@@ -1,0 +1,9 @@
+{
+  "version": "1.0.0",
+  "name": "ls-javascript",
+  "dependencies": {
+    "json-rpc2": "^1.0.2",
+    "typescript": "^1.8.2",
+    "vscode-languageserver": "^2.2.1"
+  }
+}
