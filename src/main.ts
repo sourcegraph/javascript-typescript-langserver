@@ -68,8 +68,25 @@ var server = net.createServer(function (socket) {
 	connection.connection.onReferences((params: ReferenceParams): Location[] => {
 		try {
 			console.log('refernces', params.textDocument.uri, params.position.line, params.position.character);
-			//const refs: ts.  = connection.service.get
+			const refSymbols: ts.ReferencedSymbol[] = connection.service.getReferences(params.textDocument.uri, params.position.line, params.position.character);
+			const result: Location[] = [];
+			//TODO for now we take first refernce symbol, check when more than one returned and extend
+      for (let refSymbol of refSymbols.slice(0, 1)) {
+				//first pushes declaration
+				result.push(Location.create('file:///' + refSymbol.definition.fileName, {
+					start: connection.service.position(refSymbol.definition.fileName, refSymbol.definition.textSpan.start),
+					end: connection.service.position(refSymbol.definition.fileName, refSymbol.definition.textSpan.start + refSymbol.definition.textSpan.length)
+				}));
 
+        //then pushes references
+				for (let ref of refSymbol.references) {
+					result.push(Location.create('file:///' + ref.fileName, {
+						start: connection.service.position(ref.fileName, ref.textSpan.start),
+						end: connection.service.position(ref.fileName, ref.textSpan.start + ref.textSpan.length)
+					}));
+				}
+			}
+			return result;
 		} catch (e) {
 			console.error(params, e);
 			return [];
@@ -77,6 +94,7 @@ var server = net.createServer(function (socket) {
 	});
 
 	connection.connection.onShutdown(() => {
+		console.log('shutdown');
     connection.service = null;
 	});
 
