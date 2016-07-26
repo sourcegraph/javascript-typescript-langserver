@@ -21,7 +21,7 @@ export default class TypeScriptService {
         this.files = {};
         this.lines = {};
         const allFiles: string[] = this.collectFiles(root);
-        
+
         // initialize the list of files
         allFiles.forEach(fileName => {
             this.files[fileName] = { version: 0 };
@@ -70,8 +70,13 @@ export default class TypeScriptService {
         return this.services.getQuickInfoAtPosition(fileName, offset);
     }
 
-    getReferences() {
-
+    getReferences(uri: string, line: number, column: number) :ts.ReferencedSymbol[]{
+        const fileName: string = this.uri2path(uri);
+         if (!this.files[fileName]) {
+            return null;
+        }
+        const offset: number = this.offset(fileName, line, column);
+        return this.services.findReferences(fileName, offset)
     }
 
     position(fileName: string, offset: number): Position {

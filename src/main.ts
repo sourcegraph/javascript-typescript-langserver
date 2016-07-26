@@ -56,14 +56,9 @@ var server = net.createServer(function (socket) {
 	connection.connection.onHover((params: TextDocumentPositionParams): Hover => {
 		try {
 			console.log('hover', params.textDocument.uri, params.position.line, params.position.character);
-			const quickInfo : ts.QuickInfo = connection.service.getHover(params.textDocument.uri, params.position.line, params.position.character);
-			let result : Hover = {contents: []};
-			result.contents = 
-       
-			result.contents
-
-			return [];
-
+			const quickInfo: ts.QuickInfo = connection.service.getHover(params.textDocument.uri, params.position.line, params.position.character);
+			let result: Hover = { contents: util.formHover(quickInfo) };
+			return result;
 		} catch (e) {
 			console.error(params, e);
 			return { contents: [] };
@@ -71,8 +66,18 @@ var server = net.createServer(function (socket) {
 	});
 
 	connection.connection.onReferences((params: ReferenceParams): Location[] => {
-		console.log('hover', params.textDocument.uri, params.position.line, params.position.character)
-		return [];
+		try {
+			console.log('refernces', params.textDocument.uri, params.position.line, params.position.character);
+			//const refs: ts.  = connection.service.get
+
+		} catch (e) {
+			console.error(params, e);
+			return [];
+		}
+	});
+
+	connection.connection.onShutdown(() => {
+    connection.service = null;
 	});
 
 	connection.connection.listen();
