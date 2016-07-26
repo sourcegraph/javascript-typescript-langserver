@@ -27,7 +27,7 @@ export default class TypeScriptService {
             this.files[fileName] = { version: 0 };
         });
 
-        const options: ts.CompilerOptions = { module: ts.ModuleKind.CommonJS };
+        const options: ts.CompilerOptions = { target: ts.ScriptTarget.ES6, module: ts.ModuleKind.CommonJS, jsx : ts.JsxEmit.React };
 
         // Create the language service host to allow the LS to communicate with the host
         const servicesHost: ts.LanguageServiceHost = {
