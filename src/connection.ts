@@ -15,6 +15,9 @@ export default class Connection {
 
     constructor(socket: any) {
         this.connection = createConnection(socket, socket);
+        // TODO
+        socket.removeAllListeners('end');
+        socket.removeAllListeners('close');
     }
 
 }
