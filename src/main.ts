@@ -5,6 +5,7 @@ var net = require('net');
 var fs = require('fs');
 
 import * as ts from 'typescript';
+import * as util from './util';
 
 import {
 	InitializeParams, InitializeResult,
@@ -19,8 +20,8 @@ var server = net.createServer(function (socket) {
 	let connection: Connection = new Connection(socket);
 	let documents: TextDocuments = new TextDocuments();
 
-    connection.connection.onInitialize((params: InitializeParams): InitializeResult => {		
-		console.log('initialize');		
+	connection.connection.onInitialize((params: InitializeParams): InitializeResult => {
+		console.log('initialize');
 		connection.service = new TypeScriptService(params.rootPath);
 
 		return {
@@ -32,10 +33,10 @@ var server = net.createServer(function (socket) {
 				referencesProvider: true
 			}
 		}
-    });
+	});
 
-    connection.connection.onDefinition((params: TextDocumentPositionParams): Definition => {
-		try {		
+	connection.connection.onDefinition((params: TextDocumentPositionParams): Definition => {
+		try {
 			console.log('definition', params.textDocument.uri, params.position.line, params.position.character)
 			const defs: ts.DefinitionInfo[] = connection.service.getDefinition(params.textDocument.uri, params.position.line, params.position.character)
 			let result: Location[] = [];
@@ -50,17 +51,31 @@ var server = net.createServer(function (socket) {
 			console.error(params, e);
 			return [];
 		}
-    });
+	});
 
-    connection.connection.onHover((params: TextDocumentPositionParams): Hover => {
-		return {
-			contents: []
-		};
-    });
-    connection.connection.onReferences((params: ReferenceParams): Location[] => {
+	connection.connection.onHover((params: TextDocumentPositionParams): Hover => {
+		try {
+			console.log('hover', params.textDocument.uri, params.position.line, params.position.character);
+			const quickInfo : ts.QuickInfo = connection.service.getHover(params.textDocument.uri, params.position.line, params.position.character);
+			let result : Hover = {contents: []};
+			result.contents = 
+       
+			result.contents
+
+			return [];
+
+		} catch (e) {
+			console.error(params, e);
+			return { contents: [] };
+		}
+	});
+
+	connection.connection.onReferences((params: ReferenceParams): Location[] => {
+		console.log('hover', params.textDocument.uri, params.position.line, params.position.character)
 		return [];
-    });
-    connection.connection.listen();
+	});
+
+	connection.connection.listen();
 });
 
 process.on('uncaughtException', (err) => {
