@@ -21,9 +21,8 @@ var server = net.createServer(function (socket) {
 	let documents: TextDocuments = new TextDocuments();
 
 	connection.connection.onInitialize((params: InitializeParams): InitializeResult => {
-		console.log('initialize');
+		console.log('initialize', params.rootPath);
 		connection.service = new TypeScriptService(params.rootPath);
-
 		return {
 			capabilities: {
 				// Tell the client that the server works in FULL text document sync mode
@@ -40,11 +39,13 @@ var server = net.createServer(function (socket) {
 			console.log('definition', params.textDocument.uri, params.position.line, params.position.character)
 			const defs: ts.DefinitionInfo[] = connection.service.getDefinition(params.textDocument.uri, params.position.line, params.position.character)
 			let result: Location[] = [];
-			for (let def of defs) {
-				result.push(Location.create('file:///' + def.fileName, {
-					start: connection.service.position(def.fileName, def.textSpan.start),
-					end: connection.service.position(def.fileName, def.textSpan.start + def.textSpan.length)
-				}));
+			if (defs) {
+				for (let def of defs) {
+					result.push(Location.create('file:///' + def.fileName, {
+						start: connection.service.position(def.fileName, def.textSpan.start),
+						end: connection.service.position(def.fileName, def.textSpan.start + def.textSpan.length)
+					}));
+				}
 			}
 			return result;
 		} catch (e) {
@@ -71,19 +72,21 @@ var server = net.createServer(function (socket) {
 			const refSymbols: ts.ReferencedSymbol[] = connection.service.getReferences(params.textDocument.uri, params.position.line, params.position.character);
 			const result: Location[] = [];
 			//TODO for now we take first refernce symbol, check when more than one returned and extend
-      for (let refSymbol of refSymbols.slice(0, 1)) {
-				//first pushes declaration
-				result.push(Location.create('file:///' + refSymbol.definition.fileName, {
-					start: connection.service.position(refSymbol.definition.fileName, refSymbol.definition.textSpan.start),
-					end: connection.service.position(refSymbol.definition.fileName, refSymbol.definition.textSpan.start + refSymbol.definition.textSpan.length)
-				}));
-
-        //then pushes references
-				for (let ref of refSymbol.references) {
-					result.push(Location.create('file:///' + ref.fileName, {
-						start: connection.service.position(ref.fileName, ref.textSpan.start),
-						end: connection.service.position(ref.fileName, ref.textSpan.start + ref.textSpan.length)
+			if (refSymbols) {
+				for (let refSymbol of refSymbols.slice(0, 1)) {
+					//first pushes declaration
+					result.push(Location.create('file:///' + refSymbol.definition.fileName, {
+						start: connection.service.position(refSymbol.definition.fileName, refSymbol.definition.textSpan.start),
+						end: connection.service.position(refSymbol.definition.fileName, refSymbol.definition.textSpan.start + refSymbol.definition.textSpan.length)
 					}));
+
+					//then pushes references
+					for (let ref of refSymbol.references) {
+						result.push(Location.create('file:///' + ref.fileName, {
+							start: connection.service.position(ref.fileName, ref.textSpan.start),
+							end: connection.service.position(ref.fileName, ref.textSpan.start + ref.textSpan.length)
+						}));
+					}
 				}
 			}
 			return result;
@@ -95,13 +98,13 @@ var server = net.createServer(function (socket) {
 
 	connection.connection.onShutdown(() => {
 		console.log('shutdown');
-    connection.service = null;
+		connection.service = null;
 	});
 
 	connection.connection.listen();
 });
 
 process.on('uncaughtException', (err) => {
-  console.error(err);
+	console.error(err);
 });
 server.listen(2088, '127.0.0.1');

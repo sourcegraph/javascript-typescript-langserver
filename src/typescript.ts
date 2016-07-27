@@ -27,7 +27,8 @@ export default class TypeScriptService {
             this.files[fileName] = { version: 0 };
         });
 
-        const options: ts.CompilerOptions = { target: ts.ScriptTarget.ES6, module: ts.ModuleKind.CommonJS, jsx : ts.JsxEmit.React };
+        // const options: ts.CompilerOptions = { target: ts.ScriptTarget.ES6, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React };
+        const options: ts.CompilerOptions = { module: ts.ModuleKind.CommonJS };
 
         // Create the language service host to allow the LS to communicate with the host
         const servicesHost: ts.LanguageServiceHost = {
@@ -60,9 +61,10 @@ export default class TypeScriptService {
         return this.services.getDefinitionAtPosition(fileName, offset);
     }
 
-    getHover(uri: string, line: number, column: number) : ts.QuickInfo  {
+    getHover(uri: string, line: number, column: number): ts.QuickInfo {
         const fileName: string = this.uri2path(uri);
-         if (!this.files[fileName]) {
+
+        if (!this.files[fileName]) {
             return null;
         }
 
@@ -70,9 +72,9 @@ export default class TypeScriptService {
         return this.services.getQuickInfoAtPosition(fileName, offset);
     }
 
-    getReferences(uri: string, line: number, column: number) :ts.ReferencedSymbol[]{
+    getReferences(uri: string, line: number, column: number): ts.ReferencedSymbol[] {
         const fileName: string = this.uri2path(uri);
-         if (!this.files[fileName]) {
+        if (!this.files[fileName]) {
             return null;
         }
         const offset: number = this.offset(fileName, line, column);
@@ -122,7 +124,7 @@ export default class TypeScriptService {
                 if (name == 'node_modules') {
                     return false;
                 }
-                return name.endsWith('.ts') || fs.statSync(path.join(dir, name)).isDirectory();
+                return name.endsWith('.ts') || name.endsWith('.js') || fs.statSync(path.join(dir, name)).isDirectory();
             }).forEach(function (name) {
                 self.getFiles(root, path.posix.join(prefix, name), files)
             })
