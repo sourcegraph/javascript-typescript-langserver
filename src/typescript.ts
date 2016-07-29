@@ -28,7 +28,7 @@ export default class TypeScriptService {
         });
 
         // const options: ts.CompilerOptions = { target: ts.ScriptTarget.ES6, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React };
-        const options: ts.CompilerOptions = { module: ts.ModuleKind.CommonJS };
+        const options: ts.CompilerOptions = { module: ts.ModuleKind.CommonJS, allowNonTsExtensions: true };
 
         // Create the language service host to allow the LS to communicate with the host
         const servicesHost: ts.LanguageServiceHost = {
@@ -45,7 +45,7 @@ export default class TypeScriptService {
             getCurrentDirectory: () => root,
             getCompilationSettings: () => options,
             getDefaultLibFileName: (options) => ts.getDefaultLibFilePath(options),
-        };
+        }; 
 
         // Create the language service files
         this.services = ts.createLanguageService(servicesHost, ts.createDocumentRegistry())
