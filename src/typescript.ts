@@ -72,13 +72,14 @@ export default class TypeScriptService {
         return this.services.getQuickInfoAtPosition(fileName, offset);
     }
 
-    getReferences(uri: string, line: number, column: number): ts.ReferencedSymbol[] {
+    getReferences(uri: string, line: number, column: number): ts.ReferenceEntry[] {
         const fileName: string = this.uri2path(uri);
         if (!this.files[fileName]) {
             return null;
         }
         const offset: number = this.offset(fileName, line, column);
-        return this.services.findReferences(fileName, offset)
+        // return this.services.findReferences(fileName, offset);
+        return this.services.getReferencesAtPosition(fileName, offset);
     }
 
     position(fileName: string, offset: number): Position {
@@ -124,7 +125,7 @@ export default class TypeScriptService {
                 if (name == 'node_modules') {
                     return false;
                 }
-                return name.endsWith('.ts') || name.endsWith('.js') || fs.statSync(path.join(dir, name)).isDirectory();
+                return name.endsWith('.ts') || name.endsWith('.js') || name.endsWith('.json') || fs.statSync(path.join(dir, name)).isDirectory();
             }).forEach(function (name) {
                 self.getFiles(root, path.posix.join(prefix, name), files)
             })
