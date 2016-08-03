@@ -59,11 +59,12 @@ export default class TypeScriptService {
 
         for (const sourceFile of this.services.getProgram().getSourceFiles()) {
             if (!sourceFile.hasNoDefaultLib) {
-                ts.forEachChild(sourceFile, traverse);
+                ts.forEachChild(sourceFile, collectImports);
+                ts.forEachChild(sourceFile, collectImportedCalls);
             }
         }
 
-        function traverse(node: ts.Node) {
+        function collectImports(node: ts.Node) {
             if (node.kind == ts.SyntaxKind.ImportDeclaration) {
                 let decl = <ts.ImportDeclaration>node;
                 if (decl.importClause !== undefined && decl.importClause.namedBindings !== undefined) {
@@ -93,18 +94,59 @@ export default class TypeScriptService {
                     }
                 }
             }
-
-            //console.error("kind = ", node.kind);
-            // if (node.kind == ts.SyntaxKind.ElementAccessExpression) {
-            //     console.error("NODE element = ", node);
-            // }
-            // if (node.kind == ts.SyntaxKind.PropertyAccessExpression) {
-            //     console.error("NODE call = ", node);
-            // }
-            ts.forEachChild(node, traverse);
+            ts.forEachChild(node, collectImports);
         }
 
-        console.error("import refs = ", importRefs);
+        function collectImportedCalls(node: ts.Node) {
+            // if (node.kind == ts.SyntaxKind.ElementAccessExpression) {
+            //     console.error("NODE element1 = ", node);
+            // }
+            if (node.kind == ts.SyntaxKind.PropertyAccessExpression) {
+                var ids = [];
+                ts.forEachChild(node, collectIds);
+                function collectIds(node: ts.Node) {
+                    if (node.kind == ts.SyntaxKind.Identifier) {
+                        ids.push(node);
+                    }
+                    ts.forEachChild(node, collectIds);
+                }
+
+                let idsRes = ids.map((id, index) => {
+                    //   console.error("index = ", index, "node = ", id);
+                    let text = id['text'];
+                    let pos = id.end - text.length;
+                    let importRes = importRefs.find(ref => {
+                        if (ref['file'] == id.getSourceFile().fileName && ref['start'] == pos) {
+                            return true;
+                        }
+                    });
+
+                    if (importRes) {
+                        return { index: index, import: importRes };
+                    }
+                });
+
+                let res = idsRes.find(idRes => {
+                    if (idRes) {
+                        return true;
+                    }
+                });
+
+                if (res) {
+                    //elements here access present properties chain from import
+                    let startPath = res.import.path;
+                    for (let i = res.index + 1; i < ids.length; i++) {
+                        let id = ids[i];
+                        startPath = `${startPath}.${id.text}`;
+                        let pos = id.end - id.text.length;
+                        importRefs.push({ path: startPath, file: id.getSourceFile().fileName, pos: pos, len: id.text.length })
+                    }
+                }
+            } else if (node.kind != ts.SyntaxKind.ImportDeclaration) {
+                ts.forEachChild(node, collectImportedCalls);
+            }
+            console.error("import refs = ", importRefs);
+        }
     }
 
     getDefinition(uri: string, line: number, column: number): ts.DefinitionInfo[] {
