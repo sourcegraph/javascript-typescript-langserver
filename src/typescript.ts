@@ -50,10 +50,10 @@ export default class TypeScriptService {
         // Create the language service files
         this.services = ts.createLanguageService(servicesHost, ts.createDocumentRegistry());
 
-        this.collectExternals();
+        this.collectExternals(["commander"]);
     }
 
-    collectExternals() {
+    collectExternals(externalLibs) {
         var self = this;
         var importRefs = [];
 
@@ -63,14 +63,14 @@ export default class TypeScriptService {
                 ts.forEachChild(sourceFile, collectImportedCalls);
             }
         }
-        // console.error("import refs = ", importRefs);
+        console.error("import refs = ", importRefs);
 
         function collectImports(node: ts.Node) {
             if (node.kind == ts.SyntaxKind.ImportDeclaration) {
                 let decl = <ts.ImportDeclaration>node;
                 if (decl.importClause !== undefined && decl.importClause.namedBindings !== undefined) {
-                    if (decl.moduleSpecifier['text'] == "commander") {
-                        let libName = "commander";
+                    if (externalLibs.indexOf(decl.moduleSpecifier['text']) > -1) {
+                        let libName = decl.moduleSpecifier['text'];
                         let namedBindings = decl.importClause.namedBindings;
                         if (namedBindings.kind === ts.SyntaxKind.NamespaceImport) {
                             let namespaceImport = <ts.NamespaceImport>namedBindings;
