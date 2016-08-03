@@ -63,6 +63,7 @@ export default class TypeScriptService {
                 ts.forEachChild(sourceFile, collectImportedCalls);
             }
         }
+        // console.error("import refs = ", importRefs);
 
         function collectImports(node: ts.Node) {
             if (node.kind == ts.SyntaxKind.ImportDeclaration) {
@@ -98,9 +99,6 @@ export default class TypeScriptService {
         }
 
         function collectImportedCalls(node: ts.Node) {
-            // if (node.kind == ts.SyntaxKind.ElementAccessExpression) {
-            //     console.error("NODE element1 = ", node);
-            // }
             if (node.kind == ts.SyntaxKind.PropertyAccessExpression) {
                 var ids = [];
                 ts.forEachChild(node, collectIds);
@@ -112,11 +110,9 @@ export default class TypeScriptService {
                 }
 
                 let idsRes = ids.map((id, index) => {
-                    //   console.error("index = ", index, "node = ", id);
-                    let text = id['text'];
-                    let pos = id.end - text.length;
+                    let pos = id.end - id.text.length;
                     let importRes = importRefs.find(ref => {
-                        if (ref['file'] == id.getSourceFile().fileName && ref['start'] == pos) {
+                        if (ref.file == id.getSourceFile().fileName && ref.start == pos) {
                             return true;
                         }
                     });
@@ -145,7 +141,6 @@ export default class TypeScriptService {
             } else if (node.kind != ts.SyntaxKind.ImportDeclaration) {
                 ts.forEachChild(node, collectImportedCalls);
             }
-            console.error("import refs = ", importRefs);
         }
     }
 
