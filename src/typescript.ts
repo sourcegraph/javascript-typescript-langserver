@@ -1,5 +1,5 @@
 /// <reference path="../typings/node/node.d.ts"/>
-/// <reference path="../typings/typescript/typescript.d.ts"/>
+///// <reference path="../typings/typescript/typescript.d.ts"/>
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -45,11 +45,66 @@ export default class TypeScriptService {
             getCurrentDirectory: () => root,
             getCompilationSettings: () => options,
             getDefaultLibFileName: (options) => ts.getDefaultLibFilePath(options),
-        }; 
+        };
 
         // Create the language service files
-        this.services = ts.createLanguageService(servicesHost, ts.createDocumentRegistry())
+        this.services = ts.createLanguageService(servicesHost, ts.createDocumentRegistry());
 
+        this.collectExternals();
+    }
+
+    collectExternals() {
+        var self = this;
+        var importRefs = [];
+
+        for (const sourceFile of this.services.getProgram().getSourceFiles()) {
+            if (!sourceFile.hasNoDefaultLib) {
+                ts.forEachChild(sourceFile, traverse);
+            }
+        }
+
+        function traverse(node: ts.Node) {
+            if (node.kind == ts.SyntaxKind.ImportDeclaration) {
+                let decl = <ts.ImportDeclaration>node;
+                if (decl.importClause !== undefined && decl.importClause.namedBindings !== undefined) {
+                    if (decl.moduleSpecifier['text'] == "commander") {
+                        let libName = "commander";
+                        let namedBindings = decl.importClause.namedBindings;
+                        if (namedBindings.kind === ts.SyntaxKind.NamespaceImport) {
+                            let namespaceImport = <ts.NamespaceImport>namedBindings;
+                            if (namespaceImport.name) {
+                                let refs: ts.ReferenceEntry[] = self.services.getReferencesAtPosition(namespaceImport.getSourceFile().fileName, namespaceImport.name.pos + 1);
+                                refs.forEach(ref => {
+                                    var newRef = { path: `${libName}`, file: ref.fileName, start: ref.textSpan.start, len: ref.textSpan.length };
+                                    importRefs.push(newRef);
+                                });
+                            }
+                        } else if (namedBindings.kind === ts.SyntaxKind.NamedImports) {
+                            let namedImports = <ts.NamedImports>namedBindings;
+                            for (const namedImport of namedImports.elements) {
+                                let pathName = namedImport.propertyName ? namedImport.propertyName['text'] : namedImport.name['text'];
+                                let refs: ts.ReferenceEntry[] = self.services.getReferencesAtPosition(namedImport.getSourceFile().fileName, namedImport.name.pos + 1);
+                                refs.forEach(ref => {
+                                    var newRef = { path: `${libName}.${pathName}`, file: ref.fileName, start: ref.textSpan.start, len: ref.textSpan.length };
+                                    importRefs.push(newRef);
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            //console.error("kind = ", node.kind);
+            // if (node.kind == ts.SyntaxKind.ElementAccessExpression) {
+            //     console.error("NODE element = ", node);
+            // }
+            // if (node.kind == ts.SyntaxKind.PropertyAccessExpression) {
+            //     console.error("NODE call = ", node);
+            // }
+            ts.forEachChild(node, traverse);
+        }
+
+        console.error("import refs = ", importRefs);
     }
 
     getDefinition(uri: string, line: number, column: number): ts.DefinitionInfo[] {
