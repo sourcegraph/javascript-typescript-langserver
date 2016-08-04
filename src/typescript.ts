@@ -4,10 +4,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as ts from 'typescript';
-
 import {
     Position
 } from 'vscode-languageserver';
+
+var findpkgs = require('commonjs-findpkgs');
 
 export default class TypeScriptService {
 
@@ -50,8 +51,34 @@ export default class TypeScriptService {
         // Create the language service files
         this.services = ts.createLanguageService(servicesHost, ts.createDocumentRegistry());
 
-        this.collectExternals(["commander"]);
+        this.collectExternalLibs(root).then(libs => {
+            console.error("libs = ", libs);
+            this.collectExternals(libs);
+        }).catch(error => {
+
+        });
     }
+
+    collectExternalLibs(root) {
+        return new Promise((resolve, reject) => {
+            findpkgs(`${root}/node_modules`, ["node_modules"], function (err, pkgs) {
+                if (err) {
+                    console.error("An error occurred while searching for packages", err);
+                    reject(err);
+                }
+
+                pkgs = pkgs.filter(function (pkg) {
+                    return !pkg.error;
+                });
+
+                let pkgsInfo = pkgs.map(pkg => {
+                    return { name: pkg.package.name, repo: pkg.package.repository && pkg.package.repository.url, version: pkg.package._shasum }
+                });
+                resolve(pkgsInfo);
+            });
+
+        })
+    };
 
     collectExternals(externalLibs) {
         var self = this;
@@ -69,7 +96,12 @@ export default class TypeScriptService {
             if (node.kind == ts.SyntaxKind.ImportDeclaration) {
                 let decl = <ts.ImportDeclaration>node;
                 if (decl.importClause !== undefined && decl.importClause.namedBindings !== undefined) {
-                    if (externalLibs.indexOf(decl.moduleSpecifier['text']) > -1) {
+                    let libRes = externalLibs.find(lib => {
+                        if (lib.name == decl.moduleSpecifier['text']) {
+                            return true;
+                        }
+                    });
+                    if (libRes) {
                         let libName = decl.moduleSpecifier['text'];
                         let namedBindings = decl.importClause.namedBindings;
                         if (namedBindings.kind === ts.SyntaxKind.NamespaceImport) {

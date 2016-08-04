@@ -3,6 +3,7 @@
   "name": "ls-javascript",
   "dependencies": {
     "typescript": "^1.8.2",
-    "vscode-languageserver": "^2.2.1"
+    "vscode-languageserver": "^2.2.1",
+    "commonjs-findpkgs": "alexsaveliev/commonjs-findpkgs"
   }
 }
