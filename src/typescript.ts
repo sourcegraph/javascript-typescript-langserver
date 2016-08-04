@@ -52,7 +52,7 @@ export default class TypeScriptService {
         this.services = ts.createLanguageService(servicesHost, ts.createDocumentRegistry());
 
         this.collectExternalLibs(root).then(libs => {
-            console.error("libs = ", libs);
+            // console.error("libs = ", libs);
             this.collectExternals(libs);
         }).catch(error => {
 
@@ -90,7 +90,7 @@ export default class TypeScriptService {
                 ts.forEachChild(sourceFile, collectImportedCalls);
             }
         }
-        console.error("import refs = ", importRefs);
+        // console.error("import refs = ", importRefs);
 
         function collectImports(node: ts.Node) {
             if (node.kind == ts.SyntaxKind.ImportDeclaration) {
