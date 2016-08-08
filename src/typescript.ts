@@ -52,76 +52,81 @@ export default class TypeScriptService {
         // Create the language service files
         this.services = ts.createLanguageService(servicesHost, ts.createDocumentRegistry());
 
-        let exportEnts = this.collectExportedEntities(root);
-        //console.error("exportEnts = ", exportEnts);
+        this.collectExportedEntities(root).then(exportedEnts => {
+            console.error("exportEnts = ", exportedEnts);
+        }).catch(error => {
+            console.error("Error = ", error);
+        });
+
         this.collectExternalLibs(root).then(libs => {
             this.externalRefs = this.collectExternals(libs);
             console.error("externalRefs = ", this.externalRefs);
         }).catch(error => {
-
+            console.error("Error = ", error);
         });
     }
 
     collectExportedEntities(root) {
-        let exportedRefs = [];
+        return new Promise((resolve, reject) => {
+            let exportedRefs = [];
 
-        function findCurrentProjectInfo() {
-            return new Promise((resolve, reject) => {
-                findpkgs(root, ["node_modules"], function (err, pkgs) {
-                    if (err) {
-                        console.error("An error occurred while searching for packages", err);
-                        reject(err);
-                    }
-
-                    let pkgInfo = pkgs.find(function (pkg) {
-                        return !pkg.error && path.dirname(root) == path.dirname(pkg.dir);
-                    });
-                    resolve(pkgInfo);
-                });
-            })
-        }
-
-        findCurrentProjectInfo().then(pkgInfo => {
-            function collectExports(node: ts.Node) {
-                if (node.kind == ts.SyntaxKind.FunctionDeclaration) {
-                    if ((node.flags & ts.NodeFlags.Export) != 0) {
-                        let decl = <ts.FunctionDeclaration>node;
-                        let path = `${pkgInfo['package'].name}.${decl.name.text}`;
-                        exportedRefs.push({ path: path, location: { file: node.getSourceFile().fileName, pos: decl.name.pos, end: decl.name.end } });
-                    }
-                } else if (node.kind == ts.SyntaxKind.VariableDeclaration) {
-                    if ((node.flags & ts.NodeFlags.Export) != 0) {
-                        let decl = <ts.VariableDeclaration>node;
-                        if (decl.name.kind == ts.SyntaxKind.Identifier) {
-                            let name = <ts.Identifier>decl.name;
-                            let path = `${pkgInfo['package'].name}.${name.text}`;
-                            exportedRefs.push({ path: path, location: { file: node.getSourceFile().fileName, pos: name.pos, end: name.end } });
+            function findCurrentProjectInfo() {
+                return new Promise((resolve, reject) => {
+                    findpkgs(root, ["node_modules"], function (err, pkgs) {
+                        if (err) {
+                            console.error("An error occurred while searching for packages", err);
+                            reject(err);
                         }
-                    }
-                } else if (node.kind == ts.SyntaxKind.ClassDeclaration) {
-                    if ((node.flags & ts.NodeFlags.Export) != 0) {
-                        let decl = <ts.ClassDeclaration>node;
-                        let path = `${pkgInfo['package'].name}.${decl.name.text}`;
-                        exportedRefs.push({ path: path, location: { file: node.getSourceFile().fileName, pos: decl.name.pos, end: decl.name.end } });
 
-                        //TODO add collections for methods and vars
-                    }
-                } else {
-                    ts.forEachChild(node, collectExports);
-                }
+                        let pkgInfo = pkgs.find(function (pkg) {
+                            return !pkg.error && path.dirname(root) == path.dirname(pkg.dir);
+                        });
+                        resolve(pkgInfo);
+                    });
+                })
             }
 
+            findCurrentProjectInfo().then(pkgInfo => {
+                function collectExports(node: ts.Node) {
+                    if (node.kind == ts.SyntaxKind.FunctionDeclaration) {
+                        if ((node.flags & ts.NodeFlags.Export) != 0) {
+                            let decl = <ts.FunctionDeclaration>node;
+                            let path = `${pkgInfo['package'].name}.${decl.name.text}`;
+                            exportedRefs.push({ path: path, location: { file: node.getSourceFile().fileName, pos: decl.name.pos, end: decl.name.end } });
+                        }
+                    } else if (node.kind == ts.SyntaxKind.VariableDeclaration) {
+                        if ((node.flags & ts.NodeFlags.Export) != 0) {
+                            let decl = <ts.VariableDeclaration>node;
+                            if (decl.name.kind == ts.SyntaxKind.Identifier) {
+                                let name = <ts.Identifier>decl.name;
+                                let path = `${pkgInfo['package'].name}.${name.text}`;
+                                exportedRefs.push({ path: path, location: { file: node.getSourceFile().fileName, pos: name.pos, end: name.end } });
+                            }
+                        }
+                    } else if (node.kind == ts.SyntaxKind.ClassDeclaration) {
+                        if ((node.flags & ts.NodeFlags.Export) != 0) {
+                            let decl = <ts.ClassDeclaration>node;
+                            let path = `${pkgInfo['package'].name}.${decl.name.text}`;
+                            exportedRefs.push({ path: path, location: { file: node.getSourceFile().fileName, pos: decl.name.pos, end: decl.name.end } });
 
-            for (const sourceFile of this.services.getProgram().getSourceFiles()) {
-                if (!sourceFile.hasNoDefaultLib) {
-                    ts.forEachChild(sourceFile, collectExports);
+                            //TODO add collections for methods and vars
+                        }
+                    } else {
+                        ts.forEachChild(node, collectExports);
+                    }
                 }
-            }
-            return exportedRefs;
 
-        }).catch(error => {
-            console.error("error occurred = ", error);
-        })
+                for (const sourceFile of this.services.getProgram().getSourceFiles()) {
+                    if (!sourceFile.hasNoDefaultLib) {
+                        ts.forEachChild(sourceFile, collectExports);
+                    }
+                }
+                resolve(exportedRefs);
+
+            }).catch(error => {
+                reject(error);
+            })
+        });
     }
 
     collectExternalLibs(root) {
@@ -141,7 +146,6 @@ export default class TypeScriptService {
                 });
                 resolve(pkgsInfo);
             });
-
         })
     };
 
