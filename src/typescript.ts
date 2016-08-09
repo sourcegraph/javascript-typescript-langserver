@@ -56,9 +56,9 @@ export default class TypeScriptService {
         this.services = ts.createLanguageService(servicesHost, ts.createDocumentRegistry());
 
         this.externalRefs = this.collectExternals(this.collectExternalLibs(this.root));
-        console.error("external libs = ", this.externalRefs);
 
-        //this.exportedEnts = this.collectExportedEntities(root);
+        this.exportedEnts = this.collectExportedEntities(root);
+        // console.error("exportedEnts = ", this.exportedEnts);
 
     }
 
@@ -68,27 +68,12 @@ export default class TypeScriptService {
 
         function findCurrentProjectInfo() {
             let pkgFiles = packages.collectFiles(root, ["node_modules"]);
-
             let pkgInfo = pkgFiles.find(function (pkg) {
-                return path.dirname(root) == path.dirname(pkg.package);
+                return root == path.dirname(pkg.path) + "/";
             });
 
-            console.error("pkg info = ", pkgInfo);
             return pkgInfo;
-            // findpkgs(root, ["node_modules"], functioßn (err, pkgs) {
-            //     if (err) {
-            //         console.error("An error occurred while searching for packages", err);
-            //         reject(err);
-            //     }
-
-            //     let pkgInfo = pkgs.find(function (pkg) {
-            //         return !pkg.error && path.dirname(root) == path.dirname(pkg.dir);
-            //     });
-            //     resolve(pkgInfo);
-            // });
-
         }
-
 
         function collectExports(node: ts.Node) {
             if (node.kind == ts.SyntaxKind.FunctionDeclaration) {
@@ -249,7 +234,7 @@ export default class TypeScriptService {
 
             if (externalRes) {
                 console.error("externalRes = ", externalRes);
-                //TODO map externalRes to definition here
+                //TODO map externalRes to definition here - this definition is unusual should contain path and repo
                 return [];
             }
         } else {
