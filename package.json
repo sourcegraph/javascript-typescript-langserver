@@ -4,6 +4,7 @@
   "dependencies": {
     "typescript": "^1.8.2",
     "vscode-languageserver": "^2.2.1",
-    "commonjs-findpkgs": "alexsaveliev/commonjs-findpkgs"
+    "find-files-excluding-dirs": "alexsaveliev/find-files-excluding-dirs",
+    "read-json-sync": "^1.1.1"
   }
 }
