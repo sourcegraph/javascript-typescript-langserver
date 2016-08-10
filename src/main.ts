@@ -50,8 +50,14 @@ var server = net.createServer(function (socket) {
 			console.log('workspace symbols', params.query);
 			if (params.query == "exported") {
 				const exported = connection.service.getExportedEnts();
-				console.error("get exported = ", exported);
-
+				let res = exported.map(ent => {
+					// return SymbolInformation.create(ent.name, ent.kind, Range.create(ent.location.pos, ent.location.end),
+					// 	'file:///' + ent.location.file, util.formExternalUri(ent));
+					return SymbolInformation.create(ent.name, ent.kind, util.formEmptyRange(),
+						'file:///' + ent.location.file, util.formExternalUri(ent));
+				});
+				console.error("exported res = ", res);
+				return res;
 			} else if (params.query == "externals") {
 				const externals = connection.service.getExternalRefs();
 				let res = externals.map(external => {

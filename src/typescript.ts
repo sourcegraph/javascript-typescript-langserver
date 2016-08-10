@@ -92,7 +92,8 @@ export default class TypeScriptService {
                     let decl = <ts.FunctionDeclaration>node;
                     let path = `${pkgInfo.name}.${decl.name.text}`;
                     exportedRefs.push({
-                        kind: "function", path: path, repoName: pkgInfo.name, repoURL: pkgInfo.repo, repoCommit: pkgInfo.version,
+                        name: decl.name.text, kind: "function", path: path, repoName: pkgInfo.name,
+                        repoURL: pkgInfo.repo, repoCommit: pkgInfo.version,
                         location: { file: node.getSourceFile().fileName, pos: decl.name.pos, end: decl.name.end }
                     });
                 }
@@ -103,7 +104,8 @@ export default class TypeScriptService {
                         let name = <ts.Identifier>decl.name;
                         let path = `${pkgInfo.name}.${name.text}`;
                         exportedRefs.push({
-                            kind: "var", path: path, repoName: pkgInfo.name, repoURL: pkgInfo.repo, repoCommit: pkgInfo.version,
+                            name: name.text, kind: "var", path: path, repoName: pkgInfo.name,
+                            repoURL: pkgInfo.repo, repoCommit: pkgInfo.version,
                             location: { file: node.getSourceFile().fileName, pos: name.pos, end: name.end }
                         });
                     }
@@ -113,7 +115,8 @@ export default class TypeScriptService {
                     let decl = <ts.ClassDeclaration>node;
                     let path = `${pkgInfo.name}.${decl.name.text}`;
                     exportedRefs.push({
-                        kind: "class", path: path, repoName: pkgInfo.name, repoURL: pkgInfo.repo, repoCommit: pkgInfo.version,
+                        name: decl.name.text, kind: "class", path: path, repoName: pkgInfo.name,
+                        repoURL: pkgInfo.repo, repoCommit: pkgInfo.version,
                         location: { file: node.getSourceFile().fileName, pos: decl.name.pos, end: decl.name.end }
                     });
                     //TODO add collections for methods and vars
