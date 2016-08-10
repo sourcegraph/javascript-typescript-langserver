@@ -8,12 +8,10 @@ import {
     Position
 } from 'vscode-languageserver';
 
-import * as packages from './find-packages'
-
-// var findpkgs = require('find-packages');
+import * as packages from './find-packages';
+import * as util from './util';
 
 export default class TypeScriptService {
-
     services: ts.LanguageService
     files: ts.Map<{ version: number }>
     root: string
@@ -247,21 +245,24 @@ export default class TypeScriptService {
             return [];
         }
         const offset: number = this.offset(fileName, line, column);
-        let res = this.services.getDefinitionAtPosition(fileName, offset);
-        if (!res || res.length == 0) {
-            let externalRes = this.getExternalRefs().find(ref => {
-                if (ref.file == fileName && ref.pos == offset) {
-                    return true;
-                }
-            });
+        return this.services.getDefinitionAtPosition(fileName, offset);
+    }
 
-            if (externalRes) {
-                console.error("externalRes = ", externalRes);
-                //TODO map externalRes to definition here - this definition is unusual should contain path and repo
-                return [];
+    getExternalDefinition(uri: string, line: number, column: number): string {
+        const fileName: string = this.uri2path(uri);
+        if (!this.files[fileName]) {
+            return;
+        }
+        const offset: number = this.offset(fileName, line, column);
+        let externalRes = this.getExternalRefs().find(ref => {
+            if (ref.file == fileName && ref.pos == offset) {
+                return true;
             }
-        } else {
-            return res;
+        });
+
+        if (externalRes) {
+            // console.error("externalRes = ", externalRes);
+            return util.formExternalUri(externalRes);
         }
     }
 

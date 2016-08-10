@@ -77,6 +77,12 @@ var server = net.createServer(function (socket) {
 						end: connection.service.position(def.fileName, def.textSpan.start + def.textSpan.length)
 					}));
 				}
+			} else {
+				//check whether definition is external, if uri string returned, add this location
+				let externalDef = connection.service.getExternalDefinition(params.textDocument.uri, params.position.line, params.position.character);
+				if (externalDef) {
+					result.push(Location.create(externalDef, util.formEmptyRange()));
+				}
 			}
 			return result;
 		} catch (e) {
