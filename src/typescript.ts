@@ -56,10 +56,9 @@ export default class TypeScriptService {
         this.services = ts.createLanguageService(servicesHost, ts.createDocumentRegistry());
 
         this.externalRefs = this.collectExternals(this.collectExternalLibs(this.root));
-
+        console.error("externalRefs = ", this.externalRefs);
         this.exportedEnts = this.collectExportedEntities(root);
-        // console.error("exportedEnts = ", this.exportedEnts);
-
+        console.error("exportedEnts = ", this.exportedEnts);
     }
 
     collectExportedEntities(root) {
@@ -143,6 +142,7 @@ export default class TypeScriptService {
                             return true;
                         }
                     });
+                    // console.error("libRes = ", libRes);
                     if (libRes) {
                         let libName = decl.moduleSpecifier['text'];
                         let namedBindings = decl.importClause.namedBindings;
@@ -151,7 +151,10 @@ export default class TypeScriptService {
                             if (namespaceImport.name) {
                                 let refs: ts.ReferenceEntry[] = self.services.getReferencesAtPosition(namespaceImport.getSourceFile().fileName, namespaceImport.name.pos + 1);
                                 refs.forEach(ref => {
-                                    var newRef = { path: `${libName}`, file: ref.fileName, start: ref.textSpan.start, len: ref.textSpan.length };
+                                    var newRef = {
+                                        name: namespaceImport.name.text, path: `${libName}`, file: ref.fileName, start: ref.textSpan.start,
+                                        len: ref.textSpan.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
+                                    };
                                     importRefs.push(newRef);
                                 });
                             }
@@ -161,7 +164,11 @@ export default class TypeScriptService {
                                 let pathName = namedImport.propertyName ? namedImport.propertyName['text'] : namedImport.name['text'];
                                 let refs: ts.ReferenceEntry[] = self.services.getReferencesAtPosition(namedImport.getSourceFile().fileName, namedImport.name.pos + 1);
                                 refs.forEach(ref => {
-                                    var newRef = { path: `${libName}.${pathName}`, file: ref.fileName, start: ref.textSpan.start, len: ref.textSpan.length };
+                                    // console.error("ref 2 = ", ref);
+                                    var newRef = {
+                                        name: pathName, path: `${libName}.${pathName}`, file: ref.fileName, start: ref.textSpan.start,
+                                        len: ref.textSpan.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
+                                    };
                                     importRefs.push(newRef);
                                 });
                             }
@@ -204,18 +211,30 @@ export default class TypeScriptService {
 
                 if (res) {
                     //elements here access present properties chain from import
+                    // console.error("res = ", res);
                     let startPath = res.import.path;
                     for (let i = res.index + 1; i < ids.length; i++) {
                         let id = ids[i];
                         startPath = `${startPath}.${id.text}`;
                         let pos = id.end - id.text.length;
-                        importRefs.push({ path: startPath, file: id.getSourceFile().fileName, pos: pos, len: id.text.length })
+                        importRefs.push({
+                            name: id.text, path: startPath, file: id.getSourceFile().fileName, pos: pos,
+                            len: id.text.length, repoName: res.import.repoName, repoURL: res.import.repoURL, repoCommit: res.import.repoCommit
+                        })
                     }
                 }
             } else if (node.kind != ts.SyntaxKind.ImportDeclaration) {
                 ts.forEachChild(node, collectImportedCalls);
             }
         }
+    }
+
+    getExported() {
+        return
+    }
+
+    getExternals() {
+
     }
 
     getDefinition(uri: string, line: number, column: number): ts.DefinitionInfo[] {
