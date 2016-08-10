@@ -10,7 +10,8 @@ import * as util from './util';
 import {
 	InitializeParams, InitializeResult,
 	TextDocuments,
-	TextDocumentPositionParams, Definition, ReferenceParams, Location, Hover, RequestType, WorkspaceSymbolParams, SymbolInformation
+	TextDocumentPositionParams, Definition, ReferenceParams, Location, Hover, WorkspaceSymbolParams,
+	SymbolInformation, SymbolKind, Range
 } from 'vscode-languageserver';
 
 import TypeScriptService from './typescript';
@@ -51,7 +52,11 @@ var server = net.createServer(function (socket) {
 
 			} else if (params.query == "externals") {
 				const externals = connection.service.getExternalRefs();
-				console.error("externals = ", externals);
+				let res = externals.map(external => {
+					return SymbolInformation.create(external.name, util.formEmptyKind(), util.formEmptyRange(), util.formExternalUri(external));
+				});
+				console.error("symbols res = ", res);
+				return res;
 			}
 			return [];
 		} catch (e) {
