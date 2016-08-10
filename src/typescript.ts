@@ -55,21 +55,21 @@ export default class TypeScriptService {
         // Create the language service files
         this.services = ts.createLanguageService(servicesHost, ts.createDocumentRegistry());
 
-        this.externalRefs = this.collectExternals(this.collectExternalLibs());
-        console.error("externalRefs = ", this.externalRefs);
-        this.exportedEnts = this.collectExportedEntities();
-        console.error("exportedEnts = ", this.exportedEnts);
+        // this.externalRefs = this.collectExternals(this.collectExternalLibs());
+        // console.error("externalRefs = ", this.externalRefs);
+        // this.exportedEnts = this.collectExportedEntities();
+        // console.error("exportedEnts = ", this.exportedEnts);
     }
 
     getExternalRefs() {
-        if (!this.externalRefs) {
+        if (!this.externalRefs || this.externalRefs.length == 0) {
             this.externalRefs = this.collectExternals(this.collectExternalLibs());
         }
         return this.externalRefs;
     }
 
     getExportedEnts() {
-        if (!this.exportedEnts) {
+        if (!this.exportedEnts || this.exportedEnts.length == 0) {
             this.exportedEnts = this.collectExportedEntities();
         }
         return this.collectExportedEntities;
@@ -241,15 +241,6 @@ export default class TypeScriptService {
         }
     }
 
-    getExported() {
-
-    }
-
-    getExternals() {
-      
-
-    }
-
     getDefinition(uri: string, line: number, column: number): ts.DefinitionInfo[] {
         const fileName: string = this.uri2path(uri);
         if (!this.files[fileName]) {
@@ -258,7 +249,7 @@ export default class TypeScriptService {
         const offset: number = this.offset(fileName, line, column);
         let res = this.services.getDefinitionAtPosition(fileName, offset);
         if (!res || res.length == 0) {
-            let externalRes = this.externalRefs.find(ref => {
+            let externalRes = this.getExternalRefs().find(ref => {
                 if (ref.file == fileName && ref.pos == offset) {
                     return true;
                 }

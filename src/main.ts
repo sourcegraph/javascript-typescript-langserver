@@ -20,6 +20,12 @@ import Connection from './connection';
 // 	export const type: RequestType<TextDocumentPositionParams, string, any> = { get method() { return 'textDocument/externals'; } };
 // }
 
+// connection.connection.onRequest(VSCodeContentRequest.type, (params: TextDocumentPositionParams): string => {
+// 	console.log('externals', params.textDocument.uri, params.position.line, params.position.character)
+
+// 	return "";
+// });
+
 var server = net.createServer(function (socket) {
 	let connection: Connection = new Connection(socket);
 	let documents: TextDocuments = new TextDocuments();
@@ -40,18 +46,19 @@ var server = net.createServer(function (socket) {
 
 	connection.connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): SymbolInformation[] => {
 		try {
+			console.log('workspace symbols', params.query);
+			if (params.query == "exported") {
+
+			} else if (params.query == "externals") {
+				const externals = connection.service.getExternalRefs();
+				console.error("externals = ", externals);
+			}
 			return [];
 		} catch (e) {
 			console.error(params, e);
 			return [];
 		}
 	});
-
-	// connection.connection.onRequest(VSCodeContentRequest.type, (params: TextDocumentPositionParams): string => {
-	// 	console.log('externals', params.textDocument.uri, params.position.line, params.position.character)
-
-	// 	return "";
-	// });
 
 	connection.connection.onDefinition((params: TextDocumentPositionParams): Definition => {
 		try {
