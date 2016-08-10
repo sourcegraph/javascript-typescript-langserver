@@ -49,6 +49,8 @@ var server = net.createServer(function (socket) {
 		try {
 			console.log('workspace symbols', params.query);
 			if (params.query == "exported") {
+				const exported = connection.service.getExportedEnts();
+				console.error("get exported = ", exported);
 
 			} else if (params.query == "externals") {
 				const externals = connection.service.getExternalRefs();

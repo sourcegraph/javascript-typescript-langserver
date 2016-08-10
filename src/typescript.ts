@@ -70,44 +70,52 @@ export default class TypeScriptService {
         if (!this.exportedEnts || this.exportedEnts.length == 0) {
             this.exportedEnts = this.collectExportedEntities();
         }
-        return this.collectExportedEntities;
+        return this.exportedEnts;
     }
 
     collectExportedEntities() {
         let exportedRefs = [];
+        let self = this;
         let pkgInfo = findCurrentProjectInfo();
 
         function findCurrentProjectInfo() {
-            let pkgFiles = packages.collectFiles(this.root, ["node_modules"]);
-            let pkgInfo = pkgFiles.find(function (pkg) {
-                return this.root == path.dirname(pkg.path) + "/";
+            let pkgFiles = packages.collectFiles(self.root, ["node_modules"]);
+            let pkg = pkgFiles.find(function (pkg) {
+                return self.root == path.dirname(pkg.path) + "/";
             });
-
-            return pkgInfo;
+            return { name: pkg.package.name, repo: pkg.package.repository && pkg.package.repository.url, version: pkg.package._shasum }
         }
 
         function collectExports(node: ts.Node) {
             if (node.kind == ts.SyntaxKind.FunctionDeclaration) {
                 if ((node.flags & ts.NodeFlags.Export) != 0) {
                     let decl = <ts.FunctionDeclaration>node;
-                    let path = `${pkgInfo['package'].name}.${decl.name.text}`;
-                    exportedRefs.push({ path: path, location: { file: node.getSourceFile().fileName, pos: decl.name.pos, end: decl.name.end } });
+                    let path = `${pkgInfo.name}.${decl.name.text}`;
+                    exportedRefs.push({
+                        kind: "function", path: path, repoName: pkgInfo.name, repoURL: pkgInfo.repo, repoCommit: pkgInfo.version,
+                        location: { file: node.getSourceFile().fileName, pos: decl.name.pos, end: decl.name.end }
+                    });
                 }
             } else if (node.kind == ts.SyntaxKind.VariableDeclaration) {
                 if ((node.flags & ts.NodeFlags.Export) != 0) {
                     let decl = <ts.VariableDeclaration>node;
                     if (decl.name.kind == ts.SyntaxKind.Identifier) {
                         let name = <ts.Identifier>decl.name;
-                        let path = `${pkgInfo['package'].name}.${name.text}`;
-                        exportedRefs.push({ path: path, location: { file: node.getSourceFile().fileName, pos: name.pos, end: name.end } });
+                        let path = `${pkgInfo.name}.${name.text}`;
+                        exportedRefs.push({
+                            kind: "var", path: path, repoName: pkgInfo.name, repoURL: pkgInfo.repo, repoCommit: pkgInfo.version,
+                            location: { file: node.getSourceFile().fileName, pos: name.pos, end: name.end }
+                        });
                     }
                 }
             } else if (node.kind == ts.SyntaxKind.ClassDeclaration) {
                 if ((node.flags & ts.NodeFlags.Export) != 0) {
                     let decl = <ts.ClassDeclaration>node;
-                    let path = `${pkgInfo['package'].name}.${decl.name.text}`;
-                    exportedRefs.push({ path: path, location: { file: node.getSourceFile().fileName, pos: decl.name.pos, end: decl.name.end } });
-
+                    let path = `${pkgInfo.name}.${decl.name.text}`;
+                    exportedRefs.push({
+                        kind: "class", path: path, repoName: pkgInfo.name, repoURL: pkgInfo.repo, repoCommit: pkgInfo.version,
+                        location: { file: node.getSourceFile().fileName, pos: decl.name.pos, end: decl.name.end }
+                    });
                     //TODO add collections for methods and vars
                 }
             } else {
