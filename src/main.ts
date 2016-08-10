@@ -10,11 +10,15 @@ import * as util from './util';
 import {
 	InitializeParams, InitializeResult,
 	TextDocuments,
-	TextDocumentPositionParams, Definition, ReferenceParams, Location, Hover
+	TextDocumentPositionParams, Definition, ReferenceParams, Location, Hover, RequestType, WorkspaceSymbolParams, SymbolInformation
 } from 'vscode-languageserver';
 
 import TypeScriptService from './typescript';
 import Connection from './connection';
+
+// namespace VSCodeContentRequest {
+// 	export const type: RequestType<TextDocumentPositionParams, string, any> = { get method() { return 'textDocument/externals'; } };
+// }
 
 var server = net.createServer(function (socket) {
 	let connection: Connection = new Connection(socket);
@@ -33,6 +37,21 @@ var server = net.createServer(function (socket) {
 			}
 		}
 	});
+
+	connection.connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): SymbolInformation[] => {
+		try {
+			return [];
+		} catch (e) {
+			console.error(params, e);
+			return [];
+		}
+	});
+
+	// connection.connection.onRequest(VSCodeContentRequest.type, (params: TextDocumentPositionParams): string => {
+	// 	console.log('externals', params.textDocument.uri, params.position.line, params.position.character)
+
+	// 	return "";
+	// });
 
 	connection.connection.onDefinition((params: TextDocumentPositionParams): Definition => {
 		try {
