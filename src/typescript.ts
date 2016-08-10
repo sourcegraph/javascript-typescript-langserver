@@ -55,20 +55,20 @@ export default class TypeScriptService {
         // Create the language service files
         this.services = ts.createLanguageService(servicesHost, ts.createDocumentRegistry());
 
-        this.externalRefs = this.collectExternals(this.collectExternalLibs(this.root));
+        this.externalRefs = this.collectExternals(this.collectExternalLibs());
         console.error("externalRefs = ", this.externalRefs);
-        this.exportedEnts = this.collectExportedEntities(root);
+        this.exportedEnts = this.collectExportedEntities();
         console.error("exportedEnts = ", this.exportedEnts);
     }
 
-    collectExportedEntities(root) {
+    collectExportedEntities() {
         let exportedRefs = [];
         let pkgInfo = findCurrentProjectInfo();
 
         function findCurrentProjectInfo() {
-            let pkgFiles = packages.collectFiles(root, ["node_modules"]);
+            let pkgFiles = packages.collectFiles(this.root, ["node_modules"]);
             let pkgInfo = pkgFiles.find(function (pkg) {
-                return root == path.dirname(pkg.path) + "/";
+                return this.root == path.dirname(pkg.path) + "/";
             });
 
             return pkgInfo;
@@ -112,8 +112,8 @@ export default class TypeScriptService {
         return exportedRefs;
     }
 
-    collectExternalLibs(root) {
-        let pkgFiles = packages.collectFiles(`${root}/node_modules`, ["node_modules"]);
+    collectExternalLibs() {
+        let pkgFiles = packages.collectFiles(`${this.root}/node_modules`, ["node_modules"]);
         let pkgsInfo = pkgFiles.map(pkg => {
             return { name: pkg.package.name, repo: pkg.package.repository && pkg.package.repository.url, version: pkg.package._shasum }
         });
@@ -142,7 +142,7 @@ export default class TypeScriptService {
                             return true;
                         }
                     });
-                    // console.error("libRes = ", libRes);
+
                     if (libRes) {
                         let libName = decl.moduleSpecifier['text'];
                         let namedBindings = decl.importClause.namedBindings;
@@ -164,7 +164,6 @@ export default class TypeScriptService {
                                 let pathName = namedImport.propertyName ? namedImport.propertyName['text'] : namedImport.name['text'];
                                 let refs: ts.ReferenceEntry[] = self.services.getReferencesAtPosition(namedImport.getSourceFile().fileName, namedImport.name.pos + 1);
                                 refs.forEach(ref => {
-                                    // console.error("ref 2 = ", ref);
                                     var newRef = {
                                         name: pathName, path: `${libName}.${pathName}`, file: ref.fileName, start: ref.textSpan.start,
                                         len: ref.textSpan.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
@@ -211,7 +210,6 @@ export default class TypeScriptService {
 
                 if (res) {
                     //elements here access present properties chain from import
-                    // console.error("res = ", res);
                     let startPath = res.import.path;
                     for (let i = res.index + 1; i < ids.length; i++) {
                         let id = ids[i];
@@ -234,6 +232,9 @@ export default class TypeScriptService {
     }
 
     getExternals() {
+        if (this.externalRefs) {
+
+        } 
 
     }
 
