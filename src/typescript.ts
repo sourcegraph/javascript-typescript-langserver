@@ -61,6 +61,20 @@ export default class TypeScriptService {
         console.error("exportedEnts = ", this.exportedEnts);
     }
 
+    getExternalRefs() {
+        if (!this.externalRefs) {
+            this.externalRefs = this.collectExternals(this.collectExternalLibs());
+        }
+        return this.externalRefs;
+    }
+
+    getExportedEnts() {
+        if (!this.exportedEnts) {
+            this.exportedEnts = this.collectExportedEntities();
+        }
+        return this.collectExportedEntities;
+    }
+
     collectExportedEntities() {
         let exportedRefs = [];
         let pkgInfo = findCurrentProjectInfo();
@@ -228,13 +242,11 @@ export default class TypeScriptService {
     }
 
     getExported() {
-        return
+
     }
 
     getExternals() {
-        if (this.externalRefs) {
-
-        } 
+      
 
     }
 
