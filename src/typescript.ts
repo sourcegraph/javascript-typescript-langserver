@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as ts from 'typescript';
 import {
-    Position
+    Position, Range
 } from 'vscode-languageserver';
 
 import * as packages from './find-packages';
@@ -87,14 +87,16 @@ export default class TypeScriptService {
         }
 
         function collectExports(node: ts.Node) {
+            let fileName = node.getSourceFile().fileName;
             if (node.kind == ts.SyntaxKind.FunctionDeclaration) {
                 if ((node.flags & ts.NodeFlags.Export) != 0) {
                     let decl = <ts.FunctionDeclaration>node;
                     let path = `${pkgInfo.name}.${decl.name.text}`;
+                    let range = Range.create(self.getLineAndPosFromOffset(fileName, decl.name.pos), self.getLineAndPosFromOffset(fileName, decl.name.end));
                     exportedRefs.push({
                         name: decl.name.text, kind: "function", path: path, repoName: pkgInfo.name,
                         repoURL: pkgInfo.repo, repoCommit: pkgInfo.version,
-                        location: { file: node.getSourceFile().fileName, pos: decl.name.pos, end: decl.name.end }
+                        location: { file: fileName, range: range }
                     });
                 }
             } else if (node.kind == ts.SyntaxKind.VariableDeclaration) {
@@ -103,10 +105,11 @@ export default class TypeScriptService {
                     if (decl.name.kind == ts.SyntaxKind.Identifier) {
                         let name = <ts.Identifier>decl.name;
                         let path = `${pkgInfo.name}.${name.text}`;
+                        let range = Range.create(self.getLineAndPosFromOffset(fileName, decl.name.pos), self.getLineAndPosFromOffset(fileName, decl.name.end));
                         exportedRefs.push({
                             name: name.text, kind: "var", path: path, repoName: pkgInfo.name,
                             repoURL: pkgInfo.repo, repoCommit: pkgInfo.version,
-                            location: { file: node.getSourceFile().fileName, pos: name.pos, end: name.end }
+                            location: { file: fileName, range: range }
                         });
                     }
                 }
@@ -114,10 +117,11 @@ export default class TypeScriptService {
                 if ((node.flags & ts.NodeFlags.Export) != 0) {
                     let decl = <ts.ClassDeclaration>node;
                     let path = `${pkgInfo.name}.${decl.name.text}`;
+                    let range = Range.create(self.getLineAndPosFromOffset(fileName, decl.name.pos), self.getLineAndPosFromOffset(fileName, decl.name.end));
                     exportedRefs.push({
                         name: decl.name.text, kind: "class", path: path, repoName: pkgInfo.name,
                         repoURL: pkgInfo.repo, repoCommit: pkgInfo.version,
-                        location: { file: node.getSourceFile().fileName, pos: decl.name.pos, end: decl.name.end }
+                        location: { file: fileName, range: range }
                     });
                     //TODO add collections for methods and vars
                 }
@@ -353,6 +357,19 @@ export default class TypeScriptService {
     private normalizePath(file: string): string {
         return file.
             replace(new RegExp('\\' + path.sep, 'g'), path.posix.sep);
+    }
+
+    private getLineAndPosFromOffset(fileName: string, offset: number): Position {
+        let lines: number[] = this.getLines(fileName);
+        let res = util.formEmptyPosition();
+        lines.find((el, index) => {
+            if (offset <= el) {
+                res = Position.create(index, offset - lines[index - 1]);
+                return true;
+            }
+        });
+        return res;
+
     }
 
     private offset(fileName: string, line: number, column: number): number {

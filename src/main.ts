@@ -51,9 +51,7 @@ var server = net.createServer(function (socket) {
 			if (params.query == "exported") {
 				const exported = connection.service.getExportedEnts();
 				let res = exported.map(ent => {
-					// return SymbolInformation.create(ent.name, ent.kind, Range.create(ent.location.pos, ent.location.end),
-					// 	'file:///' + ent.location.file, util.formExternalUri(ent));
-					return SymbolInformation.create(ent.name, ent.kind, util.formEmptyRange(),
+					return SymbolInformation.create(ent.name, ent.kind, ent.location.range,
 						'file:///' + ent.location.file, util.formExternalUri(ent));
 				});
 				console.error("exported res = ", res);
