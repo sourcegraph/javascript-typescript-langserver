@@ -10,6 +10,10 @@ export function formEmptyRange(): Range {
     return Range.create(Position.create(0, 0), Position.create(0, 0))
 }
 
+export function formEmptyPosition(): Position {
+    return Position.create(0, 0);
+}
+
 export function formEmptyKind(): number {
     return SymbolKind.Namespace
 }

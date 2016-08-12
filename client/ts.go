@@ -48,6 +48,8 @@ func run() error {
 		case "definition": getDefinition(client)
 		case "hover": getHover(client)
 		case "references": getReferences(client)
+		case "symbol-externals": getWorkspaceSymbols(client, "externals")
+		case "symbol-exported": getWorkspaceSymbols(client, "exported")
 		case "shutdown": shutdown(client);
 	}
     // initialize(client);
@@ -125,7 +127,6 @@ func getHover(client *jsonrpc2.Client) error {
 }
 
 func getReferences(client *jsonrpc2.Client) error {
-	 println("get references = ");
 	  initialize(client);
 		response, err := request(client, "textDocument/references", lsp.ReferenceParams{
 		TextDocumentPositionParams: lsp.TextDocumentPositionParams{
@@ -148,6 +149,23 @@ func getReferences(client *jsonrpc2.Client) error {
    		println(l.URI, l.Range.Start.Line, l.Range.Start.Character, l.Range.End.Line, l.Range.End.Character)
    	}
   return nil;
+}
+
+func getWorkspaceSymbols(client *jsonrpc2.Client, query string) error {
+	    initialize(client);
+		response, err := request(client, "workspace/symbol", lsp.WorkspaceSymbolParams{
+   		Query: query, 
+   	});
+
+	if err != nil {
+   		return err
+   }
+	println(*response.Result);
+   	// var location []lsp.Location
+   	// if err := json.Unmarshal(*response.Result, &location); err != nil {
+   	// 	return err
+   	// }
+	return nil;
 }
 
 // creates new JSON-RPC client and connects it to remote language server
