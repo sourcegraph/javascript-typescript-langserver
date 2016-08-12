@@ -198,7 +198,6 @@ export default class TypeScriptService {
 
         for (const sourceFile of this.services.getProgram().getSourceFiles()) {
             if (!sourceFile.hasNoDefaultLib) {
-                console.error
                 sourceFile.getChildren().forEach(child => {
                     collectExports(child);
                 });
