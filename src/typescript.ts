@@ -89,8 +89,30 @@ export default class TypeScriptService {
         function collectExports(node: ts.Node, parentPath?: string) {
 
             let fileName = node.getSourceFile().fileName;
+            if (node.kind == ts.SyntaxKind.BinaryExpression) {
+                let expr = <ts.BinaryExpression>node;
+                if (expr.left.kind == ts.SyntaxKind.PropertyAccessExpression) {
+                    let left = <ts.PropertyAccessExpression>expr.left;
+                    if (left.expression.kind == ts.SyntaxKind.Identifier && left.expression.getText() == "exports"
+                        && left.name.kind == ts.SyntaxKind.Identifier) {
+                        let name = left.name;
+                        let type = self.services.getTypeDefinitionAtPosition(fileName, name.pos);
+                        let kind = "";
+                        if (type && type.length > 0) {
+                            kind = type[0].kind;
+                        }
 
-            if (node.kind == ts.SyntaxKind.ExportDeclaration) {
+                        let path = `${pkgInfo.name}.${name}`;
+                        let range = Range.create(self.getLineAndPosFromOffset(fileName, name.pos), self.getLineAndPosFromOffset(fileName, name.end));
+
+                        exportedRefs.push({
+                            name: name.text, kind: kind, path: path, repoName: pkgInfo.name,
+                            repoURL: pkgInfo.repo, repoCommit: pkgInfo.version,
+                            location: { file: fileName, range: range }
+                        });
+                    }
+                }
+            } else if (node.kind == ts.SyntaxKind.ExportDeclaration) {
                 let decl = <ts.ExportDeclaration>node;
                 decl.exportClause.elements.forEach(element => {
                     let name = element.name;
@@ -99,10 +121,10 @@ export default class TypeScriptService {
                     if (type && type.length > 0) {
                         kind = type[0].kind;
                     }
-                   
+
                     let path = `${pkgInfo.name}.${name}`;
                     let range = Range.create(self.getLineAndPosFromOffset(fileName, name.pos), self.getLineAndPosFromOffset(fileName, name.end));
-                    //TODO add type here
+
                     exportedRefs.push({
                         name: name.text, kind: kind, path: path, repoName: pkgInfo.name,
                         repoURL: pkgInfo.repo, repoCommit: pkgInfo.version,
@@ -392,7 +414,7 @@ export default class TypeScriptService {
                 if (name == 'node_modules') {
                     return false;
                 }
-                return name.endsWith('.ts') || name.endsWith('.js') || name.endsWith('.json') || fs.statSync(path.join(dir, name)).isDirectory();
+                return name.endsWith('.ts') || name.endsWith('.js') || fs.statSync(path.join(dir, name)).isDirectory();
             }).forEach(function (name) {
                 self.getFiles(root, path.posix.join(prefix, name), files)
             })
