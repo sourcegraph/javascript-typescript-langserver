@@ -87,11 +87,29 @@ export default class TypeScriptService {
         }
 
         function collectExports(node: ts.Node, parentPath?: string) {
-            if ((node.flags & ts.NodeFlags.Export) != 0) {
-                console.error("node kind = ", node.kind, "exports = ", (node.flags & ts.NodeFlags.Export) != 0);
-            }
 
             let fileName = node.getSourceFile().fileName;
+
+            if (node.kind == ts.SyntaxKind.ExportDeclaration) {
+                let decl = <ts.ExportDeclaration>node;
+                decl.exportClause.elements.forEach(element => {
+                    let name = element.name;
+                    let type = self.services.getTypeDefinitionAtPosition(fileName, name.pos);
+                    let kind = "";
+                    if (type && type.length > 0) {
+                        kind = type[0].kind;
+                    }
+                   
+                    let path = `${pkgInfo.name}.${name}`;
+                    let range = Range.create(self.getLineAndPosFromOffset(fileName, name.pos), self.getLineAndPosFromOffset(fileName, name.end));
+                    //TODO add type here
+                    exportedRefs.push({
+                        name: name.text, kind: kind, path: path, repoName: pkgInfo.name,
+                        repoURL: pkgInfo.repo, repoCommit: pkgInfo.version,
+                        location: { file: fileName, range: range }
+                    });
+                });
+            }
             if (node.kind == ts.SyntaxKind.FunctionDeclaration) {
                 if ((node.flags & ts.NodeFlags.Export) != 0) {
                     let decl = <ts.FunctionDeclaration>node;
@@ -289,7 +307,6 @@ export default class TypeScriptService {
             return [];
         }
         const offset: number = this.offset(fileName, line, column);
-        console.error("diagnostics = ", this.services.getProgram().getDeclarationDiagnostics());
         return this.services.getDefinitionAtPosition(fileName, offset);
     }
 
