@@ -17,6 +17,11 @@ import {
 import TypeScriptService from './typescript';
 import Connection from './connection';
 
+import processor from './processor';
+
+// TODO: replace with configuration parameters
+const PORT = 4143;
+
 // namespace VSCodeContentRequest {
 // 	export const type: RequestType<TextDocumentPositionParams, string, any> = { get method() { return 'textDocument/externals'; } };
 // }
@@ -142,3 +147,4 @@ process.on('uncaughtException', (err) => {
 	console.error(err);
 });
 server.listen(2088, '127.0.0.1');
+processor.listen(PORT);
