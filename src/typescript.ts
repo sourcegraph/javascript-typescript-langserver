@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as ts from 'typescript';
 import {
-    Position, Range
+    Position, Range, Location
 } from 'vscode-languageserver';
 
 import * as packages from './find-packages';
@@ -371,7 +371,7 @@ export default class TypeScriptService {
         return this.services.getDefinitionAtPosition(fileName, offset);
     }
 
-    getExternalDefinition(uri: string, line: number, column: number): string {
+    getExternalDefinition(uri: string, line: number, column: number): Location {
         const fileName: string = this.uri2path(uri);
         if (!this.files[fileName]) {
             return;
@@ -384,8 +384,8 @@ export default class TypeScriptService {
         });
 
         if (externalRes) {
-            // console.error("externalRes = ", externalRes);
-            return util.formExternalUri(externalRes);
+            return Location.create(util.formExternalUri(externalRes),
+                Range.create(this.getLineAndPosFromOffset(fileName, externalRes.start), this.getLineAndPosFromOffset(fileName, externalRes.start + externalRes.len)));
         }
     }
 

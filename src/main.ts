@@ -92,7 +92,7 @@ var server = net.createServer(function (socket) {
 				//check whether definition is external, if uri string returned, add this location
 				let externalDef = connection.service.getExternalDefinition(params.textDocument.uri, params.position.line, params.position.character);
 				if (externalDef) {
-					result.push(Location.create(externalDef, util.formEmptyRange()));
+					result.push(externalDef);
 				}
 			}
 			return result;
