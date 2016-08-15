@@ -111,7 +111,6 @@ export default class TypeScriptService {
                                         repoURL: pkgInfo.repo, repoCommit: pkgInfo.version,
                                         location: { file: fileName, range: range }
                                     });
-
                                 }
                             }
                         }
@@ -236,11 +235,15 @@ export default class TypeScriptService {
                 sourceFile.getChildren().forEach(child => {
                     collectExports(child);
                 });
+            }
+        }
+
+        for (const sourceFile of this.services.getProgram().getSourceFiles()) {
+            if (!sourceFile.hasNoDefaultLib) {
                 ts.forEachChild(sourceFile, collectExportedChildDeclaration);
             }
         }
 
-        console.error("all exports = ", allExports);
         return exportedRefs;
     }
 
