@@ -52,11 +52,6 @@ export default class TypeScriptService {
 
         // Create the language service files
         this.services = ts.createLanguageService(servicesHost, ts.createDocumentRegistry());
-
-        // this.externalRefs = this.collectExternals(this.collectExternalLibs());
-        // console.error("externalRefs = ", this.externalRefs);
-        // this.exportedEnts = this.collectExportedEntities();
-        // console.error("exportedEnts = ", this.exportedEnts);
     }
 
     getExternalRefs() {
@@ -77,6 +72,7 @@ export default class TypeScriptService {
         let exportedRefs = [];
         let self = this;
         let pkgInfo = findCurrentProjectInfo();
+        let allExports = [];
 
         function findCurrentProjectInfo() {
             let pkgFiles = packages.collectFiles(self.root, ["node_modules"]);
@@ -86,12 +82,50 @@ export default class TypeScriptService {
             return { name: pkg.package.name, repo: pkg.package.repository && pkg.package.repository.url, version: pkg.package._shasum }
         }
 
+        function collectExportedChildDeclaration(node: ts.Node) {
+            let fileName = node.getSourceFile().fileName;
+            if (node.kind == ts.SyntaxKind.Identifier) {
+                let id = <ts.Identifier>node;
+                if (node.parent.kind == ts.SyntaxKind.PropertyAccessExpression) {
+                    let parent = <ts.PropertyAccessExpression>node.parent;
+                    if (parent.expression.kind == ts.SyntaxKind.PropertyAccessExpression && parent.name.kind == ts.SyntaxKind.Identifier) {
+                        let parentExpr = <ts.PropertyAccessExpression>parent.expression;
+                        if (parentExpr.expression.kind == ts.SyntaxKind.Identifier && parentExpr.name.kind == ts.SyntaxKind.Identifier) {
+                            if (parentExpr.name['text'] == "prototype") {
+                                let res = allExports.find(elem => {
+                                    if (elem.name == parentExpr.expression['text']) {
+                                        return true;
+                                    }
+                                });
+                                if (res) {
+                                    let name = parent.name;
+                                    let type = self.services.getTypeDefinitionAtPosition(fileName, name.pos);
+                                    let kind = "";
+                                    if (type && type.length > 0) {
+                                        kind = type[0].kind;
+                                    }
+                                    let path = `${res.path}.${name.text}`
+                                    let range = Range.create(self.getLineAndPosFromOffset(fileName, name.pos), self.getLineAndPosFromOffset(fileName, name.end));
+                                    exportedRefs.push({
+                                        name: name.text, kind: kind, path: path, repoName: pkgInfo.name,
+                                        repoURL: pkgInfo.repo, repoCommit: pkgInfo.version,
+                                        location: { file: fileName, range: range }
+                                    });
+
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            ts.forEachChild(node, collectExportedChildDeclaration);
+        }
+
         function collectExports(node: ts.Node, parentPath?: string) {
             let fileName = node.getSourceFile().fileName;
             if (node.kind == ts.SyntaxKind.BinaryExpression) {
                 let expr = <ts.BinaryExpression>node;
                 if (expr.left.kind == ts.SyntaxKind.PropertyAccessExpression) {
-                    // console.error("inside property access expresssion");
                     let left = <ts.PropertyAccessExpression>expr.left;
                     if (left.expression.kind == ts.SyntaxKind.Identifier && left.expression.getText() == "exports"
                         && left.name.kind == ts.SyntaxKind.Identifier) {
@@ -104,6 +138,7 @@ export default class TypeScriptService {
 
                         let path = `${pkgInfo.name}.${name.text}`;
                         let range = Range.create(self.getLineAndPosFromOffset(fileName, name.pos), self.getLineAndPosFromOffset(fileName, name.end));
+                        allExports.push({ name: name.text, path: path });
 
                         exportedRefs.push({
                             name: name.text, kind: kind, path: path, repoName: pkgInfo.name,
@@ -124,7 +159,7 @@ export default class TypeScriptService {
 
                     let path = `${pkgInfo.name}.${name.text}`;
                     let range = Range.create(self.getLineAndPosFromOffset(fileName, name.pos), self.getLineAndPosFromOffset(fileName, name.end));
-
+                    allExports.push({ name: name.text, path: path });
                     exportedRefs.push({
                         name: name.text, kind: kind, path: path, repoName: pkgInfo.name,
                         repoURL: pkgInfo.repo, repoCommit: pkgInfo.version,
@@ -201,9 +236,11 @@ export default class TypeScriptService {
                 sourceFile.getChildren().forEach(child => {
                     collectExports(child);
                 });
+                ts.forEachChild(sourceFile, collectExportedChildDeclaration);
             }
         }
 
+        console.error("all exports = ", allExports);
         return exportedRefs;
     }
 
