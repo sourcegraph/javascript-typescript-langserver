@@ -87,11 +87,11 @@ export default class TypeScriptService {
         }
 
         function collectExports(node: ts.Node, parentPath?: string) {
-
             let fileName = node.getSourceFile().fileName;
             if (node.kind == ts.SyntaxKind.BinaryExpression) {
                 let expr = <ts.BinaryExpression>node;
                 if (expr.left.kind == ts.SyntaxKind.PropertyAccessExpression) {
+                    // console.error("inside property access expresssion");
                     let left = <ts.PropertyAccessExpression>expr.left;
                     if (left.expression.kind == ts.SyntaxKind.Identifier && left.expression.getText() == "exports"
                         && left.name.kind == ts.SyntaxKind.Identifier) {
@@ -102,7 +102,7 @@ export default class TypeScriptService {
                             kind = type[0].kind;
                         }
 
-                        let path = `${pkgInfo.name}.${name}`;
+                        let path = `${pkgInfo.name}.${name.text}`;
                         let range = Range.create(self.getLineAndPosFromOffset(fileName, name.pos), self.getLineAndPosFromOffset(fileName, name.end));
 
                         exportedRefs.push({
@@ -122,7 +122,7 @@ export default class TypeScriptService {
                         kind = type[0].kind;
                     }
 
-                    let path = `${pkgInfo.name}.${name}`;
+                    let path = `${pkgInfo.name}.${name.text}`;
                     let range = Range.create(self.getLineAndPosFromOffset(fileName, name.pos), self.getLineAndPosFromOffset(fileName, name.end));
 
                     exportedRefs.push({
