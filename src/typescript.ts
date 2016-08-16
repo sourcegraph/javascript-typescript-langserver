@@ -69,7 +69,6 @@ export default class TypeScriptService {
     }
 
     collectExportedEntities() {
-        console.error("inside collected exported ents");
         let exportedRefs = [];
         let self = this;
         let pkgFiles = [];
@@ -87,6 +86,8 @@ export default class TypeScriptService {
                     }
                 }
             });
+
+            console.error("files = ", pkg.files);
 
             return { name: pkg && pkg.package.name, repo: pkg && pkg.package.repository && pkg.package.repository.url, version: pkg && pkg.package._shasum }
         }
@@ -133,6 +134,7 @@ export default class TypeScriptService {
         function collectExports(node: ts.Node, parentPath?: string) {
             let fileName = node.getSourceFile().fileName;
             let pkgInfo = findCurrentProjectInfo(node.getSourceFile().path);
+            console.error("pkg info = ", pkgInfo);
             if (node.kind == ts.SyntaxKind.BinaryExpression) {
                 let expr = <ts.BinaryExpression>node;
                 if (expr.left.kind == ts.SyntaxKind.PropertyAccessExpression) {
@@ -255,11 +257,12 @@ export default class TypeScriptService {
             }
         }
 
+        console.error("exported refs = ", exportedRefs);
         return exportedRefs;
     }
 
     collectExternalLibs() {
-        let pkgFiles = packages.collectFiles(`${this.root} / node_modules`, ["node_modules"]);
+        let pkgFiles = packages.collectFiles(this.root + "/node_modules", ["node_modules"]);
         let pkgsInfo = pkgFiles.map(pkg => {
             return { name: pkg.package.name, repo: pkg.package.repository && pkg.package.repository.url, version: pkg.package._shasum }
         });
@@ -272,7 +275,7 @@ export default class TypeScriptService {
         var importRefs = [];
 
         for (const sourceFile of this.services.getProgram().getSourceFiles()) {
-            if (!sourceFile.hasNoDefaultLib) {
+            if (!sourceFile.hasNoDefaultLib && sourceFile.fileName.indexOf("node_modules") == -1) {
                 ts.forEachChild(sourceFile, collectImports);
                 ts.forEachChild(sourceFile, collectImportedCalls);
             }
@@ -280,7 +283,34 @@ export default class TypeScriptService {
         return importRefs;
 
         function collectImports(node: ts.Node) {
-            if (node.kind == ts.SyntaxKind.ImportDeclaration) {
+            if (node.kind == ts.SyntaxKind.VariableDeclaration) {
+                let decl = <ts.VariableDeclaration>node;
+                if (decl.name.kind == ts.SyntaxKind.Identifier && decl.initializer && decl.initializer.kind == ts.SyntaxKind.CallExpression) {
+                    let init = <ts.CallExpression>decl.initializer;
+                    let name = <ts.Identifier>decl.name;
+                    let argument = init.arguments[0];
+                    if (init.expression.kind == ts.SyntaxKind.Identifier && init.expression['text'] == "require"
+                        && argument.kind == ts.SyntaxKind.StringLiteral) {
+                        let libRes = externalLibs.find(lib => {
+                            if (lib.name == argument['text']) {
+                                return true;
+                            }
+                        });
+                        if (libRes) {
+                            let libName = argument['text'];
+                            let refs: ts.ReferenceEntry[] = self.services.getReferencesAtPosition(name.getSourceFile().fileName, name.pos + 1);
+                            refs.forEach(ref => {
+                                var newRef = {
+                                    name: name.text, path: `${libName}`, file: ref.fileName, start: ref.textSpan.start,
+                                    len: ref.textSpan.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
+                                };
+                                importRefs.push(newRef);
+                            });
+
+                        }
+                    }
+                }
+            } else if (node.kind == ts.SyntaxKind.ImportDeclaration) {
                 let decl = <ts.ImportDeclaration>node;
                 if (decl.importClause !== undefined && decl.importClause.namedBindings !== undefined) {
                     let libRes = externalLibs.find(lib => {
