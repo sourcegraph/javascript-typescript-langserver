@@ -69,21 +69,31 @@ export default class TypeScriptService {
     }
 
     collectExportedEntities() {
+        console.error("inside collected exported ents");
         let exportedRefs = [];
         let self = this;
-        let pkgInfo = findCurrentProjectInfo();
+        let pkgFiles = [];
         let allExports = [];
 
-        function findCurrentProjectInfo() {
-            let pkgFiles = packages.collectFiles(self.root, ["node_modules"]);
+        function findCurrentProjectInfo(fileName) {
+            if (!pkgFiles || pkgFiles.length == 0) {
+                pkgFiles = packages.collectFiles(self.root, ["node_modules"]);
+            }
+
             let pkg = pkgFiles.find(function (pkg) {
-                return self.root == path.dirname(pkg.path) + "/";
+                if (pkg) {
+                    if (pkg.files.indexOf(fileName) > -1) {
+                        return true;
+                    }
+                }
             });
-            return { name: pkg.package.name, repo: pkg.package.repository && pkg.package.repository.url, version: pkg.package._shasum }
+
+            return { name: pkg && pkg.package.name, repo: pkg && pkg.package.repository && pkg.package.repository.url, version: pkg && pkg.package._shasum }
         }
 
         function collectExportedChildDeclaration(node: ts.Node) {
             let fileName = node.getSourceFile().fileName;
+            let pkgInfo = findCurrentProjectInfo(node.getSourceFile().path);
             if (node.kind == ts.SyntaxKind.Identifier) {
                 let id = <ts.Identifier>node;
                 if (node.parent.kind == ts.SyntaxKind.PropertyAccessExpression) {
@@ -122,6 +132,7 @@ export default class TypeScriptService {
 
         function collectExports(node: ts.Node, parentPath?: string) {
             let fileName = node.getSourceFile().fileName;
+            let pkgInfo = findCurrentProjectInfo(node.getSourceFile().path);
             if (node.kind == ts.SyntaxKind.BinaryExpression) {
                 let expr = <ts.BinaryExpression>node;
                 if (expr.left.kind == ts.SyntaxKind.PropertyAccessExpression) {
