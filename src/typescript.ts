@@ -101,8 +101,9 @@ export default class TypeScriptService {
         }
 
         function collectExportedChildDeclaration(node: ts.Node) {
-            let fileName = node.getSourceFile().fileName;
-            let pkgInfo = findCurrentProjectInfo(node.getSourceFile().path);
+            let sourceFile = node.getSourceFile();
+            let fileName = sourceFile.fileName;
+            let pkgInfo = findCurrentProjectInfo(sourceFile.path);
             if (node.kind == ts.SyntaxKind.Identifier) {
                 let id = <ts.Identifier>node;
                 if (node.parent.kind == ts.SyntaxKind.PropertyAccessExpression) {
@@ -118,13 +119,14 @@ export default class TypeScriptService {
                                 });
                                 if (res) {
                                     let name = parent.name;
-                                    let type = self.services.getTypeDefinitionAtPosition(fileName, name.pos);
+                                    let posInFile = name.getStart(sourceFile);
+                                    let type = self.services.getTypeDefinitionAtPosition(fileName, posInFile);
                                     let kind = "";
                                     if (type && type.length > 0) {
                                         kind = type[0].kind;
                                     }
                                     let path = `${res.path}.${name.text}`
-                                    let range = Range.create(self.getLineAndPosFromOffset(fileName, name.pos), self.getLineAndPosFromOffset(fileName, name.end));
+                                    let range = Range.create(self.getLineAndPosFromOffset(fileName, posInFile), self.getLineAndPosFromOffset(fileName, name.getEnd()));
                                     exportedRefs.push({
                                         name: name.text,
                                         kind: kind,
@@ -145,8 +147,9 @@ export default class TypeScriptService {
         }
 
         function collectExports(node: ts.Node, parentPath?: string) {
-            let fileName = node.getSourceFile().fileName;
-            let pkgInfo = findCurrentProjectInfo(node.getSourceFile().path);
+            let sourceFile = node.getSourceFile();
+            let fileName = sourceFile.fileName;
+            let pkgInfo = findCurrentProjectInfo(sourceFile.path);
             if (node.kind == ts.SyntaxKind.BinaryExpression) {
                 let expr = <ts.BinaryExpression>node;
                 if (expr.left.kind == ts.SyntaxKind.PropertyAccessExpression) {
@@ -154,14 +157,15 @@ export default class TypeScriptService {
                     if (left.expression.kind == ts.SyntaxKind.Identifier && left.expression.getText() == "exports"
                         && left.name.kind == ts.SyntaxKind.Identifier) {
                         let name = left.name;
-                        let type = self.services.getTypeDefinitionAtPosition(fileName, name.pos);
+                        let posInFile = name.getStart(sourceFile);
+                        let type = self.services.getTypeDefinitionAtPosition(fileName, posInFile);
                         let kind = "";
                         if (type && type.length > 0) {
                             kind = type[0].kind;
                         }
 
                         let path = `${pkgInfo.name}.${name.text}`;
-                        let range = Range.create(self.getLineAndPosFromOffset(fileName, name.pos), self.getLineAndPosFromOffset(fileName, name.end));
+                        let range = Range.create(self.getLineAndPosFromOffset(fileName, posInFile), self.getLineAndPosFromOffset(fileName, name.getEnd()));
                         allExports.push({ name: name.text, path: path });
 
                         exportedRefs.push({
@@ -185,14 +189,15 @@ export default class TypeScriptService {
                 }
                 decl.exportClause.elements.forEach(element => {
                     let name = element.name;
-                    let type = self.services.getTypeDefinitionAtPosition(fileName, name.pos);
+                    let posInFile = name.getStart(sourceFile);
+                    let type = self.services.getTypeDefinitionAtPosition(fileName, posInFile);
                     let kind = "";
                     if (type && type.length > 0) {
                         kind = type[0].kind;
                     }
 
                     let path = `${pkgInfo.name}.${name.text}`;
-                    let range = Range.create(self.getLineAndPosFromOffset(fileName, name.pos), self.getLineAndPosFromOffset(fileName, name.end));
+                    let range = Range.create(self.getLineAndPosFromOffset(fileName, posInFile), self.getLineAndPosFromOffset(fileName, name.getEnd()));
                     allExports.push({ name: name.text, path: path });
                     exportedRefs.push({
                         name: name.text,
@@ -211,7 +216,7 @@ export default class TypeScriptService {
                     let decl = <ts.FunctionDeclaration>node;
                     let text = decl.name.text;
                     let path = parentPath ? `${parentPath}.${text}` : `${pkgInfo.name}.${text}`;
-                    let range = Range.create(self.getLineAndPosFromOffset(fileName, decl.name.pos), self.getLineAndPosFromOffset(fileName, decl.name.end));
+                    let range = Range.create(self.getLineAndPosFromOffset(fileName, decl.name.getStart(sourceFile)), self.getLineAndPosFromOffset(fileName, decl.name.getEnd()));
                     exportedRefs.push({
                         name: text,
                         kind: "function",
@@ -231,7 +236,7 @@ export default class TypeScriptService {
                         return;
                     }
                     let path = `${pkgInfo.name}.${decl.name.text}`;
-                    let range = Range.create(self.getLineAndPosFromOffset(fileName, decl.name.pos), self.getLineAndPosFromOffset(fileName, decl.name.end));
+                    let range = Range.create(self.getLineAndPosFromOffset(fileName, decl.name.getStart(sourceFile)), self.getLineAndPosFromOffset(fileName, decl.name.getEnd()));
                     exportedRefs.push({
                         name: decl.name.text,
                         kind: "class",
@@ -253,7 +258,7 @@ export default class TypeScriptService {
                     if (decl.name.kind == ts.SyntaxKind.Identifier) {
                         let name = <ts.Identifier>decl.name;
                         let path = `${parentPath}.${name.text}`;
-                        let range = Range.create(self.getLineAndPosFromOffset(fileName, decl.name.pos), self.getLineAndPosFromOffset(fileName, decl.name.end));
+                        let range = Range.create(self.getLineAndPosFromOffset(fileName, decl.name.getStart(sourceFile)), self.getLineAndPosFromOffset(fileName, decl.name.getEnd()));
                         exportedRefs.push({
                             name: name.text,
                             kind: "method",
@@ -273,7 +278,7 @@ export default class TypeScriptService {
                     if (decl.name.kind == ts.SyntaxKind.Identifier) {
                         let name = <ts.Identifier>decl.name;
                         let path = parentPath ? `${parentPath}.${name.text}` : `${pkgInfo.name}.${name.text}`;
-                        let range = Range.create(self.getLineAndPosFromOffset(fileName, decl.name.pos), self.getLineAndPosFromOffset(fileName, decl.name.end));
+                        let range = Range.create(self.getLineAndPosFromOffset(fileName, decl.name.getStart(sourceFile)), self.getLineAndPosFromOffset(fileName, decl.name.getEnd()));
                         exportedRefs.push({
                             name: name.text,
                             kind: "var",
