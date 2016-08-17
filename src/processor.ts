@@ -40,7 +40,7 @@ function workspace(req: any, sync?: boolean): Promise<string> {
 					return reject('being configured');
 				}
 			}
-			configure(p).then(function res() {
+			configure(p, sync).then(function res() {
 				resolve(p);
 			}, function rej() {
 				reject(p);
@@ -127,13 +127,11 @@ app.post('/hover', (req, res) => {
 			console.log('hover', req.body.Repo, req.body.Commit, req.body.File, req.body.Line, req.body.Character);
 			const quickInfo: ts.QuickInfo = service.getHover('file:///' + req.body.File, req.body.Line + 1, req.body.Character + 1);
 			res.send({
-				Contents: [{
-					Type: 'JavaScript',
-					Value: util.formHover(quickInfo)
-				}]
+				Title: quickInfo.kind,
+				DocHTML: util.docstring(quickInfo.documentation)
 			});
 		} catch (e) {
-			console.error('hover', req.body, e);
+			console.error('hover', req.body, e, e.stack);
 			res.status(500).send({ Error: '' + e });
 		}
 	}, function () {
@@ -143,27 +141,28 @@ app.post('/hover', (req, res) => {
 
 app.post('/definition', (req, res) => {
 	let future = workspace(req);
-	future.then(function (path) {
-		let service = new TypeScriptService(path);
+	future.then(function (p) {
+		let service = new TypeScriptService(p);
 		try {
 			console.log('definition', req.body.Repo, req.body.Commit, req.body.File, req.body.Line, req.body.Character);
 			const defs: ts.DefinitionInfo[] = service.getDefinition('file:///' + req.body.File, req.body.Line + 1, req.body.Character + 1);
 			// TODO: what if there are more than 1 def?
 			if (defs.length == 0) {
-				return res.status(400).send({ Error: 'No definiton found' });
+				return res.status(400).send({ Error: 'No definition found' });
 			}
 			const def: ts.DefinitionInfo = defs[0];
 			const start = service.position(def.fileName, def.textSpan.start);
 			const end = service.position(def.fileName, def.textSpan.start + def.textSpan.length);
+			let rel = path.relative(path.normalize(p), path.normalize(def.fileName));
 			res.send({
-				File: def.fileName,
+				File: util.normalizePath(rel),
 				StartLine: start.line - 1,
 				StartCharacter: start.character - 1,
 				EndLine: end.line - 1,
 				EndCharacter: end.character - 1
 			});
 		} catch (e) {
-			console.error('definition', req.body, e);
+			console.error('definition', req.body, e, e.stack);
 			res.status(500).send({ Error: '' + e });
 		}
 	}, function () {
@@ -173,8 +172,8 @@ app.post('/definition', (req, res) => {
 
 app.post('/local-refs', (req, res) => {
 	let future = workspace(req, true);
-	future.then(function (path) {
-		let service = new TypeScriptService(path);
+	future.then(function (p) {
+		let service = new TypeScriptService(p);
 		try {
 			console.log('local-refs', req.body.Repo, req.body.Commit, req.body.File, req.body.Line, req.body.Character);
 			const refs: ts.ReferenceEntry[] = service.getReferences('file:///' + req.body.File, req.body.Line + 1, req.body.Character + 1);
@@ -182,8 +181,9 @@ app.post('/local-refs', (req, res) => {
 			refs.forEach(function (ref) {
 				const start = service.position(ref.fileName, ref.textSpan.start);
 				const end = service.position(ref.fileName, ref.textSpan.start + ref.textSpan.length);
+				let rel = path.relative(path.normalize(p), path.normalize(ref.fileName));
 				ret.Refs.push({
-					File: ref.fileName,
+					File: util.normalizePath(rel),
 					StartLine: start.line - 1,
 					StartCharacter: start.character - 1,
 					EndLine: end.line - 1,
@@ -192,7 +192,7 @@ app.post('/local-refs', (req, res) => {
 			});
 			res.send(ret);
 		} catch (e) {
-			console.error('local-refs', req.body, e);
+			console.error('local-refs', req.body, e, e.stack);
 			res.status(500).send({ Error: '' + e });
 		}
 	}, function () {
@@ -210,40 +210,47 @@ app.post('/external-refs', (req, res) => {
 			let ret = { Defs: [] };
 			externals.forEach(function (external) {
 				ret.Defs.push({
-					Path: util.formExternalUri(external)
+					Repo: external.repoURL,
+					Commit: external.repoCommit,
+					Unit: external.repoName,
+					Path: external.path
 				});
 			});
 			res.send(ret);
 		} catch (e) {
-			console.error('external-refs', req.body, e);
+			console.error('external-refs', req.body, e, e.stack);
 			res.status(500).send({ Error: '' + e });
 		}
 	}, function () {
 		res.status(500).send({ Error: 'Ooops, shouldn\'t happen' });
-	});	
+	});
 });
 
 app.post('/exported-symbols', (req, res) => {
 	let future = workspace(req, true);
-	future.then(function (path) {
-		let service = new TypeScriptService(path);
+	future.then(function (p) {
+		let service = new TypeScriptService(p);
 		try {
 			console.log('exported-symbols', req.body.Repo, req.body.Commit);
 			const exported = service.getExportedEnts();
-			let ret = { Defs: [] };
+			let ret = { Symbols: [] };
 			exported.forEach(function (entry) {
-				ret.Defs.push({
-					Path: util.formExternalUri(entry)
+				ret.Symbols.push({
+					Name: entry.name,
+					Kind: entry.kind,
+					File: entry.location.file,
+					DocHTML: entry.documentation,
+					Path: entry.path
 				});
 			});
 			res.send(ret);
 		} catch (e) {
-			console.error('exported-symbols', req.body, e);
+			console.error('exported-symbols', req.body, e, e.stack);
 			res.status(500).send({ Error: '' + e });
 		}
 	}, function () {
 		res.status(500).send({ Error: 'Ooops, shouldn\'t happen' });
-	});	
+	});
 });
 
 export default app;

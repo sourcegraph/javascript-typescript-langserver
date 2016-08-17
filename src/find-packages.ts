@@ -4,7 +4,7 @@ const readJsonSync = require('read-json-sync');
 import * as path from 'path';
 
 export function collectFiles(dir, excludes) {
-    var files = findfiles(dir, {
+    return findfiles(dir, {
         exclude: excludes,
         matcher: function (directory, name) {
             return /\package.json?$/.test(name);
@@ -14,20 +14,26 @@ export function collectFiles(dir, excludes) {
             let jsFiles = findfiles(path.dirname(f), {
                 exclude: excludes,
                 matcher: function (directory, name) {
-                    return (/\.(js|jsx|ts|tsx)$/i).test(name);
+                    return (/\.(jsx?|tsx?)$/i).test(name);
                 }
+            }).map(function(f) {
+                return path.normalize(f);
             });
-            let fileNames = jsFiles.map(file => {
-                return file.toLowerCase();
-            });
-            return { path: f, package: readJsonSync(f), files: fileNames };
+            let packageContent = null;
+            try {
+                packageContent = readJsonSync(f);
+            } catch (e) {
+                // ignore bad packages
+            }
+            return { path: f, package: packageContent, files: jsFiles };
         } catch (error) {
             console.error("Error in parsing file = ", f);
             console.error(error);
         }
-        //return util.normalizePath(f);
+    }).filter(function(item) {
+        // include only properly parsed ones
+        return item.package;
     });
-    return files;
 }
 
 
