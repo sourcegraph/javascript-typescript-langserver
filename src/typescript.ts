@@ -300,7 +300,7 @@ export default class TypeScriptService {
         }
 
         for (const sourceFile of this.services.getProgram().getSourceFiles()) {
-            if (!sourceFile.hasNoDefaultLib) {
+            if (!sourceFile.hasNoDefaultLib && sourceFile.fileName.indexOf("node_modules") == -1) {
                 sourceFile.getChildren().forEach(child => {
                     collectExports(child);
                 });
@@ -308,7 +308,7 @@ export default class TypeScriptService {
         }
 
         for (const sourceFile of this.services.getProgram().getSourceFiles()) {
-            if (!sourceFile.hasNoDefaultLib) {
+            if (!sourceFile.hasNoDefaultLib && sourceFile.fileName.indexOf("node_modules") == -1) {
                 ts.forEachChild(sourceFile, collectExportedChildDeclaration);
             }
         }
