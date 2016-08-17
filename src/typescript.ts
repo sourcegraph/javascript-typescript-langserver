@@ -187,28 +187,31 @@ export default class TypeScriptService {
                             let object = <ts.ObjectLiteralExpression>expr.right;
                             if (object.properties) {
                                 object.properties.forEach(property => {
-                                    if (property.name.kind == ts.SyntaxKind.Identifier) {
-                                        let name = <ts.Identifier>property.name;
-                                        let posInFile = name.getStart(sourceFile);
-                                        let type = self.services.getTypeDefinitionAtPosition(fileName, posInFile);
-                                        let kind = "";
-                                        if (type && type.length > 0) {
-                                            kind = type[0].kind;
-                                        }
+                                    if (property.kind == ts.SyntaxKind.PropertyAssignment) {
+                                        let prop = <ts.PropertyAssignment>property;
+                                        if (prop.name.kind == ts.SyntaxKind.Identifier) {
+                                            let name = prop.initializer && prop.initializer.kind == ts.SyntaxKind.Identifier ? <ts.Identifier>prop.initializer : <ts.Identifier>prop.name;
+                                            let posInFile = name.getStart(sourceFile);
+                                            let type = self.services.getTypeDefinitionAtPosition(fileName, posInFile);
+                                            let kind = "";
+                                            if (type && type.length > 0) {
+                                                kind = type[0].kind;
+                                            }
 
-                                        let path = `${pkgInfo.name}.${name.text}`;
-                                        let range = Range.create(self.getLineAndPosFromOffset(fileName, posInFile), self.getLineAndPosFromOffset(fileName, name.getEnd()));
-                                        allExports.push({ name: name.text, path: path });
-                                        exportedRefs.push({
-                                            name: name.text,
-                                            kind: kind,
-                                            path: path,
-                                            location: {
-                                                file: fileName,
-                                                range: range
-                                            },
-                                            documentation: self.doc(node)
-                                        });
+                                            let path = `${pkgInfo.name}.${name.text}`;
+                                            let range = Range.create(self.getLineAndPosFromOffset(fileName, posInFile), self.getLineAndPosFromOffset(fileName, name.getEnd()));
+                                            allExports.push({ name: name.text, path: path });
+                                            exportedRefs.push({
+                                                name: name.text,
+                                                kind: kind,
+                                                path: path,
+                                                location: {
+                                                    file: fileName,
+                                                    range: range
+                                                },
+                                                documentation: self.doc(node)
+                                            });
+                                        }
                                     }
                                 })
                             }
