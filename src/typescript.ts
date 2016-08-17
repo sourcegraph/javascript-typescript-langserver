@@ -288,6 +288,7 @@ export default class TypeScriptService {
                 if (decl.name.kind == ts.SyntaxKind.Identifier && decl.initializer && decl.initializer.kind == ts.SyntaxKind.CallExpression) {
                     let init = <ts.CallExpression>decl.initializer;
                     let name = <ts.Identifier>decl.name;
+                    let fileName = node.getSourceFile().fileName;
                     let argument = init.arguments[0];
                     if (init.expression.kind == ts.SyntaxKind.Identifier && init.expression['text'] == "require"
                         && argument.kind == ts.SyntaxKind.StringLiteral) {
@@ -299,14 +300,21 @@ export default class TypeScriptService {
                         if (libRes) {
                             let libName = argument['text'];
                             let refs: ts.ReferenceEntry[] = self.services.getReferencesAtPosition(name.getSourceFile().fileName, name.pos + 1);
-                            refs.forEach(ref => {
+                            if (refs) {
+                                refs.forEach(ref => {
+                                    var newRef = {
+                                        name: name.text, path: `${libName}`, file: ref.fileName, start: ref.textSpan.start,
+                                        len: ref.textSpan.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
+                                    };
+                                    importRefs.push(newRef);
+                                });
+                            } else {
                                 var newRef = {
-                                    name: name.text, path: `${libName}`, file: ref.fileName, start: ref.textSpan.start,
-                                    len: ref.textSpan.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
+                                    name: name.text, path: `${libName}`, file: fileName, start: name.pos,
+                                    len: name.text.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
                                 };
                                 importRefs.push(newRef);
-                            });
-
+                            }
                         }
                     }
                 }
