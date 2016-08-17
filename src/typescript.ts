@@ -16,8 +16,8 @@ export default class TypeScriptService {
     files: ts.Map<{ version: number }>
     root: string
     lines: ts.Map<number[]>
-    externalRefs = [];
-    exportedEnts = [];
+    externalRefs = null;
+    exportedEnts = null;
 
     constructor(root: string) {
         this.root = root;
@@ -38,7 +38,7 @@ export default class TypeScriptService {
             getScriptFileNames: () => allFiles,
             getScriptVersion: (fileName) => this.files[fileName] && this.files[fileName].version.toString(),
             getScriptSnapshot: (fileName) => {
-                const fullPath = path.join(this.root, fileName)
+                const fullPath = this.resolvePath(fileName);
                 if (!fs.existsSync(fullPath)) {
                     return undefined;
                 }
@@ -55,41 +55,49 @@ export default class TypeScriptService {
     }
 
     getExternalRefs() {
-        if (!this.externalRefs || this.externalRefs.length == 0) {
+        if (this.externalRefs === null) {
             this.externalRefs = this.collectExternals(this.collectExternalLibs());
         }
         return this.externalRefs;
     }
 
     getExportedEnts() {
-        if (!this.exportedEnts || this.exportedEnts.length == 0) {
+        if (this.exportedEnts === null) {
             this.exportedEnts = this.collectExportedEntities();
         }
         return this.exportedEnts;
     }
 
+    private doc(node: ts.Node): string {
+        // TODO implement
+        return null;
+    }
+
     collectExportedEntities() {
         let exportedRefs = [];
         let self = this;
-        let pkgFiles = [];
         let allExports = [];
+        let pkgMap = null;
 
         function findCurrentProjectInfo(fileName) {
-            if (!pkgFiles || pkgFiles.length == 0) {
-                pkgFiles = packages.collectFiles(self.root, ["node_modules"]);
+            // (alexsaveliev) TypeScript returns lowercase path items
+            if (pkgMap === null) {
+                const packageDefs = packages.collectFiles(self.root, ["node_modules"]);
+                pkgMap = new Map<string, any>();
+                packageDefs.forEach(function (packageDef) {
+                    const def = {
+                        name: packageDef.package.name,
+                        repo: packageDef.package.repository && packageDef.package.repository.url,
+                        version: packageDef.package._shasum
+                    };
+                    packageDef.files.forEach(function (f) {
+                        pkgMap.set(path.normalize(f).toLowerCase(), def);
+                    });
+                });
             }
 
-            let pkg = pkgFiles.find(function (pkg) {
-                if (pkg) {
-                    if (pkg.files.indexOf(fileName) > -1) {
-                        return true;
-                    }
-                }
-            });
-
-            console.error("files = ", pkg.files);
-
-            return { name: pkg && pkg.package.name, repo: pkg && pkg.package.repository && pkg.package.repository.url, version: pkg && pkg.package._shasum }
+            fileName = path.normalize(fileName).toLowerCase();
+            return pkgMap.get(fileName) || {};
         }
 
         function collectExportedChildDeclaration(node: ts.Node) {
@@ -118,9 +126,14 @@ export default class TypeScriptService {
                                     let path = `${res.path}.${name.text}`
                                     let range = Range.create(self.getLineAndPosFromOffset(fileName, name.pos), self.getLineAndPosFromOffset(fileName, name.end));
                                     exportedRefs.push({
-                                        name: name.text, kind: kind, path: path, repoName: pkgInfo.name,
-                                        repoURL: pkgInfo.repo, repoCommit: pkgInfo.version,
-                                        location: { file: fileName, range: range }
+                                        name: name.text,
+                                        kind: kind,
+                                        path: path,
+                                        location: {
+                                            file: fileName,
+                                            range: range
+                                        },
+                                        documentation: self.doc(node)
                                     });
                                 }
                             }
@@ -134,7 +147,6 @@ export default class TypeScriptService {
         function collectExports(node: ts.Node, parentPath?: string) {
             let fileName = node.getSourceFile().fileName;
             let pkgInfo = findCurrentProjectInfo(node.getSourceFile().path);
-            console.error("pkg info = ", pkgInfo);
             if (node.kind == ts.SyntaxKind.BinaryExpression) {
                 let expr = <ts.BinaryExpression>node;
                 if (expr.left.kind == ts.SyntaxKind.PropertyAccessExpression) {
@@ -153,14 +165,24 @@ export default class TypeScriptService {
                         allExports.push({ name: name.text, path: path });
 
                         exportedRefs.push({
-                            name: name.text, kind: kind, path: path, repoName: pkgInfo.name,
-                            repoURL: pkgInfo.repo, repoCommit: pkgInfo.version,
-                            location: { file: fileName, range: range }
+                            name: name.text,
+                            kind: kind,
+                            path: path,
+                            location: {
+                                file: fileName,
+                                range: range
+                            },
+                            documentation: self.doc(node)
                         });
                     }
                 }
             } else if (node.kind == ts.SyntaxKind.ExportDeclaration) {
                 let decl = <ts.ExportDeclaration>node;
+                if (!decl.exportClause) {
+                    // TODO: add support of 
+                    // "export * from' importedsrc'"
+                    return;
+                }
                 decl.exportClause.elements.forEach(element => {
                     let name = element.name;
                     let type = self.services.getTypeDefinitionAtPosition(fileName, name.pos);
@@ -173,9 +195,14 @@ export default class TypeScriptService {
                     let range = Range.create(self.getLineAndPosFromOffset(fileName, name.pos), self.getLineAndPosFromOffset(fileName, name.end));
                     allExports.push({ name: name.text, path: path });
                     exportedRefs.push({
-                        name: name.text, kind: kind, path: path, repoName: pkgInfo.name,
-                        repoURL: pkgInfo.repo, repoCommit: pkgInfo.version,
-                        location: { file: fileName, range: range }
+                        name: name.text,
+                        kind: kind,
+                        path: path,
+                        location: {
+                            file: fileName,
+                            range: range
+                        },
+                        documentation: self.doc(node)
                     });
                 });
             }
@@ -186,20 +213,34 @@ export default class TypeScriptService {
                     let path = parentPath ? `${parentPath}.${text}` : `${pkgInfo.name}.${text}`;
                     let range = Range.create(self.getLineAndPosFromOffset(fileName, decl.name.pos), self.getLineAndPosFromOffset(fileName, decl.name.end));
                     exportedRefs.push({
-                        name: text, kind: "function", path: path, repoName: pkgInfo.name,
-                        repoURL: pkgInfo.repo, repoCommit: pkgInfo.version,
-                        location: { file: fileName, range: range }
+                        name: text,
+                        kind: "function",
+                        path: path,
+                        location: {
+                            file: fileName,
+                            range: range
+                        },
+                        documentation: self.doc(node)
                     });
                 }
             } else if (node.kind == ts.SyntaxKind.ClassDeclaration) {
                 if (parentPath || (node.flags & ts.NodeFlags.Export) != 0) {
                     let decl = <ts.ClassDeclaration>node;
+                    if (!decl.name) {
+                        // TODO: add support of "export class {}"
+                        return;
+                    }
                     let path = `${pkgInfo.name}.${decl.name.text}`;
                     let range = Range.create(self.getLineAndPosFromOffset(fileName, decl.name.pos), self.getLineAndPosFromOffset(fileName, decl.name.end));
                     exportedRefs.push({
-                        name: decl.name.text, kind: "class", path: path, repoName: pkgInfo.name,
-                        repoURL: pkgInfo.repo, repoCommit: pkgInfo.version,
-                        location: { file: fileName, range: range }
+                        name: decl.name.text,
+                        kind: "class",
+                        path: path,
+                        location: {
+                            file: fileName,
+                            range: range
+                        },
+                        documentation: self.doc(node)
                     });
                     // collecting methods and vars
                     node.getChildren().forEach(child => {
@@ -214,9 +255,14 @@ export default class TypeScriptService {
                         let path = `${parentPath}.${name.text}`;
                         let range = Range.create(self.getLineAndPosFromOffset(fileName, decl.name.pos), self.getLineAndPosFromOffset(fileName, decl.name.end));
                         exportedRefs.push({
-                            name: name.text, kind: "method", path: path, repoName: pkgInfo.name,
-                            repoURL: pkgInfo.repo, repoCommit: pkgInfo.version,
-                            location: { file: fileName, range: range }
+                            name: name.text,
+                            kind: "method",
+                            path: path,
+                            location: {
+                                file: fileName,
+                                range: range
+                            },
+                            documentation: self.doc(node)
                         });
 
                     }
@@ -229,9 +275,14 @@ export default class TypeScriptService {
                         let path = parentPath ? `${parentPath}.${name.text}` : `${pkgInfo.name}.${name.text}`;
                         let range = Range.create(self.getLineAndPosFromOffset(fileName, decl.name.pos), self.getLineAndPosFromOffset(fileName, decl.name.end));
                         exportedRefs.push({
-                            name: name.text, kind: "var", path: path, repoName: pkgInfo.name,
-                            repoURL: pkgInfo.repo, repoCommit: pkgInfo.version,
-                            location: { file: fileName, range: range }
+                            name: name.text,
+                            kind: "var",
+                            path: path,
+                            location: {
+                                file: fileName,
+                                range: range
+                            },
+
                         });
                     }
                 }
@@ -257,7 +308,6 @@ export default class TypeScriptService {
             }
         }
 
-        console.error("exported refs = ", exportedRefs);
         return exportedRefs;
     }
 
@@ -275,6 +325,7 @@ export default class TypeScriptService {
         var importRefs = [];
 
         for (const sourceFile of this.services.getProgram().getSourceFiles()) {
+
             if (!sourceFile.hasNoDefaultLib && sourceFile.fileName.indexOf("node_modules") == -1) {
                 ts.forEachChild(sourceFile, collectImports);
                 ts.forEachChild(sourceFile, collectImportedCalls);
@@ -283,6 +334,7 @@ export default class TypeScriptService {
         return importRefs;
 
         function collectImports(node: ts.Node) {
+            // TODO: add support of "require('foo')" without declaring a variable  
             if (node.kind == ts.SyntaxKind.VariableDeclaration) {
                 let decl = <ts.VariableDeclaration>node;
                 if (decl.name.kind == ts.SyntaxKind.Identifier && decl.initializer && decl.initializer.kind == ts.SyntaxKind.CallExpression) {
@@ -511,11 +563,6 @@ export default class TypeScriptService {
         }
     }
 
-    private normalizePath(file: string): string {
-        return file.
-            replace(new RegExp('\\' + path.sep, 'g'), path.posix.sep);
-    }
-
     private getLineAndPosFromOffset(fileName: string, offset: number): Position {
         let lines: number[] = this.getLines(fileName);
         let res = util.formEmptyPosition();
@@ -537,7 +584,7 @@ export default class TypeScriptService {
     private getLines(fileName: string) {
         let lines: number[] = this.lines[fileName]
         if (!lines) {
-            lines = this.computeLineStarts(fs.readFileSync(path.join(this.root, fileName), 'utf-8'))
+            lines = this.computeLineStarts(fs.readFileSync(this.resolvePath(fileName), 'utf-8'))
             this.lines[fileName] = lines
         }
         return lines
@@ -570,6 +617,10 @@ export default class TypeScriptService {
             return null;
         }
         return uri.substring('file:///'.length);
+    }
+
+    private resolvePath(p: string): string {
+        return path.resolve(this.root, p);
     }
 
 

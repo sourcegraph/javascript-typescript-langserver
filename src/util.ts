@@ -1,4 +1,6 @@
 
+import * as path from "path";
+
 import * as ts from "typescript";
 import { SymbolKind, Range, Position} from 'vscode-languageserver';
 
@@ -20,5 +22,19 @@ export function formEmptyKind(): number {
 
 export function formExternalUri(external) {
     return external.repoName + "$" + external.repoURL + "$" + external.repoCommit + "$" + external.path;
-
 }
+
+/**
+ * Makes documentation string from symbol display part array returned by TS
+ */
+export function docstring(parts: ts.SymbolDisplayPart[]): string {
+    return ts.displayPartsToString(parts);
+}
+
+/**
+ * Normalizes path to match POSIX standard (slashes)
+ */
+export function normalizePath(file: string): string {
+    return file.replace(new RegExp('\\' + path.sep, 'g'), path.posix.sep);
+}
+
