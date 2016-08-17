@@ -178,6 +178,41 @@ export default class TypeScriptService {
                             },
                             documentation: self.doc(node)
                         });
+                        //Processing of module.exports happens here
+                    } else if (left.expression.kind == ts.SyntaxKind.Identifier && left.name.kind == ts.SyntaxKind.Identifier
+                        && left.expression.getText() == "module" && left.name.getText() == "exports") {
+                        let leftExpr = <ts.Identifier>left.expression;
+                        let leftName = <ts.Identifier>left.name;
+                        if (expr.right.kind == ts.SyntaxKind.ObjectLiteralExpression) {
+                            let object = <ts.ObjectLiteralExpression>expr.right;
+                            if (object.properties) {
+                                object.properties.forEach(property => {
+                                    if (property.name.kind == ts.SyntaxKind.Identifier) {
+                                        let name = <ts.Identifier>property.name;
+                                        let posInFile = name.getStart(sourceFile);
+                                        let type = self.services.getTypeDefinitionAtPosition(fileName, posInFile);
+                                        let kind = "";
+                                        if (type && type.length > 0) {
+                                            kind = type[0].kind;
+                                        }
+
+                                        let path = `${pkgInfo.name}.${name.text}`;
+                                        let range = Range.create(self.getLineAndPosFromOffset(fileName, posInFile), self.getLineAndPosFromOffset(fileName, name.getEnd()));
+                                        allExports.push({ name: name.text, path: path });
+                                        exportedRefs.push({
+                                            name: name.text,
+                                            kind: kind,
+                                            path: path,
+                                            location: {
+                                                file: fileName,
+                                                range: range
+                                            },
+                                            documentation: self.doc(node)
+                                        });
+                                    }
+                                })
+                            }
+                        }
                     }
                 }
             } else if (node.kind == ts.SyntaxKind.ExportDeclaration) {
