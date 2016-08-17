@@ -335,6 +335,7 @@ export default class TypeScriptService {
 
         function collectImports(node: ts.Node) {
             // TODO: add support of "require('foo')" without declaring a variable  
+            let sourceFile = node.getSourceFile();
             if (node.kind == ts.SyntaxKind.VariableDeclaration) {
                 let decl = <ts.VariableDeclaration>node;
                 if (decl.name.kind == ts.SyntaxKind.Identifier && decl.initializer && decl.initializer.kind == ts.SyntaxKind.CallExpression) {
@@ -351,7 +352,8 @@ export default class TypeScriptService {
                         });
                         if (libRes) {
                             let libName = argument['text'];
-                            let refs: ts.ReferenceEntry[] = self.services.getReferencesAtPosition(name.getSourceFile().fileName, name.pos + 1);
+                            let posInFile = name.getStart(sourceFile);
+                            let refs: ts.ReferenceEntry[] = self.services.getReferencesAtPosition(sourceFile.fileName, posInFile);
                             if (refs) {
                                 refs.forEach(ref => {
                                     var newRef = {
@@ -385,7 +387,8 @@ export default class TypeScriptService {
                         if (namedBindings.kind === ts.SyntaxKind.NamespaceImport) {
                             let namespaceImport = <ts.NamespaceImport>namedBindings;
                             if (namespaceImport.name) {
-                                let refs: ts.ReferenceEntry[] = self.services.getReferencesAtPosition(namespaceImport.getSourceFile().fileName, namespaceImport.name.pos + 1);
+                                let posInFile = namespaceImport.name.getStart(sourceFile);
+                                let refs: ts.ReferenceEntry[] = self.services.getReferencesAtPosition(sourceFile.fileName, posInFile);
                                 refs.forEach(ref => {
                                     var newRef = {
                                         name: namespaceImport.name.text, path: `${libName}`, file: ref.fileName, start: ref.textSpan.start,
@@ -397,8 +400,9 @@ export default class TypeScriptService {
                         } else if (namedBindings.kind === ts.SyntaxKind.NamedImports) {
                             let namedImports = <ts.NamedImports>namedBindings;
                             for (const namedImport of namedImports.elements) {
+                                let posInFile = namedImport.name.getStart(sourceFile);
                                 let pathName = namedImport.propertyName ? namedImport.propertyName['text'] : namedImport.name['text'];
-                                let refs: ts.ReferenceEntry[] = self.services.getReferencesAtPosition(namedImport.getSourceFile().fileName, namedImport.name.pos + 1);
+                                let refs: ts.ReferenceEntry[] = self.services.getReferencesAtPosition(sourceFile.fileName, posInFile);
                                 refs.forEach(ref => {
                                     var newRef = {
                                         name: pathName, path: `${libName}.${pathName}`, file: ref.fileName, start: ref.textSpan.start,
