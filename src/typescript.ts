@@ -341,7 +341,7 @@ export default class TypeScriptService {
                 if (decl.name.kind == ts.SyntaxKind.Identifier && decl.initializer && decl.initializer.kind == ts.SyntaxKind.CallExpression) {
                     let init = <ts.CallExpression>decl.initializer;
                     let name = <ts.Identifier>decl.name;
-                    let fileName = node.getSourceFile().fileName;
+                    let fileName = sourceFile.fileName;
                     let argument = init.arguments[0];
                     if (init.expression.kind == ts.SyntaxKind.Identifier && init.expression['text'] == "require"
                         && argument.kind == ts.SyntaxKind.StringLiteral) {
@@ -356,15 +356,15 @@ export default class TypeScriptService {
                             let refs: ts.ReferenceEntry[] = self.services.getReferencesAtPosition(sourceFile.fileName, posInFile);
                             if (refs) {
                                 refs.forEach(ref => {
-                                    var newRef = {
-                                        name: name.text, path: `${libName}`, file: ref.fileName, start: ref.textSpan.start,
+                                    let newRef = {
+                                        name: name.text, path: libName, file: ref.fileName, start: ref.textSpan.start,
                                         len: ref.textSpan.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
                                     };
                                     importRefs.push(newRef);
                                 });
                             } else {
-                                var newRef = {
-                                    name: name.text, path: `${libName}`, file: fileName, start: name.pos,
+                                let newRef = {
+                                    name: name.text, path: libName, file: fileName, start: posInFile,
                                     len: name.text.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
                                 };
                                 importRefs.push(newRef);
@@ -374,14 +374,14 @@ export default class TypeScriptService {
                 }
             } else if (node.kind == ts.SyntaxKind.ImportDeclaration) {
                 let decl = <ts.ImportDeclaration>node;
-                if (decl.importClause !== undefined && decl.importClause.namedBindings !== undefined) {
+                if (decl.importClause && decl.importClause.namedBindings) {
                     let libRes = externalLibs.find(lib => {
                         if (lib.name == decl.moduleSpecifier['text']) {
                             return true;
                         }
                     });
-
                     if (libRes) {
+                        let fileName = sourceFile.fileName;
                         let libName = decl.moduleSpecifier['text'];
                         let namedBindings = decl.importClause.namedBindings;
                         if (namedBindings.kind === ts.SyntaxKind.NamespaceImport) {
@@ -389,13 +389,21 @@ export default class TypeScriptService {
                             if (namespaceImport.name) {
                                 let posInFile = namespaceImport.name.getStart(sourceFile);
                                 let refs: ts.ReferenceEntry[] = self.services.getReferencesAtPosition(sourceFile.fileName, posInFile);
-                                refs.forEach(ref => {
-                                    var newRef = {
-                                        name: namespaceImport.name.text, path: `${libName}`, file: ref.fileName, start: ref.textSpan.start,
-                                        len: ref.textSpan.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
+                                if (refs) {
+                                    refs.forEach(ref => {
+                                        let newRef = {
+                                            name: namespaceImport.name.text, path: libName, file: ref.fileName, start: ref.textSpan.start,
+                                            len: ref.textSpan.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
+                                        };
+                                        importRefs.push(newRef);
+                                    });
+                                } else {
+                                    let newRef = {
+                                        name: namespaceImport.name.text, path: libName, file: fileName, start: posInFile,
+                                        len: namespaceImport.name.text.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
                                     };
                                     importRefs.push(newRef);
-                                });
+                                }
                             }
                         } else if (namedBindings.kind === ts.SyntaxKind.NamedImports) {
                             let namedImports = <ts.NamedImports>namedBindings;
@@ -403,13 +411,21 @@ export default class TypeScriptService {
                                 let posInFile = namedImport.name.getStart(sourceFile);
                                 let pathName = namedImport.propertyName ? namedImport.propertyName['text'] : namedImport.name['text'];
                                 let refs: ts.ReferenceEntry[] = self.services.getReferencesAtPosition(sourceFile.fileName, posInFile);
-                                refs.forEach(ref => {
-                                    var newRef = {
-                                        name: pathName, path: `${libName}.${pathName}`, file: ref.fileName, start: ref.textSpan.start,
-                                        len: ref.textSpan.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
+                                if (refs) {
+                                    refs.forEach(ref => {
+                                        let newRef = {
+                                            name: pathName, path: `${libName}.${pathName}`, file: ref.fileName, start: ref.textSpan.start,
+                                            len: ref.textSpan.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
+                                        };
+                                        importRefs.push(newRef);
+                                    });
+                                } else {
+                                    let newRef = {
+                                        name: pathName, path: `${libName}.${pathName}`, file: fileName, start: posInFile,
+                                        len: pathName.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
                                     };
                                     importRefs.push(newRef);
-                                });
+                                }
                             }
                         }
                     }
