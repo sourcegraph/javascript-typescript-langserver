@@ -20,12 +20,12 @@ var nodefs = require('node-fs');
 
 
 // TODO: replace with configuration parameters
-const WORKSPACE_ROOT = path.join(os.tmpdir(), '.sourcegraph', 'workspace', 'js');
+const WORKSPACE_ROOT = path.join(process.env.SGPATH, '.sourcegraph', 'workspace', 'js');
 
 function workspace(req: any, sync?: boolean): Promise<string> {
 	console.log('checking workspace', req.body.Repo, req.body.Commit);
 	return new Promise((resolve, reject) => {
-		let p = path.join(WORKSPACE_ROOT, req.body.Repo, req.body.Commit);
+		let p = path.join(WORKSPACE_ROOT, req.body.Repo, req.body.Commit, "workspace");
 		fs.stat(p, function (err, stats) {
 			if (err) {
 				if (sync) {
@@ -115,8 +115,11 @@ var app = express();
 app.use(bodyParser.json());
 
 app.post('/prepare', (req, res) => {
-	workspace(req);
-	res.sendStatus(202);
+	workspace(req, true).then(function () {
+		res.sendStatus(200);
+	}, function () {
+		res.sendStatus(400);
+	});
 });
 
 app.post('/hover', (req, res) => {

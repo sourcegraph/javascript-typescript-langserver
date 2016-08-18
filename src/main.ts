@@ -20,7 +20,7 @@ import Connection from './connection';
 import processor from './processor';
 
 // TODO: replace with configuration parameters
-const PORT = 4143;
+const PORT = 4145;
 
 // namespace VSCodeContentRequest {
 // 	export const type: RequestType<TextDocumentPositionParams, string, any> = { get method() { return 'textDocument/externals'; } };
