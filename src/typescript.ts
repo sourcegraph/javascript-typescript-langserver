@@ -215,6 +215,31 @@ export default class TypeScriptService {
                                     }
                                 })
                             }
+                        } else if (expr.right.kind == ts.SyntaxKind.NewExpression) {
+                            let newExpr = <ts.NewExpression>expr.right;
+                            if (newExpr.expression.kind == ts.SyntaxKind.Identifier) {
+                                let name = <ts.Identifier>newExpr.expression;
+                                let posInFile = name.getStart(sourceFile);
+                                let type = self.services.getTypeDefinitionAtPosition(fileName, posInFile);
+                                let kind = "";
+                                if (type && type.length > 0) {
+                                    kind = type[0].kind;
+                                }
+
+                                let path = `${pkgInfo.name}.${name.text}`;
+                                let range = Range.create(self.getLineAndPosFromOffset(fileName, posInFile), self.getLineAndPosFromOffset(fileName, name.getEnd()));
+                                allExports.push({ name: name.text, path: path });
+                                exportedRefs.push({
+                                    name: name.text,
+                                    kind: kind,
+                                    path: path,
+                                    location: {
+                                        file: fileName,
+                                        range: range
+                                    },
+                                    documentation: self.doc(node)
+                                });
+                            }
                         }
                     }
                 }
