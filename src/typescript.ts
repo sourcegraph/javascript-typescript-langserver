@@ -100,7 +100,7 @@ export default class TypeScriptService {
             return pkgMap.get(fileName) || {};
         }
 
-        function processExportName(name, node, pathInfo) {
+        function processExportedName(name, node, pathInfo, text) {
             let sourceFile = node.getSourceFile();
             let fileName = sourceFile.fileName;
             let posInFile = name.getStart(sourceFile);
@@ -112,7 +112,7 @@ export default class TypeScriptService {
 
             let path = `${pathInfo}.${name.text}`;
             let range = Range.create(self.getLineAndPosFromOffset(fileName, posInFile), self.getLineAndPosFromOffset(fileName, name.getEnd()));
-            allExports.push({ name: name.text, path: path });
+            allExports.push({ name: text || name.text, path: path });
             exportedRefs.push({
                 name: name.text,
                 kind: kind,
@@ -144,7 +144,7 @@ export default class TypeScriptService {
                                 });
                                 if (res) {
                                     let name = parent.name;
-                                    processExportName(name, node, res.path);
+                                    processExportedName(name, node, res.path, name.text);
                                 }
                             }
                         }
@@ -165,13 +165,15 @@ export default class TypeScriptService {
                     if (left.expression.kind == ts.SyntaxKind.Identifier && left.expression.getText() == "exports"
                         && left.name.kind == ts.SyntaxKind.Identifier) {
                         let name = left.name;
-                        processExportName(name, node, pkgInfo.name);
+                        processExportedName(name, node, pkgInfo.name, name.text);
+
                         //Processing of module.exports happens here
                     } else if (left.expression.kind == ts.SyntaxKind.Identifier && left.name.kind == ts.SyntaxKind.Identifier
                         && left.expression.getText() == "module" && left.name.getText() == "exports") {
                         if (expr.right.kind == ts.SyntaxKind.Identifier) {
                             let name = <ts.Identifier>expr.right;
-                            processExportName(name, node, pkgInfo.name);
+                            processExportedName(name, node, pkgInfo.name, name.text);
+
                         } else if (expr.right.kind == ts.SyntaxKind.ObjectLiteralExpression) {
                             let object = <ts.ObjectLiteralExpression>expr.right;
                             if (object.properties) {
@@ -181,27 +183,8 @@ export default class TypeScriptService {
                                         if (prop.name.kind == ts.SyntaxKind.Identifier) {
                                             // let name = prop.initializer && prop.initializer.kind == ts.SyntaxKind.Identifier ? <ts.Identifier>prop.initializer : <ts.Identifier>prop.name;
                                             let name = <ts.Identifier>prop.name;
-                                            let posInFile = name.getStart(sourceFile);
-                                            let type = self.services.getTypeDefinitionAtPosition(fileName, posInFile);
-                                            let kind = "";
-                                            if (type && type.length > 0) {
-                                                kind = type[0].kind;
-                                            }
-
-                                            let path = `${pkgInfo.name}.${name.text}`;
-                                            let range = Range.create(self.getLineAndPosFromOffset(fileName, posInFile), self.getLineAndPosFromOffset(fileName, name.getEnd()));
                                             let text = prop.initializer && prop.initializer.kind == ts.SyntaxKind.Identifier ? (<ts.Identifier>prop.initializer).text : name.text;
-                                            allExports.push({ name: text, path: path });
-                                            exportedRefs.push({
-                                                name: name.text,
-                                                kind: kind,
-                                                path: path,
-                                                location: {
-                                                    file: fileName,
-                                                    range: range
-                                                },
-                                                documentation: self.doc(node)
-                                            });
+                                            processExportedName(name, node, pkgInfo.name, text);
                                         }
                                     }
                                 })
@@ -210,7 +193,7 @@ export default class TypeScriptService {
                             let newExpr = <ts.NewExpression>expr.right;
                             if (newExpr.expression.kind == ts.SyntaxKind.Identifier) {
                                 let name = <ts.Identifier>newExpr.expression;
-                                processExportName(name, node, pkgInfo.name);
+                                processExportedName(name, node, pkgInfo.name, name.text);
                             }
                         }
                     }
@@ -224,7 +207,7 @@ export default class TypeScriptService {
                 }
                 decl.exportClause.elements.forEach(element => {
                     let name = element.name;
-                    processExportName(name, node, pkgInfo.name);
+                    processExportedName(name, node, pkgInfo.name, name.text);
                 });
             }
             if (node.kind == ts.SyntaxKind.FunctionDeclaration) {
