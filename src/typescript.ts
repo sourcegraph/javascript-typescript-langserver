@@ -190,7 +190,8 @@ export default class TypeScriptService {
                                     if (property.kind == ts.SyntaxKind.PropertyAssignment) {
                                         let prop = <ts.PropertyAssignment>property;
                                         if (prop.name.kind == ts.SyntaxKind.Identifier) {
-                                            let name = prop.initializer && prop.initializer.kind == ts.SyntaxKind.Identifier ? <ts.Identifier>prop.initializer : <ts.Identifier>prop.name;
+                                            // let name = prop.initializer && prop.initializer.kind == ts.SyntaxKind.Identifier ? <ts.Identifier>prop.initializer : <ts.Identifier>prop.name;
+                                            let name = <ts.Identifier>prop.name;
                                             let posInFile = name.getStart(sourceFile);
                                             let type = self.services.getTypeDefinitionAtPosition(fileName, posInFile);
                                             let kind = "";
@@ -200,7 +201,8 @@ export default class TypeScriptService {
 
                                             let path = `${pkgInfo.name}.${name.text}`;
                                             let range = Range.create(self.getLineAndPosFromOffset(fileName, posInFile), self.getLineAndPosFromOffset(fileName, name.getEnd()));
-                                            allExports.push({ name: name.text, path: path });
+                                            let text = prop.initializer && prop.initializer.kind == ts.SyntaxKind.Identifier ? (<ts.Identifier>prop.initializer).text : name.text;
+                                            allExports.push({ name: text, path: path });
                                             exportedRefs.push({
                                                 name: name.text,
                                                 kind: kind,
