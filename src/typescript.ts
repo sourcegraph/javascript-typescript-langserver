@@ -100,6 +100,31 @@ export default class TypeScriptService {
             return pkgMap.get(fileName) || {};
         }
 
+        function processExportName(name, node, pathInfo) {
+            let sourceFile = node.getSourceFile();
+            let fileName = sourceFile.fileName;
+            let posInFile = name.getStart(sourceFile);
+            let type = self.services.getTypeDefinitionAtPosition(fileName, posInFile);
+            let kind = "";
+            if (type && type.length > 0) {
+                kind = type[0].kind;
+            }
+
+            let path = `${pathInfo}.${name.text}`;
+            let range = Range.create(self.getLineAndPosFromOffset(fileName, posInFile), self.getLineAndPosFromOffset(fileName, name.getEnd()));
+            allExports.push({ name: name.text, path: path });
+            exportedRefs.push({
+                name: name.text,
+                kind: kind,
+                path: path,
+                location: {
+                    file: fileName,
+                    range: range
+                },
+                documentation: self.doc(node)
+            });
+        }
+
         function collectExportedChildDeclaration(node: ts.Node) {
             let sourceFile = node.getSourceFile();
             let fileName = sourceFile.fileName;
@@ -119,24 +144,7 @@ export default class TypeScriptService {
                                 });
                                 if (res) {
                                     let name = parent.name;
-                                    let posInFile = name.getStart(sourceFile);
-                                    let type = self.services.getTypeDefinitionAtPosition(fileName, posInFile);
-                                    let kind = "";
-                                    if (type && type.length > 0) {
-                                        kind = type[0].kind;
-                                    }
-                                    let path = `${res.path}.${name.text}`
-                                    let range = Range.create(self.getLineAndPosFromOffset(fileName, posInFile), self.getLineAndPosFromOffset(fileName, name.getEnd()));
-                                    exportedRefs.push({
-                                        name: name.text,
-                                        kind: kind,
-                                        path: path,
-                                        location: {
-                                            file: fileName,
-                                            range: range
-                                        },
-                                        documentation: self.doc(node)
-                                    });
+                                    processExportName(name, node, res.path);
                                 }
                             }
                         }
@@ -157,54 +165,13 @@ export default class TypeScriptService {
                     if (left.expression.kind == ts.SyntaxKind.Identifier && left.expression.getText() == "exports"
                         && left.name.kind == ts.SyntaxKind.Identifier) {
                         let name = left.name;
-                        let posInFile = name.getStart(sourceFile);
-                        let type = self.services.getTypeDefinitionAtPosition(fileName, posInFile);
-                        let kind = "";
-                        if (type && type.length > 0) {
-                            kind = type[0].kind;
-                        }
-
-                        let path = `${pkgInfo.name}.${name.text}`;
-                        let range = Range.create(self.getLineAndPosFromOffset(fileName, posInFile), self.getLineAndPosFromOffset(fileName, name.getEnd()));
-                        allExports.push({ name: name.text, path: path });
-
-                        exportedRefs.push({
-                            name: name.text,
-                            kind: kind,
-                            path: path,
-                            location: {
-                                file: fileName,
-                                range: range
-                            },
-                            documentation: self.doc(node)
-                        });
+                        processExportName(name, node, pkgInfo.name);
                         //Processing of module.exports happens here
                     } else if (left.expression.kind == ts.SyntaxKind.Identifier && left.name.kind == ts.SyntaxKind.Identifier
                         && left.expression.getText() == "module" && left.name.getText() == "exports") {
-                        let leftExpr = <ts.Identifier>left.expression;
-                        let leftName = <ts.Identifier>left.name;
                         if (expr.right.kind == ts.SyntaxKind.Identifier) {
                             let name = <ts.Identifier>expr.right;
-                            let posInFile = name.getStart(sourceFile);
-                            let type = self.services.getTypeDefinitionAtPosition(fileName, posInFile);
-                            let kind = "";
-                            if (type && type.length > 0) {
-                                kind = type[0].kind;
-                            }
-
-                            let path = `${pkgInfo.name}.${name.text}`;
-                            let range = Range.create(self.getLineAndPosFromOffset(fileName, posInFile), self.getLineAndPosFromOffset(fileName, name.getEnd()));
-                            allExports.push({ name: name.text, path: path });
-                            exportedRefs.push({
-                                name: name.text,
-                                kind: kind,
-                                path: path,
-                                location: {
-                                    file: fileName,
-                                    range: range
-                                },
-                                documentation: self.doc(node)
-                            });
+                            processExportName(name, node, pkgInfo.name);
                         } else if (expr.right.kind == ts.SyntaxKind.ObjectLiteralExpression) {
                             let object = <ts.ObjectLiteralExpression>expr.right;
                             if (object.properties) {
@@ -243,26 +210,7 @@ export default class TypeScriptService {
                             let newExpr = <ts.NewExpression>expr.right;
                             if (newExpr.expression.kind == ts.SyntaxKind.Identifier) {
                                 let name = <ts.Identifier>newExpr.expression;
-                                let posInFile = name.getStart(sourceFile);
-                                let type = self.services.getTypeDefinitionAtPosition(fileName, posInFile);
-                                let kind = "";
-                                if (type && type.length > 0) {
-                                    kind = type[0].kind;
-                                }
-
-                                let path = `${pkgInfo.name}.${name.text}`;
-                                let range = Range.create(self.getLineAndPosFromOffset(fileName, posInFile), self.getLineAndPosFromOffset(fileName, name.getEnd()));
-                                allExports.push({ name: name.text, path: path });
-                                exportedRefs.push({
-                                    name: name.text,
-                                    kind: kind,
-                                    path: path,
-                                    location: {
-                                        file: fileName,
-                                        range: range
-                                    },
-                                    documentation: self.doc(node)
-                                });
+                                processExportName(name, node, pkgInfo.name);
                             }
                         }
                     }
@@ -276,26 +224,7 @@ export default class TypeScriptService {
                 }
                 decl.exportClause.elements.forEach(element => {
                     let name = element.name;
-                    let posInFile = name.getStart(sourceFile);
-                    let type = self.services.getTypeDefinitionAtPosition(fileName, posInFile);
-                    let kind = "";
-                    if (type && type.length > 0) {
-                        kind = type[0].kind;
-                    }
-
-                    let path = `${pkgInfo.name}.${name.text}`;
-                    let range = Range.create(self.getLineAndPosFromOffset(fileName, posInFile), self.getLineAndPosFromOffset(fileName, name.getEnd()));
-                    allExports.push({ name: name.text, path: path });
-                    exportedRefs.push({
-                        name: name.text,
-                        kind: kind,
-                        path: path,
-                        location: {
-                            file: fileName,
-                            range: range
-                        },
-                        documentation: self.doc(node)
-                    });
+                    processExportName(name, node, pkgInfo.name);
                 });
             }
             if (node.kind == ts.SyntaxKind.FunctionDeclaration) {
