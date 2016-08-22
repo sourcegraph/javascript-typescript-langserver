@@ -262,7 +262,7 @@ app.post('/position-to-defspec', (req, res) => {
 		let service = new TypeScriptService(p);
 		try {
 			console.log('position-to-defspec', req.body.Repo, req.body.Commit, req.body.File, req.body.Line, req.body.Character);
-			let specs = service.getPathForPosition('file:///' + req.body.File, req.body.Line, req.body.Character);
+			let specs = service.getPathForPosition('file:///' + req.body.File, req.body.Line + 1, req.body.Character + 1);
             let spec = specs[0];
 			res.send({
 				Repo: req.body.Repo,
