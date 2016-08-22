@@ -93,7 +93,7 @@ export default class TypeScriptService {
             return [];
         }
         const offset: number = this.offset(fileName, line, column);
-        let defs = this.services.getDefinitionAtPosition(fileName, offset);;
+        let defs = this.services.getDefinitionAtPosition(fileName, offset);
         let paths = []
         if (defs) {
             defs.forEach(def => {
@@ -112,6 +112,20 @@ export default class TypeScriptService {
 
                 paths.push(pathRes);
             });
+        } else {
+            let sourceFile = this.services.getSourceFile(fileName);
+            let foundNode = (ts as any).getTouchingToken(sourceFile, offset);
+            let allParents = collectAllParents(foundNode, []).filter(parent => {
+                return isNamedDeclaration(parent);
+            });
+            let pathRes = fileName;
+            allParents.forEach(parent => {
+                pathRes = `${pathRes}$${parent.name.text}`
+            });
+            if (isNamedDeclaration(foundNode)) {
+                pathRes = `${pathRes}$${foundNode.name.text}`
+            }
+            paths.push(pathRes);
         }
         return paths;
     }
