@@ -280,4 +280,30 @@ app.post('/position-to-defspec', (req, res) => {
 	});
 });
 
+app.post('/defspec-to-position', (req, res) => {
+	let future = workspace(req, true);
+	future.then(function (p) {
+		let service = new TypeScriptService(p);
+		try {
+			console.log('defspec-to-position', req.body.Repo, req.body.Commit, req.body.UnitType, req.body.Unit, req.body.Path);
+			let posVariants = service.getPositionForPath(req.body.Path);
+			let pos = posVariants[0];
+			let start = service.position(pos.fileName, pos.start);
+			let rel = path.relative(path.normalize(p), path.normalize(pos.fileName));
+			res.send({
+				Repo: req.body.Repo,
+				Commit: req.body.Commit,
+				File: util.normalizePath(rel),
+				Line: start.line - 1,
+				Character: start.character - 1
+			});
+		} catch (e) {
+			console.error('defspec-to-position', req.body, e, e.stack);
+			res.status(500).send({ Error: '' + e });
+		}
+	}, function () {
+		res.status(500).send({ Error: 'Ooops, shouldn\'t happen' });
+	});
+});
+
 export default app;

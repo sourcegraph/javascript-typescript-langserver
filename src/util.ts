@@ -38,3 +38,27 @@ export function normalizePath(file: string): string {
     return file.replace(new RegExp('\\' + path.sep, 'g'), path.posix.sep);
 }
 
+export function isNamedDeclaration(node): boolean {
+    if (node.name && node.name.kind == ts.SyntaxKind.Identifier) {
+        if (node.kind == ts.SyntaxKind.MethodDeclaration) {
+            return true;
+        }
+        if (node.kind == ts.SyntaxKind.FunctionDeclaration) {
+            return true;
+        }
+        if (node.kind == ts.SyntaxKind.ClassDeclaration) {
+            return true;
+        }
+        if (node.kind == ts.SyntaxKind.VariableDeclaration) {
+            return true;
+        }
+        if (node.kind == ts.SyntaxKind.EnumDeclaration) {
+            return true;
+        }
+        if (node.kind == ts.SyntaxKind.InterfaceDeclaration) {
+            return true;
+        }
+    }
+    return false;
+}
+
