@@ -54,6 +54,68 @@ export default class TypeScriptService {
         this.services = ts.createLanguageService(servicesHost, ts.createDocumentRegistry());
     }
 
+    getPathForPosition(uri: string, line: number, column: number): string[] {
+        function collectAllParents(node, parents) {
+            if (node.parent) {
+                parents.push(node.parent);
+                return collectAllParents(node.parent, parents);
+            } else {
+                return parents;
+            }
+        }
+
+        function isNamedDeclaration(node): boolean {
+            if (node.name && node.name.kind == ts.SyntaxKind.Identifier) {
+                if (node.kind == ts.SyntaxKind.MethodDeclaration) {
+                    return true;
+                }
+                if (node.kind == ts.SyntaxKind.FunctionDeclaration) {
+                    return true;
+                }
+                if (node.kind == ts.SyntaxKind.ClassDeclaration) {
+                    return true;
+                }
+                if (node.kind == ts.SyntaxKind.VariableDeclaration) {
+                    return true;
+                }
+                if (node.kind == ts.SyntaxKind.EnumDeclaration) {
+                    return true;
+                }
+                if (node.kind == ts.SyntaxKind.InterfaceDeclaration) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        const fileName: string = this.uri2path(uri);
+        if (!this.files[fileName]) {
+            return [];
+        }
+        const offset: number = this.offset(fileName, line, column);
+        let defs = this.services.getDefinitionAtPosition(fileName, offset);;
+        let paths = []
+        if (defs) {
+            defs.forEach(def => {
+                let sourceFile = this.services.getSourceFile(def.fileName);
+                let foundNode = (ts as any).getTouchingToken(sourceFile, def.textSpan.start);
+                let allParents = collectAllParents(foundNode, []).filter(parent => {
+                    return isNamedDeclaration(parent);
+                });
+                let pathRes = def.fileName;
+                allParents.forEach(parent => {
+                    pathRes = `${pathRes}$${parent.name.text}`
+                });
+                if (isNamedDeclaration(foundNode)) {
+                    pathRes = `${pathRes}$${foundNode.name.text}`
+                }
+
+                paths.push(pathRes);
+            });
+        }
+        return paths;
+    }
+
     getExternalRefs() {
         if (this.externalRefs === null) {
             this.externalRefs = this.collectExternals(this.collectExternalLibs());
@@ -268,7 +330,6 @@ export default class TypeScriptService {
                             },
                             documentation: self.doc(node)
                         });
-
                     }
                 }
             } else if (node.kind == ts.SyntaxKind.VariableDeclaration) {
