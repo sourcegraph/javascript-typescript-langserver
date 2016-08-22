@@ -256,4 +256,28 @@ app.post('/exported-symbols', (req, res) => {
 	});
 });
 
+app.post('/position-to-defspec', (req, res) => {
+	let future = workspace(req, true);
+	future.then(function (p) {
+		let service = new TypeScriptService(p);
+		try {
+			console.log('position-to-defspec', req.body.Repo, req.body.Commit, req.body.File, req.body.Line, req.body.Character);
+			let specs = service.getPathForPosition('file:///' + req.body.File, req.body.Line, req.body.Character);
+            let spec = specs[0];
+			res.send({
+				Repo: req.body.Repo,
+				Commit: req.body.Commit,
+				UnitType: "JSModule",
+				Unit: req.body.Repo,
+				Path: spec,
+			});
+		} catch (e) {
+			console.error('position-to-defspec', req.body, e, e.stack);
+			res.status(500).send({ Error: '' + e });
+		}
+	}, function () {
+		res.status(500).send({ Error: 'Ooops, shouldn\'t happen' });
+	});
+});
+
 export default app;
