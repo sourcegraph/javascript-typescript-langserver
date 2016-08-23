@@ -127,6 +127,9 @@ export function serve(port: number, workspaceRoot: string) {
 			try {
 				console.log('hover', req.body.Repo, req.body.Commit, req.body.File, req.body.Line, req.body.Character);
 				const quickInfo: ts.QuickInfo = service.getHover('file:///' + req.body.File, req.body.Line + 1, req.body.Character + 1);
+				if (!quickInfo) {
+					return res.status(400).send({ Error: 'No hover found' });
+				}
 				res.send({
 					Title: quickInfo.kind,
 					DocHTML: util.docstring(quickInfo.documentation)
@@ -148,7 +151,7 @@ export function serve(port: number, workspaceRoot: string) {
 				console.log('definition', req.body.Repo, req.body.Commit, req.body.File, req.body.Line, req.body.Character);
 				const defs: ts.DefinitionInfo[] = service.getDefinition('file:///' + req.body.File, req.body.Line + 1, req.body.Character + 1);
 				// TODO: what if there are more than 1 def?
-				if (defs.length == 0) {
+				if (!defs || defs.length == 0) {
 					return res.status(400).send({ Error: 'No definition found' });
 				}
 				const def: ts.DefinitionInfo = defs[0];
@@ -178,6 +181,9 @@ export function serve(port: number, workspaceRoot: string) {
 			try {
 				console.log('local-refs', req.body.Repo, req.body.Commit, req.body.File, req.body.Line, req.body.Character);
 				const refs: ts.ReferenceEntry[] = service.getReferences('file:///' + req.body.File, req.body.Line + 1, req.body.Character + 1);
+				if (!refs || refs.length == 0) {
+					return res.status(400).send({ Error: 'No references found' });
+				}
 				let ret = { Refs: [] };
 				refs.forEach(function (ref) {
 					const start = service.position(ref.fileName, ref.textSpan.start);
