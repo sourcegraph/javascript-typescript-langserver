@@ -57,14 +57,6 @@ export default class TypeScriptService {
     }
 
     getPathForPosition(uri: string, line: number, column: number): string[] {
-        function collectAllParents(node, parents) {
-            if (node.parent) {
-                parents.push(node.parent);
-                return collectAllParents(node.parent, parents);
-            } else {
-                return parents;
-            }
-        }
 
         const fileName: string = this.uri2path(uri);
         if (!this.files[fileName]) {
@@ -77,7 +69,7 @@ export default class TypeScriptService {
             defs.forEach(def => {
                 let sourceFile = this.services.getSourceFile(def.fileName);
                 let foundNode = (ts as any).getTouchingToken(sourceFile, def.textSpan.start);
-                let allParents = collectAllParents(foundNode, []).filter(parent => {
+                let allParents = util.collectAllParents(foundNode, []).filter(parent => {
                     return util.isNamedDeclaration(parent);
                 });
                 let pathRes = def.fileName;
@@ -93,7 +85,7 @@ export default class TypeScriptService {
         } else {
             let sourceFile = this.services.getSourceFile(fileName);
             let foundNode = (ts as any).getTouchingToken(sourceFile, offset);
-            let allParents = collectAllParents(foundNode, []).filter(parent => {
+            let allParents = util.collectAllParents(foundNode, []).filter(parent => {
                 return util.isNamedDeclaration(parent);
             });
             let pathRes = fileName;
@@ -165,8 +157,36 @@ export default class TypeScriptService {
     }
 
     private doc(node: ts.Node): string {
-        // TODO implement
-        return null;
+        let text = node.getSourceFile().getFullText();
+        let comments1 = (ts as any).getLeadingCommentRanges(text, node.getFullStart());
+        let comments2 = (ts as any).getTrailingCommentRanges(text, node.getEnd());
+        let comments = [];
+        if (!comments1 && !comments2) {
+            let parents = util.collectAllParents(node, []);
+            for (let i = 0; i < parents.length; i++) {
+                let parent = parents[i];
+                let comments1 = (ts as any).getLeadingCommentRanges(text, parent.getFullStart());
+                let comments2 = (ts as any).getTrailingCommentRanges(text, parent.getEnd());
+                if (comments1) {
+                    comments = comments.concat(comments1);
+                }
+                if (comments2) {
+                    comments = comments.concat(comments2);
+                }
+                if (comments1 || comments2) break;
+            }
+        } else {
+            comments = comments1 || comments2;
+        }
+
+        let res = "";
+        if (comments) {
+            comments.forEach(comment => {
+                res = res + `<p>${text.substring(comment.pos + 2, comment.end)}</p>`
+            });
+        }
+
+        return res;
     }
 
     collectExportedEntities() {
