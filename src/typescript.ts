@@ -11,6 +11,8 @@ import {
 import * as packages from './find-packages';
 import * as util from './util';
 
+var sanitizeHtml = require('sanitize-html');
+
 const pathDelimiter = "$";
 
 export default class TypeScriptService {
@@ -182,10 +184,9 @@ export default class TypeScriptService {
         let res = "";
         if (comments) {
             comments.forEach(comment => {
-                res = res + `<p>${text.substring(comment.pos + 2, comment.end)}</p>`
+                res = res + sanitizeHtml(`<p>${text.substring(comment.pos + 2, comment.end)}</p>`);
             });
         }
-
         return res;
     }
 
