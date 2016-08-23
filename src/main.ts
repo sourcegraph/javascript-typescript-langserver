@@ -3,6 +3,10 @@
 
 var net = require('net');
 var fs = require('fs');
+var path = require('path');
+var os = require('os');
+
+var program = require('commander');
 
 import * as ts from 'typescript';
 import * as util from './util';
@@ -17,20 +21,7 @@ import {
 import TypeScriptService from './typescript';
 import Connection from './connection';
 
-import processor from './processor';
-
-// TODO: replace with configuration parameters
-const PORT = 4145;
-
-// namespace VSCodeContentRequest {
-// 	export const type: RequestType<TextDocumentPositionParams, string, any> = { get method() { return 'textDocument/externals'; } };
-// }
-
-// connection.connection.onRequest(VSCodeContentRequest.type, (params: TextDocumentPositionParams): string => {
-// 	console.log('externals', params.textDocument.uri, params.position.line, params.position.character)
-
-// 	return "";
-// });
+import {serve} from './processor';
 
 var server = net.createServer(function (socket) {
 	let connection: Connection = new Connection(socket);
@@ -146,5 +137,23 @@ var server = net.createServer(function (socket) {
 process.on('uncaughtException', (err) => {
 	console.error(err);
 });
-server.listen(2088, '127.0.0.1');
-processor.listen(PORT);
+
+const defaultLspPort = 2088;
+const defaultLpPort = 4145;
+
+program
+  .version('0.0.1')
+  .option('-l, --lsp [port]', 'LSP port (' + defaultLspPort + ')', parseInt)
+  .option('-p, --lp [port]', 'LP port (' + defaultLpPort + ')', parseInt)
+  .option('-w, --workspace [directory]', 'Workspace directory')
+  .parse(process.argv);
+
+const lspPort = program.lsp || defaultLspPort;
+const lpPort = program.lp || defaultLpPort;
+const workspace = program.workspace || path.join(process.env.SGPATH || os.tmpdir(), '.sourcegraph', 'workspace', 'js');
+
+console.log('Using workspace', workspace);
+console.log('Listening for incoming LSP connections on', lspPort, 'and incoming LP connections on', lpPort);
+
+server.listen(lspPort);
+serve(lpPort, workspace);
