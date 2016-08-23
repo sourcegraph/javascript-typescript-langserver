@@ -3,6 +3,7 @@
   "name": "ls-javascript",
   "dependencies": {
     "body-parser": "^1.15.2",
+    "commander": "^2.9.0",
     "es6-promise": "^3.2.1",
     "express": "^4.14.0",
     "find-files-excluding-dirs": "alexsaveliev/find-files-excluding-dirs",
