@@ -157,9 +157,10 @@ export function serve(port: number, workspaceRoot: string) {
 				const def: ts.DefinitionInfo = defs[0];
 				const start = service.position(def.fileName, def.textSpan.start);
 				const end = service.position(def.fileName, def.textSpan.start + def.textSpan.length);
-				let rel = path.relative(path.normalize(p), path.normalize(def.fileName));
 				res.send({
-					File: util.normalizePath(rel),
+					Repo: req.body.Repo, 
+					Commit: req.body.Commit,
+					File: util.normalizePath(def.fileName),
 					StartLine: start.line - 1,
 					StartCharacter: start.character - 1,
 					EndLine: end.line - 1,
@@ -188,9 +189,10 @@ export function serve(port: number, workspaceRoot: string) {
 				refs.forEach(function (ref) {
 					const start = service.position(ref.fileName, ref.textSpan.start);
 					const end = service.position(ref.fileName, ref.textSpan.start + ref.textSpan.length);
-					let rel = path.relative(path.normalize(p), path.normalize(ref.fileName));
 					ret.Refs.push({
-						File: util.normalizePath(rel),
+						Repo: req.body.Repo, 
+						Commit: req.body.Commit,						
+						File: util.normalizePath(ref.fileName),
 						StartLine: start.line - 1,
 						StartCharacter: start.character - 1,
 						EndLine: end.line - 1,
@@ -243,9 +245,11 @@ export function serve(port: number, workspaceRoot: string) {
 				let ret = { Symbols: [] };
 				exported.forEach(function (entry) {
 					ret.Symbols.push({
+						Repo: req.body.Repo, 
+						Commit: req.body.Commit,											
 						Name: entry.name,
 						Kind: entry.kind,
-						File: entry.location.file,
+						File: util.normalizePath(entry.location.file),
 						DocHTML: entry.documentation,
 						Path: entry.path
 					});
