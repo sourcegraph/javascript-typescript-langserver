@@ -150,7 +150,7 @@ program
 
 const lspPort = program.lsp || defaultLspPort;
 const lpPort = program.lp || defaultLpPort;
-const workspace = program.workspace || path.join(process.env.SGPATH || os.tmpdir(), '.sourcegraph', 'workspace', 'js');
+const workspace = program.workspace || path.join(process.env.SGPATH || os.tmpdir(), 'workspace', 'js');
 
 console.log('Using workspace', workspace);
 console.log('Listening for incoming LSP connections on', lspPort, 'and incoming LP connections on', lpPort);
