@@ -148,6 +148,7 @@ export default class TypeScriptService {
         if (this.externalRefs === null) {
             this.externalRefs = this.collectExternals(this.collectExternalLibs());
         }
+        // console.error("external refs = ", this.externalRefs);
         return this.externalRefs;
     }
 
@@ -155,6 +156,7 @@ export default class TypeScriptService {
         if (this.exportedEnts === null) {
             this.exportedEnts = this.collectExportedEntities();
         }
+        // console.error("exported ents = ", this.exportedEnts);
         return this.exportedEnts;
     }
 
@@ -402,7 +404,6 @@ export default class TypeScriptService {
                                 file: fileName,
                                 range: range
                             },
-
                         });
                     }
                 }
@@ -410,13 +411,13 @@ export default class TypeScriptService {
                 node.getChildren().forEach(child => {
                     collectExports(child, parentPath);
                 })
-
             }
         }
 
         for (const sourceFile of this.services.getProgram().getSourceFiles()) {
             if (!sourceFile.hasNoDefaultLib && sourceFile.fileName.indexOf("node_modules") == -1) {
                 sourceFile.getChildren().forEach(child => {
+                    console.error("Inside collect exports");
                     collectExports(child);
                 });
             }
@@ -424,6 +425,7 @@ export default class TypeScriptService {
 
         for (const sourceFile of this.services.getProgram().getSourceFiles()) {
             if (!sourceFile.hasNoDefaultLib && sourceFile.fileName.indexOf("node_modules") == -1) {
+                console.error("Inside collect exports for ");
                 ts.forEachChild(sourceFile, collectExportedChildDeclaration);
             }
         }
@@ -491,6 +493,47 @@ export default class TypeScriptService {
                             }
                         }
                     }
+                } else if (decl.name.kind == ts.SyntaxKind.Identifier && decl.initializer && decl.initializer.kind == ts.SyntaxKind.PropertyAccessExpression) {
+                    let init = <ts.PropertyAccessExpression>decl.initializer;
+                    let name = <ts.Identifier>decl.name;
+                    let fileName = sourceFile.fileName;
+                    let importedName = init.name;
+                    if (init.expression.kind == ts.SyntaxKind.CallExpression) {
+                        let call = <ts.CallExpression>init.expression;
+                        let expr = call.expression;
+                        let argument = call.arguments[0];
+                        if (expr.kind == ts.SyntaxKind.Identifier && expr['text'] == "require" && argument.kind == ts.SyntaxKind.StringLiteral) {
+                            let libRes = externalLibs.find(lib => {
+                                if (lib.name == argument['text']) {
+                                    return true;
+                                }
+                            });
+
+                            if (libRes) {
+                                let libName = argument['text'];
+                                let posInFile = name.getStart(sourceFile);
+                                let refs: ts.ReferenceEntry[] = self.services.getReferencesAtPosition(sourceFile.fileName, posInFile);
+                                if (refs) {
+                                    refs.forEach(ref => {
+                                        let path = importedName && importedName.kind == ts.SyntaxKind.Identifier ? `${libName}.${importedName['text']}` : libName;
+                                        let newRef = {
+                                            name: name.text, path: libName, file: ref.fileName, start: ref.textSpan.start,
+                                            len: ref.textSpan.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
+                                        };
+                                        importRefs.push(newRef);
+                                    });
+                                } else {
+                                    let path = importedName && importedName.kind == ts.SyntaxKind.Identifier ? `${libName}.${importedName['text']}` : libName;
+                                    let newRef = {
+                                        name: name.text, path: libName, file: fileName, start: posInFile,
+                                        len: name.text.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
+                                    };
+                                    importRefs.push(newRef);
+                                }
+                            }
+                        }
+                    }
+
                 }
             } else if (node.kind == ts.SyntaxKind.ImportDeclaration) {
                 let decl = <ts.ImportDeclaration>node;
