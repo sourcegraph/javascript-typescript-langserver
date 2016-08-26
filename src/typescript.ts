@@ -59,27 +59,34 @@ export default class TypeScriptService {
     }
 
     getPathForPosition(uri: string, line: number, column: number): string[] {
-
         const fileName: string = this.uri2path(uri);
         if (!this.files[fileName]) {
             return [];
         }
         const offset: number = this.offset(fileName, line, column);
+        console.error("offset = ", offset);
         let defs = this.services.getDefinitionAtPosition(fileName, offset);
+        console.error("defs here  = ", defs);
         let paths = []
         if (defs) {
             defs.forEach(def => {
-                let sourceFile = this.services.getSourceFile(def.fileName);
-                let foundNode = (ts as any).getTouchingToken(sourceFile, def.textSpan.start);
-                let allParents = util.collectAllParents(foundNode, []).filter(parent => {
-                    return util.isNamedDeclaration(parent);
-                });
                 let pathRes = def.fileName;
-                allParents.forEach(parent => {
-                    pathRes = `${pathRes}${pathDelimiter}${parent.name.text}`
-                });
-                if (util.isNamedDeclaration(foundNode)) {
-                    pathRes = `${pathRes}${pathDelimiter}${foundNode.name.text}`
+                if (def.name && def.containerName) {
+                    pathRes = `${pathRes}${pathDelimiter}${def.containerName}${pathDelimiter}${def.name}`
+                } else {
+                    let sourceFile = this.services.getSourceFile(def.fileName);
+                    let foundNode = (ts as any).getTouchingToken(sourceFile, def.textSpan.start);
+                    console.error("found node = ", foundNode);
+                    let allParents = util.collectAllParents(foundNode, []).filter(parent => {
+                        return util.isNamedDeclaration(parent);
+                    });
+
+                    allParents.forEach(parent => {
+                        pathRes = `${pathRes}${pathDelimiter}${parent.name.text}`
+                    });
+                    if (util.isNamedDeclaration(foundNode)) {
+                        pathRes = `${pathRes}${pathDelimiter}${foundNode.name.text}`
+                    }
                 }
 
                 paths.push(pathRes);
