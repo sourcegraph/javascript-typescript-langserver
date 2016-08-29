@@ -36,6 +36,7 @@ export default class TypeScriptService {
 
         // const options: ts.CompilerOptions = { target: ts.ScriptTarget.ES6, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React };
         const options: ts.CompilerOptions = { module: ts.ModuleKind.CommonJS, allowNonTsExtensions: true, allowJs: true };
+        const defPath = path.join(__dirname, '../src/defs/merged.lib.d.ts');
 
         // Create the language service host to allow the LS to communicate with the host
         const servicesHost: ts.LanguageServiceHost = {
@@ -51,7 +52,8 @@ export default class TypeScriptService {
             },
             getCurrentDirectory: () => root,
             getCompilationSettings: () => options,
-            getDefaultLibFileName: (options) => ts.getDefaultLibFilePath(options),
+            // getDefaultLibFileName: (options) => ts.getDefaultLibFilePath(options),
+            getDefaultLibFileName: (options) => defPath,
         };
 
         // Create the language service files
@@ -64,10 +66,9 @@ export default class TypeScriptService {
             return [];
         }
         const offset: number = this.offset(fileName, line, column);
-        console.error("offset = ", offset);
         let defs = this.services.getDefinitionAtPosition(fileName, offset);
-        console.error("defs here  = ", defs);
-        let paths = []
+        let paths = [];
+
         if (defs) {
             defs.forEach(def => {
                 let pathRes = def.fileName;
@@ -76,7 +77,6 @@ export default class TypeScriptService {
                 } else {
                     let sourceFile = this.services.getSourceFile(def.fileName);
                     let foundNode = (ts as any).getTouchingToken(sourceFile, def.textSpan.start);
-                    console.error("found node = ", foundNode);
                     let allParents = util.collectAllParents(foundNode, []).filter(parent => {
                         return util.isNamedDeclaration(parent);
                     });
@@ -424,7 +424,6 @@ export default class TypeScriptService {
         for (const sourceFile of this.services.getProgram().getSourceFiles()) {
             if (!sourceFile.hasNoDefaultLib && sourceFile.fileName.indexOf("node_modules") == -1) {
                 sourceFile.getChildren().forEach(child => {
-                    console.error("Inside collect exports");
                     collectExports(child);
                 });
             }
@@ -432,7 +431,6 @@ export default class TypeScriptService {
 
         for (const sourceFile of this.services.getProgram().getSourceFiles()) {
             if (!sourceFile.hasNoDefaultLib && sourceFile.fileName.indexOf("node_modules") == -1) {
-                console.error("Inside collect exports for ");
                 ts.forEachChild(sourceFile, collectExportedChildDeclaration);
             }
         }
