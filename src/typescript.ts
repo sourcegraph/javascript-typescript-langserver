@@ -679,7 +679,7 @@ export default class TypeScriptService {
                 let result = null;
                 if (results && results.length > 1) {
                     result = results.find(result => {
-                        if (result['!url'] && result['!url'].indexOf(container) > -1) {
+                        if (result['!url'] && container && result['!url'].indexOf(container) > -1) {
                             return true;
                         }
                     });
