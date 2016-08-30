@@ -12,6 +12,7 @@
     "read-json-sync": "^1.1.1",
     "typescript": "^1.8.2",
     "vscode-languageserver": "^2.2.1",
-    "sanitize-html": "^1.13.0"
+    "sanitize-html": "^1.13.0",
+    "jsonpath-plus": "^0.15.0"
   }
 }

@@ -12,6 +12,7 @@ import * as packages from './find-packages';
 import * as util from './util';
 
 var sanitizeHtml = require('sanitize-html');
+var JSONPath = require('jsonpath-plus');
 
 const pathDelimiter = "$";
 
@@ -64,7 +65,7 @@ export default class TypeScriptService {
 
     initDefFiles() {
         try {
-            this.defs = JSON.parse(fs.readFileSync(path.join(__dirname, '../src/defs/node.json'), 'utf8').toString());
+            this.defs = JSON.parse(fs.readFileSync(path.join(__dirname, '../src/defs/node.json'), 'utf8'));
         } catch (error) {
             console.error("error = ", error);
         }
@@ -667,7 +668,35 @@ export default class TypeScriptService {
             return [];
         }
         const offset: number = this.offset(fileName, line, column);
-        return this.services.getDefinitionAtPosition(fileName, offset);
+        let defs = this.services.getDefinitionAtPosition(fileName, offset);
+        let urlDefs = [];
+        defs.forEach(def => {
+            let fileName = def.fileName;
+            let name = def.name;
+            let container = def.containerName.toLowerCase();
+            if (fileName.indexOf("merged.lib.d.ts") > -1 && this.defs) {
+                var results = JSONPath({ json: this.defs, path: `$..${name}` });
+                let result = null;
+                if (results && results.length > 1) {
+                    result = results.find(result => {
+                        if (result['!url'] && result['!url'].indexOf(container) > -1) {
+                            return true;
+                        }
+                    });
+                }
+                if (results && !result) {
+                    result = results[0]
+                }
+                if (result) {
+                    def['url'] = result['!url'];
+                    urlDefs.push(def);
+                }
+            } else {
+                urlDefs.push(def);
+            }
+        });
+
+        return defs;
     }
 
     getExternalDefinition(uri: string, line: number, column: number): Location {
