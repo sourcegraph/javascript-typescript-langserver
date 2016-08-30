@@ -22,6 +22,7 @@ export default class TypeScriptService {
     lines: ts.Map<number[]>
     externalRefs = null;
     exportedEnts = null;
+    defs = null;
 
     constructor(root: string) {
         this.root = root;
@@ -58,6 +59,15 @@ export default class TypeScriptService {
 
         // Create the language service files
         this.services = ts.createLanguageService(servicesHost, ts.createDocumentRegistry());
+        this.initDefFiles();
+    }
+
+    initDefFiles() {
+        try {
+            this.defs = JSON.parse(fs.readFileSync(path.join(__dirname, '../src/defs/node.json'), 'utf8').toString());
+        } catch (error) {
+            console.error("error = ", error);
+        }
     }
 
     getPathForPosition(uri: string, line: number, column: number): string[] {
