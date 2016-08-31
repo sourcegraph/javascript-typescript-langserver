@@ -154,18 +154,31 @@ export function serve(port: number, workspaceRoot: string) {
 				if (!defs || defs.length == 0) {
 					return res.status(400).send({ Error: 'No definition found' });
 				}
+				//TODO ask if we return multiple definitions, how to code it
 				const def: ts.DefinitionInfo = defs[0];
 				const start = service.position(def.fileName, def.textSpan.start);
 				const end = service.position(def.fileName, def.textSpan.start + def.textSpan.length);
-				res.send({
-					Repo: req.body.Repo, 
-					Commit: req.body.Commit,
-					File: util.normalizePath(def.fileName),
-					StartLine: start.line - 1,
-					StartCharacter: start.character - 1,
-					EndLine: end.line - 1,
-					EndCharacter: end.character - 1
-				});
+				if (def['url']) {
+					res.send({
+						Repo: "",
+						Commit: "",
+						File: def['url'],
+						StartLine: 0,
+						StartCharacter: 0,
+						EndLine: 0,
+						EndCharacter: 0
+					});
+				} else {
+					res.send({
+						Repo: req.body.Repo,
+						Commit: req.body.Commit,
+						File: util.normalizePath(def.fileName),
+						StartLine: start.line - 1,
+						StartCharacter: start.character - 1,
+						EndLine: end.line - 1,
+						EndCharacter: end.character - 1
+					});
+				}
 			} catch (e) {
 				console.error('definition', req.body, e, e.stack);
 				res.status(500).send({ Error: '' + e });
@@ -190,8 +203,8 @@ export function serve(port: number, workspaceRoot: string) {
 					const start = service.position(ref.fileName, ref.textSpan.start);
 					const end = service.position(ref.fileName, ref.textSpan.start + ref.textSpan.length);
 					ret.Refs.push({
-						Repo: req.body.Repo, 
-						Commit: req.body.Commit,						
+						Repo: req.body.Repo,
+						Commit: req.body.Commit,
 						File: util.normalizePath(ref.fileName),
 						StartLine: start.line - 1,
 						StartCharacter: start.character - 1,
@@ -245,8 +258,8 @@ export function serve(port: number, workspaceRoot: string) {
 				let ret = { Symbols: [] };
 				exported.forEach(function (entry) {
 					ret.Symbols.push({
-						Repo: req.body.Repo, 
-						Commit: req.body.Commit,											
+						Repo: req.body.Repo,
+						Commit: req.body.Commit,
 						Name: entry.name,
 						Kind: entry.kind,
 						File: util.normalizePath(entry.location.file),
