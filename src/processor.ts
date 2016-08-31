@@ -150,8 +150,22 @@ export function serve(port: number, workspaceRoot: string) {
 			try {
 				console.log('definition', req.body.Repo, req.body.Commit, req.body.File, req.body.Line, req.body.Character);
 				const defs: ts.DefinitionInfo[] = service.getDefinition('file:///' + req.body.File, req.body.Line + 1, req.body.Character + 1);
+
 				// TODO: what if there are more than 1 def?
 				if (!defs || defs.length == 0) {
+					//Try to calculate external def here
+					let externalDef = service.getExternalDefinition('file:///' + req.body.File, req.body.Line + 1, req.body.Character + 1);
+					if (externalDef) {
+						res.send({
+							Repo: externalDef.repoURL,
+							Commit: externalDef.repoCommit,
+							File: 'path:///' + externalDef.path,
+							StartLine: 0,
+							StartCharacter: 0,
+							EndLine: 0,
+							EndCharacter: 0
+						});
+					}
 					return res.status(400).send({ Error: 'No definition found' });
 				}
 				//TODO ask if we return multiple definitions, how to code it

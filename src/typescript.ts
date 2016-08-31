@@ -54,8 +54,8 @@ export default class TypeScriptService {
             },
             getCurrentDirectory: () => root,
             getCompilationSettings: () => options,
-            // getDefaultLibFileName: (options) => ts.getDefaultLibFilePath(options),
-            getDefaultLibFileName: (options) => defPath,
+            getDefaultLibFileName: (options) => ts.getDefaultLibFilePath(options),
+            // getDefaultLibFileName: (options) => defPath,
         };
 
         // Create the language service files
@@ -463,7 +463,6 @@ export default class TypeScriptService {
         var importRefs = [];
 
         for (const sourceFile of this.services.getProgram().getSourceFiles()) {
-
             if (!sourceFile.hasNoDefaultLib && sourceFile.fileName.indexOf("node_modules") == -1) {
                 ts.forEachChild(sourceFile, collectImports);
                 ts.forEachChild(sourceFile, collectImportedCalls);
@@ -501,6 +500,7 @@ export default class TypeScriptService {
                                     importRefs.push(newRef);
                                 });
                             } else {
+                                console.error("pos in file = ", posInFile);
                                 let newRef = {
                                     name: name.text, path: libName, file: fileName, start: posInFile,
                                     len: name.text.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
@@ -539,6 +539,7 @@ export default class TypeScriptService {
                                         importRefs.push(newRef);
                                     });
                                 } else {
+                                    console.error("hereeree  = ", posInFile);
                                     let path = importedName && importedName.kind == ts.SyntaxKind.Identifier ? `${libName}.${importedName['text']}` : libName;
                                     let newRef = {
                                         name: name.text, path: libName, file: fileName, start: posInFile,
@@ -670,36 +671,38 @@ export default class TypeScriptService {
         const offset: number = this.offset(fileName, line, column);
         let defs = this.services.getDefinitionAtPosition(fileName, offset);
         let urlDefs = [];
-        defs.forEach(def => {
-            let fileName = def.fileName;
-            let name = def.name;
-            let container = def.containerName.toLowerCase();
-            if (fileName.indexOf("merged.lib.d.ts") > -1 && this.defs) {
-                var results = JSONPath({ json: this.defs, path: `$..${name}` });
-                let result = null;
-                if (results && results.length > 1) {
-                    result = results.find(result => {
-                        if (result['!url'] && container && result['!url'].indexOf(container) > -1) {
-                            return true;
-                        }
-                    });
-                }
-                if (results && !result) {
-                    result = results[0]
-                }
-                if (result) {
-                    def['url'] = result['!url'];
+        if (defs) {
+            defs.forEach(def => {
+                let fileName = def.fileName;
+                let name = def.name;
+                let container = def.containerName.toLowerCase();
+                if (fileName.indexOf("merged.lib.d.ts") > -1 && this.defs) {
+                    var results = JSONPath({ json: this.defs, path: `$..${name}` });
+                    let result = null;
+                    if (results && results.length > 1) {
+                        result = results.find(result => {
+                            if (result['!url'] && container && result['!url'].indexOf(container) > -1) {
+                                return true;
+                            }
+                        });
+                    }
+                    if (results && !result) {
+                        result = results[0]
+                    }
+                    if (result) {
+                        def['url'] = result['!url'];
+                        urlDefs.push(def);
+                    }
+                } else {
                     urlDefs.push(def);
                 }
-            } else {
-                urlDefs.push(def);
-            }
-        });
+            });
+        }
 
         return defs;
     }
 
-    getExternalDefinition(uri: string, line: number, column: number): Location {
+    getExternalDefinition(uri: string, line: number, column: number) {
         const fileName: string = this.uri2path(uri);
         if (!this.files[fileName]) {
             return;
@@ -711,10 +714,11 @@ export default class TypeScriptService {
             }
         });
 
-        if (externalRes) {
-            return Location.create(util.formExternalUri(externalRes),
-                Range.create(this.getLineAndPosFromOffset(fileName, externalRes.start), this.getLineAndPosFromOffset(fileName, externalRes.start + externalRes.len)));
-        }
+        return externalRes;
+        // if (externalRes) {
+        //     return Location.create(util.formExternalUri(externalRes),
+        //         Range.create(this.getLineAndPosFromOffset(fileName, externalRes.start), this.getLineAndPosFromOffset(fileName, externalRes.start + externalRes.len)));
+        // }
     }
 
     getHover(uri: string, line: number, column: number): ts.QuickInfo {
