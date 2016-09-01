@@ -78,7 +78,7 @@ export default class TypeScriptService {
             this.envDefs.forEach(envDef => {
                 let results = JSONPath({ json: envDef, path: `$..${property}` });
                 if (results) {
-                    res.concat(results);
+                    res = res.concat(results);
                 }
             });
         }
