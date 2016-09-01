@@ -697,7 +697,6 @@ export default class TypeScriptService {
         }
         const offset: number = this.offset(fileName, line, column);
         let defs = this.services.getDefinitionAtPosition(fileName, offset);
-        let urlDefs = [];
         if (defs) {
             defs.forEach(def => {
                 let fileName = def.fileName;
@@ -707,10 +706,7 @@ export default class TypeScriptService {
                     let result = this.lookupEnvDef(name, container);
                     if (result) {
                         def['url'] = result['!url'];
-                        urlDefs.push(def);
                     }
-                } else {
-                    urlDefs.push(def);
                 }
             });
         }
