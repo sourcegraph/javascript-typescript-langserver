@@ -23,7 +23,7 @@ export default class TypeScriptService {
     lines: ts.Map<number[]>
     externalRefs = null;
     exportedEnts = null;
-    defs = null;
+    envDefs = [];
 
     constructor(root: string) {
         this.root = root;
@@ -60,15 +60,29 @@ export default class TypeScriptService {
 
         // Create the language service files
         this.services = ts.createLanguageService(servicesHost, ts.createDocumentRegistry());
-        this.initDefFiles();
+        this.initEnvDefFiles();
     }
 
-    initDefFiles() {
+    initEnvDefFiles() {
         try {
-            this.defs = JSON.parse(fs.readFileSync(path.join(__dirname, '../src/defs/node.json'), 'utf8'));
+            this.envDefs.push(JSON.parse(fs.readFileSync(path.join(__dirname, '../src/defs/node.json'), 'utf8')));
+            this.envDefs.push(JSON.parse(fs.readFileSync(path.join(__dirname, '../src/defs/ecmascript.json'), 'utf8')));
         } catch (error) {
             console.error("error = ", error);
         }
+    }
+
+    lookupEnvDef(property) {
+        let res = [];
+        if (this.envDefs && this.envDefs.length > 0) {
+            this.envDefs.forEach(envDef => {
+                let results = JSONPath({ json: envDef, path: `$..${property}` });
+                if (results) {
+                    res.concat(results);
+                }
+            });
+        }
+        return res;
     }
 
     getPathForPosition(uri: string, line: number, column: number): string[] {
@@ -676,8 +690,8 @@ export default class TypeScriptService {
                 let fileName = def.fileName;
                 let name = def.name;
                 let container = def.containerName.toLowerCase();
-                if (fileName.indexOf("merged.lib.d.ts") > -1 && this.defs) {
-                    var results = JSONPath({ json: this.defs, path: `$..${name}` });
+                if (fileName.indexOf("merged.lib.d.ts") > -1) {
+                    let results = this.lookupEnvDef(name);
                     let result = null;
                     if (results && results.length > 1) {
                         result = results.find(result => {
