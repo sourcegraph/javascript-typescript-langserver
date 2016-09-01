@@ -72,17 +72,30 @@ export default class TypeScriptService {
         }
     }
 
-    lookupEnvDef(property) {
-        let res = [];
+    lookupEnvDef(property, container) {
+        let results = [];
         if (this.envDefs && this.envDefs.length > 0) {
             this.envDefs.forEach(envDef => {
-                let results = JSONPath({ json: envDef, path: `$..${property}` });
-                if (results) {
-                    res = res.concat(results);
+                let res = JSONPath({ json: envDef, path: `$..${property}` });
+                if (res) {
+                    results = results.concat(res);
                 }
             });
         }
-        return res;
+
+        if (results.length > 1) {
+            let result = results.find(info => {
+                if (info['!url'] && container && info['!url'].indexOf(container) > -1) {
+                    return true;
+                }
+            });
+            return result ? result : results[0];
+        }
+
+        if (results) {
+            return results[0];
+        }
+
     }
 
     getPathForPosition(uri: string, line: number, column: number): string[] {
@@ -691,18 +704,7 @@ export default class TypeScriptService {
                 let name = def.name;
                 let container = def.containerName.toLowerCase();
                 if (fileName.indexOf("merged.lib.d.ts") > -1) {
-                    let results = this.lookupEnvDef(name);
-                    let result = null;
-                    if (results && results.length > 1) {
-                        result = results.find(result => {
-                            if (result['!url'] && container && result['!url'].indexOf(container) > -1) {
-                                return true;
-                            }
-                        });
-                    }
-                    if (results && !result) {
-                        result = results[0]
-                    }
+                    let result = this.lookupEnvDef(name, container);
                     if (result) {
                         def['url'] = result['!url'];
                         urlDefs.push(def);
