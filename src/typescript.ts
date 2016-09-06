@@ -518,16 +518,23 @@ export default class TypeScriptService {
                             let refs: ts.ReferenceEntry[] = self.services.getReferencesAtPosition(sourceFile.fileName, posInFile);
                             if (refs) {
                                 refs.forEach(ref => {
+                                    let range = Range.create(self.getLineAndPosFromOffset(ref.fileName, ref.textSpan.start), self.getLineAndPosFromOffset(ref.fileName, ref.textSpan.start + ref.textSpan.length));
                                     let newRef = {
-                                        name: name.text, path: libName, file: ref.fileName, start: ref.textSpan.start,
-                                        len: ref.textSpan.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
+                                        name: name.text, path: libName, location: {
+                                            file: ref.fileName,
+                                            range: range
+                                        }, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
                                     };
                                     importRefs.push(newRef);
                                 });
                             } else {
+                                let range = Range.create(self.getLineAndPosFromOffset(fileName, posInFile), self.getLineAndPosFromOffset(fileName, name.getEnd()));
                                 let newRef = {
-                                    name: name.text, path: libName, file: fileName, start: posInFile,
-                                    len: name.text.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
+                                    name: name.text, path: libName,
+                                    location: {
+                                        file: fileName,
+                                        range: range
+                                    }, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
                                 };
                                 importRefs.push(newRef);
                             }
@@ -556,18 +563,23 @@ export default class TypeScriptService {
                                 if (refs) {
                                     refs.forEach(ref => {
                                         let path = importedName && importedName.kind == ts.SyntaxKind.Identifier ? `${libName}.${importedName['text']}` : libName;
+                                        let range = Range.create(self.getLineAndPosFromOffset(ref.fileName, ref.textSpan.start), self.getLineAndPosFromOffset(ref.fileName, ref.textSpan.start + ref.textSpan.length));
                                         let newRef = {
-                                            name: name.text, path: libName, file: ref.fileName, start: ref.textSpan.start,
-                                            len: ref.textSpan.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
+                                            name: name.text, path: libName, location: {
+                                                file: ref.fileName,
+                                                range: range
+                                            }, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
                                         };
                                         importRefs.push(newRef);
                                     });
                                 } else {
-                                    console.error("hereeree  = ", posInFile);
                                     let path = importedName && importedName.kind == ts.SyntaxKind.Identifier ? `${libName}.${importedName['text']}` : libName;
+                                    let range = Range.create(self.getLineAndPosFromOffset(fileName, posInFile), self.getLineAndPosFromOffset(fileName, name.getEnd()));
                                     let newRef = {
-                                        name: name.text, path: libName, file: fileName, start: posInFile,
-                                        len: name.text.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
+                                        name: name.text, path: libName, location: {
+                                            file: fileName,
+                                            range: range
+                                        }, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
                                     };
                                     importRefs.push(newRef);
                                 }
@@ -595,16 +607,22 @@ export default class TypeScriptService {
                                 let refs: ts.ReferenceEntry[] = self.services.getReferencesAtPosition(sourceFile.fileName, posInFile);
                                 if (refs) {
                                     refs.forEach(ref => {
+                                        let range = Range.create(self.getLineAndPosFromOffset(ref.fileName, ref.textSpan.start), self.getLineAndPosFromOffset(ref.fileName, ref.textSpan.start + ref.textSpan.length));
                                         let newRef = {
-                                            name: namespaceImport.name.text, path: libName, file: ref.fileName, start: ref.textSpan.start,
-                                            len: ref.textSpan.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
+                                            name: namespaceImport.name.text, path: libName, location: {
+                                                file: ref.fileName,
+                                                range: range
+                                            }, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
                                         };
                                         importRefs.push(newRef);
                                     });
                                 } else {
+                                    let range = Range.create(self.getLineAndPosFromOffset(fileName, posInFile), self.getLineAndPosFromOffset(fileName, namespaceImport.name.getEnd()));
                                     let newRef = {
-                                        name: namespaceImport.name.text, path: libName, file: fileName, start: posInFile,
-                                        len: namespaceImport.name.text.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
+                                        name: namespaceImport.name.text, path: libName, location: {
+                                            file: fileName,
+                                            range: range
+                                        }, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
                                     };
                                     importRefs.push(newRef);
                                 }
@@ -617,16 +635,26 @@ export default class TypeScriptService {
                                 let refs: ts.ReferenceEntry[] = self.services.getReferencesAtPosition(sourceFile.fileName, posInFile);
                                 if (refs) {
                                     refs.forEach(ref => {
+                                        let range = Range.create(self.getLineAndPosFromOffset(ref.fileName, ref.textSpan.start), self.getLineAndPosFromOffset(ref.fileName, ref.textSpan.start + ref.textSpan.length));
                                         let newRef = {
-                                            name: pathName, path: `${libName}.${pathName}`, file: ref.fileName, start: ref.textSpan.start,
-                                            len: ref.textSpan.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
+                                            name: pathName, path: `${libName}.${pathName}`,
+                                            location: {
+                                                file: ref.fileName,
+                                                range: range
+                                            },
+                                            repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
                                         };
                                         importRefs.push(newRef);
                                     });
                                 } else {
+                                    let range = Range.create(self.getLineAndPosFromOffset(fileName, posInFile), self.getLineAndPosFromOffset(fileName, namedImport.name.getEnd()));
                                     let newRef = {
-                                        name: pathName, path: `${libName}.${pathName}`, file: fileName, start: posInFile,
-                                        len: pathName.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
+                                        name: pathName, path: `${libName}.${pathName}`,
+                                        location: {
+                                            file: fileName,
+                                            range: range
+                                        },
+                                        repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
                                     };
                                     importRefs.push(newRef);
                                 }
@@ -675,6 +703,8 @@ export default class TypeScriptService {
                         let id = ids[i];
                         startPath = `${startPath}.${id.text}`;
                         let pos = id.end - id.text.length;
+                        let fileName = id.getSourceFile().fileName;
+                        let range = Range.create(self.getLineAndPosFromOffset(fileName, pos), self.getLineAndPosFromOffset(fileName, pos + id.text.length));
                         importRefs.push({
                             name: id.text, path: startPath, file: id.getSourceFile().fileName, pos: pos,
                             len: id.text.length, repoName: res.import.repoName, repoURL: res.import.repoURL, repoCommit: res.import.repoCommit
@@ -794,7 +824,7 @@ export default class TypeScriptService {
                 if (name == 'node_modules') {
                     return false;
                 }
-                return name.endsWith('.ts') || name.endsWith('.js') || fs.statSync(path.join(dir, name)).isDirectory();
+                return name.endsWith('.ts') || name.endsWith('.js') || name.endsWith('.tsx') || name.endsWith('.jsx') || fs.statSync(path.join(dir, name)).isDirectory();
             }).forEach(function (name) {
                 self.getFiles(root, path.posix.join(prefix, name), files)
             })
