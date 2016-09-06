@@ -193,7 +193,6 @@ export default class TypeScriptService {
         if (this.externalRefs === null) {
             this.externalRefs = this.collectExternals(this.collectExternalLibs());
         }
-        // console.error("external refs = ", this.externalRefs);
         return this.externalRefs;
     }
 
@@ -201,7 +200,6 @@ export default class TypeScriptService {
         if (this.exportedEnts === null) {
             this.exportedEnts = this.collectExportedEntities();
         }
-        // console.error("exported ents = ", this.exportedEnts);
         return this.exportedEnts;
     }
 
@@ -527,7 +525,6 @@ export default class TypeScriptService {
                                     importRefs.push(newRef);
                                 });
                             } else {
-                                console.error("pos in file = ", posInFile);
                                 let newRef = {
                                     name: name.text, path: libName, file: fileName, start: posInFile,
                                     len: name.text.length, repoName: libRes.name, repoURL: libRes.repo, repoCommit: libRes.version
