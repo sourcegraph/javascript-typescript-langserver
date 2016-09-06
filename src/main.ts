@@ -58,6 +58,7 @@ var server = net.createServer(function (socket) {
 						'file:///' + external.location.file, util.formExternalUri(external));
 				});
 				return res;
+		    //TODO add collecting of top-level declaration here
 			} else if (params.query == '') {
 
 			}
@@ -83,10 +84,11 @@ var server = net.createServer(function (socket) {
 			} else {
 				//check whether definition is external, if uri string returned, add this location
 				let externalDef = connection.service.getExternalDefinition(params.textDocument.uri, params.position.line, params.position.character);
-				//process external def here
+				//TODO process external def here
 				if (externalDef) {
 					result.push(externalDef);
 				}
+				//TODO process external doc ref here
 			}
 			return result;
 		} catch (e) {
