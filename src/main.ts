@@ -50,15 +50,16 @@ var server = net.createServer(function (socket) {
 					return SymbolInformation.create(ent.name, ent.kind, ent.location.range,
 						'file:///' + ent.location.file, util.formExternalUri(ent));
 				});
-				console.error("exported res = ", res);
 				return res;
 			} else if (params.query == "externals") {
 				const externals = connection.service.getExternalRefs();
 				let res = externals.map(external => {
-					return SymbolInformation.create(external.name, util.formEmptyKind(), util.formEmptyRange(), util.formExternalUri(external));
+					return SymbolInformation.create(external.name, util.formEmptyKind(), external.location.range,
+						'file:///' + external.location.file, util.formExternalUri(external));
 				});
-				console.error("symbols res = ", res);
 				return res;
+			} else if (params.query == '') {
+
 			}
 			return [];
 		} catch (e) {
@@ -82,6 +83,7 @@ var server = net.createServer(function (socket) {
 			} else {
 				//check whether definition is external, if uri string returned, add this location
 				let externalDef = connection.service.getExternalDefinition(params.textDocument.uri, params.position.line, params.position.character);
+				//process external def here
 				if (externalDef) {
 					result.push(externalDef);
 				}
@@ -142,17 +144,17 @@ const defaultLspPort = 2088;
 const defaultLpPort = 4145;
 
 program
-  .version('0.0.1')
-  .option('-l, --lsp [port]', 'LSP port (' + defaultLspPort + ')', parseInt)
-  .option('-p, --lp [port]', 'LP port (' + defaultLpPort + ')', parseInt)
-  .option('-w, --workspace [directory]', 'Workspace directory')
-  .parse(process.argv);
+	.version('0.0.1')
+	.option('-l, --lsp [port]', 'LSP port (' + defaultLspPort + ')', parseInt)
+	.option('-p, --lp [port]', 'LP port (' + defaultLpPort + ')', parseInt)
+	.option('-w, --workspace [directory]', 'Workspace directory')
+	.parse(process.argv);
 
 const lspPort = program.lsp || defaultLspPort;
 const lpPort = program.lp || defaultLpPort;
-const workspace = program.workspace || 
-	path.join(process.env.SGPATH || path.join(os.homedir(), '.sourcegraph'), 
-		'workspace', 
+const workspace = program.workspace ||
+	path.join(process.env.SGPATH || path.join(os.homedir(), '.sourcegraph'),
+		'workspace',
 		'js');
 
 console.log('Using workspace', workspace);
