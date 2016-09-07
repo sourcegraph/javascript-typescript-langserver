@@ -46,21 +46,32 @@ var server = net.createServer(function (socket) {
 			console.log('workspace symbols', params.query);
 			if (params.query == "exported") {
 				const exported = connection.service.getExportedEnts();
-				let res = exported.map(ent => {
-					return SymbolInformation.create(ent.name, ent.kind, ent.location.range,
-						'file:///' + ent.location.file, util.formExternalUri(ent));
-				});
-				return res;
+				if (exported) {
+					let res = exported.map(ent => {
+						return SymbolInformation.create(ent.name, ent.kind, ent.location.range,
+							'file:///' + ent.location.file, util.formExternalUri(ent));
+					});
+					return res;
+				}
 			} else if (params.query == "externals") {
 				const externals = connection.service.getExternalRefs();
-				let res = externals.map(external => {
-					return SymbolInformation.create(external.name, util.formEmptyKind(), external.location.range,
-						'file:///' + external.location.file, util.formExternalUri(external));
-				});
-				return res;
-		    //TODO add collecting of top-level declaration here
+				if (externals) {
+					let res = externals.map(external => {
+						return SymbolInformation.create(external.name, util.formEmptyKind(), external.location.range,
+							'file:///' + external.location.file, util.formExternalUri(external));
+					});
+					return res;
+				}
 			} else if (params.query == '') {
+				const topDecls = connection.service.getTopLevelDeclarations();
+				if (topDecls) {
+					let res = topDecls.map(decl => {
+						return SymbolInformation.create(decl.name, decl.kind, decl.location.range,
+							'file:///' + decl.location.file, util.formExternalUri(decl));
+					});
+					return res;
 
+				}
 			}
 			return [];
 		} catch (e) {

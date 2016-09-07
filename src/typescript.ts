@@ -23,6 +23,7 @@ export default class TypeScriptService {
     lines: ts.Map<number[]>
     externalRefs = null;
     exportedEnts = null;
+    topLevelDecls = null;
     envDefs = [];
 
     constructor(root: string) {
@@ -474,46 +475,6 @@ export default class TypeScriptService {
         return exportedRefs;
     }
 
-    collectTopLevelInterface() {
-        let decls = [];
-        let self = this;
-        for (const sourceFile of this.services.getProgram().getSourceFiles()) {
-            if (!sourceFile.hasNoDefaultLib && sourceFile.fileName.indexOf("node_modules") == -1) {
-                sourceFile.getChildren().forEach(child => {
-                    collectTopLevelDeclarations(child, true);
-                });
-            }
-        }
-
-        return decls;
-
-        function collectTopLevelDeclarations(node: ts.Node, analyzeChildren, parentPath?: string) {
-            let sourceFile = node.getSourceFile();
-            let fileName = sourceFile.fileName;
-            if (util.isNamedDeclaration(node)) {
-                let decl = <ts.Declaration>node;
-
-                let name = <ts.Identifier>decl.name;
-                let range = Range.create(self.getLineAndPosFromOffset(fileName, name.getStart(sourceFile)), self.getLineAndPosFromOffset(fileName, name.getEnd()));
-                let path = parentPath ? `${parentPath}.${name.text}` : name.text;
-                decls.push({
-                    name: decl.name['text'],
-                    kind: util.getNamedDeclarationKind(node),
-                    path: path,
-                    location: {
-                        file: fileName,
-                        range: range
-                    },
-                });
-                if (analyzeChildren) {
-                    node.getChildren().forEach(child => {
-                        collectTopLevelDeclarations(child, false, path);
-                    });
-                }
-            }
-        }
-    }
-
     collectExternalLibs() {
         let pkgFiles = packages.collectFiles(this.root + "/node_modules", ["node_modules"]);
         let pkgsInfo = pkgFiles.map(pkg => {
@@ -798,6 +759,54 @@ export default class TypeScriptService {
         //     return Location.create(util.formExternalUri(externalRes),
         //         Range.create(this.getLineAndPosFromOffset(fileName, externalRes.start), this.getLineAndPosFromOffset(fileName, externalRes.start + externalRes.len)));
         // }
+    }
+
+    getTopLevelDeclarations() {
+        if (this.topLevelDecls === null) {
+            this.topLevelDecls = this.collectTopLevelInterface();
+        }
+        return this.topLevelDecls;
+
+    }
+
+    collectTopLevelInterface() {
+        let decls = [];
+        let self = this;
+        for (const sourceFile of this.services.getProgram().getSourceFiles()) {
+            if (!sourceFile.hasNoDefaultLib && sourceFile.fileName.indexOf("node_modules") == -1) {
+                sourceFile.getChildren().forEach(child => {
+                    collectTopLevelDeclarations(child, true);
+                });
+            }
+        }
+
+        return decls;
+
+        function collectTopLevelDeclarations(node: ts.Node, analyzeChildren, parentPath?: string) {
+            let sourceFile = node.getSourceFile();
+            let fileName = sourceFile.fileName;
+            if (util.isNamedDeclaration(node)) {
+                let decl = <ts.Declaration>node;
+
+                let name = <ts.Identifier>decl.name;
+                let range = Range.create(self.getLineAndPosFromOffset(fileName, name.getStart(sourceFile)), self.getLineAndPosFromOffset(fileName, name.getEnd()));
+                let path = parentPath ? `${parentPath}.${name.text}` : name.text;
+                decls.push({
+                    name: decl.name['text'],
+                    kind: util.getNamedDeclarationKind(node),
+                    path: path,
+                    location: {
+                        file: fileName,
+                        range: range
+                    },
+                });
+                if (analyzeChildren) {
+                    node.getChildren().forEach(child => {
+                        collectTopLevelDeclarations(child, false, path);
+                    });
+                }
+            }
+        }
     }
 
     getHover(uri: string, line: number, column: number): ts.QuickInfo {
