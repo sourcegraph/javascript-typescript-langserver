@@ -755,10 +755,6 @@ export default class TypeScriptService {
         });
 
         return externalRes;
-        // if (externalRes) {
-        //     return Location.create(util.formExternalUri(externalRes),
-        //         Range.create(this.getLineAndPosFromOffset(fileName, externalRes.start), this.getLineAndPosFromOffset(fileName, externalRes.start + externalRes.len)));
-        // }
     }
 
     getTopLevelDeclarations() {

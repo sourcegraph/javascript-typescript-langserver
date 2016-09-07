@@ -95,10 +95,14 @@ var server = net.createServer(function (socket) {
 			} else {
 				//check whether definition is external, if uri string returned, add this location
 				let externalDef = connection.service.getExternalDefinition(params.textDocument.uri, params.position.line, params.position.character);
-				//TODO process external def here
+
 				if (externalDef) {
-					result.push(externalDef);
+					let fileName = externalDef.file;
+					let res = Location.create(util.formExternalUri(externalDef),
+						Range.create(this.getLineAndPosFromOffset(fileName, externalDef.start), this.getLineAndPosFromOffset(fileName, externalDef.start + externalDef.len)));
+					result.push(res);	
 				}
+				
 				//TODO process external doc ref here
 			}
 			return result;
