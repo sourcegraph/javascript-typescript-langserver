@@ -62,6 +62,31 @@ export function isNamedDeclaration(node): boolean {
     return false;
 }
 
+export function getNamedDeclarationKind(node) {
+    if (node.name && node.name.kind == ts.SyntaxKind.Identifier) {
+        if (node.kind == ts.SyntaxKind.MethodDeclaration) {
+            return "method";
+        }
+        if (node.kind == ts.SyntaxKind.FunctionDeclaration) {
+            return "fn";
+        }
+        if (node.kind == ts.SyntaxKind.ClassDeclaration) {
+            return "class";
+        }
+        if (node.kind == ts.SyntaxKind.VariableDeclaration) {
+            return "var";
+        }
+        if (node.kind == ts.SyntaxKind.EnumDeclaration) {
+            return "enum";
+        }
+        if (node.kind == ts.SyntaxKind.InterfaceDeclaration) {
+            return "interface";
+        }
+    }
+    return false;
+
+}
+
 export function collectAllParents(node, parents) {
     if (node.parent) {
         parents.push(node.parent);
