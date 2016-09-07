@@ -505,6 +505,11 @@ export default class TypeScriptService {
                         range: range
                     },
                 });
+                if (analyzeChildren) {
+                    node.getChildren().forEach(child => {
+                        collectTopLevelDeclarations(child, false, path);
+                    });
+                }
             }
         }
     }
