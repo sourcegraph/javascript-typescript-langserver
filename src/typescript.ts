@@ -781,7 +781,11 @@ export default class TypeScriptService {
         function collectTopLevelDeclarations(node: ts.Node, analyzeChildren, parentPath?: string) {
             let sourceFile = node.getSourceFile();
             let fileName = sourceFile.fileName;
-            if (util.isNamedDeclaration(node)) {
+            if (node.kind == ts.SyntaxKind.SyntaxList) {
+                node.getChildren().forEach(child => {
+                    collectTopLevelDeclarations(child, true);
+                });
+            } else if (util.isNamedDeclaration(node)) {
                 let decl = <ts.Declaration>node;
 
                 let name = <ts.Identifier>decl.name;
