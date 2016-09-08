@@ -48,8 +48,8 @@ func run() error {
 		case "definition": getDefinition(client)
 		case "hover": getHover(client)
 		case "references": getReferences(client)
-		case "symbol-externals": getWorkspaceSymbols(client, "externals")
-		case "symbol-exported": getWorkspaceSymbols(client, "exported")
+		case "external-refs": getWorkspaceSymbols(client, "externals")
+		case "exported-symbols": getWorkspaceSymbols(client, "exported")
 		case "shutdown": shutdown(client);
 	}
     // initialize(client);
