@@ -87,24 +87,27 @@ var server = net.createServer(function (socket) {
 			let result: Location[] = [];
 			if (defs) {
 				for (let def of defs) {
-					result.push(Location.create('file:///' + def.fileName, {
-						start: connection.service.position(def.fileName, def.textSpan.start),
-						end: connection.service.position(def.fileName, def.textSpan.start + def.textSpan.length)
-					}));
+					if (def['url']) {
+						//TODO process external doc ref here
+						result.push(Location.create(def['url'], util.formEmptyRange()));
+					} else {
+						result.push(Location.create('file:///' + def.fileName, {
+							start: connection.service.position(def.fileName, def.textSpan.start),
+							end: connection.service.position(def.fileName, def.textSpan.start + def.textSpan.length)
+						}));
+					}
 				}
 			} else {
 				//check whether definition is external, if uri string returned, add this location
 				let externalDef = connection.service.getExternalDefinition(params.textDocument.uri, params.position.line, params.position.character);
-
 				if (externalDef) {
 					let fileName = externalDef.file;
 					let res = Location.create(util.formExternalUri(externalDef),
 						Range.create(this.getLineAndPosFromOffset(fileName, externalDef.start), this.getLineAndPosFromOffset(fileName, externalDef.start + externalDef.len)));
-					result.push(res);	
+					result.push(res);
 				}
-				
-				//TODO process external doc ref here
 			}
+
 			return result;
 		} catch (e) {
 			console.error(params, e);
