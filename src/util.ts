@@ -83,7 +83,7 @@ export function getNamedDeclarationKind(node) {
             return "interface";
         }
     }
-    return false;
+    return "";
 
 }
 
