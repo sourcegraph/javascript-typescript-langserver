@@ -778,16 +778,11 @@ export default class TypeScriptService {
 
         return decls;
 
-        function collectTopLevelDeclarations(node: ts.Node, analyzeChildren, parentPath?: string) {
-            let sourceFile = node.getSourceFile();
-            let fileName = sourceFile.fileName;
-            if (node.kind == ts.SyntaxKind.SyntaxList) {
-                node.getChildren().forEach(child => {
-                    collectTopLevelDeclarations(child, true);
-                });
-            } else if (util.isNamedDeclaration(node)) {
+        function processNamedDeclaration(node: ts.Node, analyzeChildren, parentPath?: string) {
+            if (util.isNamedDeclaration(node)) {
+                let sourceFile = node.getSourceFile();
+                let fileName = sourceFile.fileName;
                 let decl = <ts.Declaration>node;
-
                 let name = <ts.Identifier>decl.name;
                 let range = Range.create(self.getLineAndPosFromOffset(fileName, name.getStart(sourceFile)), self.getLineAndPosFromOffset(fileName, name.getEnd()));
                 let path = parentPath ? `${parentPath}.${name.text}` : name.text;
@@ -805,6 +800,28 @@ export default class TypeScriptService {
                         collectTopLevelDeclarations(child, false, path);
                     });
                 }
+            }
+        }
+
+        function collectTopLevelDeclarations(node: ts.Node, analyzeChildren, parentPath?: string) {
+            let sourceFile = node.getSourceFile();
+            let fileName = sourceFile.fileName;
+            if (node.kind == ts.SyntaxKind.SyntaxList) {
+                node.getChildren().forEach(child => {
+                    collectTopLevelDeclarations(child, true);
+                });
+            } else if (node.kind = ts.SyntaxKind.VariableStatement) {
+                let stmt = <ts.VariableStatement>node;
+                if (stmt.declarationList) {
+                    let varDecls = stmt.declarationList.declarations;
+                    if (varDecls) {
+                        varDecls.forEach(varDecl => {
+                            processNamedDeclaration(varDecl, analyzeChildren, parentPath);
+                        });
+                    }
+                }
+            } else {
+                processNamedDeclaration(node, analyzeChildren, parentPath);
             }
         }
     }
