@@ -57,8 +57,7 @@ var server = net.createServer(function (socket) {
 				const externals = connection.service.getExternalRefs();
 				if (externals) {
 					let res = externals.map(external => {
-						return SymbolInformation.create(external.name, util.formEmptyKind(), external.location.range,
-							'file:///' + external.location.file, util.formExternalUri(external));
+						return SymbolInformation.create(external.name, util.formEmptyKind(), util.formEmptyRange(), util.formExternalUri(external));
 					});
 					return res;
 				}
