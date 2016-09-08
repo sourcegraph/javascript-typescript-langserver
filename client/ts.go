@@ -50,6 +50,7 @@ func run() error {
 		case "references": getReferences(client)
 		case "external-refs": getWorkspaceSymbols(client, "externals")
 		case "exported-symbols": getWorkspaceSymbols(client, "exported")
+		case "workspace-symbols": getWorkspaceSymbols(client, "")
 		case "shutdown": shutdown(client);
 	}
     // initialize(client);
