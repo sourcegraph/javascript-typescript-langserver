@@ -24,7 +24,7 @@ import Connection from './connection';
 import {serve} from './processor';
 
 namespace GlobalRefsRequest {
-	export const type: RequestType<TextDocumentPositionParams, string, any> = { get method() { return 'textDocument/global-refs'; } };
+	export const type: RequestType<WorkspaceSymbolParams, string, any> = { get method() { return 'textDocument/global-refs'; } };
 }
 
 var server = net.createServer(function (socket) {
@@ -150,8 +150,8 @@ var server = net.createServer(function (socket) {
 		}
 	});
 
-	connection.connection.onRequest(GlobalRefsRequest.type, (params: TextDocumentPositionParams): string => {
-		console.log('global-refs', params.textDocument.uri, params.position.line, params.position.character)
+	connection.connection.onRequest(GlobalRefsRequest.type, (params: WorkspaceSymbolParams): string => {
+		console.log('global-refs', params.query);
 
 		return "";
 	});
