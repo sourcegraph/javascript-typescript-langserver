@@ -15,13 +15,17 @@ import {
 	InitializeParams, InitializeResult,
 	TextDocuments,
 	TextDocumentPositionParams, Definition, ReferenceParams, Location, Hover, WorkspaceSymbolParams,
-	SymbolInformation, SymbolKind, Range
+	SymbolInformation, SymbolKind, Range, RequestType
 } from 'vscode-languageserver';
 
 import TypeScriptService from './typescript';
 import Connection from './connection';
 
 import {serve} from './processor';
+
+namespace GlobalRefsRequest {
+	export const type: RequestType<TextDocumentPositionParams, string, any> = { get method() { return 'textDocument/global-refs'; } };
+}
 
 var server = net.createServer(function (socket) {
 	let connection: Connection = new Connection(socket);
@@ -106,7 +110,6 @@ var server = net.createServer(function (socket) {
 					result.push(res);
 				}
 			}
-
 			return result;
 		} catch (e) {
 			console.error(params, e);
@@ -145,6 +148,12 @@ var server = net.createServer(function (socket) {
 			console.error(params, e);
 			return [];
 		}
+	});
+
+	connection.connection.onRequest(GlobalRefsRequest.type, (params: TextDocumentPositionParams): string => {
+		console.log('global-refs', params.textDocument.uri, params.position.line, params.position.character)
+
+		return "";
 	});
 
 	connection.connection.onShutdown(() => {
