@@ -24,7 +24,7 @@ import Connection from './connection';
 import {serve} from './processor';
 
 namespace GlobalRefsRequest {
-	export const type: RequestType<WorkspaceSymbolParams, string, any> = { get method() { return 'textDocument/global-refs'; } };
+	export const type: RequestType<WorkspaceSymbolParams, SymbolInformation[], any> = { get method() { return 'textDocument/global-refs'; } };
 }
 
 var server = net.createServer(function (socket) {
@@ -74,7 +74,6 @@ var server = net.createServer(function (socket) {
 					});
 					console.error("top declarations = ", topDecls);
 					return res;
-
 				}
 			}
 			return [];
@@ -150,10 +149,21 @@ var server = net.createServer(function (socket) {
 		}
 	});
 
-	connection.connection.onRequest(GlobalRefsRequest.type, (params: WorkspaceSymbolParams): string => {
-		console.log('global-refs', params.query);
-
-		return "";
+	connection.connection.onRequest(GlobalRefsRequest.type, (params: WorkspaceSymbolParams): SymbolInformation[] => {
+		try {
+			console.log('global-refs', params.query);
+			const externals = connection.service.getExternalRefs();
+			if (externals) {
+				let res = externals.map(external => {
+					return SymbolInformation.create(external.name, util.formEmptyKind(), util.formEmptyRange(), util.formExternalUri(external));
+				});
+				return res;
+			}
+			return [];
+		} catch (e) {
+			console.error(params, e);
+			return [];
+		}
 	});
 
 	connection.connection.onShutdown(() => {
