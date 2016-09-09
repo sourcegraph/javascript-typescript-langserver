@@ -102,8 +102,7 @@ var server = net.createServer(function (socket) {
 				let externalDef = connection.service.getExternalDefinition(params.textDocument.uri, params.position.line, params.position.character);
 				if (externalDef) {
 					let fileName = externalDef.file;
-					let res = Location.create(util.formExternalUri(externalDef),
-						Range.create(this.getLineAndPosFromOffset(fileName, externalDef.start), this.getLineAndPosFromOffset(fileName, externalDef.start + externalDef.len)));
+					let res = Location.create(util.formExternalUri(externalDef), util.formEmptyRange());
 					result.push(res);
 				}
 			}
