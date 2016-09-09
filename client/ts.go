@@ -51,6 +51,7 @@ func run() error {
 		case "external-refs": getWorkspaceSymbols(client, "externals")
 		case "exported-symbols": getWorkspaceSymbols(client, "exported")
 		case "workspace-symbols": getWorkspaceSymbols(client, "")
+		case "global-refs": getGlobalRefs(client, "")
 		case "shutdown": shutdown(client);
 	}
     // initialize(client);
@@ -155,6 +156,23 @@ func getReferences(client *jsonrpc2.Client) error {
 func getWorkspaceSymbols(client *jsonrpc2.Client, query string) error {
 	    initialize(client);
 		response, err := request(client, "workspace/symbol", lsp.WorkspaceSymbolParams{
+   		Query: query, 
+   	});
+
+	if err != nil {
+   		return err
+   }
+	println(*response.Result);
+   	// var location []lsp.Location
+   	// if err := json.Unmarshal(*response.Result, &location); err != nil {
+   	// 	return err
+   	// }
+	return nil;
+}
+
+func getGlobalRefs(client *jsonrpc2.Client, query string) error {
+	    initialize(client);
+		response, err := request(client, "textDocument/global-refs", lsp.WorkspaceSymbolParams{
    		Query: query, 
    	});
 
