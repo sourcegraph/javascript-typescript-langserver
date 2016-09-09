@@ -68,6 +68,7 @@ var server = net.createServer(function (socket) {
 						return SymbolInformation.create(decl.name, decl.kind, decl.location.range,
 							'file:///' + decl.location.file, util.formExternalUri(decl));
 					});
+					console.error("top declarations = ", topDecls);
 					return res;
 
 				}

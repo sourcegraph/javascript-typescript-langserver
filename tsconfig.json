@@ -8,7 +8,7 @@
 		"outDir": "build"
     },
     "files": [
-    	"src/main.ts"
+    	"src/language-server.ts"
     ],
     "exclude": [
         "node_modules"
