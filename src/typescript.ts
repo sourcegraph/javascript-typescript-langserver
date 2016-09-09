@@ -780,7 +780,7 @@ export default class TypeScriptService {
                 node.getChildren().forEach(child => {
                     collectTopLevelDeclarations(child, true);
                 });
-            } else if (node.kind = ts.SyntaxKind.VariableStatement) {
+            } else if (node.kind == ts.SyntaxKind.VariableStatement) {
                 let stmt = <ts.VariableStatement>node;
                 if (stmt.declarationList) {
                     let varDecls = stmt.declarationList.declarations;
