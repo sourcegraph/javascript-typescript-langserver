@@ -55,8 +55,8 @@ export default class TypeScriptService {
             },
             getCurrentDirectory: () => root,
             getCompilationSettings: () => options,
-            getDefaultLibFileName: (options) => ts.getDefaultLibFilePath(options),
-            // getDefaultLibFileName: (options) => defPath,
+            // getDefaultLibFileName: (options) => ts.getDefaultLibFilePath(options),
+             getDefaultLibFileName: (options) => defPath,
         };
 
         // Create the language service files
