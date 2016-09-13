@@ -21,8 +21,8 @@ export function formEmptyKind(): number {
 }
 
 export function formExternalUri(external) {
-    return external.repoName ? external.repoName + "$" + external.repoURL + "$" + external.repoCommit + "$" + external.path 
-    : external.path;
+    return external.repoName ? external.repoName + "$" + external.repoURL + "$" + external.repoCommit + "$" + external.path
+        : external.path;
 }
 
 /**
