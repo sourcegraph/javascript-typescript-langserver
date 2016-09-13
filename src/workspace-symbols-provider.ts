@@ -28,6 +28,8 @@ export default class WorkspaceSymbolsProvider {
             }
         }
 
+        console.error("Top decls = ", topDecls);
+
         for (const sourceFile of this.service.services.getProgram().getSourceFiles()) {
             if (!sourceFile.hasNoDefaultLib && sourceFile.fileName.indexOf("node_modules") == -1) {
                 ts.forEachChild(sourceFile, collectTopLevelChildDeclaration);
@@ -45,7 +47,7 @@ export default class WorkspaceSymbolsProvider {
                 let name = <ts.Identifier>decl.name;
                 let range = Range.create(self.service.getLineAndPosFromOffset(fileName, name.getStart(sourceFile)), self.service.getLineAndPosFromOffset(fileName, name.getEnd()));
                 let path = parentPath ? `${parentPath}.${name.text}` : name.text;
-                topDecls.push({ name: name.text || name.text, path: path });
+                topDecls.push({ name: name.text, path: path });
                 decls.push({
                     name: decl.name['text'],
                     kind: util.getNamedDeclarationKind(node),
@@ -79,9 +81,19 @@ export default class WorkspaceSymbolsProvider {
                                         return true;
                                     }
                                 });
+
                                 if (res) {
                                     let name = parent.name;
-                                    processNamedDeclaration(name, false, res.path);
+                                    let range = Range.create(self.service.getLineAndPosFromOffset(fileName, name.getStart(sourceFile)), self.service.getLineAndPosFromOffset(fileName, name.getEnd()));
+                                    decls.push({
+                                        name: name.text,
+                                        kind: "property",
+                                        path: `${res.path}.${name.text}`,
+                                        location: {
+                                            file: fileName,
+                                            range: range
+                                        },
+                                    });
                                 }
                             }
                         }
