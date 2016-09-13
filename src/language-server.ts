@@ -18,7 +18,7 @@ import {
 	SymbolInformation, SymbolKind, Range, RequestType
 } from 'vscode-languageserver';
 
-import TypeScriptService from './typescript';
+import TypeScriptService from './typescript-service';
 import Connection from './connection';
 
 import {serve} from './processor';
@@ -55,6 +55,7 @@ var server = net.createServer(function (socket) {
 						return SymbolInformation.create(ent.name, ent.kind, ent.location.range,
 							'file:///' + ent.location.file, util.formExternalUri(ent));
 					});
+					console.error("Res = ", res);
 					return res;
 				}
 			} else if (params.query == "externals") {
@@ -72,7 +73,7 @@ var server = net.createServer(function (socket) {
 						return SymbolInformation.create(decl.name, decl.kind, decl.location.range,
 							'file:///' + decl.location.file, util.formExternalUri(decl));
 					});
-					console.error("top declarations = ", topDecls);
+					 console.error("top declarations = ", res);
 					return res;
 				}
 			}
@@ -157,6 +158,7 @@ var server = net.createServer(function (socket) {
 				let res = externals.map(external => {
 					return SymbolInformation.create(external.name, util.formEmptyKind(), util.formEmptyRange(), util.formExternalUri(external));
 				});
+				console.error("global refs res = ", res);
 				return res;
 			}
 			return [];

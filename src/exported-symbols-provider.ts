@@ -7,7 +7,7 @@ import * as packages from './find-packages';
 import * as util from './util';
 import { Position, Range, Location } from 'vscode-languageserver';
 
-import TypeScriptService from './typescript';
+import TypeScriptService from './typescript-service';
 
 export default class ExportedSymbolProvider {
     service: TypeScriptService;

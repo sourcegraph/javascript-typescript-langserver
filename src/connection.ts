@@ -2,7 +2,7 @@
 /// <reference path="../typings/vscode-extension-vscode/es6.d.ts"/>
 
 import * as ts from "typescript";
-import TypeScriptService from './typescript';
+import TypeScriptService from './typescript-service';
 
 import {
 	createConnection, IConnection,

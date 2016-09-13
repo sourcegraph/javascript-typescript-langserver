@@ -13,7 +13,7 @@ import * as bodyParser from 'body-parser';
 
 import * as ts from 'typescript';
 
-import TypeScriptService from './typescript';
+import TypeScriptService from './typescript-service';
 import * as util from './util';
 
 var nodefs = require('node-fs');
