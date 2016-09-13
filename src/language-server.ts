@@ -64,6 +64,7 @@ var server = net.createServer(function (socket) {
 					let res = externals.map(external => {
 						return SymbolInformation.create(external.name, util.formEmptyKind(), util.formEmptyRange(), util.formExternalUri(external));
 					});
+					console.error("externals Res = ", res);
 					return res;
 				}
 			} else if (params.query == '') {
@@ -73,7 +74,7 @@ var server = net.createServer(function (socket) {
 						return SymbolInformation.create(decl.name, decl.kind, decl.location.range,
 							'file:///' + decl.location.file, util.formExternalUri(decl));
 					});
-					 console.error("top declarations = ", res);
+					console.error("top declarations = ", res);
 					return res;
 				}
 			}

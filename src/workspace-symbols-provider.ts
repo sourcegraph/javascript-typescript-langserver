@@ -18,6 +18,7 @@ export default class WorkspaceSymbolsProvider {
 
     collectTopLevelInterface() {
         let decls = [];
+        let topDecls = [];
         let self = this;
         for (const sourceFile of this.service.services.getProgram().getSourceFiles()) {
             if (!sourceFile.hasNoDefaultLib && sourceFile.fileName.indexOf("node_modules") == -1) {
@@ -27,7 +28,14 @@ export default class WorkspaceSymbolsProvider {
             }
         }
 
+        for (const sourceFile of this.service.services.getProgram().getSourceFiles()) {
+            if (!sourceFile.hasNoDefaultLib && sourceFile.fileName.indexOf("node_modules") == -1) {
+                ts.forEachChild(sourceFile, collectTopLevelChildDeclaration);
+            }
+        }
+
         return decls;
+
 
         function processNamedDeclaration(node: ts.Node, analyzeChildren, parentPath?: string) {
             if (util.isNamedDeclaration(node)) {
@@ -37,6 +45,7 @@ export default class WorkspaceSymbolsProvider {
                 let name = <ts.Identifier>decl.name;
                 let range = Range.create(self.service.getLineAndPosFromOffset(fileName, name.getStart(sourceFile)), self.service.getLineAndPosFromOffset(fileName, name.getEnd()));
                 let path = parentPath ? `${parentPath}.${name.text}` : name.text;
+                topDecls.push({ name: name.text || name.text, path: path });
                 decls.push({
                     name: decl.name['text'],
                     kind: util.getNamedDeclarationKind(node),
@@ -52,6 +61,34 @@ export default class WorkspaceSymbolsProvider {
                     });
                 }
             }
+        }
+
+        function collectTopLevelChildDeclaration(node: ts.Node) {
+            let sourceFile = node.getSourceFile();
+            let fileName = sourceFile.fileName;
+            if (node.kind == ts.SyntaxKind.Identifier) {
+                let id = <ts.Identifier>node;
+                if (node.parent.kind == ts.SyntaxKind.PropertyAccessExpression) {
+                    let parent = <ts.PropertyAccessExpression>node.parent;
+                    if (parent.expression.kind == ts.SyntaxKind.PropertyAccessExpression && parent.name.kind == ts.SyntaxKind.Identifier) {
+                        let parentExpr = <ts.PropertyAccessExpression>parent.expression;
+                        if (parentExpr.expression.kind == ts.SyntaxKind.Identifier && parentExpr.name.kind == ts.SyntaxKind.Identifier) {
+                            if (parentExpr.name['text'] == "prototype") {
+                                let res = topDecls.find(elem => {
+                                    if (elem.name == parentExpr.expression['text']) {
+                                        return true;
+                                    }
+                                });
+                                if (res) {
+                                    let name = parent.name;
+                                    processNamedDeclaration(name, false, res.path);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            ts.forEachChild(node, collectTopLevelChildDeclaration);
         }
 
         function collectTopLevelDeclarations(node: ts.Node, analyzeChildren, parentPath?: string) {

@@ -71,7 +71,6 @@ export default class ExportedSymbolsProvider {
         function collectExportedChildDeclaration(node: ts.Node) {
             let sourceFile = node.getSourceFile();
             let fileName = sourceFile.fileName;
-            let pkgInfo = findCurrentProjectInfo(sourceFile.path);
             if (node.kind == ts.SyntaxKind.Identifier) {
                 let id = <ts.Identifier>node;
                 if (node.parent.kind == ts.SyntaxKind.PropertyAccessExpression) {
