@@ -9,7 +9,7 @@ import { Position, Range, Location } from 'vscode-languageserver';
 
 import TypeScriptService from './typescript-service';
 
-export default class ExportedSymbolProvider {
+export default class ExportedSymbolsProvider {
     service: TypeScriptService;
 
     constructor(service: TypeScriptService) {
