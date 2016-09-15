@@ -3,10 +3,6 @@ import * as path from "path";
 import * as ts from "typescript";
 import { SymbolKind, Range, Position} from 'vscode-languageserver';
 
-export function formHover(info: ts.QuickInfo): string {
-    return info ? `{${info.kind}, ${info.documentation}}` : "";
-}
-
 export function formEmptyRange(): Range {
     return Range.create(Position.create(0, 0), Position.create(0, 0))
 }
@@ -112,4 +108,36 @@ export function collectAllParents(node, parents) {
 //         this.collectAllComments(child);
 //     });
 // }
+
+
+export function path2uri(root, file: string): string {
+    let ret = 'file://';
+    if (process.platform == 'win32') {
+        ret += '/';
+    }
+    let p = root ? path.resolve(root, file) : file;
+    return ret + normalizePath(p);
+}
+
+export function uri2path(uri: string): string {
+    if (uri.startsWith('file://')) {
+        uri = uri.substring(7);
+        if (process.platform == 'win32') {
+            uri = uri.substring(1).replace(/%3A/g, ':');
+        }
+    }
+    return uri;
+}
+
+export function uri2reluri(uri, root: string): string {
+    uri = uri2path(uri);
+    root = normalizePath(root);
+    if (uri.startsWith(root)) {
+        uri = uri.substring(root.length);
+        if (uri.startsWith('/')) {
+            uri = uri.substring(1);
+        }
+    }
+    return path2uri('', uri);
+}
 
