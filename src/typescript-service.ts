@@ -110,7 +110,7 @@ export default class TypeScriptService {
     }
 
     getPathForPosition(uri: string, line: number, column: number): string[] {
-        const fileName: string = this.uri2path(uri);
+        const fileName: string = util.uri2path(uri);
         if (!this.files[fileName]) {
             return [];
         }
@@ -247,7 +247,7 @@ export default class TypeScriptService {
     }
 
     getDefinition(uri: string, line: number, column: number): ts.DefinitionInfo[] {
-        const fileName: string = this.uri2path(uri);
+        const fileName: string = util.uri2path(uri);
         if (!this.files[fileName]) {
             return [];
         }
@@ -271,7 +271,7 @@ export default class TypeScriptService {
     }
 
     getExternalDefinition(uri: string, line: number, column: number) {
-        const fileName: string = this.uri2path(uri);
+        const fileName: string = util.uri2path(uri);
         if (!this.files[fileName]) {
             return;
         }
@@ -295,7 +295,7 @@ export default class TypeScriptService {
 
 
     getHover(uri: string, line: number, column: number): ts.QuickInfo {
-        const fileName: string = this.uri2path(uri);
+        const fileName: string = util.uri2path(uri);
 
         if (!this.files[fileName]) {
             return null;
@@ -307,7 +307,7 @@ export default class TypeScriptService {
 
     getReferences(uri: string, line: number, column: number): ts.ReferenceEntry[] {
         try {
-            const fileName: string = this.uri2path(uri);
+            const fileName: string = util.uri2path(uri);
             if (!this.files[fileName]) {
                 return null;
             }
@@ -422,13 +422,6 @@ export default class TypeScriptService {
         }
         result.push(lineStart);
         return result;
-    }
-
-    private uri2path(uri: string) {
-        if (!uri.startsWith('file:///')) {
-            return null;
-        }
-        return uri.substring('file:///'.length);
     }
 
     private resolvePath(p: string): string {
