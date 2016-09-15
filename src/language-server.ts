@@ -27,13 +27,32 @@ namespace GlobalRefsRequest {
     export const type: RequestType<WorkspaceSymbolParams, SymbolInformation[], any> = { get method() { return 'textDocument/global-refs'; } };
 }
 
+namespace InitializeRequest {
+    export const type: RequestType<InitializeParams, InitializeResult, any> = { get method() { return 'initialize'; } };
+}
+
 var server = net.createServer(function (socket) {
     let connection: Connection = new Connection(socket);
     let documents: TextDocuments = new TextDocuments();
 
     let workspaceRoot : string
 
-    connection.connection.onInitialize((params: InitializeParams): InitializeResult => {
+    // connection.connection.onInitialize((params: InitializeParams): InitializeResult => {
+    //     console.log('initialize', params.rootPath);
+    //     workspaceRoot = util.uri2path(params.rootPath);
+    //     connection.service = new TypeScriptService(workspaceRoot);
+    //     return {
+    //         capabilities: {
+    //             // Tell the client that the server works in FULL text document sync mode
+    //             textDocumentSync: documents.syncKind,
+    //             hoverProvider: true,
+    //             definitionProvider: true,
+    //             referencesProvider: true
+    //         }
+    //     }
+    // });
+
+    connection.connection.onRequest(InitializeRequest.type, (params: InitializeParams): InitializeResult => {
         console.log('initialize', params.rootPath);
         workspaceRoot = util.uri2path(params.rootPath);
         connection.service = new TypeScriptService(workspaceRoot);
@@ -46,6 +65,7 @@ var server = net.createServer(function (socket) {
                 referencesProvider: true
             }
         }
+        
     });
 
     connection.connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): SymbolInformation[] => {
