@@ -28,8 +28,6 @@ export default class WorkspaceSymbolsProvider {
             }
         }
 
-        console.error("Top decls = ", topDecls);
-
         for (const sourceFile of this.service.services.getProgram().getSourceFiles()) {
             if (!sourceFile.hasNoDefaultLib && sourceFile.fileName.indexOf("node_modules") == -1) {
                 ts.forEachChild(sourceFile, collectTopLevelChildDeclaration);

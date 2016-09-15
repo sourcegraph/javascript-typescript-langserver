@@ -27,13 +27,31 @@ namespace GlobalRefsRequest {
 	export const type: RequestType<WorkspaceSymbolParams, SymbolInformation[], any> = { get method() { return 'textDocument/global-refs'; } };
 }
 
+function uri(root, file: string): string {
+	let ret = 'file://';
+	if (process.platform == 'win32') {
+		ret += '/';
+	}
+	return ret + util.normalizePath(path.join(root, file));
+}
+
 var server = net.createServer(function (socket) {
 	let connection: Connection = new Connection(socket);
 	let documents: TextDocuments = new TextDocuments();
 
+	let workspaceRoot : string 
+
 	connection.connection.onInitialize((params: InitializeParams): InitializeResult => {
 		console.log('initialize', params.rootPath);
-		connection.service = new TypeScriptService(params.rootPath);
+		let rootPath = params.rootPath;
+		if (rootPath.startsWith('file://')) {
+			rootPath = rootPath.substring(7);
+			if (process.platform == 'win32') {
+				rootPath = rootPath.substring(1);
+			}
+		}
+		workspaceRoot = rootPath;
+		connection.service = new TypeScriptService(rootPath);
 		return {
 			capabilities: {
 				// Tell the client that the server works in FULL text document sync mode
@@ -75,6 +93,7 @@ var server = net.createServer(function (socket) {
 							'file:///' + decl.location.file, util.formExternalUri(decl));
 					});
 					console.error("top declarations = ", res);
+					console.error("Res length = ", res.length);
 					return res;
 				}
 			}
@@ -94,9 +113,9 @@ var server = net.createServer(function (socket) {
 				for (let def of defs) {
 					if (def['url']) {
 						//TODO process external doc ref here
-						result.push(Location.create(def['url'], util.formEmptyRange()));
+						//result.push(Location.create(def['url'], util.formEmptyRange()));
 					} else {
-						result.push(Location.create('file:///' + def.fileName, {
+						result.push(Location.create(uri(workspaceRoot, def.fileName), {
 							start: connection.service.position(def.fileName, def.textSpan.start),
 							end: connection.service.position(def.fileName, def.textSpan.start + def.textSpan.length)
 						}));
@@ -132,7 +151,7 @@ var server = net.createServer(function (socket) {
 
 	connection.connection.onReferences((params: ReferenceParams): Location[] => {
 		try {
-			console.log('references', params.textDocument.uri, params.position.line, params.position.character);
+			// const refs: ts.ReferenceEntry[] = service.getReferences('file:///' + req.body.File, req.body.Line + 1, req.body.Character + 1);
 			const refEntries: ts.ReferenceEntry[] = connection.service.getReferences(params.textDocument.uri, params.position.line, params.position.character);
 			const result: Location[] = [];
 			if (refEntries) {

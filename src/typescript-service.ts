@@ -306,13 +306,17 @@ export default class TypeScriptService {
     }
 
     getReferences(uri: string, line: number, column: number): ts.ReferenceEntry[] {
-        const fileName: string = this.uri2path(uri);
-        if (!this.files[fileName]) {
-            return null;
+        try {
+            const fileName: string = this.uri2path(uri);
+            if (!this.files[fileName]) {
+                return null;
+            }
+            const offset: number = this.offset(fileName, line, column);
+           
+            return this.services.getReferencesAtPosition(fileName, offset);
+        } catch (exc) {
+            console.error("Exception occcurred = ", exc);
         }
-        const offset: number = this.offset(fileName, line, column);
-        // return this.services.findReferences(fileName, offset);
-        return this.services.getReferencesAtPosition(fileName, offset);
     }
 
     position(fileName: string, offset: number): Position {
@@ -381,8 +385,12 @@ export default class TypeScriptService {
     }
 
     private offset(fileName: string, line: number, column: number): number {
-        let lines: number[] = this.getLines(fileName)
-        return lines[line - 1] + column - 1
+        try {
+            let lines: number[] = this.getLines(fileName)
+            return lines[line - 1] + column - 1
+        } catch (exc) {
+            console.error("inside offset catch = ", exc);
+        }
     }
 
     private getLines(fileName: string) {
