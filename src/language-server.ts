@@ -32,7 +32,7 @@ namespace InitializeRequest {
 }
 
 namespace ShutdownRequest {
-    export const type: RequestType<any, any, any> = { get method() { return 'shutdown'; } };
+    export const type = { get method() { return 'shutdown'; } };
 }
 
 namespace ExitRequest {
@@ -43,22 +43,16 @@ var server = net.createServer(function (socket) {
     let connection: Connection = new Connection(socket);
     let documents: TextDocuments = new TextDocuments();
 
-    let workspaceRoot : string
+    let workspaceRoot : string;
 
-    // connection.connection.onInitialize((params: InitializeParams): InitializeResult => {
-    //     console.log('initialize', params.rootPath);
-    //     workspaceRoot = util.uri2path(params.rootPath);
-    //     connection.service = new TypeScriptService(workspaceRoot);
-    //     return {
-    //         capabilities: {
-    //             // Tell the client that the server works in FULL text document sync mode
-    //             textDocumentSync: documents.syncKind,
-    //             hoverProvider: true,
-    //             definitionProvider: true,
-    //             referencesProvider: true
-    //         }
-    //     }
-    // });
+    let closed = false;
+
+    function close() {
+        if (!closed) {
+            socket.close();
+            closed = true;
+        }
+    }
 
     connection.connection.onRequest(InitializeRequest.type, (params: InitializeParams): InitializeResult => {
         console.log('initialize', params.rootPath);
@@ -75,12 +69,14 @@ var server = net.createServer(function (socket) {
         }
     });
 
-    connection.connection.onRequest(ShutdownRequest.type, () => {
-        console.log('shutdown new ');
+    connection.connection.onNotification(ExitRequest.type, function (params) {
+        console.log('exit...');
+        close();
     });
 
-     connection.connection.onRequest(ExitRequest.type, () => {
-        console.log('exit new ');
+    connection.connection.onNotification(ShutdownRequest.type, function (params) {
+        console.log('shutdown...');
+        close();
     });
 
     connection.connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): SymbolInformation[] => {
