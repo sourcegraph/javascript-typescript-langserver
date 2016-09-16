@@ -31,6 +31,14 @@ namespace InitializeRequest {
     export const type: RequestType<InitializeParams, InitializeResult, any> = { get method() { return 'initialize'; } };
 }
 
+namespace ShutdownRequest {
+    export const type: RequestType<any, any, any> = { get method() { return 'shutdown'; } };
+}
+
+namespace ExitRequest {
+    export const type = { get method() { return 'exit'; } };
+}
+
 var server = net.createServer(function (socket) {
     let connection: Connection = new Connection(socket);
     let documents: TextDocuments = new TextDocuments();
@@ -65,7 +73,14 @@ var server = net.createServer(function (socket) {
                 referencesProvider: true
             }
         }
-        
+    });
+
+    connection.connection.onRequest(ShutdownRequest.type, () => {
+        console.log('shutdown new ');
+    });
+
+     connection.connection.onRequest(ExitRequest.type, () => {
+        console.log('exit new ');
     });
 
     connection.connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): SymbolInformation[] => {
@@ -112,9 +127,9 @@ var server = net.createServer(function (socket) {
     connection.connection.onDefinition((params: TextDocumentPositionParams): Definition => {
         try {
             console.log('definition', params.textDocument.uri, params.position.line, params.position.character)
-            let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);             
-            const defs: ts.DefinitionInfo[] = connection.service.getDefinition(reluri, params.position.line + 1, params.position.character + 1);            
-            let result: Location[] = [];            
+            let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
+            const defs: ts.DefinitionInfo[] = connection.service.getDefinition(reluri, params.position.line + 1, params.position.character + 1);
+            let result: Location[] = [];
             if (defs) {
                 for (let def of defs) {
                     if (def['url']) {
@@ -126,7 +141,7 @@ var server = net.createServer(function (socket) {
                         start.character--;
                         let end = connection.service.position(def.fileName, def.textSpan.start + def.textSpan.length);
                         end.line--;
-                        end.character--;                          
+                        end.character--;
                         result.push(Location.create(util.path2uri(workspaceRoot, def.fileName), {
                             start: start,
                             end: end
@@ -158,7 +173,7 @@ var server = net.createServer(function (socket) {
     connection.connection.onHover((params: TextDocumentPositionParams): Hover => {
         try {
             console.log('hover', params.textDocument.uri, params.position.line, params.position.character);
-            let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);            
+            let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
             const quickInfo: ts.QuickInfo = connection.service.getHover(reluri, params.position.line + 1, params.position.character + 1);
             let contents = [];
             if (quickInfo) {
@@ -189,7 +204,7 @@ var server = net.createServer(function (socket) {
                     start.character--;
                     let end = connection.service.position(ref.fileName, ref.textSpan.start + ref.textSpan.length);
                     end.line--;
-                    end.character--;                                              
+                    end.character--;
                     result.push(Location.create(util.path2uri(workspaceRoot, ref.fileName), {
                         start: start,
                         end: end
@@ -222,10 +237,11 @@ var server = net.createServer(function (socket) {
         }
     });
 
-    connection.connection.onShutdown(() => {
-        console.log('shutdown');
-        connection.service = null;
-    });
+    // connection.connection.onShutdown(() => {
+    //     console.log('shutdown');
+    //     console.trace('inside shutdown');
+    //     connection.service = null;
+    // });
 
     connection.connection.listen();
 });
