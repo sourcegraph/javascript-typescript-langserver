@@ -126,7 +126,7 @@ export function serve(port: number, workspaceRoot: string) {
 			let service = new TypeScriptService(path);
 			try {
 				console.log('hover', req.body.Repo, req.body.Commit, req.body.File, req.body.Line, req.body.Character);
-				const quickInfo: ts.QuickInfo = service.getHover('file:///' + req.body.File, req.body.Line + 1, req.body.Character + 1);
+				const quickInfo: ts.QuickInfo = service.getHover('file://' + req.body.File, req.body.Line + 1, req.body.Character + 1);
 				if (!quickInfo) {
 					return res.status(400).send({ Error: 'No hover found' });
 				}
@@ -149,12 +149,12 @@ export function serve(port: number, workspaceRoot: string) {
 			let service = new TypeScriptService(p);
 			try {
 				console.log('definition', req.body.Repo, req.body.Commit, req.body.File, req.body.Line, req.body.Character);
-				const defs: ts.DefinitionInfo[] = service.getDefinition('file:///' + req.body.File, req.body.Line + 1, req.body.Character + 1);
+				const defs: ts.DefinitionInfo[] = service.getDefinition('file://' + req.body.File, req.body.Line + 1, req.body.Character + 1);
 
 				// TODO: what if there are more than 1 def?
 				if (!defs || defs.length == 0) {
 					//Try to calculate external def here
-					let externalDef = service.getExternalDefinition('file:///' + req.body.File, req.body.Line + 1, req.body.Character + 1);
+					let externalDef = service.getExternalDefinition('file://' + req.body.File, req.body.Line + 1, req.body.Character + 1);
 					if (externalDef) {
 						res.send({
 							Repo: externalDef.repoURL,
@@ -208,7 +208,7 @@ export function serve(port: number, workspaceRoot: string) {
 			let service = new TypeScriptService(p);
 			try {
 				console.log('local-refs', req.body.Repo, req.body.Commit, req.body.File, req.body.Line, req.body.Character);
-				const refs: ts.ReferenceEntry[] = service.getReferences('file:///' + req.body.File, req.body.Line + 1, req.body.Character + 1);
+				const refs: ts.ReferenceEntry[] = service.getReferences('file://' + req.body.File, req.body.Line + 1, req.body.Character + 1);
 				if (!refs || refs.length == 0) {
 					return res.status(400).send({ Error: 'No references found' });
 				}
@@ -297,7 +297,7 @@ export function serve(port: number, workspaceRoot: string) {
 			let service = new TypeScriptService(p);
 			try {
 				console.log('position-to-defspec', req.body.Repo, req.body.Commit, req.body.File, req.body.Line, req.body.Character);
-				let specs = service.getPathForPosition('file:///' + req.body.File, req.body.Line + 1, req.body.Character + 1);
+				let specs = service.getPathForPosition('file://' + req.body.File, req.body.Line + 1, req.body.Character + 1);
 				let spec = specs[0];
 				res.send({
 					Repo: req.body.Repo,
