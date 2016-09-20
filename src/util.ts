@@ -134,9 +134,9 @@ export function uri2reluri(uri, root: string): string {
     root = normalizePath(root);
     if (uri.startsWith(root)) {
         uri = uri.substring(root.length);
-        if (uri.startsWith('/')) {
-            uri = uri.substring(1);
-        }
+    }
+    while (uri.startsWith('/')) {
+        uri = uri.substring(1);
     }
     return path2uri('', uri);
 }

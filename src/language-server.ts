@@ -72,9 +72,9 @@ var server = net.createServer(function (socket) {
         close();
     });
 
-    connection.connection.onNotification(ShutdownRequest.type, function (params) {
+    connection.connection.onRequest(ShutdownRequest.type, function (params) {
         console.log('shutdown...');
-        close();
+	return [];
     });
 
     connection.connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): SymbolInformation[] => {
@@ -154,9 +154,6 @@ var server = net.createServer(function (socket) {
                 }
                 */
             }
-            result.forEach(function(r) {
-                console.log(r, r.range);
-            });
             return result;
         } catch (e) {
             console.error(params, e);
