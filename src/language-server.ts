@@ -21,8 +21,6 @@ import {
 import TypeScriptService from './typescript-service';
 import Connection from './connection';
 
-import {serve} from './processor';
-
 namespace GlobalRefsRequest {
     export const type: RequestType<WorkspaceSymbolParams, SymbolInformation[], any> = { get method() { return 'textDocument/global-refs'; } };
 }
@@ -74,9 +72,9 @@ var server = net.createServer(function (socket) {
         close();
     });
 
-    connection.connection.onNotification(ShutdownRequest.type, function (params) {
+    connection.connection.onRequest(ShutdownRequest.type, function (params) {
         console.log('shutdown...');
-        close();
+	return [];
     });
 
     connection.connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): SymbolInformation[] => {
@@ -156,9 +154,6 @@ var server = net.createServer(function (socket) {
                 }
                 */
             }
-            result.forEach(function(r) {
-                console.log(r, r.range);
-            });
             return result;
         } catch (e) {
             console.error(params, e);
@@ -246,25 +241,15 @@ process.on('uncaughtException', (err) => {
     console.error(err);
 });
 
-const defaultLspPort = 2088;
-const defaultLpPort = 4145;
+const defaultLspPort = 2089;
 
 program
     .version('0.0.1')
-    .option('-l, --lsp [port]', 'LSP port (' + defaultLspPort + ')', parseInt)
-    .option('-p, --lp [port]', 'LP port (' + defaultLpPort + ')', parseInt)
-    .option('-w, --workspace [directory]', 'Workspace directory')
+    .option('-p, --port [port]', 'LSP port (' + defaultLspPort + ')', parseInt)
     .parse(process.argv);
 
-const lspPort = program.lsp || defaultLspPort;
-const lpPort = program.lp || defaultLpPort;
-const workspace = program.workspace ||
-    path.join(process.env.SGPATH || path.join(os.homedir(), '.sourcegraph'),
-        'workspace',
-        'js');
+const lspPort = program.port || defaultLspPort;
 
-console.log('Using workspace', workspace);
-console.log('Listening for incoming LSP connections on', lspPort, 'and incoming LP connections on', lpPort);
+console.log('Listening for incoming LSP connections on', lspPort);
 
 server.listen(lspPort);
-serve(lpPort, workspace);
