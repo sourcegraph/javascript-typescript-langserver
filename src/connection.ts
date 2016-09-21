@@ -34,7 +34,6 @@ namespace ExitRequest {
 export default class Connection {
 
     private connection: IConnection;
-    private service: TypeScriptService;
 
     constructor(input: any, output: any, strict : boolean) {
 
@@ -59,11 +58,13 @@ export default class Connection {
             }
         }
 
+        let service: TypeScriptService;
+
         this.connection.onRequest(InitializeRequest.type, (params: InitializeParams): InitializeResult => {
             console.error('initialize', params.rootPath);
             if (params.rootPath) {
                 workspaceRoot = util.uri2path(params.rootPath);
-                this.service = new TypeScriptService(workspaceRoot, strict);
+                service = new TypeScriptService(workspaceRoot, strict);
                 return {
                     capabilities: {
                         // Tell the client that the server works in FULL text document sync mode
@@ -87,20 +88,20 @@ export default class Connection {
         this.connection.onDidOpenTextDocument((params: DidOpenTextDocumentParams) => {
             let relpath = util.uri2relpath(params.textDocument.uri, workspaceRoot);
             console.error('add file', workspaceRoot, '/', relpath);
-            this.service.addFile(relpath, params.textDocument.text);
+            service.addFile(relpath, params.textDocument.text);
         });
 
         this.connection.onDidCloseTextDocument((params: DidCloseTextDocumentParams) => {
             let relpath = util.uri2relpath(params.textDocument.uri, workspaceRoot);
             console.error('remove file', workspaceRoot, '/', relpath);
-            this.service.removeFile(relpath);
+            service.removeFile(relpath);
         });
 
         this.connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): SymbolInformation[] => {
             try {
                 console.error('workspace symbols', params.query);
                 if (params.query == "exported") {
-                    const exported = this.service.getExportedEnts();
+                    const exported = service.getExportedEnts();
                     if (exported) {
                         let res = exported.map(ent => {
                             return SymbolInformation.create(ent.name, ent.kind, ent.location.range,
@@ -110,7 +111,7 @@ export default class Connection {
                         return res;
                     }
                 } else if (params.query == "externals") {
-                    const externals = this.service.getExternalRefs();
+                    const externals = service.getExternalRefs();
                     if (externals) {
                         let res = externals.map(external => {
                             return SymbolInformation.create(external.name, util.formEmptyKind(), util.formEmptyRange(), util.formExternalUri(external));
@@ -119,7 +120,7 @@ export default class Connection {
                         return res;
                     }
                 } else if (params.query == '') {
-                    const topDecls = this.service.getTopLevelDeclarations();
+                    const topDecls = service.getTopLevelDeclarations();
                     if (topDecls) {
                         let res = topDecls.map(decl => {
                             return SymbolInformation.create(decl.name, decl.kind, decl.location.range,
@@ -141,7 +142,7 @@ export default class Connection {
             try {
                 console.error('definition', params.textDocument.uri, params.position.line, params.position.character);
                 let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
-                const defs: ts.DefinitionInfo[] = this.service.getDefinition(reluri, params.position.line + 1, params.position.character + 1);
+                const defs: ts.DefinitionInfo[] = service.getDefinition(reluri, params.position.line + 1, params.position.character + 1);
                 let result: Location[] = [];
                 if (defs) {
                     for (let def of defs) {
@@ -149,10 +150,10 @@ export default class Connection {
                             //TODO process external doc ref here
                             //result.push(Location.create(def['url'], util.formEmptyRange()));
                         } else {
-                            let start = this.service.position(def.fileName, def.textSpan.start);
+                            let start = service.position(def.fileName, def.textSpan.start);
                             start.line--;
                             start.character--;
-                            let end = this.service.position(def.fileName, def.textSpan.start + def.textSpan.length);
+                            let end = service.position(def.fileName, def.textSpan.start + def.textSpan.length);
                             end.line--;
                             end.character--;
                             result.push(Location.create(util.path2uri(workspaceRoot, def.fileName), {
@@ -184,7 +185,7 @@ export default class Connection {
             try {
                 console.error('hover', params.textDocument.uri, params.position.line, params.position.character);
                 let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
-                const quickInfo: ts.QuickInfo = this.service.getHover(reluri, params.position.line + 1, params.position.character + 1);
+                const quickInfo: ts.QuickInfo = service.getHover(reluri, params.position.line + 1, params.position.character + 1);
                 let contents = [];
                 if (quickInfo) {
                     contents.push({language: 'javascript', value: ts.displayPartsToString(quickInfo.displayParts)});
@@ -204,14 +205,14 @@ export default class Connection {
             try {
                 // const refs: ts.ReferenceEntry[] = service.getReferences('file:///' + req.body.File, req.body.Line + 1, req.body.Character + 1);
                 let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
-                const refEntries: ts.ReferenceEntry[] = this.service.getReferences(reluri, params.position.line + 1, params.position.character + 1);
+                const refEntries: ts.ReferenceEntry[] = service.getReferences(reluri, params.position.line + 1, params.position.character + 1);
                 const result: Location[] = [];
                 if (refEntries) {
                     for (let ref of refEntries) {
-                        let start = this.service.position(ref.fileName, ref.textSpan.start);
+                        let start = service.position(ref.fileName, ref.textSpan.start);
                         start.line--;
                         start.character--;
-                        let end = this.service.position(ref.fileName, ref.textSpan.start + ref.textSpan.length);
+                        let end = service.position(ref.fileName, ref.textSpan.start + ref.textSpan.length);
                         end.line--;
                         end.character--;
                         result.push(Location.create(util.path2uri(workspaceRoot, ref.fileName), {
@@ -231,7 +232,7 @@ export default class Connection {
         this.connection.onRequest(GlobalRefsRequest.type, (params: WorkspaceSymbolParams): SymbolInformation[] => {
             try {
                 console.error('global-refs', params.query);
-                const externals = this.service.getExternalRefs();
+                const externals = service.getExternalRefs();
                 if (externals) {
                     let res = externals.map(external => {
                         return SymbolInformation.create(external.name, util.formEmptyKind(), util.formEmptyRange(), util.formExternalUri(external));
