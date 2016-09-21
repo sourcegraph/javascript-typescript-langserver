@@ -39,6 +39,11 @@ export default class Connection {
     constructor(input: any, output: any, strict : boolean) {
 
         this.connection = createConnection(input, output);
+        
+        input.removeAllListeners('end');
+        input.removeAllListeners('close');
+        output.removeAllListeners('end');
+        output.removeAllListeners('close');
 
         let workspaceRoot : string;
 
@@ -71,13 +76,11 @@ export default class Connection {
             }
         });
 
-        this.connection.onNotification(ExitRequest.type, function () {
-            console.log('exit...');
+        this.connection.onNotification(ExitRequest.type, function () {            
             close();
         });
 
-        this.connection.onRequest(ShutdownRequest.type, function () {
-            console.log('shutdown...');
+        this.connection.onRequest(ShutdownRequest.type, function () {            
             return [];
         });
 
