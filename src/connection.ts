@@ -85,19 +85,15 @@ export default class Connection {
         });
 
         this.connection.onDidOpenTextDocument((params: DidOpenTextDocumentParams) => {
-            if (strict) {
-                let relpath = util.uri2relpath(params.textDocument.uri, workspaceRoot);
-                console.log('add file', workspaceRoot, '/', relpath);
-                this.service.addFile(relpath, params.textDocument.text);
-            }
+            let relpath = util.uri2relpath(params.textDocument.uri, workspaceRoot);
+            console.log('add file', workspaceRoot, '/', relpath);
+            this.service.addFile(relpath, params.textDocument.text);
         });
 
         this.connection.onDidCloseTextDocument((params: DidCloseTextDocumentParams) => {
-            if (strict) {
-                let relpath = util.uri2relpath(params.textDocument.uri, workspaceRoot);
-                console.log('remove file', workspaceRoot, '/', relpath);
-                this.service.removeFile(relpath);
-            }
+            let relpath = util.uri2relpath(params.textDocument.uri, workspaceRoot);
+            console.log('remove file', workspaceRoot, '/', relpath);
+            this.service.removeFile(relpath);
         });
 
         this.connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): SymbolInformation[] => {

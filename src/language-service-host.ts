@@ -64,9 +64,10 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
         if (!entry) {
             return undefined;
         }
-        if (this.strict) {
+        if (this.strict || entry.content) {
             return ts.ScriptSnapshot.fromString(entry.content);
         }
+
         const fullPath = this.resolvePath(fileName);
         if (!fs.existsSync(fullPath)) {
             return undefined;
