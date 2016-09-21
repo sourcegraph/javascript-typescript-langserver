@@ -56,15 +56,17 @@ export default class Connection {
 
         this.connection.onRequest(InitializeRequest.type, (params: InitializeParams): InitializeResult => {
             console.log('initialize', params.rootPath);
-            workspaceRoot = util.uri2path(params.rootPath);
-            this.service = new TypeScriptService(workspaceRoot, strict);
-            return {
-                capabilities: {
-                    // Tell the client that the server works in FULL text document sync mode
-                    textDocumentSync: documents.syncKind,
-                    hoverProvider: true,
-                    definitionProvider: true,
-                    referencesProvider: true
+            if (params.rootPath) {
+                workspaceRoot = util.uri2path(params.rootPath);
+                this.service = new TypeScriptService(workspaceRoot, strict);
+                return {
+                    capabilities: {
+                        // Tell the client that the server works in FULL text document sync mode
+                        textDocumentSync: documents.syncKind,
+                        hoverProvider: true,
+                        definitionProvider: true,
+                        referencesProvider: true
+                    }
                 }
             }
         });
