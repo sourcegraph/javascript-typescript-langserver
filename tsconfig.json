@@ -1,14 +1,15 @@
 {
 
     "compilerOptions": {
-		"target": "ES5",
-		"module": "commonjs",
-		"moduleResolution": "node",
-		"sourceMap": true,
-		"outDir": "build"
+        "target": "ES5",
+        "module": "commonjs",
+        "moduleResolution": "node",
+        "sourceMap": true,
+        "outDir": "build"
     },
     "files": [
-    	"src/language-server.ts"
+        "src/language-server.ts",
+        "src/language-server-stdio.ts"
     ],
     "exclude": [
         "node_modules"
