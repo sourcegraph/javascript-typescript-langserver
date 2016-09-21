@@ -4,10 +4,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as ts from 'typescript';
-import { Position, Range, Location } from 'vscode-languageserver';
+import { Position } from 'vscode-languageserver';
 
-import * as packages from './find-packages';
 import * as util from './util';
+import VersionedLanguageServiceHost from './language-service-host';
 
 import ExportedSymbolsProvider from './exported-symbols-provider'
 import ExternalRefsProvider from './external-refs-provider';
@@ -19,10 +19,9 @@ var JSONPath = require('jsonpath-plus');
 const pathDelimiter = "$";
 
 export default class TypeScriptService {
-    services: ts.LanguageService
-    files: ts.Map<{ version: number }>
-    root: string
-    lines: ts.Map<number[]>
+    services: ts.LanguageService;
+    root: string;
+    lines: ts.Map<number[]>;
     externalRefs = null;
     exportedEnts = null;
     topLevelDecls = null;
@@ -30,49 +29,31 @@ export default class TypeScriptService {
     externalRefsProvider: ExternalRefsProvider;
     workspaceSymbolProvider: WorkspaceSymbolsProvider;
 
+    host: VersionedLanguageServiceHost;
+
     envDefs = [];
 
-    constructor(root: string) {
+    constructor(root: string, strict: boolean) {
         this.root = root;
-        this.files = {};
         this.lines = {};
-        const allFiles: string[] = this.collectFiles(root);
-
-        // initialize the list of files
-        allFiles.forEach(fileName => {
-            this.files[fileName] = { version: 0 };
-        });
-
-        // const options: ts.CompilerOptions = { target: ts.ScriptTarget.ES6, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React };
-        const options: ts.CompilerOptions = { module: ts.ModuleKind.CommonJS, allowNonTsExtensions: true, allowJs: true };
-        const defPath = path.join(__dirname, '../src/defs/merged.lib.d.ts');
-
-        // Create the language service host to allow the LS to communicate with the host
-        const servicesHost: ts.LanguageServiceHost = {
-            getScriptFileNames: () => allFiles,
-            getScriptVersion: (fileName) => this.files[fileName] && this.files[fileName].version.toString(),
-            getScriptSnapshot: (fileName) => {
-                const fullPath = this.resolvePath(fileName);
-                if (!fs.existsSync(fullPath)) {
-                    return undefined;
-                }
-
-                return ts.ScriptSnapshot.fromString(fs.readFileSync(fullPath).toString());
-            },
-            getCurrentDirectory: () => root,
-            getCompilationSettings: () => options,
-            // getDefaultLibFileName: (options) => ts.getDefaultLibFilePath(options),
-            getDefaultLibFileName: (options) => defPath,
-        };
+        this.host = new VersionedLanguageServiceHost(root, strict);
 
         // Create the language service files
-        this.services = ts.createLanguageService(servicesHost, ts.createDocumentRegistry());
+        this.services = ts.createLanguageService(this.host, ts.createDocumentRegistry());
         this.initEnvDefFiles();
 
         //initialize providers 
         this.exportedSymbolProvider = new ExportedSymbolsProvider(this);
         this.externalRefsProvider = new ExternalRefsProvider(this);
         this.workspaceSymbolProvider = new WorkspaceSymbolsProvider(this);
+    }
+
+    addFile(name, content: string) {
+        this.host.addFile(name, content);
+    }
+
+    removeFile(name: string) {
+        this.host.removeFile(name);
     }
 
     initEnvDefFiles() {
@@ -111,7 +92,7 @@ export default class TypeScriptService {
 
     getPathForPosition(uri: string, line: number, column: number): string[] {
         const fileName: string = util.uri2path(uri);
-        if (!this.files[fileName]) {
+        if (!this.host.hasFile(fileName)) {
             return [];
         }
         const offset: number = this.offset(fileName, line, column);
@@ -248,7 +229,7 @@ export default class TypeScriptService {
 
     getDefinition(uri: string, line: number, column: number): ts.DefinitionInfo[] {
         const fileName: string = util.uri2path(uri);
-        if (!this.files[fileName]) {
+        if (!this.host.hasFile(fileName)) {
             return [];
         }
         const offset: number = this.offset(fileName, line, column);
@@ -272,17 +253,15 @@ export default class TypeScriptService {
 
     getExternalDefinition(uri: string, line: number, column: number) {
         const fileName: string = util.uri2path(uri);
-        if (!this.files[fileName]) {
+        if (!this.host.hasFile(fileName)) {
             return;
         }
         const offset: number = this.offset(fileName, line, column);
-        let externalRes = this.getExternalRefs().find(ref => {
+        return this.getExternalRefs().find(ref => {
             if (ref.file == fileName && ref.pos == offset) {
                 return true;
             }
         });
-
-        return externalRes;
     }
 
     getTopLevelDeclarations() {
@@ -297,7 +276,7 @@ export default class TypeScriptService {
     getHover(uri: string, line: number, column: number): ts.QuickInfo {
         const fileName: string = util.uri2path(uri);
 
-        if (!this.files[fileName]) {
+        if (!this.host.hasFile(fileName)) {
             return null;
         }
 
@@ -308,7 +287,7 @@ export default class TypeScriptService {
     getReferences(uri: string, line: number, column: number): ts.ReferenceEntry[] {
         try {
             const fileName: string = util.uri2path(uri);
-            if (!this.files[fileName]) {
+            if (!this.host.hasFile(fileName)) {
                 return null;
             }
             const offset: number = this.offset(fileName, line, column);
@@ -320,19 +299,19 @@ export default class TypeScriptService {
     }
 
     position(fileName: string, offset: number): Position {
-        let lines: number[] = this.getLines(fileName)
-        let index: number = this.getLine(offset, lines)
+        let lines: number[] = this.getLines(fileName);
+        let index: number = TypeScriptService.getLine(offset, lines);
         return {
             line: index + 1,
             character: offset - lines[index] + 1
         }
     }
 
-    private getLine(offset: number, lines: number[]): number {
-        let lo: number = 0
-        let hi: number = lines.length
+    private static getLine(offset: number, lines: number[]): number {
+        let lo: number = 0;
+        let hi: number = lines.length;
         while (lo != hi) {
-            let mid: number = (lo + hi) / 2
+            let mid: number = (lo + hi) / 2;
             if (lines[mid] <= offset) {
                 lo = mid + 1
             } else {
@@ -340,35 +319,6 @@ export default class TypeScriptService {
             }
         }
         return lo - 1
-    }
-
-    private collectFiles(root: string): string[] {
-        var files: string[] = [];
-        this.getFiles(root, '', files);
-        return files;
-    }
-
-    private getFiles(root: string, prefix: string, files: string[]) {
-        const dir: string = path.join(root, prefix)
-        const self = this
-        if (!fs.existsSync(dir)) {
-            return
-        }
-        if (fs.statSync(dir).isDirectory()) {
-            fs.readdirSync(dir).filter(function (name) {
-                if (name[0] == '.') {
-                    return false;
-                }
-                if (name == 'node_modules') {
-                    return false;
-                }
-                return name.endsWith('.ts') || name.endsWith('.js') || fs.statSync(path.join(dir, name)).isDirectory();
-            }).forEach(function (name) {
-                self.getFiles(root, path.posix.join(prefix, name), files)
-            })
-        } else {
-            files.push(prefix)
-        }
     }
 
     getLineAndPosFromOffset(fileName: string, offset: number): Position {
@@ -386,7 +336,7 @@ export default class TypeScriptService {
 
     private offset(fileName: string, line: number, column: number): number {
         try {
-            let lines: number[] = this.getLines(fileName)
+            let lines: number[] = this.getLines(fileName);
             return lines[line - 1] + column - 1
         } catch (exc) {
             console.error("inside offset catch = ", exc);
@@ -394,15 +344,19 @@ export default class TypeScriptService {
     }
 
     private getLines(fileName: string) {
-        let lines: number[] = this.lines[fileName]
+        let lines: number[] = this.lines[fileName];
         if (!lines) {
-            lines = this.computeLineStarts(fs.readFileSync(this.resolvePath(fileName), 'utf-8'))
+            const snapshot = this.host.getScriptSnapshot(fileName);
+            if (!snapshot) {
+                return [];
+            }
+            lines = TypeScriptService.computeLineStarts(snapshot.getText(0, snapshot.getLength()));
             this.lines[fileName] = lines
         }
         return lines
     }
 
-    private computeLineStarts(text: string): number[] {
+    private static computeLineStarts(text: string): number[] {
         const result: number[] = [];
         let pos = 0;
         let lineStart = 0;
