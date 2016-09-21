@@ -18,6 +18,10 @@ import {
     SymbolInformation, SymbolKind, Range, RequestType
 } from 'vscode-languageserver';
 
+import {
+	TextDocumentChangeEvent,
+} from 'vscode-languageserver-types';
+
 import TypeScriptService from './typescript-service';
 import Connection from './connection';
 
@@ -76,6 +80,14 @@ var server = net.createServer(function (socket) {
         console.log('shutdown...');
 	return [];
     });
+
+	// Keep the documents store updated (upon receiving
+	// textDocument/didOpen, etc., notifs).
+	documents.listen(connection.connection);
+
+	documents.onDidOpen((e: TextDocumentChangeEvent) => {
+		console.log(`textDocument/didOpen ${e.document.uri}`);
+	});
 
     connection.connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): SymbolInformation[] => {
         try {
