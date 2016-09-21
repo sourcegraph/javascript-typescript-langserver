@@ -14,6 +14,11 @@ To try it in [Visual Studio Code](https://code.visualstudio.com), install the [v
 
 Run `node_modules/.bin/tsc --watch`.
 
+## Command line arguments 
+
+* `-p, --port` specifies port to use, default one is `2089`
+* `-s, --strict` enables strict mode where server expects all files to be receives in `didOpen` notification requests.
+
 ## Known issues
 
 * You need to disable VSCode's built-in TypeScript support to avoid weird conflicts on TypeScript files (double hover tooltips, etc.). There's a hacky way to do this: add the setting `{"typescript.tsdk": "/dev/null"}` to your VSCode user or workspace settings.
