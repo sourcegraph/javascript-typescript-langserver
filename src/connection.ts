@@ -60,7 +60,7 @@ export default class Connection {
         }
 
         this.connection.onRequest(InitializeRequest.type, (params: InitializeParams): InitializeResult => {
-            console.log('initialize', params.rootPath);
+            console.error('initialize', params.rootPath);
             if (params.rootPath) {
                 workspaceRoot = util.uri2path(params.rootPath);
                 this.service = new TypeScriptService(workspaceRoot, strict);
@@ -86,19 +86,19 @@ export default class Connection {
 
         this.connection.onDidOpenTextDocument((params: DidOpenTextDocumentParams) => {
             let relpath = util.uri2relpath(params.textDocument.uri, workspaceRoot);
-            console.log('add file', workspaceRoot, '/', relpath);
+            console.error('add file', workspaceRoot, '/', relpath);
             this.service.addFile(relpath, params.textDocument.text);
         });
 
         this.connection.onDidCloseTextDocument((params: DidCloseTextDocumentParams) => {
             let relpath = util.uri2relpath(params.textDocument.uri, workspaceRoot);
-            console.log('remove file', workspaceRoot, '/', relpath);
+            console.error('remove file', workspaceRoot, '/', relpath);
             this.service.removeFile(relpath);
         });
 
         this.connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): SymbolInformation[] => {
             try {
-                console.log('workspace symbols', params.query);
+                console.error('workspace symbols', params.query);
                 if (params.query == "exported") {
                     const exported = this.service.getExportedEnts();
                     if (exported) {
@@ -139,7 +139,7 @@ export default class Connection {
 
         this.connection.onDefinition((params: TextDocumentPositionParams): Definition => {
             try {
-                console.log('definition', params.textDocument.uri, params.position.line, params.position.character);
+                console.error('definition', params.textDocument.uri, params.position.line, params.position.character);
                 let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
                 const defs: ts.DefinitionInfo[] = this.service.getDefinition(reluri, params.position.line + 1, params.position.character + 1);
                 let result: Location[] = [];
@@ -182,7 +182,7 @@ export default class Connection {
 
         this.connection.onHover((params: TextDocumentPositionParams): Hover => {
             try {
-                console.log('hover', params.textDocument.uri, params.position.line, params.position.character);
+                console.error('hover', params.textDocument.uri, params.position.line, params.position.character);
                 let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
                 const quickInfo: ts.QuickInfo = this.service.getHover(reluri, params.position.line + 1, params.position.character + 1);
                 let contents = [];
@@ -230,7 +230,7 @@ export default class Connection {
 
         this.connection.onRequest(GlobalRefsRequest.type, (params: WorkspaceSymbolParams): SymbolInformation[] => {
             try {
-                console.log('global-refs', params.query);
+                console.error('global-refs', params.query);
                 const externals = this.service.getExternalRefs();
                 if (externals) {
                     let res = externals.map(external => {
