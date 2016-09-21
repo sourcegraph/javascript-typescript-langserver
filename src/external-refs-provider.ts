@@ -183,13 +183,13 @@ export default class ExternalRefsProvider {
         function collectImportedCalls(node: ts.Node) {
             if (node.kind == ts.SyntaxKind.PropertyAccessExpression) {
                 var ids = [];
-                ts.forEachChild(node, collectIds);
-                function collectIds(node: ts.Node) {
+				let collectIds = (node: ts.Node): void => {
                     if (node.kind == ts.SyntaxKind.Identifier) {
                         ids.push(node);
                     }
                     ts.forEachChild(node, collectIds);
                 }
+                ts.forEachChild(node, collectIds);
 
                 let idsRes = ids.map((id, index) => {
                     let pos = id.end - id.text.length;
