@@ -21,7 +21,7 @@ const pathDelimiter = "$";
 export default class TypeScriptService {
     services: ts.LanguageService;
     root: string;
-    lines: ts.Map<number[]>;
+    lines = {};
     externalRefs = null;
     exportedEnts = null;
     topLevelDecls = null;
@@ -105,7 +105,7 @@ export default class TypeScriptService {
                 if (def.name && def.containerName) {
                     pathRes = `${pathRes}${pathDelimiter}${def.containerName}${pathDelimiter}${def.name}`
                 } else {
-                    let sourceFile = this.services.getSourceFile(def.fileName);
+                    let sourceFile = this.services.getProgram().getSourceFile(def.fileName);
                     let foundNode = (ts as any).getTouchingToken(sourceFile, def.textSpan.start);
                     let allParents = util.collectAllParents(foundNode, []).filter(parent => {
                         return util.isNamedDeclaration(parent);
@@ -122,7 +122,7 @@ export default class TypeScriptService {
                 paths.push(pathRes);
             });
         } else {
-            let sourceFile = this.services.getSourceFile(fileName);
+            let sourceFile = this.services.getProgram().getSourceFile(fileName);
             let foundNode = (ts as any).getTouchingToken(sourceFile, offset);
             let allParents = util.collectAllParents(foundNode, []).filter(parent => {
                 return util.isNamedDeclaration(parent);
@@ -167,7 +167,7 @@ export default class TypeScriptService {
 
         var parts = path.split(pathDelimiter);
         let fileName = parts[0];
-        let sourceFile = this.services.getSourceFile(fileName);
+        let sourceFile = this.services.getProgram().getSourceFile(fileName);
         traverseNodeChain(sourceFile, parts.slice(1));
         let res = [];
         if (resNodes.length > 0) {

@@ -58,6 +58,7 @@ var server = net.createServer(function (socket) {
 
     connection.connection.onRequest(InitializeRequest.type, (params: InitializeParams): InitializeResult => {
         console.log('initialize', params.rootPath);
+        if (params.rootPath) {
         workspaceRoot = util.uri2path(params.rootPath);
         connection.service = new TypeScriptService(workspaceRoot, program.strict);
         return {
@@ -68,6 +69,7 @@ var server = net.createServer(function (socket) {
                 definitionProvider: true,
                 referencesProvider: true
             }
+        }
         }
     });
 
