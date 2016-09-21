@@ -14,7 +14,7 @@ import * as util from './util';
 import {
     InitializeParams, InitializeResult,
     TextDocuments,
-    TextDocumentPositionParams, Definition, ReferenceParams, Location, Hover, MarkedString, WorkspaceSymbolParams,
+    TextDocumentPositionParams, Definition, ReferenceParams, Location, Hover, MarkedString, WorkspaceSymbolParams, DidOpenTextDocumentParams, DidCloseTextDocumentParams,
     SymbolInformation, SymbolKind, Range, RequestType
 } from 'vscode-languageserver';
 
@@ -55,7 +55,7 @@ var server = net.createServer(function (socket) {
     connection.connection.onRequest(InitializeRequest.type, (params: InitializeParams): InitializeResult => {
         console.log('initialize', params.rootPath);
         workspaceRoot = util.uri2path(params.rootPath);
-        connection.service = new TypeScriptService(workspaceRoot);
+        connection.service = new TypeScriptService(workspaceRoot, program.strict);
         return {
             capabilities: {
                 // Tell the client that the server works in FULL text document sync mode
@@ -74,7 +74,23 @@ var server = net.createServer(function (socket) {
 
     connection.connection.onRequest(ShutdownRequest.type, function (params) {
         console.log('shutdown...');
-	return [];
+    return [];
+    });
+
+    connection.connection.onDidOpenTextDocument((params: DidOpenTextDocumentParams) => {
+        if (program.strict) {            
+            let relpath = util.uri2relpath(params.textDocument.uri, workspaceRoot);
+            console.log('add file', workspaceRoot, '/', relpath);
+            connection.service.addFile(relpath, params.textDocument.text);
+        }
+    });
+
+    connection.connection.onDidCloseTextDocument((params: DidCloseTextDocumentParams) => {
+        if (program.strict) {
+            let relpath = util.uri2relpath(params.textDocument.uri, workspaceRoot);
+            console.log('remove file', workspaceRoot, '/', relpath);            
+            connection.service.removeFile(relpath);
+        }
     });
 
     connection.connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): SymbolInformation[] => {
@@ -245,6 +261,7 @@ const defaultLspPort = 2089;
 
 program
     .version('0.0.1')
+    .option('-s, --strict', 'Strict mode')
     .option('-p, --port [port]', 'LSP port (' + defaultLspPort + ')', parseInt)
     .parse(process.argv);
 

@@ -130,6 +130,10 @@ export function uri2path(uri: string): string {
 }
 
 export function uri2reluri(uri, root: string): string {
+    return path2uri('', uri2relpath(uri, root));
+}
+
+export function uri2relpath(uri, root: string): string {
     uri = uri2path(uri);
     root = normalizePath(root);
     if (uri.startsWith(root)) {
@@ -138,6 +142,6 @@ export function uri2reluri(uri, root: string): string {
     while (uri.startsWith('/')) {
         uri = uri.substring(1);
     }
-    return path2uri('', uri);
+    return uri;    
 }
 
