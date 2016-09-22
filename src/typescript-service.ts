@@ -234,19 +234,19 @@ export default class TypeScriptService {
         }
         const offset: number = this.offset(fileName, line, column);
         let defs = this.services.getDefinitionAtPosition(fileName, offset);
-        if (defs) {
-            defs.forEach(def => {
-                let fileName = def.fileName;
-                let name = def.name;
-                let container = def.containerName.toLowerCase();
-                if (fileName.indexOf("merged.lib.d.ts") > -1) {
-                    let result = this.lookupEnvDef(name, container);
-                    if (result) {
-                        def['url'] = result['!url'];
-                    }
-                }
-            });
-        }
+        // if (defs) {
+        //     defs.forEach(def => {
+        //         let fileName = def.fileName;
+        //         let name = def.name;
+        //         let container = def.containerName.toLowerCase();
+        //         if (fileName.indexOf("merged.lib.d.ts") > -1) {
+        //             let result = this.lookupEnvDef(name, container);
+        //             if (result) {
+        //                 def['url'] = result['!url'];
+        //             }
+        //         }
+        //     });
+        // }
 
         return defs;
     }
