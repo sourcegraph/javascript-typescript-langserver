@@ -228,27 +228,30 @@ export default class TypeScriptService {
     }
 
     getDefinition(uri: string, line: number, column: number): ts.DefinitionInfo[] {
-        const fileName: string = util.uri2path(uri);
-        if (!this.host.hasFile(fileName)) {
-            return [];
+        try {
+            const fileName: string = util.uri2path(uri);
+            if (!this.host.hasFile(fileName)) {
+                return [];
+            }
+            const offset: number = this.offset(fileName, line, column);
+            return this.services.getDefinitionAtPosition(fileName, offset);
+            // if (defs) {
+            //     defs.forEach(def => {
+            //         let fileName = def.fileName;
+            //         let name = def.name;
+            //         let container = def.containerName.toLowerCase();
+            //         if (fileName.indexOf("merged.lib.d.ts") > -1) {
+            //             let result = this.lookupEnvDef(name, container);
+            //             if (result) {
+            //                 def['url'] = result['!url'];
+            //             }
+            //         }
+            //     });
+            // }
+            // return defs;
+        } catch (exc) {
+            console.error("Exception occcurred = ", exc);
         }
-        const offset: number = this.offset(fileName, line, column);
-        let defs = this.services.getDefinitionAtPosition(fileName, offset);
-        // if (defs) {
-        //     defs.forEach(def => {
-        //         let fileName = def.fileName;
-        //         let name = def.name;
-        //         let container = def.containerName.toLowerCase();
-        //         if (fileName.indexOf("merged.lib.d.ts") > -1) {
-        //             let result = this.lookupEnvDef(name, container);
-        //             if (result) {
-        //                 def['url'] = result['!url'];
-        //             }
-        //         }
-        //     });
-        // }
-
-        return defs;
     }
 
     getExternalDefinition(uri: string, line: number, column: number) {
@@ -274,14 +277,17 @@ export default class TypeScriptService {
 
 
     getHover(uri: string, line: number, column: number): ts.QuickInfo {
-        const fileName: string = util.uri2path(uri);
+        try {
+            const fileName: string = util.uri2path(uri);
+            if (!this.host.hasFile(fileName)) {
+                return null;
+            }
 
-        if (!this.host.hasFile(fileName)) {
-            return null;
+            const offset: number = this.offset(fileName, line, column);
+            return this.services.getQuickInfoAtPosition(fileName, offset);
+        } catch (exc) {
+            console.error("Exception occcurred = ", exc);
         }
-
-        const offset: number = this.offset(fileName, line, column);
-        return this.services.getQuickInfoAtPosition(fileName, offset);
     }
 
     getReferences(uri: string, line: number, column: number): ts.ReferenceEntry[] {
@@ -291,7 +297,6 @@ export default class TypeScriptService {
                 return null;
             }
             const offset: number = this.offset(fileName, line, column);
-           
             return this.services.getReferencesAtPosition(fileName, offset);
         } catch (exc) {
             console.error("Exception occcurred = ", exc);
@@ -335,12 +340,8 @@ export default class TypeScriptService {
     }
 
     private offset(fileName: string, line: number, column: number): number {
-        try {
-            let lines: number[] = this.getLines(fileName);
-            return lines[line - 1] + column - 1
-        } catch (exc) {
-            console.error("inside offset catch = ", exc);
-        }
+        let lines: number[] = this.getLines(fileName);
+        return lines[line - 1] + column - 1
     }
 
     private getLines(fileName: string) {

@@ -3,7 +3,7 @@
 
 
 import {
-    IConnection, createConnection, 
+    IConnection, createConnection,
     InitializeParams, InitializeResult,
     TextDocuments,
     TextDocumentPositionParams, Definition, ReferenceParams, Location, Hover, WorkspaceSymbolParams, DidOpenTextDocumentParams, DidCloseTextDocumentParams,
@@ -35,16 +35,16 @@ export default class Connection {
 
     private connection: IConnection;
 
-    constructor(input: any, output: any, strict : boolean) {
+    constructor(input: any, output: any, strict: boolean) {
 
         this.connection = createConnection(input, output);
-        
+
         input.removeAllListeners('end');
         input.removeAllListeners('close');
         output.removeAllListeners('end');
         output.removeAllListeners('close');
 
-        let workspaceRoot : string;
+        let workspaceRoot: string;
 
         let documents: TextDocuments = new TextDocuments();
 
@@ -77,11 +77,11 @@ export default class Connection {
             }
         });
 
-        this.connection.onNotification(ExitRequest.type, function () {            
+        this.connection.onNotification(ExitRequest.type, function () {
             close();
         });
 
-        this.connection.onRequest(ShutdownRequest.type, function () {            
+        this.connection.onRequest(ShutdownRequest.type, function () {
             return [];
         });
 
@@ -146,21 +146,21 @@ export default class Connection {
                 let result: Location[] = [];
                 if (defs) {
                     for (let def of defs) {
-                        if (def['url']) {
-                            //TODO process external doc ref here
-                            //result.push(Location.create(def['url'], util.formEmptyRange()));
-                        } else {
-                            let start = service.position(def.fileName, def.textSpan.start);
-                            start.line--;
-                            start.character--;
-                            let end = service.position(def.fileName, def.textSpan.start + def.textSpan.length);
-                            end.line--;
-                            end.character--;
-                            result.push(Location.create(util.path2uri(workspaceRoot, def.fileName), {
-                                start: start,
-                                end: end
-                            }));
-                        }
+                        // if (def['url']) {
+                        //TODO process external doc ref here
+                        //result.push(Location.create(def['url'], util.formEmptyRange()));
+                        // } else {
+                        let start = service.position(def.fileName, def.textSpan.start);
+                        start.line--;
+                        start.character--;
+                        let end = service.position(def.fileName, def.textSpan.start + def.textSpan.length);
+                        end.line--;
+                        end.character--;
+                        result.push(Location.create(util.path2uri(workspaceRoot, def.fileName), {
+                            start: start,
+                            end: end
+                        }));
+                        // }
                     }
                 } else {
                     //check whether definition is external, if uri string returned, add this location
@@ -188,13 +188,13 @@ export default class Connection {
                 const quickInfo: ts.QuickInfo = service.getHover(reluri, params.position.line + 1, params.position.character + 1);
                 let contents = [];
                 if (quickInfo) {
-                    contents.push({language: 'javascript', value: ts.displayPartsToString(quickInfo.displayParts)});
+                    contents.push({ language: 'javascript', value: ts.displayPartsToString(quickInfo.displayParts) });
                     let documentation = ts.displayPartsToString(quickInfo.documentation);
                     if (documentation) {
-                        contents.push({language: 'text/html', value: documentation});
+                        contents.push({ language: 'text/html', value: documentation });
                     }
                 }
-                return {contents: contents};
+                return { contents: contents };
             } catch (e) {
                 console.error(params, e);
                 return { contents: [] };
