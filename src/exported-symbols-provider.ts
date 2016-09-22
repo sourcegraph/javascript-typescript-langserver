@@ -54,7 +54,8 @@ export default class ExportedSymbolsProvider {
             }
 
             let path = `${pathInfo}.${name.text}`;
-            let range = Range.create(self.service.getLineAndPosFromOffset(fileName, posInFile), self.service.getLineAndPosFromOffset(fileName, name.getEnd()));
+
+            let range = Range.create(self.service.getPositionFromOffset(fileName, posInFile), self.service.getPositionFromOffset(fileName, name.getEnd()));
             allExports.push({ name: text || name.text, path: path });
             exportedRefs.push({
                 name: name.text,
@@ -157,7 +158,7 @@ export default class ExportedSymbolsProvider {
                     let decl = <ts.FunctionDeclaration>node;
                     let text = decl.name.text;
                     let path = parentPath ? `${parentPath}.${text}` : `${pkgInfo.name}.${text}`;
-                    let range = Range.create(self.service.getLineAndPosFromOffset(fileName, decl.name.getStart(sourceFile)), self.service.getLineAndPosFromOffset(fileName, decl.name.getEnd()));
+                    let range = Range.create(self.service.getPositionFromOffset(fileName, decl.name.getStart(sourceFile)), self.service.getPositionFromOffset(fileName, decl.name.getEnd()));
                     exportedRefs.push({
                         name: text,
                         kind: "function",
@@ -177,7 +178,7 @@ export default class ExportedSymbolsProvider {
                         return;
                     }
                     let path = `${pkgInfo.name}.${decl.name.text}`;
-                    let range = Range.create(self.service.getLineAndPosFromOffset(fileName, decl.name.getStart(sourceFile)), self.service.getLineAndPosFromOffset(fileName, decl.name.getEnd()));
+                    let range = Range.create(self.service.getPositionFromOffset(fileName, decl.name.getStart(sourceFile)), self.service.getPositionFromOffset(fileName, decl.name.getEnd()));
                     exportedRefs.push({
                         name: decl.name.text,
                         kind: "class",
@@ -199,7 +200,7 @@ export default class ExportedSymbolsProvider {
                     if (decl.name.kind == ts.SyntaxKind.Identifier) {
                         let name = <ts.Identifier>decl.name;
                         let path = `${parentPath}.${name.text}`;
-                        let range = Range.create(self.service.getLineAndPosFromOffset(fileName, decl.name.getStart(sourceFile)), self.service.getLineAndPosFromOffset(fileName, decl.name.getEnd()));
+                        let range = Range.create(self.service.getPositionFromOffset(fileName, decl.name.getStart(sourceFile)), self.service.getPositionFromOffset(fileName, decl.name.getEnd()));
                         exportedRefs.push({
                             name: name.text,
                             kind: "method",
@@ -218,7 +219,7 @@ export default class ExportedSymbolsProvider {
                     if (decl.name.kind == ts.SyntaxKind.Identifier) {
                         let name = <ts.Identifier>decl.name;
                         let path = parentPath ? `${parentPath}.${name.text}` : `${pkgInfo.name}.${name.text}`;
-                        let range = Range.create(self.service.getLineAndPosFromOffset(fileName, decl.name.getStart(sourceFile)), self.service.getLineAndPosFromOffset(fileName, decl.name.getEnd()));
+                        let range = Range.create(self.service.getPositionFromOffset(fileName, decl.name.getStart(sourceFile)), self.service.getPositionFromOffset(fileName, decl.name.getEnd()));
                         exportedRefs.push({
                             name: name.text,
                             kind: "var",

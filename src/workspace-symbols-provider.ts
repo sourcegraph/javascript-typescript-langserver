@@ -43,7 +43,7 @@ export default class WorkspaceSymbolsProvider {
                 let fileName = sourceFile.fileName;
                 let decl = <ts.Declaration>node;
                 let name = <ts.Identifier>decl.name;
-                let range = Range.create(self.service.getLineAndPosFromOffset(fileName, name.getStart(sourceFile)), self.service.getLineAndPosFromOffset(fileName, name.getEnd()));
+                let range = Range.create(self.service.getPositionFromOffset(fileName, name.getStart(sourceFile)), self.service.getPositionFromOffset(fileName, name.getEnd()));
                 let path = parentPath ? `${parentPath}.${name.text}` : name.text;
                 topDecls.push({ name: name.text, path: path });
                 decls.push({
@@ -82,7 +82,7 @@ export default class WorkspaceSymbolsProvider {
 
                                 if (res) {
                                     let name = parent.name;
-                                    let range = Range.create(self.service.getLineAndPosFromOffset(fileName, name.getStart(sourceFile)), self.service.getLineAndPosFromOffset(fileName, name.getEnd()));
+                                    let range = Range.create(self.service.getPositionFromOffset(fileName, name.getStart(sourceFile)), self.service.getPositionFromOffset(fileName, name.getEnd()));
                                     decls.push({
                                         name: name.text,
                                         kind: "property",

@@ -21,7 +21,6 @@ const pathDelimiter = "$";
 export default class TypeScriptService {
     services: ts.LanguageService;
     root: string;
-    lines = {};
     externalRefs = null;
     exportedEnts = null;
     topLevelDecls = null;
@@ -35,7 +34,6 @@ export default class TypeScriptService {
 
     constructor(root: string, strict: boolean) {
         this.root = root;
-        this.lines = {};
         this.host = new VersionedLanguageServiceHost(root, strict);
 
         // Create the language service files
@@ -95,7 +93,8 @@ export default class TypeScriptService {
         if (!this.host.hasFile(fileName)) {
             return [];
         }
-        const offset: number = this.offset(fileName, line, column);
+
+        const offset: number = ts.getPositionOfLineAndCharacter(this.services.getSourceFile(fileName), line, column);
         let defs = this.services.getDefinitionAtPosition(fileName, offset);
         let paths = [];
 
@@ -233,7 +232,8 @@ export default class TypeScriptService {
             if (!this.host.hasFile(fileName)) {
                 return [];
             }
-            const offset: number = this.offset(fileName, line, column);
+
+            const offset: number = ts.getPositionOfLineAndCharacter(this.services.getSourceFile(fileName), line, column);
             return this.services.getDefinitionAtPosition(fileName, offset);
             // if (defs) {
             //     defs.forEach(def => {
@@ -259,7 +259,8 @@ export default class TypeScriptService {
         if (!this.host.hasFile(fileName)) {
             return;
         }
-        const offset: number = this.offset(fileName, line, column);
+
+        const offset: number = ts.getPositionOfLineAndCharacter(this.services.getSourceFile(fileName), line, column);
         return this.getExternalRefs().find(ref => {
             if (ref.file == fileName && ref.pos == offset) {
                 return true;
@@ -283,7 +284,7 @@ export default class TypeScriptService {
                 return null;
             }
 
-            const offset: number = this.offset(fileName, line, column);
+            const offset: number = ts.getPositionOfLineAndCharacter(this.services.getSourceFile(fileName), line, column);
             return this.services.getQuickInfoAtPosition(fileName, offset);
         } catch (exc) {
             console.error("Exception occcurred = ", exc);
@@ -296,88 +297,20 @@ export default class TypeScriptService {
             if (!this.host.hasFile(fileName)) {
                 return null;
             }
-            const offset: number = this.offset(fileName, line, column);
+
+            const offset: number = ts.getPositionOfLineAndCharacter(this.services.getSourceFile(fileName), line, column);
+            // const offset: number = this.offset(fileName, line, column);
             return this.services.getReferencesAtPosition(fileName, offset);
         } catch (exc) {
             console.error("Exception occcurred = ", exc);
         }
     }
-
-    position(fileName: string, offset: number): Position {
-        let lines: number[] = this.getLines(fileName);
-        let index: number = TypeScriptService.getLine(offset, lines);
-        return {
-            line: index + 1,
-            character: offset - lines[index] + 1
-        }
+    
+    getPositionFromOffset(fileName: string, offset: number): Position {
+        let res = ts.getLineAndCharacterOfPosition(this.services.getSourceFile(fileName), offset);
+        return Position.create(res.line, res.character);
     }
-
-    private static getLine(offset: number, lines: number[]): number {
-        let lo: number = 0;
-        let hi: number = lines.length;
-        while (lo != hi) {
-            let mid: number = (lo + hi) / 2;
-            if (lines[mid] <= offset) {
-                lo = mid + 1
-            } else {
-                hi = mid
-            }
-        }
-        return lo - 1
-    }
-
-    getLineAndPosFromOffset(fileName: string, offset: number): Position {
-        let lines: number[] = this.getLines(fileName);
-        let res = util.formEmptyPosition();
-        lines.find((el, index) => {
-            if (offset <= el) {
-                res = Position.create(index, offset - lines[index - 1]);
-                return true;
-            }
-        });
-        return res;
-
-    }
-
-    private offset(fileName: string, line: number, column: number): number {
-        let lines: number[] = this.getLines(fileName);
-        return lines[line - 1] + column - 1
-    }
-
-    private getLines(fileName: string) {
-        let lines: number[] = this.lines[fileName];
-        if (!lines) {
-            const snapshot = this.host.getScriptSnapshot(fileName);
-            if (!snapshot) {
-                return [];
-            }
-            lines = TypeScriptService.computeLineStarts(snapshot.getText(0, snapshot.getLength()));
-            this.lines[fileName] = lines
-        }
-        return lines
-    }
-
-    private static computeLineStarts(text: string): number[] {
-        const result: number[] = [];
-        let pos = 0;
-        let lineStart = 0;
-        while (pos < text.length) {
-            const ch = text.charCodeAt(pos);
-            pos++;
-            switch (ch) {
-                case 0xD:
-                    if (text.charCodeAt(pos) === 0xA) {
-                        pos++;
-                    }
-                case 0xA:
-                    result.push(lineStart);
-                    lineStart = pos;
-                    break;
-            }
-        }
-        result.push(lineStart);
-        return result;
-    }
+    
 
     private resolvePath(p: string): string {
         return path.resolve(this.root, p);

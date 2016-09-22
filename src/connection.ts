@@ -142,7 +142,7 @@ export default class Connection {
             try {
                 console.error('definition', params.textDocument.uri, params.position.line, params.position.character);
                 let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
-                const defs: ts.DefinitionInfo[] = service.getDefinition(reluri, params.position.line + 1, params.position.character + 1);
+                const defs: ts.DefinitionInfo[] = service.getDefinition(reluri, params.position.line, params.position.character);
                 let result: Location[] = [];
                 if (defs) {
                     for (let def of defs) {
@@ -150,12 +150,8 @@ export default class Connection {
                         //TODO process external doc ref here
                         //result.push(Location.create(def['url'], util.formEmptyRange()));
                         // } else {
-                        let start = service.position(def.fileName, def.textSpan.start);
-                        start.line--;
-                        start.character--;
-                        let end = service.position(def.fileName, def.textSpan.start + def.textSpan.length);
-                        end.line--;
-                        end.character--;
+                        let start = ts.getLineAndCharacterOfPosition(service.services.getSourceFile(def.fileName), def.textSpan.start);
+                        let end = ts.getLineAndCharacterOfPosition(service.services.getSourceFile(def.fileName), def.textSpan.start + def.textSpan.length);
                         result.push(Location.create(util.path2uri(workspaceRoot, def.fileName), {
                             start: start,
                             end: end
@@ -185,7 +181,7 @@ export default class Connection {
             try {
                 console.error('hover', params.textDocument.uri, params.position.line, params.position.character);
                 let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
-                const quickInfo: ts.QuickInfo = service.getHover(reluri, params.position.line + 1, params.position.character + 1);
+                const quickInfo: ts.QuickInfo = service.getHover(reluri, params.position.line, params.position.character);
                 let contents = [];
                 if (quickInfo) {
                     contents.push({ language: 'javascript', value: ts.displayPartsToString(quickInfo.displayParts) });
@@ -205,16 +201,12 @@ export default class Connection {
             try {
                 // const refs: ts.ReferenceEntry[] = service.getReferences('file:///' + req.body.File, req.body.Line + 1, req.body.Character + 1);
                 let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
-                const refEntries: ts.ReferenceEntry[] = service.getReferences(reluri, params.position.line + 1, params.position.character + 1);
+                const refEntries: ts.ReferenceEntry[] = service.getReferences(reluri, params.position.line, params.position.character);
                 const result: Location[] = [];
                 if (refEntries) {
                     for (let ref of refEntries) {
-                        let start = service.position(ref.fileName, ref.textSpan.start);
-                        start.line--;
-                        start.character--;
-                        let end = service.position(ref.fileName, ref.textSpan.start + ref.textSpan.length);
-                        end.line--;
-                        end.character--;
+                        let start = ts.getLineAndCharacterOfPosition(service.services.getSourceFile(ref.fileName), ref.textSpan.start);
+                        let end = ts.getLineAndCharacterOfPosition(service.services.getSourceFile(ref.fileName), ref.textSpan.start + ref.textSpan.length);
                         result.push(Location.create(util.path2uri(workspaceRoot, ref.fileName), {
                             start: start,
                             end: end
