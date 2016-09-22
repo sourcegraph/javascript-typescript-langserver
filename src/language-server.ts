@@ -29,6 +29,6 @@ program
 
 const lspPort = program.port || defaultLspPort;
 
-console.log('Listening for incoming LSP connections on', lspPort);
+console.error('Listening for incoming LSP connections on', lspPort);
 
 server.listen(lspPort);
