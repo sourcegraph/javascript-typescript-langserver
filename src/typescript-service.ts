@@ -94,7 +94,7 @@ export default class TypeScriptService {
             return [];
         }
 
-        const offset: number = ts.getPositionOfLineAndCharacter(this.services.getSourceFile(fileName), line, column);
+        const offset: number = ts.getPositionOfLineAndCharacter(this.services.getProgram().getSourceFile(fileName), line, column);
         let defs = this.services.getDefinitionAtPosition(fileName, offset);
         let paths = [];
 
@@ -233,7 +233,7 @@ export default class TypeScriptService {
                 return [];
             }
 
-            const offset: number = ts.getPositionOfLineAndCharacter(this.services.getSourceFile(fileName), line, column);
+            const offset: number = ts.getPositionOfLineAndCharacter(this.services.getProgram().getSourceFile(fileName), line, column);
             return this.services.getDefinitionAtPosition(fileName, offset);
             // if (defs) {
             //     defs.forEach(def => {
@@ -260,7 +260,7 @@ export default class TypeScriptService {
             return;
         }
 
-        const offset: number = ts.getPositionOfLineAndCharacter(this.services.getSourceFile(fileName), line, column);
+        const offset: number = ts.getPositionOfLineAndCharacter(this.services.getProgram().getSourceFile(fileName), line, column);
         return this.getExternalRefs().find(ref => {
             if (ref.file == fileName && ref.pos == offset) {
                 return true;
@@ -284,7 +284,7 @@ export default class TypeScriptService {
                 return null;
             }
 
-            const offset: number = ts.getPositionOfLineAndCharacter(this.services.getSourceFile(fileName), line, column);
+            const offset: number = ts.getPositionOfLineAndCharacter(this.services.getProgram().getSourceFile(fileName), line, column);
             return this.services.getQuickInfoAtPosition(fileName, offset);
         } catch (exc) {
             console.error("Exception occcurred = ", exc);
@@ -298,19 +298,19 @@ export default class TypeScriptService {
                 return null;
             }
 
-            const offset: number = ts.getPositionOfLineAndCharacter(this.services.getSourceFile(fileName), line, column);
+            const offset: number = ts.getPositionOfLineAndCharacter(this.services.getProgram().getSourceFile(fileName), line, column);
             // const offset: number = this.offset(fileName, line, column);
             return this.services.getReferencesAtPosition(fileName, offset);
         } catch (exc) {
             console.error("Exception occcurred = ", exc);
         }
     }
-    
+
     getPositionFromOffset(fileName: string, offset: number): Position {
-        let res = ts.getLineAndCharacterOfPosition(this.services.getSourceFile(fileName), offset);
+        let res = ts.getLineAndCharacterOfPosition(this.services.getProgram().getSourceFile(fileName), offset);
         return Position.create(res.line, res.character);
     }
-    
+
 
     private resolvePath(p: string): string {
         return path.resolve(this.root, p);
