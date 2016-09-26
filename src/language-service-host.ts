@@ -56,22 +56,14 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
                         let rname = path.relative(root, fileName);
                         this.entries.set(rname, new ScriptEntry(null));
                     });
-                } else {
-                    if (!strict) {
-                        this.getFiles(root, '');
-                    }
-                }
-                // if tsconfig.json not found, add all files with extensions
-            } else {
-                if (!strict) {
-                    this.getFiles(root, '');
                 }
             }
         } catch (error) {
             console.error("Error in config file processing");
-            if (!strict) {
-                this.getFiles(root, '');
-            }
+        }
+
+        if (!strict && this.entries.size == 0) {
+            this.getFiles(root, '');
         }
     }
 
