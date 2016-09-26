@@ -150,8 +150,8 @@ export default class Connection {
                         //TODO process external doc ref here
                         //result.push(Location.create(def['url'], util.formEmptyRange()));
                         // } else {
-                        let start = ts.getLineAndCharacterOfPosition(service.services.getSourceFile(def.fileName), def.textSpan.start);
-                        let end = ts.getLineAndCharacterOfPosition(service.services.getSourceFile(def.fileName), def.textSpan.start + def.textSpan.length);
+                        let start = ts.getLineAndCharacterOfPosition(service.services.getProgram().getSourceFile(def.fileName), def.textSpan.start);
+                        let end = ts.getLineAndCharacterOfPosition(service.services.getProgram().getSourceFile(def.fileName), def.textSpan.start + def.textSpan.length);
                         result.push(Location.create(util.path2uri(workspaceRoot, def.fileName), {
                             start: start,
                             end: end
@@ -205,8 +205,8 @@ export default class Connection {
                 const result: Location[] = [];
                 if (refEntries) {
                     for (let ref of refEntries) {
-                        let start = ts.getLineAndCharacterOfPosition(service.services.getSourceFile(ref.fileName), ref.textSpan.start);
-                        let end = ts.getLineAndCharacterOfPosition(service.services.getSourceFile(ref.fileName), ref.textSpan.start + ref.textSpan.length);
+                        let start = ts.getLineAndCharacterOfPosition(service.services.getProgram().getSourceFile(ref.fileName), ref.textSpan.start);
+                        let end = ts.getLineAndCharacterOfPosition(service.services.getProgram().getSourceFile(ref.fileName), ref.textSpan.start + ref.textSpan.length);
                         result.push(Location.create(util.path2uri(workspaceRoot, ref.fileName), {
                             start: start,
                             end: end

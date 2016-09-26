@@ -36,21 +36,42 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
     strict: boolean;
 
     entries: Map<string, ScriptEntry>;
+    compilerOptions: ts.CompilerOptions = { module: ts.ModuleKind.CommonJS, allowNonTsExtensions: true, allowJs: true };
 
     constructor(root: string, strict: boolean) {
         this.root = root;
         this.strict = strict;
         this.entries = new Map<string, ScriptEntry>();
-        if (!strict) {
+
+        //process tsconfig.json file
+        try {
+            let configFileName = ts.findConfigFile(root, ts.sys.fileExists);
+            if (configFileName) {
+                var result = ts.parseConfigFileTextToJson(configFileName, ts.sys.readFile(configFileName));
+                var configObject = result.config;
+                var configParseResult = ts.parseJsonConfigFileContent(configObject, ts.sys, root);
+                this.compilerOptions = configParseResult.options;
+                if (configParseResult.fileNames) {
+                    configParseResult.fileNames.forEach(fileName => {
+                        let rname = path.relative(root, fileName);
+                        this.entries.set(rname, new ScriptEntry(null));
+                    });
+                }
+            }
+        } catch (error) {
+            console.error("Error in config file processing");
+        }
+
+        if (!strict && this.entries.size == 0) {
             this.getFiles(root, '');
         }
     }
 
     getCompilationSettings(): ts.CompilerOptions {
-        return { module: ts.ModuleKind.CommonJS, allowNonTsExtensions: true, allowJs: true };
+        return this.compilerOptions;
     }
 
-    getScriptFileNames(): string[] {                
+    getScriptFileNames(): string[] {
         return Array.from(this.entries.keys());
     }
 
@@ -83,7 +104,7 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
         return path.join(__dirname, '../src/defs/merged.lib.d.ts');
     }
 
-    addFile(name, content: string) {        
+    addFile(name, content: string) {
         let entry = this.entries.get(name);
         if (entry) {
             entry.update(content);
@@ -102,7 +123,7 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
 
     private resolvePath(p: string): string {
         return path.resolve(this.root, p);
-    }    
+    }
 
     private getFiles(root: string, prefix: string) {
         const dir: string = path.join(root, prefix);
