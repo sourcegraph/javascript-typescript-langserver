@@ -12,8 +12,6 @@ import {
     SymbolInformation, RequestType
 } from 'vscode-languageserver';
 
-import { LanguageClient, LanguageClientOptions, SettingMonitor, ServerOptions, ErrorAction, ErrorHandler, CloseAction, TransportKind } from 'vscode-languageclient';
-
 import * as ts from 'typescript';
 
 import * as util from './util';
@@ -54,12 +52,6 @@ export default class Connection {
 
         let closed = false;
 
-        // var client = new net.Socket();
-        // client.connect(2087, '127.0.0.1', function () {
-        //     console.log('Connected to language server');
-        // });
-
-        let client: LanguageClient = initLangServerTCP(2088, ["typescript", "typescriptreact", "javascript", "javascriptreact"]);
 
         function close() {
             if (!closed) {
@@ -69,30 +61,19 @@ export default class Connection {
             }
         }
 
-        function initLangServerTCP(addr: number, documentSelector: string | string[]): LanguageClient {
-            const serverOptions: ServerOptions = function () {
-                return new Promise((resolve, reject) => {
-                    var client = new net.Socket();
-                    client.connect(addr, "127.0.0.1", function () {
-                        resolve({
-                            reader: client,
-                            writer: client
-                        });
-                    });
-                });
-            }
-
-            const clientOptions: LanguageClientOptions = {
-                documentSelector: documentSelector,
-            }
-
-            return new LanguageClient(`tcp lang server (port ${addr})`, serverOptions, clientOptions);
-        }
-
         this.connection.onRequest(InitializeRequest.type, (params: InitializeParams): InitializeResult => {
-            console.error('initialize', params.rootPath);
-            client.start();
-            client.sendRequest(InitializeRequest.type, params);
+            console.error('Build server initialize', params.rootPath);
+
+            var client = new net.Socket();
+
+            //just for testing purposes now, check that build server calls langserver - but it works
+            client.connect(2089, '127.0.0.1', function () {
+                console.log('Connected to language server');
+                client.write('Content-Length: 145\r\n');
+                client.write('Content-Type: application/vscode-jsonrpc; charset=utf8\r\n\r\n');
+                client.write('{"id":"1","jsonrpc":"2.0","method":"initialize","params":{"processId":0,"rootPath":"/Users/tonya/ts-server/poc-jslang-server","capabilities":{}}}');
+            });
+
             return null;
         });
 

@@ -19,15 +19,15 @@ process.on('uncaughtException', (err) => {
     console.error(err);
 });
 
-const defaultLspPort = 2089;
+const defaultBuildPort = 2088;
 
 program
     .version('0.0.1')
     .option('-s, --strict', 'Strict mode')
-    .option('-p, --port [port]', 'LSP port (' + defaultLspPort + ')', parseInt)
+    .option('-p, --port [port]', 'LSP port (' + defaultBuildPort + ')', parseInt)
     .parse(process.argv);
 
-const lspPort = program.port || defaultLspPort;
+const lspPort = program.port || defaultBuildPort;
 
 console.error('Build server: listening for incoming LSP connections on', lspPort);
 
