@@ -8,11 +8,23 @@ var os = require('os');
 
 var program = require('commander');
 
-import Connection from './build-server-connection';
-
 var server = net.createServer(function (socket) {
-    let connection = new Connection(socket, socket, program.strict);
-    connection.start();
+
+	//connect to language server
+	var client = new net.Socket();
+	//just for testing purposes now, check that build server calls langserver - but it works
+	client.connect(2089, '127.0.0.1', function () {
+		console.log('Connected to language server');
+	});
+
+	socket.on('data', function (data) {
+		client.write(data);
+	});
+
+	client.on('data', function (data) {
+        socket.write(data);
+	});
+
 });
 
 process.on('uncaughtException', (err) => {
