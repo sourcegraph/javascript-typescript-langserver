@@ -8,17 +8,39 @@ var os = require('os');
 
 var program = require('commander');
 
+import {StreamMessageReader} from 'vscode-languageserver';
+
 var server = net.createServer(function (socket) {
 
 	//connect to language server
 	var client = new net.Socket();
-	//just for testing purposes now, check that build server calls langserver - but it works
 	client.connect(2089, '127.0.0.1', function () {
 		console.log('Connected to language server');
+
+		// let messageReader = new StreamMessageReader(socket);
+		// messageReader.onData(function(data) {
+		// 	console.error("ON DATA message reader with data = ", data);
+		// });
+		// messageReader.listen(function(data) {
+		// 	console.error("data inside message reader = ", data);
+		// 	// if (data.method == "initialize") {
+		// 	// 	// add processing for packa
+		// 	// }
+		// });
+
+		// messageReader.onData()
 	});
 
 	socket.on('data', function (data) {
-		client.write(data);
+		let dataInfo = processData(data.toString());
+
+		if (dataInfo) {
+			if (dataInfo.json.method == 'initialize') {
+				console.error("Inside initialize method = ");
+				//Add initialization procedures here
+			}
+			client.write(data);
+		}
 	});
 
 	client.on('data', function (data) {
@@ -26,6 +48,18 @@ var server = net.createServer(function (socket) {
 	});
 
 });
+
+function processData(data: string) {
+	let jsonStart = data.indexOf('{');
+	let jsonEnd = data.lastIndexOf('}');
+	try {
+		let json = JSON.parse(data.substring(jsonStart, jsonEnd + 1));
+		let headers = data.substring(0, jsonStart);
+		return { headers: headers, json: json };
+	} catch (error) {
+		console.error("Error while processing json in data sent to built server")
+	}
+}
 
 process.on('uncaughtException', (err) => {
     console.error(err);
