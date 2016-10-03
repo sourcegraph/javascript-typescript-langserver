@@ -16,19 +16,6 @@ var server = net.createServer(function (socket) {
 	var client = new net.Socket();
 	client.connect(2089, '127.0.0.1', function () {
 		console.log('Connected to language server');
-
-		// let messageReader = new StreamMessageReader(socket);
-		// messageReader.onData(function(data) {
-		// 	console.error("ON DATA message reader with data = ", data);
-		// });
-		// messageReader.listen(function(data) {
-		// 	console.error("data inside message reader = ", data);
-		// 	// if (data.method == "initialize") {
-		// 	// 	// add processing for packa
-		// 	// }
-		// });
-
-		// messageReader.onData()
 	});
 
 	socket.on('data', function (data) {
