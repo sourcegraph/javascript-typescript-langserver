@@ -1,10 +1,15 @@
 /// <reference path="../typings/node/node.d.ts"/>
 ///// <reference path="../typings/typescript/typescript.d.ts"/>
-import * as path from 'path';
+/// <reference path="../typings/async/async.d.ts"/>
+
+import * as path_ from 'path';
 import * as fs from 'fs';
 
 import * as ts from 'typescript';
+import {IConnection} from 'vscode-languageserver';
+import * as async from 'async';
 
+import * as FileSystem from './fs';
 /**
  * Script entry, allows to keep content in memory
  */
@@ -36,9 +41,11 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
     strict: boolean;
 
     entries: Map<string, ScriptEntry>;
-    compilerOptions: ts.CompilerOptions = { module: ts.ModuleKind.CommonJS, allowNonTsExtensions: true, allowJs: true };
+    compilerOptions: ts.CompilerOptions = {module: ts.ModuleKind.CommonJS, allowNonTsExtensions: true, allowJs: true};
 
-    constructor(root: string, strict: boolean) {
+    fs: FileSystem.FileSystem;
+
+    constructor(root: string, strict: boolean, connection: IConnection) {
         this.root = root;
         this.strict = strict;
         this.entries = new Map<string, ScriptEntry>();
@@ -62,10 +69,55 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
         } catch (error) {
             console.error("Error in config file processing");
         }
-
-        if (!strict && this.entries.size == 0) {
-            this.getFiles(root, '');
+        
+        if (strict) {
+            this.fs = new FileSystem.RemoteFileSystem(connection)
+        } else {
+            this.fs = new FileSystem.LocalFileSystem(root)
         }
+
+        const defaultLibFileName = this.getDefaultLibFileName(null);
+        const defaultLibFileContent = fs.readFileSync(defaultLibFileName).toString();
+        this.entries.set(defaultLibFileName, new ScriptEntry(defaultLibFileContent));
+    }
+
+    initialize(root: string): Promise<void> {
+
+        let self = this;
+
+        return new Promise<void>(function(resolve, reject) {
+            self.getFiles(root, function (err, files) {
+                if (err) {
+                    console.error('An error occurred while collecting files', err);
+                    return reject();
+                }
+                self.processTsConfig(root, files, function(err?: Error, files?: string[]) {
+                    if (err) {
+                        console.error('An error occurred while collecting files', err);
+                        return reject();
+                    }
+                    let tasks = [];
+                    const fetch = function (path: string): AsyncFunction<string> {
+                        return function (callback: (err?: Error, result?: string) => void) {
+                            self.fs.readFile(path, (err?: Error, result?: string) => {
+                                if (err) {
+                                    console.error('Unable to fetch content of ' + path, err);
+                                    return callback()
+                                }
+                                self.entries.set(path, new ScriptEntry(result));
+                                return callback()
+                            })
+                        }
+                    };
+                    files.forEach(function (path) {
+                        tasks.push(fetch(path))
+                    });
+                    async.parallel(tasks, function () {
+                        return resolve();
+                    })
+                });
+            });
+        });
     }
 
     getCompilationSettings(): ts.CompilerOptions {
@@ -87,6 +139,7 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
             return undefined;
         }
         if (this.strict || entry.content) {
+
             return ts.ScriptSnapshot.fromString(entry.content);
         }
 
@@ -102,7 +155,7 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
     }
 
     getDefaultLibFileName(options: ts.CompilerOptions): string {
-        return path.join(__dirname, '../src/defs/merged.lib.d.ts');
+        return path_.join(__dirname, '../src/defs/merged.lib.d.ts');
     }
 
     addFile(name, content: string) {
@@ -123,30 +176,100 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
     }
 
     private resolvePath(p: string): string {
-        return path.resolve(this.root, p);
+        return path_.resolve(this.root, p);
     }
 
-    private getFiles(root: string, prefix: string) {
-        const dir: string = path.join(root, prefix);
-        const self = this;
-        if (!fs.existsSync(dir)) {
-            return
+    private fetchDir(path: string): AsyncFunction<FileSystem.FileInfo[]> {
+        let self = this;
+        return function (callback: (err?: Error, result?: FileSystem.FileInfo[]) => void) {
+            self.fs.readDir(path, (err?: Error, result?: FileSystem.FileInfo[]) => {
+                if (result && path != '/') {
+                    result.forEach(function (fi) {
+                        fi.Name_ = path_.posix.join(path, fi.Name_)
+                    })
+                }
+                return callback(err, result)
+            });
         }
-        if (fs.statSync(dir).isDirectory()) {
-            fs.readdirSync(dir).filter(function (name) {
-                if (name[0] == '.') {
-                    return false;
+    }
+
+    getFiles(path: string, callback: (err: Error, result?: string[]) => void) {
+        let self = this;
+        let files: string[] = [];
+        let counter: number = 0;
+
+        let cb = function (err: Error, result?: FileSystem.FileInfo[]) {
+            if (err) {
+                console.error('got error while reading dir', err);
+                return callback(err)
+            }
+            let tasks = [];
+            result.forEach(function (fi) {
+                if (fi.Name_.indexOf('/.') >= 0 || fi.Name_.endsWith('/node_modules')) {
+                    return
                 }
-                if (name == 'node_modules') {
-                    return false;
+                if (fi.Dir_) {
+                    counter++;
+                    tasks.push(self.fetchDir(fi.Name_))
+                } else {
+                    if (/\.[tj]sx?$/.test(fi.Name_) || 'tsconfig.json' == fi.Name_) {
+                        files.push(fi.Name_)
+                    }
                 }
-                return /\.[tj]sx?$/.test(name) || fs.statSync(path.join(dir, name)).isDirectory();
-            }).forEach(function (name) {
-                self.getFiles(root, path.posix.join(prefix, name))
+            });
+            async.parallel(tasks, function (err: Error, result?: FileSystem.FileInfo[][]) {
+                if (err) {
+                    return callback(err)
+                }
+                result.forEach((items) => {
+                    counter--;
+                    cb(null, items)
+                });
+                if (counter == 0) {
+                    callback(null, files)
+                }
             })
-        } else {
-            this.entries.set(prefix, new ScriptEntry(null));
-        }
+        };
+        this.fetchDir(path)(cb)
     }
 
+    private processTsConfig(root: string, files: string[], callback: (err?: Error, result?: string[]) => void) {
+        const tsConfig = files.find(function(value: string): boolean {
+            return /(^|\/)tsconfig\.json$/.test(value)
+        });
+        if (tsConfig) {
+            this.fs.readFile(tsConfig, (err?: Error, result?: string) => {
+                if (err) {
+                    return callback(err)
+                }
+                var jsonConfig = ts.parseConfigFileTextToJson(tsConfig, result);
+                if (jsonConfig.error) {
+                    return callback(new Error('Cannot parse tsconfig.json'))
+                }
+                var configObject = jsonConfig.config;
+                // TODO: VFS - add support of includes/excludes
+                const parseConfigHost = {
+                    useCaseSensitiveFileNames: true,
+                    readDirectory: function(): string[] {
+                        return []
+                    },
+                    fileExists: function(): boolean {
+                        return true
+                    }
+                };
+
+                var configParseResult = ts.parseJsonConfigFileContent(configObject, parseConfigHost, root);
+                this.compilerOptions = configParseResult.options;
+                if (configParseResult.fileNames) {
+                    files = [];
+                    configParseResult.fileNames.forEach(fileName => {
+                        files.push(path_.relative(root, fileName));
+                    });
+                }
+                return callback(null, files);
+            });
+        } else {
+            return callback(null, files);
+        }
+    }
 }

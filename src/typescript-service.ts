@@ -4,7 +4,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as ts from 'typescript';
-import { Position } from 'vscode-languageserver';
+import { IConnection, Position } from 'vscode-languageserver';
 
 import * as util from './util';
 import VersionedLanguageServiceHost from './language-service-host';
@@ -12,6 +12,7 @@ import VersionedLanguageServiceHost from './language-service-host';
 import ExportedSymbolsProvider from './exported-symbols-provider'
 import ExternalRefsProvider from './external-refs-provider';
 import WorkspaceSymbolsProvider from './workspace-symbols-provider';
+import * as FileSystem from './fs';
 
 var sanitizeHtml = require('sanitize-html');
 var JSONPath = require('jsonpath-plus');
@@ -32,9 +33,9 @@ export default class TypeScriptService {
 
     envDefs = [];
 
-    constructor(root: string, strict: boolean) {
+    constructor(root: string, strict: boolean, connection: IConnection) {
         this.root = root;
-        this.host = new VersionedLanguageServiceHost(root, strict);
+        this.host = new VersionedLanguageServiceHost(root, strict, connection);
 
         // Create the language service files
         this.services = ts.createLanguageService(this.host, ts.createDocumentRegistry());
@@ -158,7 +159,7 @@ export default class TypeScriptService {
             // }
             // return defs;
         } catch (exc) {
-            console.error("Exception occcurred = ", exc);
+            console.error("Exception occurred = ", exc);
         }
     }
 
