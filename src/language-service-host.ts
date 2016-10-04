@@ -50,6 +50,26 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
         this.strict = strict;
         this.entries = new Map<string, ScriptEntry>();
 
+        //process tsconfig.json file
+        try {
+            let configFileName = ts.findConfigFile(root, ts.sys.fileExists);
+            if (configFileName) {
+                var result = ts.parseConfigFileTextToJson(configFileName, ts.sys.readFile(configFileName));
+                var configObject = result.config;
+                var configParseResult = ts.parseJsonConfigFileContent(configObject, ts.sys, root);
+                this.compilerOptions = configParseResult.options;
+                if (configParseResult.fileNames) {
+                    //TODO disquss if it is okay to rely on files from tsconfig.json
+                    // configParseResult.fileNames.forEach(fileName => {
+                    //     let rname = path.relative(root, fileName);
+                    //     this.entries.set(rname, new ScriptEntry(null));
+                    // });
+                }
+            }
+        } catch (error) {
+            console.error("Error in config file processing");
+        }
+        
         if (strict) {
             this.fs = new FileSystem.RemoteFileSystem(connection)
         } else {
