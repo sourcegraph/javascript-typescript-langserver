@@ -52,10 +52,11 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
                 var configParseResult = ts.parseJsonConfigFileContent(configObject, ts.sys, root);
                 this.compilerOptions = configParseResult.options;
                 if (configParseResult.fileNames) {
-                    configParseResult.fileNames.forEach(fileName => {
-                        let rname = path.relative(root, fileName);
-                        this.entries.set(rname, new ScriptEntry(null));
-                    });
+                    //TODO disquss if it is okay to rely on files from tsconfig.json
+                    // configParseResult.fileNames.forEach(fileName => {
+                    //     let rname = path.relative(root, fileName);
+                    //     this.entries.set(rname, new ScriptEntry(null));
+                    // });
                 }
             }
         } catch (error) {
