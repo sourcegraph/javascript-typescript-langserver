@@ -104,7 +104,8 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
                                     console.error('Unable to fetch content of ' + path, err);
                                     return callback()
                                 }
-                                self.entries.set(path, new ScriptEntry(result));
+                                const rel = path_.posix.relative(root, path);
+                                self.addFile(rel, result);
                                 return callback()
                             })
                         }
@@ -183,7 +184,7 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
         let self = this;
         return function (callback: (err?: Error, result?: FileSystem.FileInfo[]) => void) {
             self.fs.readDir(path, (err?: Error, result?: FileSystem.FileInfo[]) => {
-                if (result && path != '/') {
+                if (result) {
                     result.forEach(function (fi) {
                         fi.Name_ = path_.posix.join(path, fi.Name_)
                     })
