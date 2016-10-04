@@ -15,7 +15,6 @@
     "sanitize-html": "^1.13.0",
     "typescript": "^2.0.0",
     "vscode-languageserver": "^2.2.1",
-    "vscode-languageserver-types": "^1.0.3",
-    "glob": "^7.1.0"
+    "vscode-languageserver-types": "^1.0.3"
   }
 }

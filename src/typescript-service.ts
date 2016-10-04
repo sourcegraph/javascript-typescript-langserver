@@ -89,6 +89,98 @@ export default class TypeScriptService {
         }
     }
 
+    getPathForPosition(uri: string, line: number, column: number): string[] {
+        const fileName: string = util.uri2path(uri);
+        if (!this.host.hasFile(fileName)) {
+            return [];
+        }
+
+        const offset: number = ts.getPositionOfLineAndCharacter(this.services.getProgram().getSourceFile(fileName), line, column);
+        let defs = this.services.getDefinitionAtPosition(fileName, offset);
+        let paths = [];
+
+        if (defs) {
+            defs.forEach(def => {
+                let pathRes = def.fileName;
+                if (def.name && def.containerName) {
+                    pathRes = `${pathRes}${pathDelimiter}${def.containerName}${pathDelimiter}${def.name}`
+                } else {
+                    let sourceFile = this.services.getProgram().getSourceFile(def.fileName);
+                    let foundNode = (ts as any).getTouchingToken(sourceFile, def.textSpan.start);
+                    let allParents = util.collectAllParents(foundNode, []).filter(parent => {
+                        return util.isNamedDeclaration(parent);
+                    });
+
+                    allParents.forEach(parent => {
+                        pathRes = `${pathRes}${pathDelimiter}${parent.name.text}`
+                    });
+                    if (util.isNamedDeclaration(foundNode)) {
+                        pathRes = `${pathRes}${pathDelimiter}${foundNode.name.text}`
+                    }
+                }
+
+                paths.push(pathRes);
+            });
+        } else {
+            let sourceFile = this.services.getProgram().getSourceFile(fileName);
+            let foundNode = (ts as any).getTouchingToken(sourceFile, offset);
+            let allParents = util.collectAllParents(foundNode, []).filter(parent => {
+                return util.isNamedDeclaration(parent);
+            });
+            let pathRes = fileName;
+            allParents.forEach(parent => {
+                pathRes = `${pathRes}${pathDelimiter}${parent.name.text}`
+            });
+            if (util.isNamedDeclaration(foundNode)) {
+                pathRes = `${pathRes}${pathDelimiter}${foundNode.name.text}`
+            }
+            paths.push(pathRes);
+        }
+        return paths;
+    }
+
+    getPositionForPath(path: string) {
+        let resNodes = [];
+        function traverseNodeChain(node, parts) {
+            if (!node) {
+                return;
+            }
+
+            node.getChildren().forEach(child => {
+                if (util.isNamedDeclaration(child)) {
+                    let name = <ts.Identifier>child.name.text;
+                    let partName = parts[0];
+                    if (name == partName) {
+                        let restParts = parts.slice(1);
+                        if (restParts.length == 0) {
+                            resNodes.push(child);
+                            return;
+                        } else {
+                            traverseNodeChain(child, restParts);
+                        }
+                    }
+                } else {
+                    traverseNodeChain(child, parts);
+                }
+            });
+        }
+
+        var parts = path.split(pathDelimiter);
+        let fileName = parts[0];
+        let sourceFile = this.services.getProgram().getSourceFile(fileName);
+        traverseNodeChain(sourceFile, parts.slice(1));
+        let res = [];
+        if (resNodes.length > 0) {
+            resNodes.forEach(resNode => {
+                let file: ts.SourceFile = resNode.getSourceFile();
+                let posStart = resNode.getStart(file);
+                let posEnd = resNode.getEnd();
+                res.push({ fileName: file.fileName, start: posStart, end: posEnd });
+            });
+        }
+        return res;
+    }
+
     getExternalRefs() {
         if (this.externalRefs === null) {
             this.externalRefs = this.externalRefsProvider.collectExternals();

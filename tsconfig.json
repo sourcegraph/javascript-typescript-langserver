@@ -9,8 +9,7 @@
     },
     "files": [
         "src/language-server.ts",
-        "src/language-server-stdio.ts",
-        "src/build-server.ts"
+        "src/language-server-stdio.ts"
     ],
     "exclude": [
         "node_modules"
