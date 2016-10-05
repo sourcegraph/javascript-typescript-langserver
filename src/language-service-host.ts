@@ -193,7 +193,7 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
                     counter++;
                     tasks.push(self.fetchDir(fi.Name_))
                 } else {
-                    if (/\.[tj]sx?$/.test(fi.Name_) || 'tsconfig.json' == fi.Name_) {
+                    if (/\.[tj]sx?$/.test(fi.Name_) || /(^|\/)tsconfig\.json$/.test(fi.Name_)) {
                         files.push(fi.Name_)
                     }
                 }
@@ -241,7 +241,7 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
 
                 var configParseResult = ts.parseJsonConfigFileContent(configObject, parseConfigHost, root);
                 this.compilerOptions = configParseResult.options;
-                if (configParseResult.fileNames) {
+                if (configParseResult.fileNames && configParseResult.fileNames.length) {
                     files = [];
                     configParseResult.fileNames.forEach(fileName => {
                         files.push(path_.relative(root, fileName));
