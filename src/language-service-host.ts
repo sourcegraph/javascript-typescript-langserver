@@ -245,15 +245,20 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
                     }
                 };
                 
-                const base = path_.posix.relative(root, path_.posix.dirname(tsConfig));                 
+                let base = path_.posix.relative(root, path_.posix.dirname(tsConfig));
+                if (!base) {
+                    base = root;
+                }
                 var configParseResult = ts.parseJsonConfigFileContent(configObject, parseConfigHost, base);
                 this.compilerOptions = configParseResult.options;                
+
                 if (configParseResult.fileNames && configParseResult.fileNames.length) {
                     files = [];
                     configParseResult.fileNames.forEach(fileName => {
-                        files.push(path_.relative(root, fileName));
+                        files.push(fileName);
                     });
                 }
+
                 return callback(null, files);
             });
         } else {
