@@ -94,10 +94,13 @@ export default class Connection {
             console.error('initialize', params.rootPath);
             return new Promise<InitializeResult>(function (resolve) {
                 if (params.rootPath) {
+                    let start = new Date().getTime();
                     workspaceRoot = util.uri2path(params.rootPath);
                     service = new TypeScriptService(workspaceRoot, strict, self.connection);
                     initialized = service.host.initialize(workspaceRoot);
                     initialized.then(function () {
+                        let end = new Date().getTime();
+                        console.log("Initialization time = ", end - start);
                         resolve({
                             capabilities: {
                                 // Tell the client that the server works in FULL text document sync mode
@@ -242,13 +245,13 @@ export default class Connection {
                             });
                             let documentation = ts.displayPartsToString(quickInfo.documentation);
                             if (documentation) {
-                                contents.push({language: 'text/html', value: documentation});
+                                contents.push({ language: 'text/html', value: documentation });
                             }
                         }
-                        resolve({contents: contents});
+                        resolve({ contents: contents });
                     } catch (e) {
                         console.error(params, e);
-                        resolve({contents: []});
+                        resolve({ contents: [] });
                     }
                 }, function () {
                     return reject()
