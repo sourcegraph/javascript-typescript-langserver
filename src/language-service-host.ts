@@ -251,14 +251,14 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
                 }
                 var configParseResult = ts.parseJsonConfigFileContent(configObject, parseConfigHost, base);
                 this.compilerOptions = configParseResult.options;                
-
+/*
                 if (configParseResult.fileNames && configParseResult.fileNames.length) {
                     files = [];
                     configParseResult.fileNames.forEach(fileName => {
                         files.push(fileName);
                     });
                 }
-
+*/
                 return callback(null, files);
             });
         } else {
