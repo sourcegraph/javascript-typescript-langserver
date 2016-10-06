@@ -72,6 +72,7 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
                     return reject();
                 }
                 self.processTsConfig(root, files, function(err?: Error, files?: string[]) {
+                    const start = new Date().getTime();
                     if (err) {
                         console.error('An error occurred while collecting files', err);
                         return reject();
@@ -94,6 +95,7 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
                         tasks.push(fetch(path))
                     });
                     async.parallel(tasks, function () {
+                        console.error('files fetched in', (new Date().getTime() - start) / 1000.0);
                         return resolve();
                     })
                 });
@@ -175,6 +177,9 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
     }
 
     getFiles(path: string, callback: (err: Error, result?: string[]) => void) {
+
+        const start = new Date().getTime();
+
         let self = this;
         let files: string[] = [];
         let counter: number = 0;
@@ -207,6 +212,7 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
                     cb(null, items)
                 });
                 if (counter == 0) {
+                    console.error('fs scan complete in', (new Date().getTime() - start) / 1000.0);
                     callback(null, files)
                 }
             })
@@ -239,15 +245,20 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
                     }
                 };
                 
-                const base = path_.posix.relative(root, path_.posix.dirname(tsConfig));                 
+                let base = path_.posix.relative(root, path_.posix.dirname(tsConfig));
+                if (!base) {
+                    base = root;
+                }
                 var configParseResult = ts.parseJsonConfigFileContent(configObject, parseConfigHost, base);
                 this.compilerOptions = configParseResult.options;                
+
                 if (configParseResult.fileNames && configParseResult.fileNames.length) {
                     files = [];
                     configParseResult.fileNames.forEach(fileName => {
-                        files.push(path_.relative(root, fileName));
+                        files.push(fileName);
                     });
                 }
+
                 return callback(null, files);
             });
         } else {
