@@ -55,10 +55,6 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
         } else {
             this.fs = new FileSystem.LocalFileSystem(root)
         }
-
-        const defaultLibFileName = this.getDefaultLibFileName(this.compilerOptions);
-        const defaultLibFileContent = fs.readFileSync(defaultLibFileName).toString();
-        this.entries.set(defaultLibFileName, new ScriptEntry(defaultLibFileContent));
     }
 
     initialize(root: string): Promise<void> {
@@ -139,7 +135,6 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
 
     getDefaultLibFileName(options: ts.CompilerOptions): string {
         return ts.getDefaultLibFilePath(options);
-        //return path_.join(__dirname, '../src/defs/merged.lib.d.ts');
     }
 
     addFile(name, content: string) {
