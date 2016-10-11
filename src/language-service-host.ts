@@ -56,7 +56,7 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
             this.fs = new FileSystem.LocalFileSystem(root)
         }
 
-        const defaultLibFileName = this.getDefaultLibFileName(null);
+        const defaultLibFileName = this.getDefaultLibFileName(this.compilerOptions);
         const defaultLibFileContent = fs.readFileSync(defaultLibFileName).toString();
         this.entries.set(defaultLibFileName, new ScriptEntry(defaultLibFileContent));
     }
