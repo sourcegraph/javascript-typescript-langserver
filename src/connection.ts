@@ -148,7 +148,6 @@ export default class Connection {
                                     return SymbolInformation.create(ent.name, ent.kind, ent.location.range,
                                         'file:///' + ent.location.file, util.formExternalUri(ent));
                                 });
-                                console.error("Res = ", res);
                                 return resolve(res);
                             }
                         } else if (params.query == "externals") {
@@ -157,7 +156,6 @@ export default class Connection {
                                 let res = externals.map(external => {
                                     return SymbolInformation.create(external.name, util.formEmptyKind(), util.formEmptyRange(), util.formExternalUri(external));
                                 });
-                                console.error("externals Res = ", res);
                                 return resolve(res);
                             }
                         } else if (params.query == '') {
@@ -167,8 +165,8 @@ export default class Connection {
                                     return SymbolInformation.create(decl.name, decl.kind, decl.location.range,
                                         'file:///' + decl.location.file, util.formExternalUri(decl));
                                 });
-                                console.error("top declarations = ", res);
-                                console.error("Res length = ", res.length);
+                                // console.error("top declarations = ", res);
+                                // console.error("Res length = ", res.length);
                                 return resolve(res);
                             }
                         }

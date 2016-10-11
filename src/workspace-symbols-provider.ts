@@ -17,6 +17,7 @@ export default class WorkspaceSymbolsProvider {
     }
 
     collectTopLevelInterface() {
+        let start = new Date().getTime();
         let decls = [];
         let topDecls = [];
         let self = this;
@@ -28,12 +29,14 @@ export default class WorkspaceSymbolsProvider {
             }
         }
 
-        for (const sourceFile of this.service.services.getProgram().getSourceFiles()) {
-            if (!sourceFile.hasNoDefaultLib && sourceFile.fileName.indexOf("node_modules") == -1) {
-                ts.forEachChild(sourceFile, collectTopLevelChildDeclaration);
-            }
-        }
+        // for (const sourceFile of this.service.services.getProgram().getSourceFiles()) {
+        //     if (!sourceFile.hasNoDefaultLib && sourceFile.fileName.indexOf("node_modules") == -1) {
+        //         ts.forEachChild(sourceFile, collectTopLevelChildDeclaration);
+        //     }
+        // }
 
+        let end = new Date().getTime();
+        console.error("Time in milliseconds = ", end - start);
         return decls;
 
 
@@ -102,6 +105,7 @@ export default class WorkspaceSymbolsProvider {
         }
 
         function collectTopLevelDeclarations(node: ts.Node, analyzeChildren, parentPath?: string) {
+            //console.error("Inside collect top level decl with parentPath = ", parentPath, " in file = ", node.getSourceFile().fileName);
             let sourceFile = node.getSourceFile();
             let fileName = sourceFile.fileName;
             if (node.kind == ts.SyntaxKind.SyntaxList) {
@@ -123,5 +127,4 @@ export default class WorkspaceSymbolsProvider {
             }
         }
     }
-
 }

@@ -181,8 +181,8 @@ export default class TypeScriptService {
         if (this.topLevelDecls === null) {
             this.topLevelDecls = this.workspaceSymbolProvider.collectTopLevelInterface();
         }
-        return this.topLevelDecls;
 
+        return this.topLevelDecls;
     }
 
 
