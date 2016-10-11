@@ -10,6 +10,7 @@ import {IConnection} from 'vscode-languageserver';
 import * as async from 'async';
 
 import * as FileSystem from './fs';
+import * as child_process from 'child_process';
 /**
  * Script entry, allows to keep content in memory
  */
@@ -62,6 +63,7 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
     }
 
     initialize(root: string): Promise<void> {
+        console.error("Inside initialize");
 
         let self = this;
 
@@ -271,6 +273,18 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
         }
     }
 
+    private installDependencyDefinition(dep: string, root: string) {
+        return new Promise((resolve,reject) => {
+            	child_process.exec(`npm install @types/${dep}`, {
+						cwd: root
+					}, function (err) {
+                        if (err) reject(err);
+                        console.log(`installed d.ts definition for dependency ${dep} into ${root}`);
+                        resolve();
+					});
+        });
+    }
+
     private processPackageJson(root: string, files: string[], callback: (err?: Error, result?: string[]) => void) {
         const packageJson = files.find(function (value: string): boolean {
             return /(^|\/)package\.json$/.test(value)
@@ -281,8 +295,25 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
                     return callback(err)
                 }
 
-                //console.error("result for package json  = ", result);
-                return callback(null, files);
+                let parsedResult = JSON.parse(result);
+                let devDeps = parsedResult.devDependencies;
+                let deps = parsedResult.dependencies;
+                let depPromises = [];
+                for (let devDep in devDeps) {
+                    depPromises.push(this.installDependencyDefinition(devDep, root));
+                }
+
+                // for (let dep in deps) {
+                //      depPromises.push(this.installDependencyDefinition(dep, root));
+                // }
+                console.error("before all promises = ");
+                Promise.all(depPromises).then(() => {
+                  console.error("Resolved dependencies = "); 
+                  return callback(null, files);
+                }).catch((err) => {
+                    console.error("An error occurred", err);
+                })
+                
             });
         } else {
             return callback(null, files);
