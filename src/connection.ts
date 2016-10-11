@@ -94,23 +94,18 @@ export default class Connection {
             console.error('initialize', params.rootPath);
             return new Promise<InitializeResult>(function (resolve) {
                 if (params.rootPath) {
-                    const start = new Date().getTime();
                     workspaceRoot = util.uri2path(params.rootPath);
                     service = new TypeScriptService(workspaceRoot, strict, self.connection);
                     initialized = service.host.initialize(workspaceRoot);
-                    initialized.then(function () {
-                        let end = new Date().getTime();
-                        console.error('initialization completed in', (new Date().getTime() - start) / 1000.0);
-                        resolve({
-                            capabilities: {
-                                // Tell the client that the server works in FULL text document sync mode
-                                textDocumentSync: documents.syncKind,
-                                hoverProvider: true,
-                                definitionProvider: true,
-                                referencesProvider: true
-                            }
-                        })
-                    });
+                    resolve({
+                        capabilities: {
+                            // Tell the client that the server works in FULL text document sync mode
+                            textDocumentSync: documents.syncKind,
+                            hoverProvider: true,
+                            definitionProvider: true,
+                            referencesProvider: true
+                        }
+                    })
                 }
             });
         });
@@ -136,41 +131,39 @@ export default class Connection {
         });
 
         this.connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): Promise<SymbolInformation[]> => {
+            const enter = new Date().getTime();
             return new Promise<SymbolInformation[]>(function (resolve, reject) {
                 initialized.then(function () {
-
+                    let result = [];
+                    const init = new Date().getTime();
                     try {
-                        console.error('workspace symbols', params.query);
                         if (params.query == "exported") {
                             const exported = service.getExportedEnts();
                             if (exported) {
-                                let res = exported.map(ent => {
+                                result = exported.map(ent => {
                                     return SymbolInformation.create(ent.name, ent.kind, ent.location.range,
                                         'file:///' + ent.location.file, util.formExternalUri(ent));
                                 });
-                                return resolve(res);
                             }
                         } else if (params.query == "externals") {
                             const externals = service.getExternalRefs();
                             if (externals) {
-                                let res = externals.map(external => {
+                                result = externals.map(external => {
                                     return SymbolInformation.create(external.name, util.formEmptyKind(), util.formEmptyRange(), util.formExternalUri(external));
                                 });
-                                return resolve(res);
                             }
                         } else if (params.query == '') {
                             const topDecls = service.getTopLevelDeclarations();
                             if (topDecls) {
-                                let res = topDecls.map(decl => {
+                                result = topDecls.map(decl => {
                                     return SymbolInformation.create(decl.name, decl.kind, decl.location.range,
                                         'file:///' + decl.location.file, util.formExternalUri(decl));
                                 });
-                                // console.error("top declarations = ", res);
-                                // console.error("Res length = ", res.length);
-                                return resolve(res);
                             }
                         }
-                        return resolve([]);
+                        const exit = new Date().getTime();
+                        console.error('symbol', params.query, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);                                                         
+                        return resolve(result);
                     } catch (e) {
                         console.error(params, e);
                         return resolve([]);
@@ -182,11 +175,11 @@ export default class Connection {
         });
 
         this.connection.onDefinition((params: TextDocumentPositionParams): Promise<Definition> => {
-
+            const enter = new Date().getTime();
             return new Promise<Definition>(function (resolve, reject) {
                 initialized.then(function () {
                     try {
-                        console.error('definition', params.textDocument.uri, params.position.line, params.position.character);
+                        const init = new Date().getTime();                        
                         let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
                         const defs: ts.DefinitionInfo[] = service.getDefinition(reluri, params.position.line, params.position.character);
                         let result: Location[] = [];
@@ -216,6 +209,8 @@ export default class Connection {
                              }
                              */
                         }
+                        const exit = new Date().getTime();
+                        console.error('definition', params.textDocument.uri, params.position.line, params.position.character, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
                         return resolve(result);
                     } catch (e) {
                         console.error(params, e);
@@ -228,11 +223,11 @@ export default class Connection {
         });
 
         this.connection.onHover((params: TextDocumentPositionParams): Promise<Hover> => {
+            const enter = new Date().getTime();
             return new Promise<Hover>(function (resolve, reject) {
                 initialized.then(function () {
-
-                    try {
-                        console.error('hover', params.textDocument.uri, params.position.line, params.position.character);
+                    const init = new Date().getTime();
+                    try {                        
                         let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
                         const quickInfo: ts.QuickInfo = service.getHover(reluri, params.position.line, params.position.character);
                         let contents = [];
@@ -246,6 +241,8 @@ export default class Connection {
                                 contents.push({ language: 'text/html', value: documentation });
                             }
                         }
+                        const exit = new Date().getTime();
+                        console.error('hover', params.textDocument.uri, params.position.line, params.position.character, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);                        
                         resolve({ contents: contents });
                     } catch (e) {
                         console.error(params, e);
@@ -259,8 +256,9 @@ export default class Connection {
 
         this.connection.onReferences((params: ReferenceParams): Promise<Location[]> => {
             return new Promise<Location[]>(function (resolve, reject) {
+                const enter = new Date().getTime();
                 initialized.then(function () {
-
+                    const init = new Date().getTime();
                     try {
                         // const refs: ts.ReferenceEntry[] = service.getReferences('file:///' + req.body.File, req.body.Line + 1, req.body.Character + 1);
                         let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
@@ -277,6 +275,8 @@ export default class Connection {
 
                             }
                         }
+                        const exit = new Date().getTime();
+                        console.error('references', params.textDocument.uri, params.position.line, params.position.character, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
                         return resolve(result);
                     } catch (e) {
                         console.error(params, e);
