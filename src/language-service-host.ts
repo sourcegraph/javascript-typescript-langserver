@@ -138,7 +138,8 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
     }
 
     getDefaultLibFileName(options: ts.CompilerOptions): string {
-        return path_.join(__dirname, '../src/defs/merged.lib.d.ts');
+        return ts.getDefaultLibFilePath(options);
+        //return path_.join(__dirname, '../src/defs/merged.lib.d.ts');
     }
 
     addFile(name, content: string) {
