@@ -41,7 +41,7 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
     strict: boolean;
 
     entries: Map<string, ScriptEntry>;
-    compilerOptions: ts.CompilerOptions = { module: ts.ModuleKind.CommonJS, allowNonTsExtensions: true, allowJs: true };
+    compilerOptions: ts.CompilerOptions = {module: ts.ModuleKind.CommonJS, allowNonTsExtensions: true, allowJs: true};
 
     fs: FileSystem.FileSystem;
 
@@ -65,44 +65,39 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
 
         let self = this;
 
-        return new Promise<void>(function (resolve, reject) {
+        return new Promise<void>(function(resolve, reject) {
             self.getFiles(root, function (err, files) {
                 if (err) {
                     console.error('An error occurred while collecting files', err);
                     return reject();
                 }
-                self.processPackageJson(root, files, function (err?: Error, files?: string[]) {
+                self.processTsConfig(root, files, function(err?: Error, files?: string[]) {
+                    const start = new Date().getTime();
                     if (err) {
-                        console.error('An error occurred while processing package.json', err);
+                        console.error('An error occurred while collecting files', err);
+                        return reject();
                     }
-                    self.processTsConfig(root, files, function (err?: Error, files?: string[]) {
-                        const start = new Date().getTime();
-                        if (err) {
-                            console.error('An error occurred while collecting files', err);
-                            return reject();
-                        }
-                        let tasks = [];
-                        const fetch = function (path: string): AsyncFunction<string> {
-                            return function (callback: (err?: Error, result?: string) => void) {
-                                self.fs.readFile(path, (err?: Error, result?: string) => {
-                                    if (err) {
-                                        console.error('Unable to fetch content of ' + path, err);
-                                        return callback()
-                                    }
-                                    const rel = path_.posix.relative(root, path);
-                                    self.addFile(rel, result);
+                    let tasks = [];
+                    const fetch = function (path: string): AsyncFunction<string> {
+                        return function (callback: (err?: Error, result?: string) => void) {
+                            self.fs.readFile(path, (err?: Error, result?: string) => {
+                                if (err) {
+                                    console.error('Unable to fetch content of ' + path, err);
                                     return callback()
-                                })
-                            }
-                        };
-                        files.forEach(function (path) {
-                            tasks.push(fetch(path))
-                        });
-                        async.parallel(tasks, function () {
-                            console.error('files fetched in', (new Date().getTime() - start) / 1000.0);
-                            return resolve();
-                        })
+                                }
+                                const rel = path_.posix.relative(root, path);
+                                self.addFile(rel, result);
+                                return callback()
+                            })
+                        }
+                    };
+                    files.forEach(function (path) {
+                        tasks.push(fetch(path))
                     });
+                    async.parallel(tasks, function () {
+                        console.error('files fetched in', (new Date().getTime() - start) / 1000.0);
+                        return resolve();
+                    })
                 });
             });
         });
@@ -226,7 +221,7 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
     }
 
     private processTsConfig(root: string, files: string[], callback: (err?: Error, result?: string[]) => void) {
-        const tsConfig = files.find(function (value: string): boolean {
+        const tsConfig = files.find(function(value: string): boolean {
             return /(^|\/)tsconfig\.json$/.test(value)
         });
         if (tsConfig) {
@@ -242,46 +237,28 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
                 // TODO: VFS - add support of includes/excludes
                 const parseConfigHost = {
                     useCaseSensitiveFileNames: true,
-                    readDirectory: function (): string[] {
+                    readDirectory: function(): string[] {
                         return []
                     },
-                    fileExists: function (): boolean {
+                    fileExists: function(): boolean {
                         return true
                     }
                 };
-
+                
                 let base = path_.posix.relative(root, path_.posix.dirname(tsConfig));
                 if (!base) {
                     base = root;
                 }
                 var configParseResult = ts.parseJsonConfigFileContent(configObject, parseConfigHost, base);
-                this.compilerOptions = configParseResult.options;
-                /*
-                                if (configParseResult.fileNames && configParseResult.fileNames.length) {
-                                    files = [];
-                                    configParseResult.fileNames.forEach(fileName => {
-                                        files.push(fileName);
-                                    });
-                                }
-                */
-                return callback(null, files);
-            });
-        } else {
-            return callback(null, files);
-        }
-    }
-
-    private processPackageJson(root: string, files: string[], callback: (err?: Error, result?: string[]) => void) {
-        const packageJson = files.find(function (value: string): boolean {
-            return /(^|\/)package\.json$/.test(value)
-        });
-        if (packageJson) {
-            this.fs.readFile(packageJson, (err?: Error, result?: string) => {
-                if (err) {
-                    return callback(err)
+                this.compilerOptions = configParseResult.options;                
+/*
+                if (configParseResult.fileNames && configParseResult.fileNames.length) {
+                    files = [];
+                    configParseResult.fileNames.forEach(fileName => {
+                        files.push(fileName);
+                    });
                 }
-
-                //console.error("result for package json  = ", result);
+*/
                 return callback(null, files);
             });
         } else {
