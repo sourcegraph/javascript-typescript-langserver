@@ -191,14 +191,14 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
             }
             let tasks = [];
             result.forEach(function (fi) {
-                if (fi.Name_.indexOf('/.') >= 0 || fi.Name_.endsWith('/node_modules')) {
+                if (fi.Name_.indexOf('/.') >= 0) {
                     return
                 }
                 if (fi.Dir_) {
                     counter++;
                     tasks.push(self.fetchDir(fi.Name_))
                 } else {
-                    if (/\.[tj]sx?$/.test(fi.Name_) || /(^|\/)tsconfig\.json$/.test(fi.Name_)) {
+                    if (/\.tsx?$/.test(fi.Name_) || /(^|\/)tsconfig\.json$/.test(fi.Name_)) {
                         files.push(fi.Name_)
                     }
                 }
@@ -212,7 +212,7 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
                     cb(null, items)
                 });
                 if (counter == 0) {
-                    console.error('fs scan complete in', (new Date().getTime() - start) / 1000.0);
+                    console.error(files.length + ' found, fs scan complete in', (new Date().getTime() - start) / 1000.0);
                     callback(null, files)
                 }
             })
