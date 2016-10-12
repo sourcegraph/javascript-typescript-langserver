@@ -17,7 +17,8 @@ import {
     DidOpenTextDocumentParams,
     DidCloseTextDocumentParams,
     SymbolInformation,
-    RequestType
+    RequestType,
+    SymbolKind, Range
 } from 'vscode-languageserver';
 
 import * as ts from 'typescript';
@@ -160,9 +161,18 @@ export default class Connection {
                                         'file:///' + decl.location.file, util.formExternalUri(decl));
                                 });
                             }
+                        } else {
+                            const navigateToItems = service.getWorkspaceSymbols(params.query);
+                            if (navigateToItems) {
+                                result = navigateToItems.map(item => {
+                                    let start = ts.getLineAndCharacterOfPosition(service.services.getProgram().getSourceFile(item.fileName), item.textSpan.start);
+                                    let end = ts.getLineAndCharacterOfPosition(service.services.getProgram().getSourceFile(item.fileName), item.textSpan.start + item.textSpan.length);
+                                    return SymbolInformation.create(item.name, util.convertStringtoSymbolKind(item.kind), Range.create(start.line, start.character, end.line, end.character), 'file:///' + item.fileName, item.containerName);
+                                });
+                            }
                         }
                         const exit = new Date().getTime();
-                        console.error('symbol', params.query, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);                                                         
+                        console.error('symbol', params.query, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
                         return resolve(result);
                     } catch (e) {
                         console.error(params, e);
@@ -179,7 +189,7 @@ export default class Connection {
             return new Promise<Definition>(function (resolve, reject) {
                 initialized.then(function () {
                     try {
-                        const init = new Date().getTime();                        
+                        const init = new Date().getTime();
                         let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
                         const defs: ts.DefinitionInfo[] = service.getDefinition(reluri, params.position.line, params.position.character);
                         let result: Location[] = [];
@@ -227,7 +237,7 @@ export default class Connection {
             return new Promise<Hover>(function (resolve, reject) {
                 initialized.then(function () {
                     const init = new Date().getTime();
-                    try {                        
+                    try {
                         let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
                         const quickInfo: ts.QuickInfo = service.getHover(reluri, params.position.line, params.position.character);
                         let contents = [];
@@ -242,7 +252,7 @@ export default class Connection {
                             }
                         }
                         const exit = new Date().getTime();
-                        console.error('hover', params.textDocument.uri, params.position.line, params.position.character, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);                        
+                        console.error('hover', params.textDocument.uri, params.position.line, params.position.character, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
                         resolve({ contents: contents });
                     } catch (e) {
                         console.error(params, e);
@@ -299,7 +309,6 @@ export default class Connection {
                             let res = externals.map(external => {
                                 return SymbolInformation.create(external.name, util.formEmptyKind(), util.formEmptyRange(), util.formExternalUri(external));
                             });
-                            console.error("global refs res = ", res);
                             return resolve(res);
                         }
                         return resolve([]);

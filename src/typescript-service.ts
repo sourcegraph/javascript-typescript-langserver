@@ -215,6 +215,11 @@ export default class TypeScriptService {
         }
     }
 
+    getWorkspaceSymbols(query: string, maxResultCount?:number) : ts.NavigateToItem[]{
+        let items : ts.NavigateToItem[] = this.services.getNavigateToItems(query, maxResultCount);
+        return items;
+    }
+
     getPositionFromOffset(fileName: string, offset: number): Position {
         let res = ts.getLineAndCharacterOfPosition(this.services.getProgram().getSourceFile(fileName), offset);
         return Position.create(res.line, res.character);

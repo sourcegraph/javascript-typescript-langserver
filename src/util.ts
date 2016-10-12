@@ -80,7 +80,30 @@ export function getNamedDeclarationKind(node) {
         }
     }
     return "";
+}
 
+export function convertStringtoSymbolKind(kind: string): SymbolKind {
+    switch (kind) {
+        case "file": return SymbolKind.File;
+        case "module": return SymbolKind.Module
+        case "namespace": return SymbolKind.Namespace
+        case "package": return SymbolKind.Package
+        case "class": return SymbolKind.Class
+        case "method": return SymbolKind.Method
+        case "property": return SymbolKind.Property
+        case "field": return SymbolKind.Field
+        case "constructor": return SymbolKind.Constructor
+        case "enum": return SymbolKind.Enum
+        case "interface": return SymbolKind.Interface
+        case "function": return SymbolKind.Function
+        case "variable": return SymbolKind.Variable
+        case "constant": return SymbolKind.Constant
+        case "string": return SymbolKind.String
+        case "number": return SymbolKind.Number
+        case "boolean": return SymbolKind.Boolean
+        case "array": return SymbolKind.Array
+        default: return SymbolKind.String
+    }
 }
 
 export function collectAllParents(node, parents) {
@@ -108,7 +131,6 @@ export function collectAllParents(node, parents) {
 //         this.collectAllComments(child);
 //     });
 // }
-
 
 export function path2uri(root, file: string): string {
     let ret = 'file://';
@@ -142,6 +164,6 @@ export function uri2relpath(uri, root: string): string {
     while (uri.startsWith('/')) {
         uri = uri.substring(1);
     }
-    return uri;    
+    return uri;
 }
 
