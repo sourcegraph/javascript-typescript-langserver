@@ -177,7 +177,7 @@ export default class TypeScriptService {
         });
     }
 
-    getTopLevelDeclarations() {
+    getTopLevelDeclarations(limit?:number) { 
         if (this.topLevelDecls === null) {
             this.topLevelDecls = this.workspaceSymbolProvider.collectTopLevelInterface();
         }
@@ -215,8 +215,8 @@ export default class TypeScriptService {
         }
     }
 
-    getWorkspaceSymbols(query: string, maxResultCount?:number) : ts.NavigateToItem[]{
-        let items : ts.NavigateToItem[] = this.services.getNavigateToItems(query, maxResultCount);
+    getWorkspaceSymbols(query: string, limit?: number): ts.NavigateToItem[] {
+        let items: ts.NavigateToItem[] = this.services.getNavigateToItems(query, limit);
         return items;
     }
 

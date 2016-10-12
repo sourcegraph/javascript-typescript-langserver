@@ -171,7 +171,7 @@ export default class Connection {
                                 });
                             }
                         } else if (params.query == '') {
-                            const topDecls = service.getTopLevelDeclarations();
+                            const topDecls = service.getTopLevelDeclarations(params.limit);
                             if (topDecls) {
                                 result = topDecls.map(decl => {
                                     return SymbolInformation.create(decl.name, decl.kind, decl.location.range,
@@ -179,7 +179,7 @@ export default class Connection {
                                 });
                             }
                         } else {
-                            const navigateToItems = service.getWorkspaceSymbols(params.query);
+                            const navigateToItems = service.getWorkspaceSymbols(params.query, params.limit);
                             if (navigateToItems) {
                                 result = navigateToItems.map(item => {
                                     let start = ts.getLineAndCharacterOfPosition(service.services.getProgram().getSourceFile(item.fileName), item.textSpan.start);
