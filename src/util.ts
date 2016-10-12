@@ -61,25 +61,25 @@ export function isNamedDeclaration(node): boolean {
 export function getNamedDeclarationKind(node) {
     if (node.name && node.name.kind == ts.SyntaxKind.Identifier) {
         if (node.kind == ts.SyntaxKind.MethodDeclaration) {
-            return "method";
+            return SymbolKind.Method;
         }
         if (node.kind == ts.SyntaxKind.FunctionDeclaration) {
-            return "fn";
+            return SymbolKind.Function;
         }
         if (node.kind == ts.SyntaxKind.ClassDeclaration) {
-            return "class";
+            return SymbolKind.Class;
         }
         if (node.kind == ts.SyntaxKind.VariableDeclaration) {
-            return "var";
+            return SymbolKind.Variable;
         }
         if (node.kind == ts.SyntaxKind.EnumDeclaration) {
-            return "enum";
+            return SymbolKind.Enum;
         }
         if (node.kind == ts.SyntaxKind.InterfaceDeclaration) {
-            return "interface";
+            return SymbolKind.Interface;
         }
     }
-    return "";
+    return SymbolKind.String;
 }
 
 export function convertStringtoSymbolKind(kind: string): SymbolKind {
