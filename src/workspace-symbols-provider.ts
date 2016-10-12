@@ -16,15 +16,18 @@ export default class WorkspaceSymbolsProvider {
         this.service = service;
     }
 
-    collectTopLevelInterface() {
+    collectTopLevelInterface(limit?: number) {
         let start = new Date().getTime();
         let decls = [];
         let topDecls = [];
         let self = this;
+        let count = 0;
         for (const sourceFile of this.service.services.getProgram().getSourceFiles()) {
-            if (!sourceFile.hasNoDefaultLib && sourceFile.fileName.indexOf("node_modules") == -1) {
+            if (!sourceFile.hasNoDefaultLib && sourceFile.fileName.indexOf("node_modules") == -1 && (!limit || count < limit)) {
                 sourceFile.getChildren().forEach(child => {
-                    collectTopLevelDeclarations(child, true);
+                    if (!limit || count < limit) {
+                        collectTopLevelDeclarations(child, true);
+                    }
                 });
             }
         }
@@ -37,7 +40,7 @@ export default class WorkspaceSymbolsProvider {
 
         let end = new Date().getTime();
         console.error("Time in milliseconds = ", end - start);
-        return decls;
+        return limit ? decls.slice(0, limit) : decls;
 
 
         function processNamedDeclaration(node: ts.Node, analyzeChildren, parentPath?: string) {
@@ -49,6 +52,7 @@ export default class WorkspaceSymbolsProvider {
                 let range = Range.create(self.service.getPositionFromOffset(fileName, name.getStart(sourceFile)), self.service.getPositionFromOffset(fileName, name.getEnd()));
                 let path = parentPath ? `${parentPath}.${name.text}` : name.text;
                 topDecls.push({ name: name.text, path: path });
+                count = count + 1;
                 decls.push({
                     name: decl.name['text'],
                     kind: util.getNamedDeclarationKind(node),
@@ -106,24 +110,30 @@ export default class WorkspaceSymbolsProvider {
 
         function collectTopLevelDeclarations(node: ts.Node, analyzeChildren, parentPath?: string) {
             //console.error("Inside collect top level decl with parentPath = ", parentPath, " in file = ", node.getSourceFile().fileName);
-            let sourceFile = node.getSourceFile();
-            let fileName = sourceFile.fileName;
-            if (node.kind == ts.SyntaxKind.SyntaxList) {
-                node.getChildren().forEach(child => {
-                    collectTopLevelDeclarations(child, true);
-                });
-            } else if (node.kind == ts.SyntaxKind.VariableStatement) {
-                let stmt = <ts.VariableStatement>node;
-                if (stmt.declarationList) {
-                    let varDecls = stmt.declarationList.declarations;
-                    if (varDecls) {
-                        varDecls.forEach(varDecl => {
-                            processNamedDeclaration(varDecl, analyzeChildren, parentPath);
-                        });
+            if (!limit || count < limit) {
+                let sourceFile = node.getSourceFile();
+                let fileName = sourceFile.fileName;
+                if (node.kind == ts.SyntaxKind.SyntaxList) {
+                    node.getChildren().forEach(child => {
+                        if (!limit || count < limit) {
+                            collectTopLevelDeclarations(child, true);
+                        }
+                    });
+                } else if (node.kind == ts.SyntaxKind.VariableStatement) {
+                    let stmt = <ts.VariableStatement>node;
+                    if (stmt.declarationList) {
+                        let varDecls = stmt.declarationList.declarations;
+                        if (varDecls) {
+                            varDecls.forEach(varDecl => {
+                                if (!limit || count < limit) {
+                                    processNamedDeclaration(varDecl, analyzeChildren, parentPath);
+                                }
+                            });
+                        }
                     }
+                } else {
+                    processNamedDeclaration(node, analyzeChildren, parentPath);
                 }
-            } else {
-                processNamedDeclaration(node, analyzeChildren, parentPath);
             }
         }
     }

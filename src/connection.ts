@@ -149,7 +149,7 @@ export default class Connection {
         });
 
         this.connection.onRequest(WorkspaceSymbolsRequest.type, (params: WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]> => {
-              const enter = new Date().getTime();
+            const enter = new Date().getTime();
             return new Promise<SymbolInformation[]>(function (resolve, reject) {
                 initialized.then(function () {
                     let result = [];
