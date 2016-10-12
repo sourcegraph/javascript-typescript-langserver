@@ -178,7 +178,7 @@ export default class TypeScriptService {
     }
 
     getTopLevelDeclarations(limit?:number) { 
-        if (this.topLevelDecls === null) {
+        if (this.topLevelDecls === null || (limit && this.topLevelDecls.length < limit)) {
             this.topLevelDecls = this.workspaceSymbolProvider.collectTopLevelInterface(limit);
         }
 
