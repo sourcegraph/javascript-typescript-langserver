@@ -26,6 +26,21 @@ import * as ts from 'typescript';
 import * as util from './util';
 import TypeScriptService from './typescript-service';
 
+interface WorkspaceSymbolParamsWithLimit {
+    query: string;
+    limit: number;
+}
+
+namespace WorkspaceSymbolsRequest {
+    export const type: RequestType<WorkspaceSymbolParamsWithLimit, SymbolInformation[], any> = {
+        get method() {
+            return 'workspace/symbol';
+        }
+    };
+}
+
+
+
 namespace GlobalRefsRequest {
     export const type: RequestType<WorkspaceSymbolParams, SymbolInformation[], any> = {
         get method() {
@@ -33,6 +48,8 @@ namespace GlobalRefsRequest {
         }
     };
 }
+
+
 
 namespace InitializeRequest {
     export const type: RequestType<InitializeParams, InitializeResult, any> = {
@@ -131,8 +148,8 @@ export default class Connection {
             service.removeFile(relpath);
         });
 
-        this.connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): Promise<SymbolInformation[]> => {
-            const enter = new Date().getTime();
+        this.connection.onRequest(WorkspaceSymbolsRequest.type, (params: WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]> => {
+              const enter = new Date().getTime();
             return new Promise<SymbolInformation[]>(function (resolve, reject) {
                 initialized.then(function () {
                     let result = [];
