@@ -177,12 +177,12 @@ export default class TypeScriptService {
         });
     }
 
-    getTopLevelDeclarations(limit?:number) { 
+    getTopLevelDeclarations(limit?: number) {
         if (this.topLevelDecls === null || (limit && this.topLevelDecls.length < limit)) {
             this.topLevelDecls = this.workspaceSymbolProvider.collectTopLevelInterface(limit);
         }
 
-        return this.topLevelDecls;
+        return limit ? this.topLevelDecls.slice(0, limit) : this.topLevelDecls;
     }
 
 
