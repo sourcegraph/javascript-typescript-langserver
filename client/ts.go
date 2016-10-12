@@ -22,6 +22,8 @@ var (
 	line 	   = flag.Int("line", 1, "Symbol line (1-based")
 	column 	   = flag.Int("column", 1, "Symbol column (1-based")
 	command    = flag.String("command", "initialize", "LSP command")
+	query      = flag.String("query", "Object", "LSP command")
+	limit 	   = flag.Int("limit", 100, "Symbol line (1-based")
 )
 
 var reqCounter = 0
@@ -48,9 +50,10 @@ func run() error {
 		case "definition": getDefinition(client)
 		case "hover": getHover(client)
 		case "references": getReferences(client)
-		case "external-refs": getWorkspaceSymbols(client, "externals")
-		case "exported-symbols": getWorkspaceSymbols(client, "exported")
-		case "workspace-symbols": getWorkspaceSymbols(client, "")
+		case "external-refs": getWorkspaceSymbols(client, "externals", 1000)
+		case "exported-symbols": getWorkspaceSymbols(client, "exported", 1000)
+		case "workspace-symbols-all": getWorkspaceSymbols(client, "", *limit)
+		case "workspace-symbols": getWorkspaceSymbols(client, *query, *limit)
 		case "global-refs": getGlobalRefs(client, "")
 		case "shutdown": shutdown(client);
 	}
@@ -153,10 +156,11 @@ func getReferences(client *jsonrpc2.Client) error {
   return nil;
 }
 
-func getWorkspaceSymbols(client *jsonrpc2.Client, query string) error {
+func getWorkspaceSymbols(client *jsonrpc2.Client, query string, limit int) error {
 	    initialize(client);
 		response, err := request(client, "workspace/symbol", lsp.WorkspaceSymbolParams{
    		Query: query, 
+		Limit: limit,
    	});
 
 	if err != nil {
