@@ -59,7 +59,6 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
     }
 
     initialize(root: string): Promise<void> {
-
         let self = this;
 
         return new Promise<void>(function (resolve, reject) {
@@ -71,10 +70,8 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
                     console.error('An error occurred while collecting package.json', err);
                     return reject();
                 }
-                console.error("package.json files = ", files);
-                self.processPackageJson(root, files, function (err?: Error, files?: string[]) {
-                    //PROCESS package.json here
 
+                self.processPackageJson(root, files, function (err?: Error) {
                     let allFilesPattern = function (fileName) {
                         return (/\.tsx?$/.test(fileName) || /(^|\/)tsconfig\.json$/.test(fileName)) ? true : false;
                     }
@@ -300,7 +297,7 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
         return res;
     }
 
-    private processPackageJson(root: string, files: string[], callback: (err?: Error, result?: string[]) => void) {
+    private processPackageJson(root: string, files: string[], callback: (err?: Error) => void) {
         files.forEach(packageJson => {
             this.fs.readFile(packageJson, (err?: Error, result?: string) => {
                 if (err) {
@@ -311,15 +308,13 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
                 let devDeps = parsedResult.devDependencies;
                 let deps = parsedResult.dependencies;
                 let npmInstallStr = this.formNpmInstallDepsString(deps, devDeps);
-                console.error("NPM install str = ", npmInstallStr);
 
                 child_process.exec(`npm install ${npmInstallStr}`, {
                     cwd: root
                 }, function (err) {
-                    console.error("error = ", err);
-                    if (err) return callback(err, files);
+                    if (err) return callback(err);
                     console.log(`types dependencies were installed`);
-                    return callback(null, files);
+                    return callback(null);
                 });
             });
 
