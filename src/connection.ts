@@ -108,13 +108,20 @@ export default class Connection {
 
         let initialized: Thenable<void> = null;
 
+        function initialize() : Thenable<void> {
+            if (!initialized) {
+                initialized = service.host.initialize(workspaceRoot);
+            }
+            return initialized;
+        }
+
+
         this.connection.onRequest(InitializeRequest.type, (params: InitializeParams): Promise<InitializeResult> => {
             console.error('initialize', params.rootPath);
             return new Promise<InitializeResult>(function (resolve) {
                 if (params.rootPath) {
                     workspaceRoot = util.uri2path(params.rootPath);
-                    service = new TypeScriptService(workspaceRoot, strict, self.connection);
-                    initialized = service.host.initialize(workspaceRoot);
+                    service = new TypeScriptService(workspaceRoot, strict, self.connection);                    
                     resolve({
                         capabilities: {
                             // Tell the client that the server works in FULL text document sync mode
@@ -151,7 +158,7 @@ export default class Connection {
         this.connection.onRequest(WorkspaceSymbolsRequest.type, (params: WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]> => {
             const enter = new Date().getTime();
             return new Promise<SymbolInformation[]>(function (resolve, reject) {
-                initialized.then(function () {
+                initialize().then(function () {
                     let result = [];
                     const init = new Date().getTime();
                     try {
@@ -195,8 +202,9 @@ export default class Connection {
                         console.error(params, e);
                         return resolve([]);
                     }
-                }, function () {
-                    return reject()
+                }, function (err) {
+                    initialized = null;
+                    return reject(err)
                 })
             });
         });
@@ -204,7 +212,7 @@ export default class Connection {
         this.connection.onDefinition((params: TextDocumentPositionParams): Promise<Definition> => {
             const enter = new Date().getTime();
             return new Promise<Definition>(function (resolve, reject) {
-                initialized.then(function () {
+                initialize().then(function () {
                     try {
                         const init = new Date().getTime();
                         let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
@@ -243,8 +251,9 @@ export default class Connection {
                         console.error(params, e);
                         return resolve([]);
                     }
-                }, function () {
-                    return reject()
+                }, function (err) {
+                    initialized = null;
+                    return reject(err)
                 });
             });
         });
@@ -252,7 +261,7 @@ export default class Connection {
         this.connection.onHover((params: TextDocumentPositionParams): Promise<Hover> => {
             const enter = new Date().getTime();
             return new Promise<Hover>(function (resolve, reject) {
-                initialized.then(function () {
+                initialize().then(function () {
                     const init = new Date().getTime();
                     try {
                         let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
@@ -275,8 +284,9 @@ export default class Connection {
                         console.error(params, e);
                         resolve({ contents: [] });
                     }
-                }, function () {
-                    return reject()
+                }, function (err) {
+                    initialized = null;
+                    return reject(err)
                 })
             });
         });
@@ -284,7 +294,7 @@ export default class Connection {
         this.connection.onReferences((params: ReferenceParams): Promise<Location[]> => {
             return new Promise<Location[]>(function (resolve, reject) {
                 const enter = new Date().getTime();
-                initialized.then(function () {
+                initialize().then(function () {
                     const init = new Date().getTime();
                     try {
                         // const refs: ts.ReferenceEntry[] = service.getReferences('file:///' + req.body.File, req.body.Line + 1, req.body.Character + 1);
@@ -309,15 +319,16 @@ export default class Connection {
                         console.error(params, e);
                         return resolve([]);
                     }
-                }, function () {
-                    return reject()
+                }, function (err) {
+                    initialized = null;
+                    return reject(err)
                 })
             });
         });
 
         this.connection.onRequest(GlobalRefsRequest.type, (params: WorkspaceSymbolParams): Promise<SymbolInformation[]> => {
             return new Promise<SymbolInformation[]>(function (resolve, reject) {
-                initialized.then(function () {
+                initialize().then(function () {
 
                     try {
                         console.error('global-refs', params.query);
@@ -333,8 +344,9 @@ export default class Connection {
                         console.error(params, e);
                         return resolve([]);
                     }
-                }, function () {
-                    return reject()
+                }, function (err) {
+                    initialized = null;
+                    return reject(err)
                 })
             });
         });
