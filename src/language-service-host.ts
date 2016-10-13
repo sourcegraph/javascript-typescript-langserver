@@ -6,8 +6,9 @@ import * as path_ from 'path';
 import * as fs from 'fs';
 
 import * as ts from 'typescript';
-import {IConnection} from 'vscode-languageserver';
+import { IConnection } from 'vscode-languageserver';
 import * as async from 'async';
+import * as child_process from 'child_process';
 
 import * as FileSystem from './fs';
 /**
@@ -41,7 +42,7 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
     strict: boolean;
 
     entries: Map<string, ScriptEntry>;
-    compilerOptions: ts.CompilerOptions = {module: ts.ModuleKind.CommonJS, allowNonTsExtensions: true, allowJs: true};
+    compilerOptions: ts.CompilerOptions = { module: ts.ModuleKind.CommonJS, allowNonTsExtensions: true, allowJs: true };
 
     fs: FileSystem.FileSystem;
 
@@ -61,39 +62,58 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
 
         let self = this;
 
-        return new Promise<void>(function(resolve, reject) {
-            self.getFiles(root, function (err, files) {
+        return new Promise<void>(function (resolve, reject) {
+            let packageJsonPattern = function (fileName) {
+                return (/(^|\/)package\.json$/.test(fileName)) ? true : false;
+            }
+            self.getFiles(root, packageJsonPattern, true, function (err, files) {
                 if (err) {
-                    console.error('An error occurred while collecting files', err);
+                    console.error('An error occurred while collecting package.json', err);
                     return reject();
                 }
-                self.processTsConfig(root, files, function(err?: Error, files?: string[]) {
-                    const start = new Date().getTime();
-                    if (err) {
-                        console.error('An error occurred while collecting files', err);
-                        return reject();
+                console.error("package.json files = ", files);
+                self.processPackageJson(root, files, function (err?: Error, files?: string[]) {
+                    //PROCESS package.json here
+
+                    let allFilesPattern = function (fileName) {
+                        return (/\.tsx?$/.test(fileName) || /(^|\/)tsconfig\.json$/.test(fileName)) ? true : false;
                     }
-                    let tasks = [];
-                    const fetch = function (path: string): AsyncFunction<string> {
-                        return function (callback: (err?: Error, result?: string) => void) {
-                            self.fs.readFile(path, (err?: Error, result?: string) => {
-                                if (err) {
-                                    console.error('Unable to fetch content of ' + path, err);
-                                    return callback()
-                                }
-                                const rel = path_.posix.relative(root, path);
-                                self.addFile(rel, result);
-                                return callback()
-                            })
+
+                    self.getFiles(root, allFilesPattern, false, function (err, files) {
+                        if (err) {
+                            console.error('An error occurred while collecting files', err);
+                            return reject();
                         }
-                    };
-                    files.forEach(function (path) {
-                        tasks.push(fetch(path))
+
+                        self.processTsConfig(root, files, function (err?: Error, files?: string[]) {
+                            const start = new Date().getTime();
+                            if (err) {
+                                console.error('An error occurred while collecting files', err);
+                                return reject();
+                            }
+                            let tasks = [];
+                            const fetch = function (path: string): AsyncFunction<string> {
+                                return function (callback: (err?: Error, result?: string) => void) {
+                                    self.fs.readFile(path, (err?: Error, result?: string) => {
+                                        if (err) {
+                                            console.error('Unable to fetch content of ' + path, err);
+                                            return callback()
+                                        }
+                                        const rel = path_.posix.relative(root, path);
+                                        self.addFile(rel, result);
+                                        return callback()
+                                    })
+                                }
+                            };
+                            files.forEach(function (path) {
+                                tasks.push(fetch(path))
+                            });
+                            async.parallel(tasks, function () {
+                                console.error('files fetched in', (new Date().getTime() - start) / 1000.0);
+                                return resolve();
+                            })
+                        });
                     });
-                    async.parallel(tasks, function () {
-                        console.error('files fetched in', (new Date().getTime() - start) / 1000.0);
-                        return resolve();
-                    })
                 });
             });
         });
@@ -172,7 +192,8 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
         }
     }
 
-    getFiles(path: string, callback: (err: Error, result?: string[]) => void) {
+
+    getFiles(path: string, filePattern, skipNodeModules, callback: (err: Error, result?: string[]) => void) {
 
         const start = new Date().getTime();
 
@@ -187,14 +208,14 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
             }
             let tasks = [];
             result.forEach(function (fi) {
-                if (fi.Name_.indexOf('/.') >= 0) {
+                if (fi.Name_.indexOf('/.') >= 0 || (skipNodeModules && fi.Name_.endsWith('/node_modules'))) {
                     return
                 }
                 if (fi.Dir_) {
                     counter++;
                     tasks.push(self.fetchDir(fi.Name_))
                 } else {
-                    if (/\.tsx?$/.test(fi.Name_) || /(^|\/)tsconfig\.json$/.test(fi.Name_)) {
+                    if (filePattern(fi.Name_)) {
                         files.push(fi.Name_)
                     }
                 }
@@ -217,7 +238,7 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
     }
 
     private processTsConfig(root: string, files: string[], callback: (err?: Error, result?: string[]) => void) {
-        const tsConfig = files.find(function(value: string): boolean {
+        const tsConfig = files.find(function (value: string): boolean {
             return /(^|\/)tsconfig\.json$/.test(value)
         });
         if (tsConfig) {
@@ -233,32 +254,75 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
                 // TODO: VFS - add support of includes/excludes
                 const parseConfigHost = {
                     useCaseSensitiveFileNames: true,
-                    readDirectory: function(): string[] {
+                    readDirectory: function (): string[] {
                         return []
                     },
-                    fileExists: function(): boolean {
+                    fileExists: function (): boolean {
                         return true
                     }
                 };
-                
+
                 let base = path_.posix.relative(root, path_.posix.dirname(tsConfig));
                 if (!base) {
                     base = root;
                 }
                 var configParseResult = ts.parseJsonConfigFileContent(configObject, parseConfigHost, base);
-                this.compilerOptions = configParseResult.options;                
-/*
-                if (configParseResult.fileNames && configParseResult.fileNames.length) {
-                    files = [];
-                    configParseResult.fileNames.forEach(fileName => {
-                        files.push(fileName);
-                    });
-                }
-*/
+                this.compilerOptions = configParseResult.options;
+                /*
+                                if (configParseResult.fileNames && configParseResult.fileNames.length) {
+                                    files = [];
+                                    configParseResult.fileNames.forEach(fileName => {
+                                        files.push(fileName);
+                                    });
+                                }
+                */
                 return callback(null, files);
             });
         } else {
             return callback(null, files);
         }
+    }
+
+    private formNpmInstallDepsString(deps, devDeps): string {
+        let res = ''
+
+        if (deps) {
+            for (let dep in deps) {
+                res = res + ' ' + (dep.startsWith('@types') ? dep : `@types/${dep}`)
+            }
+        }
+        if (devDeps) {
+            for (let devDep in devDeps) {
+                res = res + ' ' + (devDep.startsWith('@types') ? devDep : `@types/${devDep}`)
+            }
+        }
+
+        return res;
+    }
+
+    private processPackageJson(root: string, files: string[], callback: (err?: Error, result?: string[]) => void) {
+        files.forEach(packageJson => {
+            this.fs.readFile(packageJson, (err?: Error, result?: string) => {
+                if (err) {
+                    return callback(err)
+                }
+
+                let parsedResult = JSON.parse(result);
+                let devDeps = parsedResult.devDependencies;
+                let deps = parsedResult.dependencies;
+                let npmInstallStr = this.formNpmInstallDepsString(deps, devDeps);
+                console.error("NPM install str = ", npmInstallStr);
+
+                child_process.exec(`npm install ${npmInstallStr}`, {
+                    cwd: root
+                }, function (err) {
+                    console.error("error = ", err);
+                    if (err) return callback(err, files);
+                    console.log(`types dependencies were installed`);
+                    return callback(null, files);
+                });
+            });
+
+        });
     }
 }
