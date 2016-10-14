@@ -269,7 +269,7 @@ export default class Connection {
                         let contents = [];
                         if (quickInfo) {
                             contents.push({
-                                language: 'javascript',
+                                language: 'typescript',
                                 value: ts.displayPartsToString(quickInfo.displayParts)
                             });
                             let documentation = ts.displayPartsToString(quickInfo.documentation);
