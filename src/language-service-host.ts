@@ -306,13 +306,13 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
 
                 if (deps) {
                     for (let dep in deps) {
-                        tasks.push(fetch(`@types/${dep}`))
+                        tasks.push(dep.startsWith('@types') ? fetch(dep) : fetch(`@types/${dep}`))
                     }
                 }
 
                 if (devDeps) {
                     for (let devDep in devDeps) {
-                        tasks.push(fetch(`@types/${devDep}`))
+                        tasks.push(devDep.startsWith('@types') ? fetch(devDep) : fetch(`@types/${devDep}`))
                     }
                 }
 
