@@ -191,7 +191,6 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
 
 
     getFiles(path: string, filePattern, skipNodeModules, callback: (err: Error, result?: string[]) => void) {
-
         const start = new Date().getTime();
 
         let self = this;
@@ -217,6 +216,7 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
                     }
                 }
             });
+
             async.parallel(tasks, function (err: Error, result?: FileSystem.FileInfo[][]) {
                 if (err) {
                     return callback(err)
@@ -280,23 +280,6 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
         }
     }
 
-    private formNpmInstallDepsString(deps, devDeps): string {
-        let res = ''
-
-        if (deps) {
-            for (let dep in deps) {
-                res = res + ' ' + (dep.startsWith('@types') ? dep : `@types/${dep}`)
-            }
-        }
-        if (devDeps) {
-            for (let devDep in devDeps) {
-                res = res + ' ' + (devDep.startsWith('@types') ? devDep : `@types/${devDep}`)
-            }
-        }
-
-        return res;
-    }
-
     private processPackageJson(root: string, files: string[], callback: (err?: Error) => void) {
         files.forEach(packageJson => {
             this.fs.readFile(packageJson, (err?: Error, result?: string) => {
@@ -307,13 +290,36 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
                 let parsedResult = JSON.parse(result);
                 let devDeps = parsedResult.devDependencies;
                 let deps = parsedResult.dependencies;
-                let npmInstallStr = this.formNpmInstallDepsString(deps, devDeps);
 
-                child_process.exec(`npm install ${npmInstallStr}`, {
-                    cwd: root
-                }, function (err) {
-                    if (err) return callback(err);
-                    console.log(`types dependencies were installed`);
+                let tasks = [];
+                const fetch = function (path: string): AsyncFunction<string> {
+                    return function (callback: (err?: Error) => void) {
+                        child_process.exec(`npm install ${path}`, {
+                            cwd: root
+                        }, function (err) {
+                            if (err) return callback(err);
+                            console.log(`${path} types dependencies were installed`);
+                            return callback(null);
+                        });
+                    }
+                };
+
+                if (deps) {
+                    for (let dep in deps) {
+                        tasks.push(fetch(`@types/${dep}`))
+                    }
+                }
+
+                if (devDeps) {
+                    for (let devDep in devDeps) {
+                        tasks.push(fetch(`@types/${devDep}`))
+                    }
+                }
+
+                async.parallel(tasks, function (err: Error, result?: FileSystem.FileInfo[][]) {
+                    if (err) {
+                        return callback(err)
+                    }
                     return callback(null);
                 });
             });
