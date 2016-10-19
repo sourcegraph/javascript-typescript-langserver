@@ -26,26 +26,19 @@ export default class WorkspaceSymbolsProvider {
             if (!sourceFile.hasNoDefaultLib && sourceFile.fileName.indexOf("node_modules") == -1 && (!limit || count < limit)) {
                 sourceFile.getChildren().forEach(child => {
                     if (!limit || count < limit) {
-                        collectTopLevelDeclarations(child, true);
+                        collectTopLevelDeclarations(child, sourceFile, true);
                     }
                 });
             }
         }
-
-        // for (const sourceFile of this.service.services.getProgram().getSourceFiles()) {
-        //     if (!sourceFile.hasNoDefaultLib && sourceFile.fileName.indexOf("node_modules") == -1) {
-        //         ts.forEachChild(sourceFile, collectTopLevelChildDeclaration);
-        //     }
-        // }
 
         let end = new Date().getTime();
         console.error("Time in milliseconds = ", end - start);
         return limit ? decls.slice(0, limit) : decls;
 
 
-        function processNamedDeclaration(node: ts.Node, analyzeChildren, parentPath?: string) {
+        function processNamedDeclaration(node: ts.Node, sourceFile: SourceFile, analyzeChildren, parentPath?: string) {
             if (util.isNamedDeclaration(node)) {
-                let sourceFile = node.getSourceFile();
                 let fileName = sourceFile.fileName;
                 let decl = <ts.Declaration>node;
                 let name = <ts.Identifier>decl.name;
@@ -64,59 +57,19 @@ export default class WorkspaceSymbolsProvider {
                 });
                 if (analyzeChildren) {
                     node.getChildren().forEach(child => {
-                        collectTopLevelDeclarations(child, false, path);
+                        collectTopLevelDeclarations(child, sourceFile, false, path);
                     });
                 }
             }
         }
 
-        function collectTopLevelChildDeclaration(node: ts.Node) {
-            let sourceFile = node.getSourceFile();
-            let fileName = sourceFile.fileName;
-            if (node.kind == ts.SyntaxKind.Identifier) {
-                let id = <ts.Identifier>node;
-                if (node.parent.kind == ts.SyntaxKind.PropertyAccessExpression) {
-                    let parent = <ts.PropertyAccessExpression>node.parent;
-                    if (parent.expression.kind == ts.SyntaxKind.PropertyAccessExpression && parent.name.kind == ts.SyntaxKind.Identifier) {
-                        let parentExpr = <ts.PropertyAccessExpression>parent.expression;
-                        if (parentExpr.expression.kind == ts.SyntaxKind.Identifier && parentExpr.name.kind == ts.SyntaxKind.Identifier) {
-                            if (parentExpr.name['text'] == "prototype") {
-                                let res = topDecls.find(elem => {
-                                    if (elem.name == parentExpr.expression['text']) {
-                                        return true;
-                                    }
-                                });
-
-                                if (res) {
-                                    let name = parent.name;
-                                    let range = Range.create(self.service.getPositionFromOffset(fileName, name.getStart(sourceFile)), self.service.getPositionFromOffset(fileName, name.getEnd()));
-                                    decls.push({
-                                        name: name.text,
-                                        kind: "property",
-                                        path: `${res.path}.${name.text}`,
-                                        location: {
-                                            file: fileName,
-                                            range: range
-                                        },
-                                    });
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            ts.forEachChild(node, collectTopLevelChildDeclaration);
-        }
-
-        function collectTopLevelDeclarations(node: ts.Node, analyzeChildren, parentPath?: string) {
-            //console.error("Inside collect top level decl with parentPath = ", parentPath, " in file = ", node.getSourceFile().fileName);
+        function collectTopLevelDeclarations(node: ts.Node, sourceFile: SourceFile, analyzeChildren, parentPath?: string) {
             if (!limit || count < limit) {
-                let sourceFile = node.getSourceFile();
                 let fileName = sourceFile.fileName;
                 if (node.kind == ts.SyntaxKind.SyntaxList) {
                     node.getChildren().forEach(child => {
                         if (!limit || count < limit) {
-                            collectTopLevelDeclarations(child, true);
+                            collectTopLevelDeclarations(child, sourceFile, true);
                         }
                     });
                 } else if (node.kind == ts.SyntaxKind.VariableStatement) {
@@ -126,13 +79,13 @@ export default class WorkspaceSymbolsProvider {
                         if (varDecls) {
                             varDecls.forEach(varDecl => {
                                 if (!limit || count < limit) {
-                                    processNamedDeclaration(varDecl, analyzeChildren, parentPath);
+                                    processNamedDeclaration(varDecl, sourceFile, analyzeChildren, parentPath);
                                 }
                             });
                         }
                     }
                 } else {
-                    processNamedDeclaration(node, analyzeChildren, parentPath);
+                    processNamedDeclaration(node, sourceFile, analyzeChildren, parentPath);
                 }
             }
         }

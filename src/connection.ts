@@ -188,9 +188,15 @@ export default class Connection {
                         } else {
                             const navigateToItems = service.getWorkspaceSymbols(params.query, params.limit);
                             if (navigateToItems) {
+                                let sourceFiles = new Map<string, SourceFile>(); // cache SourceFiles
                                 result = navigateToItems.map(item => {
-                                    let start = ts.getLineAndCharacterOfPosition(service.services.getProgram().getSourceFile(item.fileName), item.textSpan.start);
-                                    let end = ts.getLineAndCharacterOfPosition(service.services.getProgram().getSourceFile(item.fileName), item.textSpan.start + item.textSpan.length);
+                                    let sourceFile = sourceFiles.get(item.fileName);
+                                    if (!sourceFile) {
+                                        sourceFile = service.services.getProgram().getSourceFile(item.fileName);
+                                        sourceFiles.set(item.fileName, sourceFile);
+                                    }
+                                    let start = ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start);
+                                    let end = ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start + item.textSpan.length);
                                     return SymbolInformation.create(item.name, util.convertStringtoSymbolKind(item.kind), Range.create(start.line, start.character, end.line, end.character), 'file:///' + item.fileName, item.containerName);
                                 });
                             }
