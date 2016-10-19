@@ -194,7 +194,7 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
                     counter++;
                     tasks.push(self.fetchDir(fi.Name_))
                 } else {
-                    if (/\.tsx?$/.test(fi.Name_) || /(^|\/)tsconfig\.json$/.test(fi.Name_)) {
+                    if (/\.(ts|js)x?$/.test(fi.Name_) || /(^|\/)(ts|js)config\.json$/.test(fi.Name_)) {
                         files.push(fi.Name_)
                     }
                 }
