@@ -16,7 +16,7 @@
     "node-mkdirp": "0.0.1",
     "read-json-sync": "^1.1.1",
     "sanitize-html": "^1.13.0",
-    "typescript": "^2.0.0",
+    "typescript": "alexsaveliev/typescript",
     "vscode-languageserver": "^2.2.1",
     "vscode-languageserver-types": "^1.0.3"
   }
