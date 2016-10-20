@@ -24,7 +24,6 @@ export class ProjectManager {
     private root: string;
     private strict: boolean;
 
-    private defaultConfig: ProjectConfiguration;
     private configs: Map<string, ProjectConfiguration>;
 
     private remoteFs: FileSystem.FileSystem;
@@ -40,17 +39,6 @@ export class ProjectManager {
             this.remoteFs = new FileSystem.RemoteFileSystem(connection)
         } else {
             this.remoteFs = new FileSystem.LocalFileSystem(root)
-        }
-        const defaultHost = new InMemoryLanguageServiceHost(this.root, {
-            module: ts.ModuleKind.CommonJS,
-            allowNonTsExtensions: false,
-            allowJs: true
-        }, this.localFs, []);
-        const defaultService = ts.createLanguageService(defaultHost, ts.createDocumentRegistry());
-        this.defaultConfig = {
-            service: defaultService,
-            program: defaultService.getProgram(),
-            host: defaultHost
         }
     }
 
@@ -83,9 +71,8 @@ export class ProjectManager {
                     }
 
                     // Determine and initialize sub-projects
-                    self.processProjects(function () {
-                        return resolve();
-                    });
+                    self.processProjects();
+                    return resolve();
 
                 });
             });
@@ -145,7 +132,7 @@ export class ProjectManager {
                 config = v;
             }
         });
-        return config || this.defaultConfig;
+        return config;
     }
 
     /**
@@ -211,8 +198,7 @@ export class ProjectManager {
                 dir = '';
             }
         }
-        config = this.configs.get(dir);
-        return config || this.defaultConfig;
+        return this.configs.get('');
     }
 
     /**
@@ -266,8 +252,7 @@ export class ProjectManager {
     /**
      * Detects projects denoted by tsconfig.json
      */
-    private processProjects(callback: (err?: Error) => void) {
-        let tasks = [];
+    private processProjects() {
         const self = this;
         Object.keys(this.localFs.entries).forEach(function (k) {
             if (!/(^|\/)[tj]sconfig\.json$/.test(k)) {
@@ -276,50 +261,21 @@ export class ProjectManager {
             if (/(^|\/)node_modules\//.test(k)) {
                 return;
             }
-            tasks.push(self.processProject(k, self.localFs.entries[k]));
-        });
-        if (!tasks.length) {
-            // collecting all the files in workspace by making fake configuration object 
-            const config = {
-                compilerOptions: self.defaultConfig.host.getCompilationSettings()
-            };
-            const configParseResult = ts.parseJsonConfigFileContent(config, self.localFs, self.root);
-            self.defaultConfig.host.expectedFiles = configParseResult.fileNames;
-        }
-        async.parallel(tasks, callback);
-    }
-
-    /**
-     * @return asynchronous function that processes TypeScript project
-     */
-    private processProject(tsConfigPath: string, tsConfigContent: string): AsyncFunction<void> {
-        const self = this;
-        return function (callback: (err?: Error) => void) {
-            const jsonConfig = ts.parseConfigFileTextToJson(tsConfigPath, tsConfigContent);
-            if (jsonConfig.error) {
-                console.error('Cannot parse ' + tsConfigPath + ': ' + jsonConfig.error.messageText);
-                return callback(new Error('Cannot parse ' + tsConfigPath + ': ' + jsonConfig.error.messageText));
-            }
-            const configObject = jsonConfig.config;
-            let dir = path_.posix.dirname(tsConfigPath);
+            let dir = path_.posix.dirname(k);
             if (dir == '.') {
                 dir = '';
             }
-            const base = dir || self.root;
-            const configParseResult = ts.parseJsonConfigFileContent(configObject, self.localFs, base);
-            console.error('Added project', tsConfigPath);
-            const options = configParseResult.options;
-            if (/(^|\/)jsconfig\.json$/.test(tsConfigPath)) {
-                options.allowJs = true;
-            }
-            const host = new InMemoryLanguageServiceHost(self.root,
-                options,
-                self.localFs,
-                configParseResult.fileNames);
-            const service = ts.createLanguageService(host, ts.createDocumentRegistry());
-            const program = service.getProgram();
-            self.configs.set(dir, { service: service, host: host, program: program });
-            callback();
+            self.configs.set(dir, new ProjectConfiguration(self.localFs, k));
+        });
+        // collecting all the files in workspace by making fake configuration object         
+        if (!self.configs.get('')) {
+            self.configs.set('', new ProjectConfiguration(self.localFs, '', {
+                compilerOptions: {
+                    module: ts.ModuleKind.CommonJS,
+                    allowNonTsExtensions: false,
+                    allowJs: true
+                }
+            }));
         }
     }
 }
@@ -386,7 +342,8 @@ class InMemoryFileSystem implements ts.ParseConfigHost {
 
     useCaseSensitiveFileNames: boolean;
 
-    private path: string;
+    path: string;
+
     private rootNode: any;
 
     constructor(path: string) {
@@ -459,7 +416,64 @@ class InMemoryFileSystem implements ts.ParseConfigHost {
  * Project configuration holder
  */
 export class ProjectConfiguration {
+
     service: ts.LanguageService;
     program: ts.Program;
     host: InMemoryLanguageServiceHost;
+
+    private promise: Promise<ProjectConfiguration>;
+
+    private fs: InMemoryFileSystem;
+    private configFileName: string;
+    private configContent: any;
+
+    /**
+     * @param fs file system to use
+     * @param configFileName configuration file name (relative to workspace root)
+     * @param configContent optional configuration content to use instead of reading configuration file)
+     */
+    constructor(fs: InMemoryFileSystem, configFileName: string, configContent?: any) {
+        this.fs = fs;
+        this.configFileName = configFileName;
+        this.configContent = configContent;
+    }
+
+    get(): Promise<ProjectConfiguration> {
+        if (!this.promise) {
+            const self = this;
+            this.promise = new Promise<ProjectConfiguration>(function (resolve, reject) {
+                let configObject;
+                if (!self.configContent) {
+                    const jsonConfig = ts.parseConfigFileTextToJson(self.configFileName, self.fs.readFile(self.configFileName));
+                    if (jsonConfig.error) {
+                        console.error('Cannot parse ' + self.configFileName + ': ' + jsonConfig.error.messageText);
+                        return reject(new Error('Cannot parse ' + self.configFileName + ': ' + jsonConfig.error.messageText));
+                    }
+                    configObject = jsonConfig.config;
+                } else {
+                    configObject = self.configContent;
+                }
+                let dir = path_.posix.dirname(self.configFileName);
+                if (dir == '.') {
+                    dir = '';
+                }
+                const base = dir || self.fs.path;
+                const configParseResult = ts.parseJsonConfigFileContent(configObject, self.fs, base);
+                const options = configParseResult.options;
+                if (/(^|\/)jsconfig\.json$/.test(self.configFileName)) {
+                    options.allowJs = true;
+                }
+                self.host = new InMemoryLanguageServiceHost(self.fs.path,
+                    options,
+                    self.fs,
+                    configParseResult.fileNames);
+                self.service = ts.createLanguageService(self.host, ts.createDocumentRegistry());
+                self.program = self.service.getProgram();
+                return resolve(self);
+            });
+        }
+        return this.promise;
+    }
+
+
 }
