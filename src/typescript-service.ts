@@ -123,67 +123,71 @@ export default class TypeScriptService {
         return res;
     }
 
-    getDefinition(uri: string, line: number, column: number): Location[] {
-        try {
-            const fileName: string = util.uri2path(uri);
+    getDefinition(uri: string, line: number, column: number): Promise<Location[]> {
+        const self = this;
+        return new Promise<Location[]>(function (resolve, reject) {
+            try {
+                const fileName: string = util.uri2path(uri);
+                const configuration = self.projectManager.getConfiguration(fileName);
+                configuration.get().then(function () {
+                    try {
+                        const sourceFile = self.getSourceFile(configuration, fileName);
+                        if (!sourceFile) {
+                            return resolve([]);
+                        }
 
-            const configuration = this.projectManager.getConfiguration(fileName);
-            const sourceFile = this.getSourceFile(configuration, fileName);
-            if (!sourceFile) {
-                return [];
-            }
+                        const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
+                        const defs: ts.DefinitionInfo[] = configuration.service.getDefinitionAtPosition(fileName, offset);
+                        const ret = [];
+                        if (defs) {
+                            for (let def of defs) {
+                                const sourceFile = configuration.program.getSourceFile(def.fileName);
+                                const start = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start);
+                                const end = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start + def.textSpan.length);
+                                ret.push(Location.create(util.path2uri(self.root, def.fileName), {
+                                    start: start,
+                                    end: end
+                                }));
+                            }
+                        }
+                        return resolve(ret);
+                    } catch (e) {
+                        return reject(e);
+                    }
 
-            const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
-            const defs: ts.DefinitionInfo[] = configuration.service.getDefinitionAtPosition(fileName, offset);
-            const ret = [];
-            if (defs) {
-                for (let def of defs) {
-                    const sourceFile = configuration.program.getSourceFile(def.fileName);
-                    const start = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start);
-                    const end = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start + def.textSpan.length);
-                    ret.push(Location.create(util.path2uri(this.root, def.fileName), {
-                        start: start,
-                        end: end
-                    }));
-                }
-            }
-            return ret;
-        } catch (exc) {
-            console.error("Exception occurred", exc.stack || exc);
-        }
-    }
-
-    getExternalDefinition(uri: string, line: number, column: number) {
-        const fileName: string = util.uri2path(uri);
-
-        const configuration = this.projectManager.getConfiguration(fileName);
-
-        const sourceFile = this.getSourceFile(configuration, fileName);
-        if (!sourceFile) {
-            return;
-        }
-
-        const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
-        return this.getExternalRefs().find(ref => {
-            if (ref.file == fileName && ref.pos == offset) {
-                return true;
+                }, function (e) {
+                    return reject(e);
+                });
+            } catch (e) {
+                return reject(e);
             }
         });
     }
 
-    getHover(uri: string, line: number, column: number): ts.QuickInfo {
-        try {
-            const fileName: string = util.uri2path(uri);
-            const configuration = this.projectManager.getConfiguration(fileName);
-            const sourceFile = this.getSourceFile(configuration, fileName);
-            if (!sourceFile) {
-                return null;
+    getHover(uri: string, line: number, column: number): Promise<ts.QuickInfo> {
+        const self = this;
+        return new Promise<ts.QuickInfo>(function (resolve, reject) {
+            try {
+                const fileName: string = util.uri2path(uri);
+                const configuration = self.projectManager.getConfiguration(fileName);
+                configuration.get().then(function () {
+                    try {
+                        const sourceFile = self.getSourceFile(configuration, fileName);
+                        if (!sourceFile) {
+                            return resolve(null);
+                        }
+                        const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
+                        return resolve(configuration.service.getQuickInfoAtPosition(fileName, offset));
+                    } catch (e) {
+                        return reject(e);
+                    }
+                }, function (e) {
+                    return reject(e);
+                });
+            } catch (e) {
+                return reject(e);
             }
-            const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
-            return configuration.service.getQuickInfoAtPosition(fileName, offset);
-        } catch (exc) {
-            console.error("Exception occurred", exc.stack || exc);
-        }
+        });
     }
 
     getReferences(uri: string, line: number, column: number): Promise<Location[]> {
@@ -193,38 +197,46 @@ export default class TypeScriptService {
                 const fileName: string = util.uri2path(uri);
 
                 const configuration = self.projectManager.getConfiguration(fileName);
+                configuration.get().then(function () {
+                    try {
+                        const sourceFile = self.getSourceFile(configuration, fileName);
+                        if (!sourceFile) {
+                            return resolve([]);
+                        }
 
-                const sourceFile = self.getSourceFile(configuration, fileName);
-                if (!sourceFile) {
-                    return resolve([]);
-                }
+                        const started = new Date().getTime();
 
-                const started = new Date().getTime();
+                        self.projectManager.syncConfigurationFor(fileName);
 
-                self.projectManager.syncConfigurationFor(fileName);
+                        const prepared = new Date().getTime();
 
-                const prepared = new Date().getTime();
+                        const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
+                        const refs = configuration.service.getReferencesAtPosition(fileName, offset);
 
-                const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
-                const refs = configuration.service.getReferencesAtPosition(fileName, offset);
+                        const fetched = new Date().getTime();
+                        const ret = [];
+                        const tasks = [];
 
-                const fetched = new Date().getTime();
-                const ret = [];
-                const tasks = [];
+                        if (refs) {
+                            for (let ref of refs) {
+                                tasks.push(self.transformReference(self.root, configuration.program, ref));
+                            }
+                        }
+                        async.parallel(tasks, function (err: Error, results: Location[]) {
+                            const finished = new Date().getTime();
+                            console.error('references', 'transform', (finished - fetched) / 1000.0, 'fetch', (fetched - prepared) / 1000.0, 'prepare', (prepared - started) / 1000.0);
+                            return resolve(results);
+                        });
 
-                if (refs) {
-                    for (let ref of refs) {
-                        tasks.push(self.transformReference(self.root, configuration.program, ref));
+                    } catch (e) {
+                        return reject(e);
                     }
-                }
-                async.parallel(tasks, function (err: Error, results: Location[]) {
-                    const finished = new Date().getTime();
-                    console.error('references', 'transform', (finished - fetched) / 1000.0, 'fetch', (fetched - prepared) / 1000.0, 'prepare', (prepared - started) / 1000.0);
-                    resolve(results);
+                }, function (e) {
+                    return reject(e);
                 });
-            } catch (exc) {
-                console.error("Exception occurred", exc.stack || exc);
-                return reject(exc);
+
+            } catch (e) {
+                return reject(e);
             }
         });
     }
@@ -249,7 +261,7 @@ export default class TypeScriptService {
     }
 
     getPositionFromOffset(fileName: string, offset: number): Position {
-
+        // TODO: initialize configuration object by calling .get()
         const configuration = this.projectManager.getConfiguration(fileName);
         const sourceFile = this.getSourceFile(configuration, fileName);
         if (!sourceFile) {
@@ -327,20 +339,24 @@ export default class TypeScriptService {
             return callback();
         }
         const configuration = configurations[index];
-        this.projectManager.syncConfiguration(configuration);
-        const chunkSize = limit ? Math.min(limit, limit - items.length) : undefined;
-        const chunk = configuration.service.getNavigateToItems(query, chunkSize);
-        const tasks = [];
         const self = this;
-        chunk.forEach(function (item) {
-            tasks.push(self.transformNavItem(self.root, configuration.program, item));
-        });
-        async.parallel(tasks, function (err: Error, results: SymbolInformation[]) {
-            Array.prototype.push.apply(items, results);
-            if (limit && items.length >= limit || index == configurations.length - 1) {
-                return callback();
-            }
-            self.collectWorkspaceSymbols(query, limit, configurations, index + 1, items, callback);
+        configuration.get().then(function () {
+            self.projectManager.syncConfiguration(configuration);
+            const chunkSize = limit ? Math.min(limit, limit - items.length) : undefined;
+            const chunk = configuration.service.getNavigateToItems(query, chunkSize);
+            const tasks = [];
+            chunk.forEach(function (item) {
+                tasks.push(self.transformNavItem(self.root, configuration.program, item));
+            });
+            async.parallel(tasks, function (err: Error, results: SymbolInformation[]) {
+                Array.prototype.push.apply(items, results);
+                if (limit && items.length >= limit || index == configurations.length - 1) {
+                    return callback();
+                }
+                self.collectWorkspaceSymbols(query, limit, configurations, index + 1, items, callback);
+            });
+        }, function () {
+            return callback();
         });
     }
 

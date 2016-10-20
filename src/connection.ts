@@ -149,7 +149,8 @@ export default class Connection {
                     let result = [];
                     const init = new Date().getTime();
                     try {
-                        if (params.query == "exported") {
+                        // TODO: optimize and restore exported and externals processing
+                        /*if (params.query == "exported") {
                             const exported = service.getExportedEnts();
                             if (exported) {
                                 result = exported.map(ent => {
@@ -164,20 +165,17 @@ export default class Connection {
                                     return SymbolInformation.create(external.name, util.formEmptyKind(), util.formEmptyRange(), util.formExternalUri(external));
                                 });
                             }
-                        } else {
+                        } else */ {
                             return service.getWorkspaceSymbols(params.query, params.limit).then((result) => {
-                                    const exit = new Date().getTime();
-                                    console.error('symbol', params.query, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
-                                    return resolve(result);
-                                });
+                                const exit = new Date().getTime();
+                                console.error('symbol', params.query, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
+                                return resolve(result);
+                            });
                         }
-                        const exit = new Date().getTime();
-                        console.error('symbol', params.query, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
                     } catch (e) {
                         console.error(params, e);
                         return resolve([]);
                     }
-                    return resolve(result);
                 }, function (err) {
                     initialized = null;
                     return reject(err)
@@ -192,10 +190,13 @@ export default class Connection {
                     try {
                         const init = new Date().getTime();
                         let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
-                        const result: Location[] = service.getDefinition(reluri, params.position.line, params.position.character);
-                        const exit = new Date().getTime();
-                        console.error('definition', params.textDocument.uri, params.position.line, params.position.character, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
-                        return resolve(result);
+                        service.getDefinition(reluri, params.position.line, params.position.character).then(function (result) {
+                            const exit = new Date().getTime();
+                            console.error('definition', params.textDocument.uri, params.position.line, params.position.character, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
+                            return resolve(result);
+                        }, function (e) {
+                            return reject(e);
+                        });
                     } catch (e) {
                         console.error(params, e);
                         return resolve([]);
@@ -214,21 +215,24 @@ export default class Connection {
                     const init = new Date().getTime();
                     try {
                         let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
-                        const quickInfo: ts.QuickInfo = service.getHover(reluri, params.position.line, params.position.character);
-                        let contents = [];
-                        if (quickInfo) {
-                            contents.push({
-                                language: 'typescript',
-                                value: ts.displayPartsToString(quickInfo.displayParts)
-                            });
-                            let documentation = ts.displayPartsToString(quickInfo.documentation);
-                            if (documentation) {
-                                contents.push({ language: 'text/html', value: documentation });
+                        service.getHover(reluri, params.position.line, params.position.character).then(function (quickInfo) {
+                            let contents = [];
+                            if (quickInfo) {
+                                contents.push({
+                                    language: 'typescript',
+                                    value: ts.displayPartsToString(quickInfo.displayParts)
+                                });
+                                let documentation = ts.displayPartsToString(quickInfo.documentation);
+                                if (documentation) {
+                                    contents.push(documentation);
+                                }
                             }
-                        }
-                        const exit = new Date().getTime();
-                        console.error('hover', params.textDocument.uri, params.position.line, params.position.character, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
-                        resolve({ contents: contents });
+                            const exit = new Date().getTime();
+                            console.error('hover', params.textDocument.uri, params.position.line, params.position.character, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
+                            resolve({ contents: contents });
+                        }, function (e) {
+                            return reject(e);
+                        });
                     } catch (e) {
                         console.error(params, e);
                         resolve({ contents: [] });
