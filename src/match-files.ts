@@ -1,6 +1,11 @@
 /// <reference path="../typings/node/node.d.ts"/>
 /// <reference path="../typings/typescript/typescript.d.ts"/>
 
+/**
+ * This file contains subset of functions copied over from src/compiler/sys.ts and src/compiler/core.ts of microsoft/typescript.
+ * The purpose is to expose `matchFiles` helper function
+ */
+
 export interface FileSystemEntries {
     files: string[];
     directories: string[];
