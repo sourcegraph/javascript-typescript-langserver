@@ -101,14 +101,19 @@ export class ProjectManager {
         if (config.host.complete) {
             return;
         }
+        let changed = false;
         (config.host.expectedFiles || []).forEach(function (fileName) {
             const sourceFile = config.program.getSourceFile(fileName);
             if (!sourceFile) {
                 config.program.addFile(fileName);
-                // requery program object to synchonize LanguageService's data   
-                config.program = config.service.getProgram();
+                changed = true;
             }
         });
+        if (changed) {
+            config.host.incProjectVersion();
+            // requery program object to synchonize LanguageService's data
+            config.program = config.service.getProgram();
+        }
         config.host.complete = true;
     }
 
@@ -292,11 +297,30 @@ class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
     private fs: InMemoryFileSystem;
     expectedFiles: string[];
 
+    private projectVersion: number;
+
     constructor(root: string, options: ts.CompilerOptions, fs: InMemoryFileSystem, expectedFiles: string[]) {
         this.root = root;
         this.options = options;
         this.fs = fs;
         this.expectedFiles = expectedFiles;
+        this.projectVersion = 1;
+    }
+
+    /**
+     * TypeScript uses this method (when present) to compare project's version 
+     * with the last known one to decide if internal data should be synchronized
+     */
+    getProjectVersion(): string {
+        return '' + this.projectVersion;
+    }
+
+    /**
+     * Increments project version, used in conjunction with getProjectVersion()
+     * which may be called by TypeScript to check if internal data is up to date
+     */
+    incProjectVersion() {
+        this.projectVersion++;
     }
 
     getCompilationSettings(): ts.CompilerOptions {
