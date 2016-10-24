@@ -7,6 +7,15 @@
   "installed": {
     "async/async.d.ts": {
       "commit": "dbe6a6f2338b19f201c7b4b771d621da45ec6c9c"
+    },
+    "mocha/mocha.d.ts": {
+      "commit": "b26b960488568032a30784845a007ca1d7d1de9a"
+    },
+    "tmp/tmp.d.ts": {
+      "commit": "b26b960488568032a30784845a007ca1d7d1de9a"
+    },
+    "chai/chai.d.ts": {
+      "commit": "b26b960488568032a30784845a007ca1d7d1de9a"
     }
   }
 }

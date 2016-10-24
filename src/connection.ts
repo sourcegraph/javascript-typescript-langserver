@@ -24,58 +24,11 @@ import * as ts from 'typescript';
 import * as util from './util';
 import TypeScriptService from './typescript-service';
 
-interface WorkspaceSymbolParamsWithLimit {
-    query: string;
-    limit: number;
-}
-
-namespace WorkspaceSymbolsRequest {
-    export const type: RequestType<WorkspaceSymbolParamsWithLimit, SymbolInformation[], any> = {
-        get method() {
-            return 'workspace/symbol';
-        }
-    };
-}
-
-
-
-namespace GlobalRefsRequest {
-    export const type: RequestType<WorkspaceSymbolParams, SymbolInformation[], any> = {
-        get method() {
-            return 'textDocument/global-refs';
-        }
-    };
-}
-
-
-
-namespace InitializeRequest {
-    export const type: RequestType<InitializeParams, InitializeResult, any> = {
-        get method() {
-            return 'initialize';
-        }
-    };
-}
-
-namespace ShutdownRequest {
-    export const type = {
-        get method() {
-            return 'shutdown';
-        }
-    };
-}
-
-namespace ExitRequest {
-    export const type = {
-        get method() {
-            return 'exit';
-        }
-    };
-}
+import * as rt from './request-type';
 
 export default class Connection {
 
-    private connection: IConnection;
+    connection: IConnection;
 
     constructor(input: any, output: any, strict: boolean) {
 
@@ -114,7 +67,7 @@ export default class Connection {
         }
 
 
-        this.connection.onRequest(InitializeRequest.type, (params: InitializeParams): Promise<InitializeResult> => {
+        this.connection.onRequest(rt.InitializeRequest.type, (params: InitializeParams): Promise<InitializeResult> => {
             console.error('initialize', params.rootPath);
             return new Promise<InitializeResult>(function (resolve) {
                 if (params.rootPath) {
@@ -134,15 +87,16 @@ export default class Connection {
             });
         });
 
-        this.connection.onNotification(ExitRequest.type, function () {
+        this.connection.onNotification(rt.ExitRequest.type, function () {
             close();
         });
 
-        this.connection.onRequest(ShutdownRequest.type, function () {
+        this.connection.onRequest(rt.ShutdownRequest.type, function () {
             return [];
         });
 
-        this.connection.onRequest(WorkspaceSymbolsRequest.type, (params: WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]> => {
+
+        this.connection.onRequest(rt.WorkspaceSymbolsRequest.type, (params: rt.WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]> => {
             const enter = new Date().getTime();
             return new Promise<SymbolInformation[]>(function (resolve, reject) {
                 initialize().then(function () {
@@ -269,7 +223,7 @@ export default class Connection {
             });
         });
 
-        this.connection.onRequest(GlobalRefsRequest.type, (params: WorkspaceSymbolParams): Promise<SymbolInformation[]> => {
+        this.connection.onRequest(rt.GlobalRefsRequest.type, (params: WorkspaceSymbolParams): Promise<SymbolInformation[]> => {
             return new Promise<SymbolInformation[]>(function (resolve, reject) {
                 initialize().then(function () {
 
@@ -297,6 +251,10 @@ export default class Connection {
 
     start() {
         this.connection.listen();
+    }
+
+    sendRequest<P, R, E>(type: RequestType<P, R, E>, params?: P): Thenable<R> {
+        return this.connection.sendRequest(type, params);
     }
 
 }
