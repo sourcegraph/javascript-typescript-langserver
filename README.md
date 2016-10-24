@@ -14,6 +14,10 @@ To try it in [Visual Studio Code](https://code.visualstudio.com), install the [v
 
 Run `node_modules/.bin/tsc --watch`.
 
+## Tests
+
+Run `node_modules/.bin/mocha build/test/*.js`
+
 ## Command line arguments 
 
 * `-p, --port` specifies port to use, default one is `2089`
