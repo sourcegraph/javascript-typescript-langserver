@@ -73,20 +73,18 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
 
                 self.processPackageJson(root, files, function (err?: Error) {
                     let allFilesPattern = function (fileName) {
-                        return (/\.tsx?$/.test(fileName) || /(^|\/)tsconfig\.json$/.test(fileName)) ? true : false;
+                        return (/\.(ts|js)x?$/.test(fileName) || /(^|\/)(ts|js)config\.json$/.test(fileName)) ? true : false;
                     }
-
                     self.getFiles(root, allFilesPattern, false, function (err, files) {
                         if (err) {
                             console.error('An error occurred while collecting files', err);
-                            return reject();
+                            return reject(err);
                         }
-
                         self.processTsConfig(root, files, function (err?: Error, files?: string[]) {
                             const start = new Date().getTime();
                             if (err) {
                                 console.error('An error occurred while collecting files', err);
-                                return reject();
+                                return reject(err);
                             }
                             let tasks = [];
                             const fetch = function (path: string): AsyncFunction<string> {
@@ -94,7 +92,7 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
                                     self.fs.readFile(path, (err?: Error, result?: string) => {
                                         if (err) {
                                             console.error('Unable to fetch content of ' + path, err);
-                                            return callback()
+                                            return callback(err)
                                         }
                                         const rel = path_.posix.relative(root, path);
                                         self.addFile(rel, result);
@@ -105,15 +103,16 @@ export default class VersionedLanguageServiceHost implements ts.LanguageServiceH
                             files.forEach(function (path) {
                                 tasks.push(fetch(path))
                             });
-                            async.parallel(tasks, function () {
+                            async.parallel(tasks, function (err) {
                                 console.error('files fetched in', (new Date().getTime() - start) / 1000.0);
-                                return resolve();
+                                return err ? reject(err) : resolve();
                             })
                         });
                     });
                 });
             });
         });
+
     }
 
     getCompilationSettings(): ts.CompilerOptions {

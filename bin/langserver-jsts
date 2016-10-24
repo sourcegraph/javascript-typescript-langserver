@@ -1,3 +1,4 @@
 #!/bin/bash
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-node $DIR/../build/language-server-stdio.js --strict
+set -euf -o pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/.." > /dev/null # cd to repo root dir
+exec node build/language-server-stdio.js --strict
