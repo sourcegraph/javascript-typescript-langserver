@@ -4,6 +4,9 @@
   "engines" : {
   	"node" : ">=5.10.0"
   },
+  "scripts": {
+    "test": "./node_modules/.bin/mocha build/test/*.js"
+  },
   "dependencies": {
     "async": "^2.0.1",
     "body-parser": "^1.15.2",
