@@ -16,14 +16,14 @@ import (
 )
 
 var (
-	addr       = flag.String("addr", "localhost:2088", "language server address (tcp)")
-	rootPath   = flag.String("root-path", ".", "language server root path")
-	file       = flag.String("file", "", "File")
-	line 	   = flag.Int("line", 1, "Symbol line (1-based")
-	column 	   = flag.Int("column", 1, "Symbol column (1-based")
-	command    = flag.String("command", "initialize", "LSP command")
-	query      = flag.String("query", "Object", "LSP command")
-	limit 	   = flag.Int("limit", 100, "Symbol line (1-based")
+	addr     = flag.String("addr", "localhost:2088", "language server address (tcp)")
+	rootPath = flag.String("root-path", ".", "language server root path")
+	file     = flag.String("file", "", "File")
+	line     = flag.Int("line", 1, "Symbol line (1-based")
+	column   = flag.Int("column", 1, "Symbol column (1-based")
+	command  = flag.String("command", "initialize", "LSP command")
+	query    = flag.String("query", "Object", "LSP command")
+	limit    = flag.Int("limit", 100, "Symbol line (1-based")
 )
 
 var reqCounter = 0
@@ -45,26 +45,36 @@ func run() error {
 	}
 	defer client.Close()
 
-    switch *command {
-		case "initialize": initialize(client)
-		case "definition": getDefinition(client)
-		case "hover": getHover(client)
-		case "references": getReferences(client)
-		case "external-refs": getWorkspaceSymbols(client, "externals", 1000)
-		case "exported-symbols": getWorkspaceSymbols(client, "exported", 1000)
-		case "workspace-symbols-all": getWorkspaceSymbols(client, "", *limit)
-		case "workspace-symbols": getWorkspaceSymbols(client, *query, *limit)
-		case "global-refs": getGlobalRefs(client, "")
-		case "shutdown": shutdown(client);
+	switch *command {
+	case "initialize":
+		initialize(client)
+	case "definition":
+		getDefinition(client)
+	case "hover":
+		getHover(client)
+	case "references":
+		getReferences(client)
+	case "external-refs":
+		getWorkspaceSymbols(client, "externals", 1000)
+	case "exported-symbols":
+		getWorkspaceSymbols(client, "exported", 1000)
+	case "workspace-symbols-all":
+		getWorkspaceSymbols(client, "", *limit)
+	case "workspace-symbols":
+		getWorkspaceSymbols(client, *query, *limit)
+	case "global-refs":
+		getGlobalRefs(client, "")
+	case "shutdown":
+		shutdown(client)
 	}
-    // initialize(client);
-    // getDefinition(client);
+	// initialize(client);
+	// getDefinition(client);
 	// getHover(client);
-	return nil;
+	return nil
 }
 
 func initialize(client *jsonrpc2.Client) error {
-// initialize server
+	// initialize server
 	// note that RootPath should point to file path, not URI (at least Java binding expects it to be path)
 	_, err := request(client, "initialize", lsp.InitializeParams{
 		RootPath: *rootPath,
@@ -72,123 +82,112 @@ func initialize(client *jsonrpc2.Client) error {
 	if err != nil {
 		return err
 	}
-	return nil;
+	return nil
 }
 
 func shutdown(client *jsonrpc2.Client) error {
-	_, err := request(client, "shutdown", nil);
+	_, err := request(client, "shutdown", nil)
 	if err != nil {
 		return err
 	}
-	return nil;
+	return nil
 }
 
 func getDefinition(client *jsonrpc2.Client) error {
-	initialize(client);
+	initialize(client)
 	response, err := request(client, "textDocument/definition", lsp.TextDocumentPositionParams{
-   		TextDocument: lsp.TextDocumentIdentifier{
-   			URI: toUri(filepath.Join(*rootPath, *file)),
-   		},
-   		Position: lsp.Position{
-   			Line:      *line,
-   			Character: *column ,
-   		},
-   	})
-   	if err != nil {
-   		return err
-   	}
-   	var location []lsp.Location
-   	if err := json.Unmarshal(*response.Result, &location); err != nil {
-   		return err
-   	}
-   	for _, l := range location {
-   		println(l.URI, l.Range.Start.Line, l.Range.Start.Character, l.Range.End.Line, l.Range.End.Character)
-   	}
-	return nil;
+		TextDocument: lsp.TextDocumentIdentifier{
+			URI: toUri(filepath.Join(*rootPath, *file)),
+		},
+		Position: lsp.Position{
+			Line:      *line,
+			Character: *column,
+		},
+	})
+	if err != nil {
+		return err
+	}
+	var location []lsp.Location
+	if err := json.Unmarshal(*response.Result, &location); err != nil {
+		return err
+	}
+	for _, l := range location {
+		println(l.URI, l.Range.Start.Line, l.Range.Start.Character, l.Range.End.Line, l.Range.End.Character)
+	}
+	return nil
 
 }
 
 func getHover(client *jsonrpc2.Client) error {
-	    initialize(client);
-		response, err := request(client, "textDocument/hover", lsp.TextDocumentPositionParams{
-   		TextDocument: lsp.TextDocumentIdentifier{
-   			URI: toUri(filepath.Join(*rootPath, *file)),
-   		},
-   		Position: lsp.Position{
-   			Line:      *line,
-   			Character: *column ,
-   		},
-   	});
+	initialize(client)
+	response, err := request(client, "textDocument/hover", lsp.TextDocumentPositionParams{
+		TextDocument: lsp.TextDocumentIdentifier{
+			URI: toUri(filepath.Join(*rootPath, *file)),
+		},
+		Position: lsp.Position{
+			Line:      *line,
+			Character: *column,
+		},
+	})
 
 	if err != nil {
-   		return err
-   }
-	println(*response.Result);
-   	// var location []lsp.Location
-   	// if err := json.Unmarshal(*response.Result, &location); err != nil {
-   	// 	return err
-   	// }
-	return nil;
+		return err
+	}
+	println(*response.Result)
+	// var location []lsp.Location
+	// if err := json.Unmarshal(*response.Result, &location); err != nil {
+	// 	return err
+	// }
+	return nil
 }
 
 func getReferences(client *jsonrpc2.Client) error {
-	  initialize(client);
-		response, err := request(client, "textDocument/references", lsp.ReferenceParams{
+	initialize(client)
+	response, err := request(client, "textDocument/references", lsp.ReferenceParams{
 		TextDocumentPositionParams: lsp.TextDocumentPositionParams{
-   		TextDocument: lsp.TextDocumentIdentifier{
-   			URI: toUri(filepath.Join(*rootPath, *file)),
-   		},
-   		Position: lsp.Position{
-   			Line:      *line,
-   			Character: *column ,
-   		},
-		}});
-  if err != nil {
-   		return err
-   	}
-  var location []lsp.Location
-   	if err := json.Unmarshal(*response.Result, &location); err != nil {
-   		return err
-   	}
-   	for _, l := range location {
-   		println(l.URI, l.Range.Start.Line, l.Range.Start.Character, l.Range.End.Line, l.Range.End.Character)
-   	}
-  return nil;
+			TextDocument: lsp.TextDocumentIdentifier{
+				URI: toUri(filepath.Join(*rootPath, *file)),
+			},
+			Position: lsp.Position{
+				Line:      *line,
+				Character: *column,
+			},
+		}})
+	if err != nil {
+		return err
+	}
+	var location []lsp.Location
+	if err := json.Unmarshal(*response.Result, &location); err != nil {
+		return err
+	}
+	for _, l := range location {
+		println(l.URI, l.Range.Start.Line, l.Range.Start.Character, l.Range.End.Line, l.Range.End.Character)
+	}
+	return nil
 }
 
 func getWorkspaceSymbols(client *jsonrpc2.Client, query string, limit int) error {
-	    initialize(client);
-		response, err := request(client, "workspace/symbol", lsp.WorkspaceSymbolParams{
-   		Query: query, 
-		Limit: limit,
-   	});
-
-	if err != nil {
-   		return err
-   }
-	println(*response.Result);
-   	// var location []lsp.Location
-   	// if err := json.Unmarshal(*response.Result, &location); err != nil {
-   	// 	return err
-   	// }
-	return nil;
+	//todo(antonina-cherednichenko) workspace symbols takes too much CPU right
+	//now, and bogs down the rest of the requests, so don't forward it to the
+	//server for now.
+	return nil
 }
 
 func getGlobalRefs(client *jsonrpc2.Client, query string) error {
-	    initialize(client);
-		response, err := request(client, "textDocument/global-refs", lsp.WorkspaceSymbolParams{
-   		Query: query, 
-   	});
+	initialize(client)
+	response, err := request(client, "textDocument/global-refs", lsp.WorkspaceSymbolParams{
+		Query: query,
+	})
 
 	if err != nil {
-   		return err
-   }
-	println(*response.Result);
-   	// var location []lsp.Location
-   	// if err := json.Unmarshal(*response.Result, &location); err != nil {
-   	// 	return err
-   	// }
-	return nil;
+		return err
+	}
+	println(*response.Result)
+	// var location []lsp.Location
+	// if err := json.Unmarshal(*response.Result, &location); err != nil {
+	// 	return err
+	// }
+	return nil
 }
 
 // creates new JSON-RPC client and connects it to remote language server
@@ -208,8 +207,8 @@ func request(client *jsonrpc2.Client, method string, params interface{}) (*jsonr
 	request := &jsonrpc2.Request{
 		Method: method,
 	}
-	if (params != nil) {
-      request.SetParams(params);
+	if params != nil {
+		request.SetParams(params)
 	}
 
 	request.ID = strconv.Itoa(reqCounter)
