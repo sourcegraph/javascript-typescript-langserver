@@ -1,5 +1,6 @@
 /// <reference path="../typings/node/node.d.ts"/>
 /// <reference path="../typings/async/async.d.ts"/>
+/// <reference path="../typings/lodash/lodash.d.ts"/>
 ///// <reference path="../typings/typescript/typescript.d.ts"/>
 
 import * as fs from 'fs';
@@ -17,6 +18,8 @@ import ExternalRefsProvider from './external-refs-provider';
 
 var sanitizeHtml = require('sanitize-html');
 var JSONPath = require('jsonpath-plus');
+
+var github = require('download-github-repo');
 
 export default class TypeScriptService {
 
@@ -36,45 +39,23 @@ export default class TypeScriptService {
         this.root = root;
         this.projectManager = new pm.ProjectManager(root, strict, connection);
 
-        this.initEnvDefFiles();
+        this.fetchDefinetelyTypedRepo();
 
         //initialize providers 
         this.exportedSymbolProvider = new ExportedSymbolsProvider(this);
         this.externalRefsProvider = new ExternalRefsProvider(this);
     }
 
-    initEnvDefFiles() {
-        try {
-            this.envDefs.push(JSON.parse(fs.readFileSync(path.join(__dirname, '../src/defs/node.json'), 'utf8')));
-            this.envDefs.push(JSON.parse(fs.readFileSync(path.join(__dirname, '../src/defs/ecmascript.json'), 'utf8')));
-        } catch (error) {
-            console.error("error", error.stack || error);
-        }
-    }
 
-    lookupEnvDef(property, container) {
-        let results = [];
-        if (this.envDefs && this.envDefs.length > 0) {
-            this.envDefs.forEach(envDef => {
-                let res = JSONPath({ json: envDef, path: `$..${property}` });
-                if (res) {
-                    results = results.concat(res);
-                }
-            });
-        }
-
-        if (results.length > 1) {
-            let result = results.find(info => {
-                if (info['!url'] && container && info['!url'].indexOf(container) > -1) {
-                    return true;
-                }
-            });
-            return result ? result : results[0];
-        }
-
-        if (results) {
-            return results[0];
-        }
+    fetchDefinetelyTypedRepo() {
+        //TODO add checking that repo is already fetched
+        github('DefinitelyTyped/DefinitelyTyped', '/tmp/DefinitelyTyped', function (err) {
+            if (err) {
+                console.error("Error downloading DefinitelyTyped repo ", err);
+            } else {
+                console.error("DefinitelyTyped repo downloading completed");
+            }
+        });
     }
 
     getExternalRefs() {

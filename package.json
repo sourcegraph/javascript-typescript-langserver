@@ -18,6 +18,7 @@
     "sanitize-html": "^1.13.0",
     "typescript": "alexsaveliev/typescript",
     "vscode-languageserver": "^2.2.1",
-    "vscode-languageserver-types": "^1.0.3"
+    "vscode-languageserver-types": "^1.0.3",
+    "download-github-repo": "^0.1.3"
   }
 }
