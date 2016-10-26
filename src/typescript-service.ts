@@ -45,8 +45,6 @@ export default class TypeScriptService {
         this.externalRefsProvider = new ExternalRefsProvider(this);
     }
 
-
-
     fetchDefinetelyTypedRepo() {
         //TODO add checking that repo is already fetched
         github('DefinitelyTyped/DefinitelyTyped', '/tmp/DefinitelyTyped', function (err) {
@@ -125,10 +123,23 @@ export default class TypeScriptService {
                                 const sourceFile = configuration.program.getSourceFile(def.fileName);
                                 const start = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start);
                                 const end = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start + def.textSpan.length);
-                                ret.push(Location.create(util.path2uri(self.root, def.fileName), {
-                                    start: start,
-                                    end: end
-                                }));
+
+                                let pathParts = def.fileName.split(path.sep);
+                                let index1 = pathParts.indexOf("node_modules")
+                                let index2 = pathParts.indexOf("@types");
+                                if (index2 - index1 == 1) {
+                                    let dtsFolder = pathParts[index2 + 1];
+                                    let dtsFileName = configuration.dtsNames[dtsFolder];
+                                    ret.push(Location.create(`https://github.com/DefinitelyTyped/DefinitelyTyped/${dtsFolder}/${dtsFileName}`, {
+                                        start: start,
+                                        end: end
+                                    }));
+                                } else {
+                                    ret.push(Location.create(util.path2uri(self.root, def.fileName), {
+                                        start: start,
+                                        end: end
+                                    }));
+                                }
                             }
                         }
                         return resolve(ret);

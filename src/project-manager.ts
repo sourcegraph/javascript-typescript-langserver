@@ -482,6 +482,8 @@ export class ProjectConfiguration {
     private configContent: any;
     private packageJsonFileName: string;
 
+    dtsNames: any;
+
 
     /**
      * @param fs file system to use
@@ -493,6 +495,7 @@ export class ProjectConfiguration {
         this.configFileName = configFileName;
         this.configContent = configContent;
         this.packageJsonFileName = packageJsonFileName;
+        this.dtsNames = {};
     }
 
     public setPackageJsonFile(packageJsonFileName: string) {
@@ -548,6 +551,7 @@ export class ProjectConfiguration {
                         if (res && res.length > 0) {
                             let depFile = res[0];
                             self.fs.addFile(`node_modules/@types/${dep}/index.d.ts`, fs.readFileSync(res[0], 'utf8'));
+                            self.dtsNames[dep] = path_.basename(depFile);
                         }
                     }
                 }
@@ -558,6 +562,7 @@ export class ProjectConfiguration {
                         if (res && res.length > 0) {
                             let depFile = res[0];
                             self.fs.addFile(`node_modules/@types/${devDep}/index.d.ts`, fs.readFileSync(depFile, 'utf8'));
+                            self.dtsNames[devDep] = path_.basename(depFile);
                         }
                     }
                 }
