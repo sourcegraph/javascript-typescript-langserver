@@ -47,6 +47,7 @@ export default class TypeScriptService {
     }
 
 
+
     fetchDefinetelyTypedRepo() {
         //TODO add checking that repo is already fetched
         github('DefinitelyTyped/DefinitelyTyped', '/tmp/DefinitelyTyped', function (err) {
