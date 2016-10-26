@@ -162,15 +162,16 @@ export class ProjectManager {
             }
             let tasks = [];
             result.forEach(function (fi) {
-                if (fi.Name_.indexOf('/.') >= 0) {
+                if (fi.name.indexOf('/.') >= 0) {
                     return
                 }
-                if (fi.Dir_) {
+                if (fi.dir) {
                     counter++;
-                    tasks.push(self.fetchDir(fi.Name_))
+                    tasks.push(self.fetchDir(fi.name))
                 } else {
-                    if (/\.[tj]sx?$/.test(fi.Name_) || /(^|\/)[tj]sconfig\.json$/.test(fi.Name_) || /(^|\/)package\.json$/.test(fi.Name_)) {
-                        files.push(fi.Name_)
+
+                    if (/\.[tj]sx?$/.test(fi.name) || /(^|\/)[tj]sconfig\.json$/.test(fi.name) || /(^|\/)package\.json$/.test(fi.name)) {
+                        files.push(fi.name)
                     }
                 }
             });
@@ -222,7 +223,7 @@ export class ProjectManager {
             self.remoteFs.readDir(path, (err?: Error, result?: FileSystem.FileInfo[]) => {
                 if (result) {
                     result.forEach(function (fi) {
-                        fi.Name_ = path_.posix.join(path, fi.Name_)
+                        fi.name = path_.posix.join(path, fi.name)
                     })
                 }
                 return callback(err, result)
