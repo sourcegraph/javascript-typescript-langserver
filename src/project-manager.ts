@@ -12,6 +12,10 @@ import * as FileSystem from './fs';
 import * as util from './util';
 import * as match from './match-files';
 
+import * as fs from 'fs';
+const findfiles = require('find-files-excluding-dirs');
+
+
 /**
  * ProjectManager translates VFS files to one or many projects denoted by [tj]config.json.
  * It uses either local or remote file system to fetch directory tree and files from and then
@@ -165,11 +169,12 @@ export class ProjectManager {
                     counter++;
                     tasks.push(self.fetchDir(fi.Name_))
                 } else {
-                    if (/\.[tj]sx?$/.test(fi.Name_) || /(^|\/)[tj]sconfig\.json$/.test(fi.Name_)) {
+                    if (/\.[tj]sx?$/.test(fi.Name_) || /(^|\/)[tj]sconfig\.json$/.test(fi.Name_) || /(^|\/)package\.json$/.test(fi.Name_)) {
                         files.push(fi.Name_)
                     }
                 }
             });
+
             async.parallel(tasks, function (err: Error, result?: FileSystem.FileInfo[][]) {
                 if (err) {
                     return callback(err)
@@ -184,6 +189,8 @@ export class ProjectManager {
                 }
             })
         };
+
+
         this.fetchDir(path)(cb)
     }
 
@@ -259,7 +266,8 @@ export class ProjectManager {
      */
     private processProjects() {
         const self = this;
-        Object.keys(this.localFs.entries).forEach(function (k) {
+        const files = Object.keys(this.localFs.entries);
+        files.forEach(function (k) {
             if (!/(^|\/)[tj]sconfig\.json$/.test(k)) {
                 return;
             }
@@ -270,8 +278,29 @@ export class ProjectManager {
             if (dir == '.') {
                 dir = '';
             }
-            self.configs.set(dir, new ProjectConfiguration(self.localFs, k));
+            self.configs.set(dir, new ProjectConfiguration(self.localFs, k, null, null));
         });
+
+        files.forEach(function (k) {
+            if (!/(^|\/)package\.json$/.test(k)) {
+                return;
+            }
+            if (/(^|\/)node_modules\//.test(k)) {
+                return;
+            }
+            let dir = path_.posix.dirname(k);
+            if (dir == '.') {
+                dir = '';
+            }
+            let config = self.configs.get(dir);
+            if (config) {
+                config.setPackageJsonFile(k);
+            } else {
+                self.configs.set(dir, new ProjectConfiguration(self.localFs, null, null, k));
+
+            }
+        });
+
         // collecting all the files in workspace by making fake configuration object         
         if (!self.configs.get('')) {
             self.configs.set('', new ProjectConfiguration(self.localFs, '', {
@@ -450,16 +479,38 @@ export class ProjectConfiguration {
     private fs: InMemoryFileSystem;
     private configFileName: string;
     private configContent: any;
+    private packageJsonFileName: string;
+
 
     /**
      * @param fs file system to use
      * @param configFileName configuration file name (relative to workspace root)
      * @param configContent optional configuration content to use instead of reading configuration file)
      */
-    constructor(fs: InMemoryFileSystem, configFileName: string, configContent?: any) {
+    constructor(fs: InMemoryFileSystem, configFileName: string, configContent?: any, packageJsonFileName?: string) {
         this.fs = fs;
         this.configFileName = configFileName;
         this.configContent = configContent;
+        this.packageJsonFileName = packageJsonFileName;
+    }
+
+    public setPackageJsonFile(packageJsonFileName: string) {
+        this.packageJsonFileName = packageJsonFileName;
+    }
+
+    public findDTSFile(dep): string[] {
+        let jsFiles = findfiles(`/tmp/DefinitelyTyped/${dep}`, {
+            exclude: [],
+            matcher: function (directory, name) {
+                return (/d\.ts$/i).test(name);
+            }
+        }).map(function (f) {
+            return path_.normalize(f);
+        });
+
+        console.error("dep = ", dep);
+        console.error("JS files = ", jsFiles);
+        return jsFiles;
     }
 
     get(): Promise<ProjectConfiguration> {
@@ -487,6 +538,31 @@ export class ProjectConfiguration {
                 if (/(^|\/)jsconfig\.json$/.test(self.configFileName)) {
                     options.allowJs = true;
                 }
+
+                let parsedResult = JSON.parse(self.fs.readFile(self.packageJsonFileName));
+                let devDeps = parsedResult.devDependencies;
+                let deps = parsedResult.dependencies;
+
+                if (deps) {
+                    for (let dep in deps) {
+                        let res = self.findDTSFile(dep);
+                        if (res.length > 0) {
+                            let depFile = res[0];
+                            self.fs.addFile(`node_modules/@types/${dep}/index.d.ts`, fs.readFileSync(res[0], 'utf8'));
+                        }
+                    }
+                }
+
+                if (devDeps) {
+                    for (let devDep in devDeps) {
+                        let res = self.findDTSFile(devDep);
+                        if (res.length > 0) {
+                            let depFile = res[0];
+                            self.fs.addFile(`node_modules/@types/${devDep}/index.d.ts`, fs.readFileSync(depFile, 'utf8'));
+                        }
+                    }
+                }
+
                 self.host = new InMemoryLanguageServiceHost(self.fs.path,
                     options,
                     self.fs,
