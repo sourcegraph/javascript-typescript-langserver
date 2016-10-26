@@ -106,15 +106,15 @@ function initFs(connection: Connection, memfs: any) {
             const v = node[k];
             if (typeof v == 'string') {
                 result.push({
-                    Name_: k,
-                    Size_: v.length,
-                    Dir_: false
+                    name: k,
+                    size: v.length,
+                    dir: false
                 })
             } else {
                 result.push({
-                    Name_: k,
-                    Size_: 0,
-                    Dir_: true
+                    name: k,
+                    size: 0,
+                    dir: true
                 });
             }
         });
