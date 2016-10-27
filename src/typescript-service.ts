@@ -123,21 +123,26 @@ export default class TypeScriptService {
                                 let pathParts = def.fileName.split(path.sep);
                                 let index1 = pathParts.indexOf("node_modules")
                                 let index2 = pathParts.indexOf("@types");
-                                if (index2 - index1 == 1) {
-                                    let dtsFolder = pathParts[index2 + 1];
-                                    let dtsFileName = configuration.dtsNames[dtsFolder];
-                                    ret.push(Location.create(`https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/${dtsFolder}/${dtsFileName}`, {
-                                        start: start,
-                                        end: end
-                                    }));
-                                } else {
-                                    ret.push(Location.create(util.path2uri(self.root, def.fileName), {
-                                        start: start,
-                                        end: end
-                                    }));
-                                }
+                                // if (index2 - index1 == 1) {
+                                //     let dtsFolder = pathParts[index2 + 1];
+                                //     let dtsFileName = configuration.dtsNames[dtsFolder];
+                                //     ret.push(Location.create(`https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/${dtsFolder}/${dtsFileName}`, {
+                                //         start: start,
+                                //         end: end
+                                //     }));
+                                // } else {
+                                //     ret.push(Location.create(util.path2uri(self.root, def.fileName), {
+                                //         start: start,
+                                //         end: end
+                                //     }));
+                                // }
+                                ret.push(Location.create(util.path2uri(self.root, def.fileName), {
+                                    start: start,
+                                    end: end
+                                }));
                             }
                         }
+
                         return resolve(ret);
                     } catch (e) {
                         return reject(e);
