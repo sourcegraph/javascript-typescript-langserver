@@ -24,6 +24,8 @@ import * as ts from 'typescript';
 import * as util from './util';
 import TypeScriptService from './typescript-service';
 
+import * as path_ from 'path';
+
 interface WorkspaceSymbolParamsWithLimit {
     query: string;
     limit: number;
@@ -195,8 +197,24 @@ export default class Connection {
                     try {
                         const init = new Date().getTime();
                         let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
-                        service.getDefinition(reluri, params.position.line, params.position.character).then(function (result) {
+                        service.getDefinition(reluri, params.position.line, params.position.character).then(function (result: Definition) {
                             const exit = new Date().getTime();
+
+							// Don't provide any go-to-definition for the TypeScript
+							// core lib (otherwise they will confusingly point to
+							// local file system paths.)
+							const isCoreLibPath = (uri: string): boolean => {
+								uri = util.uri2reluri(uri, workspaceRoot);
+								return uri.startsWith("file:/" + path_.join(__dirname, "../node_modules/typescript/lib"));
+							};
+							if (result instanceof Array) {
+								result = result.filter(r => !isCoreLibPath(r.uri));
+							} else if (result) {
+								if (isCoreLibPath(result.uri)) {
+									return {};
+								}
+							}
+
                             console.error('definition', params.textDocument.uri, params.position.line, params.position.character, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
                             return resolve(result);
                         }, function (e) {

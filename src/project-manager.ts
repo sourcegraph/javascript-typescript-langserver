@@ -3,6 +3,7 @@
 /// <reference path="../typings/async/async.d.ts"/>
 
 import * as path_ from 'path';
+import * as osFS from 'fs';
 
 import * as ts from 'typescript';
 import { IConnection } from 'vscode-languageserver';
@@ -278,7 +279,8 @@ export class ProjectManager {
                 compilerOptions: {
                     module: ts.ModuleKind.CommonJS,
                     allowNonTsExtensions: false,
-                    allowJs: true
+                    allowJs: true,
+					lib: ["es2017", "dom"],
                 }
             }));
         }
@@ -342,6 +344,16 @@ class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
             fileName = path_.posix.relative(this.root, fileName);
             entry = this.fs.readFile(fileName);
         }
+
+		// Satisfy TypeScript core libraries from the file system
+		// (they are often not checked into the repository, so they
+		// would not be in the in-memory FS).
+		if (path_.join("/", fileName).startsWith(path_.join(__dirname, "../node_modules/typescript/"))) {
+			if (/\/node_modules\/typescript\/lib\/lib\.[a-z0-9.]+\.d\.ts$/.test(fileName)) {
+				entry = osFS.readFileSync(path_.join("/", fileName), "utf-8");
+			}
+		}
+
         if (!entry) {
             return undefined;
         }
