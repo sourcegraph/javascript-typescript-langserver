@@ -1,8 +1,3 @@
-/// <reference path="../../typings/node/node.d.ts"/>
-/// <reference path="../../typings/tmp/tmp.d.ts"/>
-/// <reference path="../../typings/mocha/mocha.d.ts"/>
-/// <reference path="../../typings/chai/chai.d.ts"/>
-
 import * as net from 'net';
 import * as os from 'os';
 import * as fs from 'fs';

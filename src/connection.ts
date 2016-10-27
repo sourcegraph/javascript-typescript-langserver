@@ -1,6 +1,4 @@
-/// <reference path="../typings/node/node.d.ts"/>
-/// <reference path="../typings/vscode-extension-vscode/es6.d.ts"/>
-
+/// <reference path="../node_modules/vscode/thenable.d.ts"/>
 
 import {
     IConnection,

@@ -2,6 +2,7 @@
 
     "compilerOptions": {
         "target": "ES5",
+        "lib": ["es2016"],
         "module": "commonjs",
         "moduleResolution": "node",
         "sourceMap": true,

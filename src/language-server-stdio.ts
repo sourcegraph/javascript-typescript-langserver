@@ -1,6 +1,3 @@
-/// <reference path="../typings/node/node.d.ts"/>
-/// <reference path="../typings/vscode-extension-vscode/es6.d.ts"/>
-
 var fs = require('fs');
 var path = require('path');
 var os = require('os');

@@ -1,4 +1,3 @@
-/// <reference path="../typings/node/node.d.ts"/>
 const findfiles = require('find-files-excluding-dirs');
 const readJsonSync = require('read-json-sync');
 import * as path from 'path';

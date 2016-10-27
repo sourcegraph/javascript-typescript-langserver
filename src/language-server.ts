@@ -1,6 +1,3 @@
-/// <reference path="../typings/node/node.d.ts"/>
-/// <reference path="../typings/vscode-extension-vscode/es6.d.ts"/>
-
 import * as net from 'net';
 import * as fs from 'fs';
 import * as path from 'path';
