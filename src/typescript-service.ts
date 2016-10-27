@@ -34,14 +34,14 @@ export default class TypeScriptService {
         this.root = root;
         this.projectManager = new pm.ProjectManager(root, strict, connection);
 
-        this.fetchDefinetelyTypedRepo();
+        this.fetchDefinitelyTypedRepo();
 
         //initialize providers 
         this.exportedSymbolProvider = new ExportedSymbolsProvider(this);
         this.externalRefsProvider = new ExternalRefsProvider(this);
     }
 
-    fetchDefinetelyTypedRepo() {
+    fetchDefinitelyTypedRepo() {
         //TODO add checking that repo is already fetched
         github('DefinitelyTyped/DefinitelyTyped', '/tmp/DefinitelyTyped', function (err) {
             if (err) {

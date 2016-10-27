@@ -498,17 +498,25 @@ export class ProjectConfiguration {
         this.packageJsonFileName = packageJsonFileName;
     }
 
-    public findDTSFile(dep): string[] {
-        let jsFiles = findfiles(`/tmp/DefinitelyTyped/${dep}`, {
-            exclude: [],
-            matcher: function (directory, name) {
-                return (/d\.ts$/i).test(name);
-            }
-        }).map(function (f) {
-            return path_.normalize(f);
-        });
+    public processDeps(deps) {
+        if (deps) {
+            for (let dep in deps) {
+                let findRes = findfiles(`/tmp/DefinitelyTyped/${dep}`, {
+                    exclude: [],
+                    matcher: function (directory, name) {
+                        return (/\.d\.ts$/i).test(name);
+                    }
+                }).map(function (f) {
+                    return path_.normalize(f);
+                });
 
-        return jsFiles;
+                if (findRes && findRes.length > 0) {
+                    let depFile = findRes[0];
+                    this.fs.addFile(`node_modules/@types/${dep}/index.d.ts`, fs.readFileSync(res[0], 'utf8'));
+                    this.dtsNames[dep] = path_.basename(depFile);
+                }
+            }
+        }
     }
 
     get(): Promise<ProjectConfiguration> {
@@ -542,27 +550,8 @@ export class ProjectConfiguration {
                     let devDeps = parsedResult.devDependencies;
                     let deps = parsedResult.dependencies;
 
-                    if (deps) {
-                        for (let dep in deps) {
-                            let res = self.findDTSFile(dep);
-                            if (res && res.length > 0) {
-                                let depFile = res[0];
-                                self.fs.addFile(`node_modules/@types/${dep}/index.d.ts`, fs.readFileSync(res[0], 'utf8'));
-                                self.dtsNames[dep] = path_.basename(depFile);
-                            }
-                        }
-                    }
-
-                    if (devDeps) {
-                        for (let devDep in devDeps) {
-                            let res = self.findDTSFile(devDep);
-                            if (res && res.length > 0) {
-                                let depFile = res[0];
-                                self.fs.addFile(`node_modules/@types/${devDep}/index.d.ts`, fs.readFileSync(depFile, 'utf8'));
-                                self.dtsNames[devDep] = path_.basename(depFile);
-                            }
-                        }
-                    }
+                    self.processDeps(deps);
+                    self.processDeps(devDeps);
                 }
 
                 self.host = new InMemoryLanguageServiceHost(self.fs.path,
