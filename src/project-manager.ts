@@ -1,7 +1,3 @@
-/// <reference path="../typings/node/node.d.ts"/>
-/// <reference path="../typings/typescript/typescript.d.ts"/>
-/// <reference path="../typings/async/async.d.ts"/>
-
 import * as path_ from 'path';
 
 import * as ts from 'typescript';
