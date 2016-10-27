@@ -101,6 +101,11 @@ export default class Connection {
             return new Promise<SymbolInformation[]>(function (resolve, reject) {
                 initialize().then(function () {
                     let result = [];
+                    {
+                        // TODO(alexsaveliev) remove the following call once
+                        // the server doesn't hang accumulating symbols.
+                        resolve(result);
+                    }
                     const init = new Date().getTime();
                     try {
                         // TODO: optimize and restore exported and externals processing
