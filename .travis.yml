@@ -3,6 +3,8 @@ language: node_js
 node_js:
   - "6"
 
+before_install:
+  - npm install ts-node -g
+
 install:
   - npm install
-  - node_modules/.bin/tsc

@@ -16,7 +16,7 @@ Run `node_modules/.bin/tsc --watch`.
 
 ## Tests
 
-Run `node_modules/.bin/mocha build/test/*.js`
+Run `npm test` or `yarn test`. You should have `ts-node` installed globally
 
 ## Command line arguments 
 

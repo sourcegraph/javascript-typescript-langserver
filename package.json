@@ -5,7 +5,7 @@
     "node": ">=5.10.0"
   },
   "scripts": {
-    "test": "./node_modules/.bin/mocha build/test/*.js"
+    "test": "./node_modules/.bin/mocha -r ts-node/register src/test/**/*.ts"
   },
   "dependencies": {
     "@types/async": "^2.0.32",
