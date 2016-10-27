@@ -537,28 +537,30 @@ export class ProjectConfiguration {
                     options.allowJs = true;
                 }
 
-                let parsedResult = JSON.parse(self.fs.readFile(self.packageJsonFileName));
-                let devDeps = parsedResult.devDependencies;
-                let deps = parsedResult.dependencies;
+                if (self.packageJsonFileName) {
+                    let parsedResult = JSON.parse(self.fs.readFile(self.packageJsonFileName));
+                    let devDeps = parsedResult.devDependencies;
+                    let deps = parsedResult.dependencies;
 
-                if (deps) {
-                    for (let dep in deps) {
-                        let res = self.findDTSFile(dep);
-                        if (res && res.length > 0) {
-                            let depFile = res[0];
-                            self.fs.addFile(`node_modules/@types/${dep}/index.d.ts`, fs.readFileSync(res[0], 'utf8'));
-                            self.dtsNames[dep] = path_.basename(depFile);
+                    if (deps) {
+                        for (let dep in deps) {
+                            let res = self.findDTSFile(dep);
+                            if (res && res.length > 0) {
+                                let depFile = res[0];
+                                self.fs.addFile(`node_modules/@types/${dep}/index.d.ts`, fs.readFileSync(res[0], 'utf8'));
+                                self.dtsNames[dep] = path_.basename(depFile);
+                            }
                         }
                     }
-                }
 
-                if (devDeps) {
-                    for (let devDep in devDeps) {
-                        let res = self.findDTSFile(devDep);
-                        if (res && res.length > 0) {
-                            let depFile = res[0];
-                            self.fs.addFile(`node_modules/@types/${devDep}/index.d.ts`, fs.readFileSync(depFile, 'utf8'));
-                            self.dtsNames[devDep] = path_.basename(depFile);
+                    if (devDeps) {
+                        for (let devDep in devDeps) {
+                            let res = self.findDTSFile(devDep);
+                            if (res && res.length > 0) {
+                                let depFile = res[0];
+                                self.fs.addFile(`node_modules/@types/${devDep}/index.d.ts`, fs.readFileSync(depFile, 'utf8'));
+                                self.dtsNames[devDep] = path_.basename(depFile);
+                            }
                         }
                     }
                 }
