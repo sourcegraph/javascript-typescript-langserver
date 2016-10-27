@@ -56,22 +56,22 @@ export function setUp(memfs: any, done: (err?: Error) => void) {
                 capabilities: null
             }
 
-            channel.clientConnection.sendRequest(rt.InitializeRequest.type, params).then(function () {
+            channel.clientConnection.sendRequest(rt.InitializeRequest.type, params).then(() => {
                 done();
-            }, function () {
-                console.error(arguments);
+            }, (e) => {
+                console.error(e);
                 return done(new Error('initialization failed'));
             });
         }
     }
 
-    channel.server = net.createServer(function (stream) {
+    channel.server = net.createServer((stream) => {
         channel.serverIn = stream;
         channel.serverConnection = new Connection(channel.serverIn, channel.serverOut, true);
         maybeDone();
     });
     channel.server.listen(input.name);
-    channel.client = net.createServer(function (stream) {
+    channel.client = net.createServer((stream) => {
         channel.clientIn = stream;
         channel.clientConnection = new Connection(channel.clientIn, channel.clientOut, true);
         initFs(channel.clientConnection, memfs);
@@ -160,13 +160,13 @@ export function definition(pos: vscode.TextDocumentPositionParams, expected: vsc
             line: pos.position.line,
             character: pos.position.character
         }
-    }).then(function (results: vscode.Location[]) {
-        check(done, function () {
+    }).then((results: vscode.Location[]) => {
+        check(done, () => {
             chai.expect(results.length).to.equal(1);
             const result = results[0];
             chai.expect(result).to.deep.equal(expected);
         });
-    }, function (err?: Error) {
+    }, (err?: Error) => {
         return done(err || new Error('definition request failed'))
     })
 }
@@ -180,11 +180,11 @@ export function hover(pos: vscode.TextDocumentPositionParams, expected: vscode.H
             line: pos.position.line,
             character: pos.position.character
         }
-    }).then(function (result: vscode.Hover) {
-        check(done, function () {
+    }).then((result: vscode.Hover) => {
+        check(done, () => {
             chai.expect(result.contents).to.deep.equal(expected.contents);
         });
-    }, function (err?: Error) {
+    }, (err?: Error) => {
         return done(err || new Error('hover request failed'))
     })
 }
@@ -198,12 +198,22 @@ export function references(pos: vscode.TextDocumentPositionParams, expected: num
             line: pos.position.line,
             character: pos.position.character
         }
-    }).then(function (result: vscode.Location[]) {
-        check(done, function () {
+    }).then((result: vscode.Location[]) => {
+        check(done, () => {
             chai.expect(result.length).to.equal(expected);
         });
-    }, function (err?: Error) {
+    }, (err?: Error) => {
         return done(err || new Error('references request failed'))
+    })
+}
+
+export function symbols(params: rt.WorkspaceSymbolParamsWithLimit, expected: vscode.SymbolInformation[], done: (err?: Error) => void) {
+    channel.clientConnection.sendRequest(rt.WorkspaceSymbolsRequest.type, params).then((result: vscode.SymbolInformation[]) => {
+        check(done, () => {
+            chai.expect(result).to.deep.equal(expected);
+        });
+    }, (err?: Error) => {
+        return done(err || new Error('workspace symbols request failed'))
     })
 }
 

@@ -9,13 +9,13 @@ import * as chai from 'chai';
 import * as vscode from 'vscode-languageserver';
 
 import Connection from '../connection';
-import {FileInfo} from '../fs';
+import { FileInfo } from '../fs';
 import * as rt from '../request-type';
 import * as utils from './test-utils';
 
 describe('LSP', function () {
 
-    describe('def-and-hover', function () {
+    describe('definitions and hovers', function () {
         before(function (done: () => void) {
             utils.setUp({
                 'a.ts': "const abc = 1; console.log(abc);",
@@ -60,7 +60,7 @@ describe('LSP', function () {
             }, {
                     contents: [{
                         language: 'typescript',
-                        value: 'const abc: 1'
+                        value: 'const abc: number'
                     }]
                 }, done);
         });
@@ -127,6 +127,125 @@ describe('LSP', function () {
                     character: 20
                 }
             }, 3, done);
+        });
+        afterEach(function (done: () => void) {
+            utils.tearDown(done);
+        });
+    });
+    describe('workspace symbols', function () {
+        before(function (done: () => void) {
+            utils.setUp({
+                'a.ts': "class a { foo() { const i = 1;} }",
+                'foo': {
+                    'b.ts': "class b { bar: number; baz(): number { return this.bar;}}; function qux() {}"
+                }
+            }, done);
+        });
+        it('workspace symbols with empty query', function (done: (err?: Error) => void) {
+            utils.symbols({
+                query: '',
+                limit: 3
+            }, [
+                    {
+                        "kind": 5,
+                        "location": {
+                            "range": {
+                                "end": {
+                                    "character": 33,
+                                    "line": 0
+                                },
+                                "start": {
+                                    "character": 0,
+                                    "line": 0
+                                }
+                            },
+                            "uri": "file:////a.ts"
+                        },
+                        "name": "a"
+                    },
+                    {
+                        "containerName": "a",
+                        "kind": 6,
+                        "location": {
+                            "range": {
+                                "end": {
+                                    "character": 31,
+                                    "line": 0
+                                },
+                                "start": {
+                                    "character": 10,
+                                    "line": 0
+                                }
+                            },
+                            "uri": "file:////a.ts"
+                        },
+                        "name": "foo"
+                    },
+                    {
+                        "containerName": "foo",
+                        "kind": 15,
+                        "location": {
+                            "range": {
+                                "end": {
+                                    "character": 29,
+                                    "line": 0
+                                },
+                                "start": {
+                                    "character": 24,
+                                    "line": 0
+                                }
+                            },
+                            "uri": "file:////a.ts"
+                        },
+                        "name": "i"
+                    }
+                ]
+                , done);
+        });
+        it('workspace symbols with not-empty query', function (done: (err?: Error) => void) {
+            utils.symbols({
+                query: 'ba',
+                limit: 100
+            }, [
+                    {
+                        "containerName": "b",
+                        "kind": 7,
+                        "location": {
+                            "range": {
+                                "end": {
+                                    "character": 22,
+                                    "line": 0
+                                },
+                                "start": {
+                                    "character": 10,
+                                    "line": 0
+                                },
+                            },
+                            "uri": "file:////foo/b.ts"
+                        },
+                        "name": "bar"
+                    },
+                    {
+                        "containerName": "b",
+                        "kind": 6,
+                        "location": {
+                            "range": {
+                                "end": {
+                                    "character": 56,
+                                    "line": 0
+                                },
+                                "start": {
+                                    "character": 23,
+                                    "line": 0
+                                }
+                            },
+                            "uri": "file:////foo/b.ts"
+                        },
+                        "name": "baz"
+                    }
+                ]
+
+                , done);
         });
         afterEach(function (done: () => void) {
             utils.tearDown(done);

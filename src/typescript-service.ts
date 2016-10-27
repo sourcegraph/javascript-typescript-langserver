@@ -84,14 +84,13 @@ export default class TypeScriptService {
     }
 
     getDefinition(uri: string, line: number, column: number): Promise<Location[]> {
-        const self = this;
-        return new Promise<Location[]>(function (resolve, reject) {
+        return new Promise<Location[]>((resolve, reject) => {
             try {
                 const fileName: string = util.uri2path(uri);
-                const configuration = self.projectManager.getConfiguration(fileName);
-                configuration.get().then(function () {
+                const configuration = this.projectManager.getConfiguration(fileName);
+                configuration.get().then(() => {
                     try {
-                        const sourceFile = self.getSourceFile(configuration, fileName);
+                        const sourceFile = this.getSourceFile(configuration, fileName);
                         if (!sourceFile) {
                             return resolve([]);
                         }
@@ -104,7 +103,7 @@ export default class TypeScriptService {
                                 const sourceFile = configuration.program.getSourceFile(def.fileName);
                                 const start = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start);
                                 const end = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start + def.textSpan.length);
-                                ret.push(Location.create(util.path2uri(self.root, def.fileName), {
+                                ret.push(Location.create(util.path2uri(this.root, def.fileName), {
                                     start: start,
                                     end: end
                                 }));
@@ -115,7 +114,7 @@ export default class TypeScriptService {
                         return reject(e);
                     }
 
-                }, function (e) {
+                }, (e) => {
                     return reject(e);
                 });
             } catch (e) {
@@ -125,14 +124,13 @@ export default class TypeScriptService {
     }
 
     getHover(uri: string, line: number, column: number): Promise<ts.QuickInfo> {
-        const self = this;
-        return new Promise<ts.QuickInfo>(function (resolve, reject) {
+        return new Promise<ts.QuickInfo>((resolve, reject) => {
             try {
                 const fileName: string = util.uri2path(uri);
-                const configuration = self.projectManager.getConfiguration(fileName);
-                configuration.get().then(function () {
+                const configuration = this.projectManager.getConfiguration(fileName);
+                configuration.get().then(() => {
                     try {
-                        const sourceFile = self.getSourceFile(configuration, fileName);
+                        const sourceFile = this.getSourceFile(configuration, fileName);
                         if (!sourceFile) {
                             return resolve(null);
                         }
@@ -141,7 +139,7 @@ export default class TypeScriptService {
                     } catch (e) {
                         return reject(e);
                     }
-                }, function (e) {
+                }, (e) => {
                     return reject(e);
                 });
             } catch (e) {
@@ -151,22 +149,21 @@ export default class TypeScriptService {
     }
 
     getReferences(uri: string, line: number, column: number): Promise<Location[]> {
-        const self = this;
-        return new Promise<Location[]>(function (resolve, reject) {
+        return new Promise<Location[]>((resolve, reject) => {
             try {
                 const fileName: string = util.uri2path(uri);
 
-                const configuration = self.projectManager.getConfiguration(fileName);
-                configuration.get().then(function () {
+                const configuration = this.projectManager.getConfiguration(fileName);
+                configuration.get().then(() => {
                     try {
-                        const sourceFile = self.getSourceFile(configuration, fileName);
+                        const sourceFile = this.getSourceFile(configuration, fileName);
                         if (!sourceFile) {
                             return resolve([]);
                         }
 
                         const started = new Date().getTime();
 
-                        self.projectManager.syncConfigurationFor(fileName);
+                        this.projectManager.syncConfigurationFor(fileName);
 
                         const prepared = new Date().getTime();
 
@@ -179,10 +176,10 @@ export default class TypeScriptService {
 
                         if (refs) {
                             for (let ref of refs) {
-                                tasks.push(self.transformReference(self.root, configuration.program, ref));
+                                tasks.push(this.transformReference(this.root, configuration.program, ref));
                             }
                         }
-                        async.parallel(tasks, function (err: Error, results: Location[]) {
+                        async.parallel(tasks, (err: Error, results: Location[]) => {
                             const finished = new Date().getTime();
                             console.error('references', 'transform', (finished - fetched) / 1000.0, 'fetch', (fetched - prepared) / 1000.0, 'prepare', (prepared - started) / 1000.0);
                             return resolve(results);
@@ -191,7 +188,7 @@ export default class TypeScriptService {
                     } catch (e) {
                         return reject(e);
                     }
-                }, function (e) {
+                }, (e) => {
                     return reject(e);
                 });
 
@@ -202,18 +199,19 @@ export default class TypeScriptService {
     }
 
     getWorkspaceSymbols(query: string, limit?: number): Promise<SymbolInformation[]> {
-        const self = this;
-        return new Promise<SymbolInformation[]>(function (resolve, reject) {
+        return new Promise<SymbolInformation[]>((resolve, reject) => {
             // TODO: cache all symbols or slice of them?
-            if (!query && self.workspaceSymbols) {
-                return resolve(self.workspaceSymbols);
+            if (!query && this.workspaceSymbols) {
+                return resolve(this.workspaceSymbols);
             }
-            const configurations = self.projectManager.getConfigurations();
+            const configurations = this.projectManager.getConfigurations();
             const index = 0;
             const items = [];
-            self.collectWorkspaceSymbols(query, limit, configurations, index, items, function () {
+            this.collectWorkspaceSymbols(query, limit, configurations, index, items, () => {
                 if (!query) {
-                    self.workspaceSymbols = items;
+                    this.workspaceSymbols = items.sort((a, b) =>
+                        a.matchKind - b.matchKind ||
+                        a.name.toLocaleLowerCase().localeCompare(b.name.toLocaleLowerCase()));
                 }
                 resolve(items);
             });
@@ -244,9 +242,7 @@ export default class TypeScriptService {
         if (sourceFile) {
             return sourceFile;
         }
-        // HACK (alexsaveliev) using custom method to add a file
-        configuration.host.incProjectVersion();
-        configuration.program.addFile(fileName);
+        configuration.host.addFile(fileName);
         // requery program object to synchonize LanguageService's data
         configuration.program = configuration.service.getProgram();
         return configuration.program.getSourceFile(fileName);
@@ -256,7 +252,7 @@ export default class TypeScriptService {
      * Produces async function that converts ReferenceEntry object to Location
      */
     private transformReference(root: string, program: ts.Program, ref: ts.ReferenceEntry): AsyncFunction<Location> {
-        return function (callback: (err?: Error, result?: Location) => void) {
+        return (callback: (err?: Error, result?: Location) => void) => {
             const sourceFile = program.getSourceFile(ref.fileName);
             let start = ts.getLineAndCharacterOfPosition(sourceFile, ref.textSpan.start);
             let end = ts.getLineAndCharacterOfPosition(sourceFile, ref.textSpan.start + ref.textSpan.length);
@@ -271,7 +267,7 @@ export default class TypeScriptService {
      * Produces async function that converts NavigateToItem object to SymbolInformation
      */
     private transformNavItem(root: string, program: ts.Program, item: ts.NavigateToItem): AsyncFunction<SymbolInformation> {
-        return function (callback: (err?: Error, result?: SymbolInformation) => void) {
+        return (callback: (err?: Error, result?: SymbolInformation) => void) => {
             const sourceFile = program.getSourceFile(item.fileName);
             let start = ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start);
             let end = ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start + item.textSpan.length);
@@ -302,25 +298,104 @@ export default class TypeScriptService {
             return callback();
         }
         const configuration = configurations[index];
-        const self = this;
-        configuration.get().then(function () {
-            self.projectManager.syncConfiguration(configuration);
-            const chunkSize = limit ? Math.min(limit, limit - items.length) : undefined;
-            const chunk = configuration.service.getNavigateToItems(query, chunkSize);
-            const tasks = [];
-            chunk.forEach(function (item) {
-                tasks.push(self.transformNavItem(self.root, configuration.program, item));
+
+        function maybeEnough() {
+            if (limit && items.length >= limit || index == configurations.length - 1) {
+                return callback();
+            }
+            this.collectWorkspaceSymbols(query, limit, configurations, index + 1, items, callback);
+        }
+
+        configuration.get().then(() => {
+            setImmediate(() => {
+                this.projectManager.syncConfiguration(configuration);
+                const chunkSize = limit ? Math.min(limit, limit - items.length) : undefined;
+                setImmediate(() => {
+                    if (query) {
+                        const chunk = configuration.service.getNavigateToItems(query, chunkSize);
+                        const tasks = [];
+                        chunk.forEach((item) => {
+                            tasks.push(this.transformNavItem(this.root, configuration.program, item));
+                        });
+                        async.parallel(tasks, (err: Error, results: SymbolInformation[]) => {
+                            Array.prototype.push.apply(items, results);
+                            maybeEnough();
+                        });
+                    } else {
+                        const chunk = this.getNavigationTreeItems(configuration, chunkSize);
+                        Array.prototype.push.apply(items, chunk);
+                        maybeEnough();
+                    }
+                });
             });
-            async.parallel(tasks, function (err: Error, results: SymbolInformation[]) {
-                Array.prototype.push.apply(items, results);
-                if (limit && items.length >= limit || index == configurations.length - 1) {
-                    return callback();
+        }, callback);
+    }
+
+    /**
+     * Fetches up to limit navigation bar items from given project, flattennes them  
+     */
+    private getNavigationTreeItems(configuration: pm.ProjectConfiguration, limit?: number): SymbolInformation[] {
+        const result = [];
+        for (const sourceFile of configuration.program.getSourceFiles()) {
+            const tree = configuration.service.getNavigationTree(sourceFile.fileName);
+            this.flattenNavigationTreeItem(tree, null, sourceFile, result, limit);
+            if (limit && result.length >= limit) {
+                break;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Flattens navigation tree by transforming it to one-dimensional array.
+     * Some items (source files, modules) may be excluded 
+     */
+    private flattenNavigationTreeItem(item: ts.NavigationTree, parent: ts.NavigationTree, sourceFile: ts.SourceFile, result: SymbolInformation[], limit?: number) {
+        if (!limit || result.length < limit) {
+            const acceptable = TypeScriptService.isAcceptableNavigationTreeItem(item);
+            if (acceptable) {
+                result.push(this.transformNavigationTreeItem(item, parent, sourceFile));
+            }
+            if (item.childItems) {
+                let i = 0;
+                while (i < item.childItems.length && (!limit || result.length < limit)) {
+                    this.flattenNavigationTreeItem(item.childItems[i], acceptable ? item : null, sourceFile, result, limit);
+                    i++;
                 }
-                self.collectWorkspaceSymbols(query, limit, configurations, index + 1, items, callback);
-            });
-        }, function () {
-            return callback();
-        });
+            }
+        }
+    }
+
+    /**
+     * Transforms NavigationTree to SymbolInformation
+     */
+    private transformNavigationTreeItem(item: ts.NavigationTree, parent: ts.NavigationTree, sourceFile: ts.SourceFile): SymbolInformation {
+        const span = item.spans[0];
+        let start = ts.getLineAndCharacterOfPosition(sourceFile, span.start);
+        let end = ts.getLineAndCharacterOfPosition(sourceFile, span.start + span.length);
+        return SymbolInformation.create(item.text,
+            util.convertStringtoSymbolKind(item.kind),
+            Range.create(start.line, start.character, end.line, end.character),
+            'file:///' + sourceFile.fileName, parent ? parent.text : '');
+    }
+
+    /**
+     * @return true if navigation tree item is acceptable for inclusion into workspace/symbols 
+     */
+    private static isAcceptableNavigationTreeItem(item: ts.NavigationTree): boolean {
+        // modules and source files should be excluded
+        if ([ts.ScriptElementKind.moduleElement, "sourcefile"].indexOf(item.kind) >= 0) {
+            return false;
+        }
+        // special items may start with ", (, [, or <
+        if (/^[<\(\[\"]/.test(item.text)) {
+            return false;
+        }
+        // magic words
+        if (["default", "constructor", "new()"].indexOf(item.text) >= 0) {
+            return false;
+        }
+        return true;
     }
 
 }

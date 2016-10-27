@@ -23,7 +23,6 @@ export default class ExternalRefsProvider {
     };
 
     collectExternals() {
-        let self = this;
         let importRefs = [];
         let externalLibs = this.collectExternalLibs();
 
@@ -57,7 +56,7 @@ export default class ExternalRefsProvider {
                         if (libRes) {
                             let libName = argument['text'];
                             let posInFile = name.getStart(sourceFile);
-                            let refs: ts.ReferenceEntry[] = self.service.projectManager.getConfiguration(sourceFile.fileName).service.getReferencesAtPosition(sourceFile.fileName, posInFile);
+                            let refs: ts.ReferenceEntry[] = this.service.projectManager.getConfiguration(sourceFile.fileName).service.getReferencesAtPosition(sourceFile.fileName, posInFile);
                             if (refs) {
                                 refs.forEach(ref => {
                                     let newRef = {
@@ -94,7 +93,7 @@ export default class ExternalRefsProvider {
                             if (libRes) {
                                 let libName = argument['text'];
                                 let posInFile = name.getStart(sourceFile);
-                                let refs: ts.ReferenceEntry[] = self.service.projectManager.getConfiguration(sourceFile.fileName).service.getReferencesAtPosition(sourceFile.fileName, posInFile);
+                                let refs: ts.ReferenceEntry[] = this.service.projectManager.getConfiguration(sourceFile.fileName).service.getReferencesAtPosition(sourceFile.fileName, posInFile);
                                 if (refs) {
                                     refs.forEach(ref => {
                                         let path = importedName && importedName.kind == ts.SyntaxKind.Identifier ? `${libName}.${importedName['text']}` : libName;
@@ -134,7 +133,7 @@ export default class ExternalRefsProvider {
                             let namespaceImport = <ts.NamespaceImport>namedBindings;
                             if (namespaceImport.name) {
                                 let posInFile = namespaceImport.name.getStart(sourceFile);
-                                let refs: ts.ReferenceEntry[] = self.service.projectManager.getConfiguration(sourceFile.fileName).service.getReferencesAtPosition(sourceFile.fileName, posInFile);
+                                let refs: ts.ReferenceEntry[] = this.service.projectManager.getConfiguration(sourceFile.fileName).service.getReferencesAtPosition(sourceFile.fileName, posInFile);
                                 if (refs) {
                                     refs.forEach(ref => {
                                         let newRef = {
@@ -156,7 +155,7 @@ export default class ExternalRefsProvider {
                             for (const namedImport of namedImports.elements) {
                                 let posInFile = namedImport.name.getStart(sourceFile);
                                 let pathName = namedImport.propertyName ? namedImport.propertyName['text'] : namedImport.name['text'];
-                                let refs: ts.ReferenceEntry[] = self.service.projectManager.getConfiguration(sourceFile.fileName).service.getReferencesAtPosition(sourceFile.fileName, posInFile);
+                                let refs: ts.ReferenceEntry[] = this.service.projectManager.getConfiguration(sourceFile.fileName).service.getReferencesAtPosition(sourceFile.fileName, posInFile);
                                 if (refs) {
                                     refs.forEach(ref => {
                                         let newRef = {
