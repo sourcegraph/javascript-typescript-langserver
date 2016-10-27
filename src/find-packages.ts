@@ -5,17 +5,17 @@ import * as path from 'path';
 export function collectFiles(dir, excludes) {
     return findfiles(dir, {
         exclude: excludes,
-        matcher: function (directory, name) {
+        matcher: (directory, name) => {
             return /\package.json?$/.test(name);
         }
-    }).map(function (f) {
+    }).map((f) => {
         try {
             let jsFiles = findfiles(path.dirname(f), {
                 exclude: excludes,
-                matcher: function (directory, name) {
+                matcher: (directory, name) => {
                     return (/\.(jsx?|tsx?)$/i).test(name);
                 }
-            }).map(function(f) {
+            }).map((f) => {
                 return path.normalize(f);
             });
             let packageContent = null;
@@ -29,7 +29,7 @@ export function collectFiles(dir, excludes) {
             console.error("Error in parsing file = ", f);
             console.error(error);
         }
-    }).filter(function(item) {
+    }).filter((item) => {
         // include only properly parsed ones
         return item.package;
     });

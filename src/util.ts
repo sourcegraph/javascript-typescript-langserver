@@ -102,6 +102,8 @@ export function convertStringtoSymbolKind(kind: string): SymbolKind {
         case "number": return SymbolKind.Number
         case "boolean": return SymbolKind.Boolean
         case "array": return SymbolKind.Array
+        case "array": return SymbolKind.Array
+        case "sourcefile": return SymbolKind.File
         default: return SymbolKind.String
     }
 }

@@ -60,12 +60,12 @@ export class LocalFileSystem implements FileSystem {
 
     readDir(path: string, callback: (err: Error, result?: FileInfo[]) => void) {
         path = path_.resolve(this.root, path);
-        fs.readdir(path, function (err: Error, files: string[]) {
+        fs.readdir(path, (err: Error, files: string[]) => {
             if (err) {
                 return callback(err)
             }
             let ret: FileInfo[] = [];
-            files.forEach(function (f) {
+            files.forEach((f) => {
                 const stats: fs.Stats = fs.statSync(path_.resolve(path, f));
                 ret.push({
                     name: f,
@@ -79,7 +79,7 @@ export class LocalFileSystem implements FileSystem {
 
     readFile(path: string, callback: (err: Error, result?: string) => void) {
         path = path_.resolve(this.root, path);
-        fs.readFile(path, function (err: Error, buf: Buffer) {
+        fs.readFile(path, (err: Error, buf: Buffer) => {
             if (err) {
                 return callback(err)
             }

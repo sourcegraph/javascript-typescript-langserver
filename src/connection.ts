@@ -53,8 +53,6 @@ export default class Connection {
 
         let service: TypeScriptService;
 
-        let self = this;
-
         let initialized: Thenable<void> = null;
 
         function initialize(): Thenable<void> {
@@ -67,10 +65,10 @@ export default class Connection {
 
         this.connection.onRequest(rt.InitializeRequest.type, (params: InitializeParams): Promise<InitializeResult> => {
             console.error('initialize', params.rootPath);
-            return new Promise<InitializeResult>(function (resolve) {
+            return new Promise<InitializeResult>((resolve) => {
                 if (params.rootPath) {
                     workspaceRoot = util.uri2path(params.rootPath);
-                    service = new TypeScriptService(workspaceRoot, strict, self.connection);
+                    service = new TypeScriptService(workspaceRoot, strict, this.connection);
                     resolve({
                         capabilities: {
                             // Tell the client that the server works in FULL text document sync mode
@@ -85,25 +83,16 @@ export default class Connection {
             });
         });
 
-        this.connection.onNotification(rt.ExitRequest.type, function () {
-            close();
-        });
+        this.connection.onNotification(rt.ExitRequest.type, close);
 
-        this.connection.onRequest(rt.ShutdownRequest.type, function () {
-            return [];
-        });
+        this.connection.onRequest(rt.ShutdownRequest.type, () => []);
 
 
         this.connection.onRequest(rt.WorkspaceSymbolsRequest.type, (params: rt.WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]> => {
             const enter = new Date().getTime();
-            return new Promise<SymbolInformation[]>(function (resolve, reject) {
-                initialize().then(function () {
+            return new Promise<SymbolInformation[]>((resolve, reject) => {
+                initialize().then(() => {
                     let result = [];
-                    {
-                        // TODO(alexsaveliev) remove the following call once
-                        // the server doesn't hang accumulating symbols.
-                        resolve(result);
-                    }
                     const init = new Date().getTime();
                     try {
                         // TODO: optimize and restore exported and externals processing
@@ -133,7 +122,7 @@ export default class Connection {
                         console.error(params, e);
                         return resolve([]);
                     }
-                }, function (err) {
+                }, (err) => {
                     initialized = null;
                     return reject(err)
                 })
@@ -142,23 +131,23 @@ export default class Connection {
 
         this.connection.onDefinition((params: TextDocumentPositionParams): Promise<Definition> => {
             const enter = new Date().getTime();
-            return new Promise<Definition>(function (resolve, reject) {
-                initialize().then(function () {
+            return new Promise<Definition>((resolve, reject) => {
+                initialize().then(() => {
                     try {
                         const init = new Date().getTime();
                         let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
-                        service.getDefinition(reluri, params.position.line, params.position.character).then(function (result) {
+                        service.getDefinition(reluri, params.position.line, params.position.character).then((result) => {
                             const exit = new Date().getTime();
                             console.error('definition', params.textDocument.uri, params.position.line, params.position.character, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
                             return resolve(result);
-                        }, function (e) {
+                        }, (e) => {
                             return reject(e);
                         });
                     } catch (e) {
                         console.error(params, e);
                         return resolve([]);
                     }
-                }, function (err) {
+                }, (err) => {
                     initialized = null;
                     return reject(err)
                 });
@@ -167,12 +156,12 @@ export default class Connection {
 
         this.connection.onHover((params: TextDocumentPositionParams): Promise<Hover> => {
             const enter = new Date().getTime();
-            return new Promise<Hover>(function (resolve, reject) {
-                initialize().then(function () {
+            return new Promise<Hover>((resolve, reject) => {
+                initialize().then(() => {
                     const init = new Date().getTime();
                     try {
                         let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
-                        service.getHover(reluri, params.position.line, params.position.character).then(function (quickInfo) {
+                        service.getHover(reluri, params.position.line, params.position.character).then((quickInfo) => {
                             let contents = [];
                             if (quickInfo) {
                                 contents.push({
@@ -187,14 +176,14 @@ export default class Connection {
                             const exit = new Date().getTime();
                             console.error('hover', params.textDocument.uri, params.position.line, params.position.character, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
                             resolve({ contents: contents });
-                        }, function (e) {
+                        }, (e) => {
                             return reject(e);
                         });
                     } catch (e) {
                         console.error(params, e);
                         resolve({ contents: [] });
                     }
-                }, function (err) {
+                }, (err) => {
                     initialized = null;
                     return reject(err)
                 })
@@ -202,14 +191,14 @@ export default class Connection {
         });
 
         this.connection.onReferences((params: ReferenceParams): Promise<Location[]> => {
-            return new Promise<Location[]>(function (resolve, reject) {
+            return new Promise<Location[]>((resolve, reject) => {
                 const enter = new Date().getTime();
-                initialize().then(function () {
+                initialize().then(() => {
                     const init = new Date().getTime();
                     try {
                         let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
                         service.getReferences(reluri, params.position.line, params.position.character).then(
-                            function (result) {
+                            (result) => {
                                 const exit = new Date().getTime();
                                 console.error('references', params.textDocument.uri, params.position.line, params.position.character, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
                                 return resolve(result);
@@ -219,7 +208,7 @@ export default class Connection {
                         console.error(params, e);
                         return resolve([]);
                     }
-                }, function (err) {
+                }, (err) => {
                     initialized = null;
                     return reject(err)
                 })
@@ -227,8 +216,8 @@ export default class Connection {
         });
 
         this.connection.onRequest(rt.GlobalRefsRequest.type, (params: WorkspaceSymbolParams): Promise<SymbolInformation[]> => {
-            return new Promise<SymbolInformation[]>(function (resolve, reject) {
-                initialize().then(function () {
+            return new Promise<SymbolInformation[]>((resolve, reject) => {
+                initialize().then(() => {
 
                     try {
                         console.error('global-refs', params.query);
@@ -244,7 +233,7 @@ export default class Connection {
                         console.error(params, e);
                         return resolve([]);
                     }
-                }, function (err) {
+                }, (err) => {
                     initialized = null;
                     return reject(err)
                 })
