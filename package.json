@@ -22,6 +22,7 @@
     "read-json-sync": "^1.1.1",
     "sanitize-html": "^1.13.0",
     "typescript": "alexsaveliev/typescript",
+    "vscode": "^1.0.1",
     "vscode-languageserver": "^2.2.1",
     "vscode-languageserver-types": "^1.0.3"
   },
@@ -31,6 +32,7 @@
     "@types/tmp": "0.0.31",
     "chai": "^3.4.34",
     "mocha": "^2.2.32",
-    "tmp": "0.0.29"
+    "tmp": "0.0.29",
+    "ts-node": "^1.6.1"
   }
 }
