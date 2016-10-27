@@ -130,7 +130,7 @@ export default class TypeScriptService {
                                 if (index2 - index1 == 1) {
                                     let dtsFolder = pathParts[index2 + 1];
                                     let dtsFileName = configuration.dtsNames[dtsFolder];
-                                    ret.push(Location.create(`https://github.com/DefinitelyTyped/DefinitelyTyped/${dtsFolder}/${dtsFileName}`, {
+                                    ret.push(Location.create(`https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/${dtsFolder}/${dtsFileName}`, {
                                         start: start,
                                         end: end
                                     }));
