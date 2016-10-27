@@ -484,6 +484,7 @@ export class ProjectConfiguration {
      * @param fs file system to use
      * @param configFileName configuration file name (relative to workspace root)
      * @param configContent optional configuration content to use instead of reading configuration file)
+     * @param packageJsonFileName optional package.json file (relative to workspace root)
      */
     constructor(fs: InMemoryFileSystem, configFileName: string, configContent?: any, packageJsonFileName?: string) {
         this.fs = fs;
@@ -493,6 +494,10 @@ export class ProjectConfiguration {
         this.dtsNames = {};
     }
 
+    /**
+     * Setter for package.json file for project configuration
+     * @param packageJsonFileName package.json file (relative to workspace root)
+     */
     public setPackageJsonFile(packageJsonFileName: string) {
         this.packageJsonFileName = packageJsonFileName;
     }
