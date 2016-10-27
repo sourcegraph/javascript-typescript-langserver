@@ -1,11 +1,16 @@
 {
   "version": "1.0.0",
   "name": "javascript-typescript-langserver",
-  "engines" : {
-  	"node" : ">=5.10.0"
+  "engines": {
+    "node": ">=5.10.0"
+  },
+  "scripts": {
+    "test": "./node_modules/.bin/mocha -r ts-node/register src/test/**/*.ts"
   },
   "dependencies": {
-    "async": "^2.0.1",
+    "@types/async": "^2.0.32",
+    "@types/node": "^6.0.46",
+    "async": "^2.0.32",
     "body-parser": "^1.15.2",
     "commander": "^2.9.0",
     "es6-promise": "^3.2.1",
@@ -17,8 +22,18 @@
     "read-json-sync": "^1.1.1",
     "sanitize-html": "^1.13.0",
     "typescript": "alexsaveliev/typescript",
+    "vscode": "^1.0.1",
     "vscode-languageserver": "^2.2.1",
     "vscode-languageserver-types": "^1.0.3",
     "download-github-repo": "^0.1.3"
+  },
+  "devDependencies": {
+    "@types/chai": "^3.4.34",
+    "@types/mocha": "^2.2.32",
+    "@types/tmp": "0.0.31",
+    "chai": "^3.4.34",
+    "mocha": "^2.2.32",
+    "tmp": "0.0.29",
+    "ts-node": "^1.6.1"
   }
 }

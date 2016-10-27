@@ -2,6 +2,8 @@
 
     "compilerOptions": {
         "target": "ES5",
+        "lib": ["es2016"],
+        "types": ["node", "mocha", "chai"],
         "module": "commonjs",
         "moduleResolution": "node",
         "sourceMap": true,
@@ -9,7 +11,8 @@
     },
     "files": [
         "src/language-server.ts",
-        "src/language-server-stdio.ts"
+        "src/language-server-stdio.ts",
+        "src/test/language-server-test.ts"
     ],
     "exclude": [
         "node_modules"
