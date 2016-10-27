@@ -5,4 +5,3 @@ node_js:
 
 install:
   - npm install
-  - node_modules/.bin/tsc
