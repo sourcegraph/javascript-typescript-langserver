@@ -41,13 +41,19 @@ export default class TypeScriptService {
         this.externalRefsProvider = new ExternalRefsProvider(this);
     }
 
+    /**
+     * Fetch repository from https://github.com/DefinitelyTyped/DefinitelyTyped into /tmp/DefinitelyTyped/
+     */
     fetchDefinitelyTypedRepo() {
-        //TODO add checking that repo is already fetched
-        github('DefinitelyTyped/DefinitelyTyped', '/tmp/DefinitelyTyped', function (err) {
-            if (err) {
-                console.error("Error downloading DefinitelyTyped repo ", err);
-            } else {
-                console.error("DefinitelyTyped repo downloading completed");
+        fs.exists('/tmp/DefinitelyTyped', (exists) => {
+            if (!exists) {
+                github('DefinitelyTyped/DefinitelyTyped', '/tmp/DefinitelyTyped', function (err) {
+                    if (err) {
+                        console.error("Error downloading DefinitelyTyped repo ", err);
+                    } else {
+                        console.error("DefinitelyTyped repo downloading completed");
+                    }
+                });
             }
         });
     }

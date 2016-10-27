@@ -294,7 +294,6 @@ export class ProjectManager {
                 config.setPackageJsonFile(k);
             } else {
                 self.configs.set(dir, new ProjectConfiguration(self.localFs, null, null, k));
-
             }
         });
 
@@ -498,6 +497,10 @@ export class ProjectConfiguration {
         this.packageJsonFileName = packageJsonFileName;
     }
 
+    /**
+     * Finds d.ts files located in /tmp/DefinitelyTyped folder which are related to dependencies from package.json
+     * @param deps list of dependecies from package.json file
+     */
     public processDeps(deps) {
         if (deps) {
             for (let dep in deps) {
@@ -512,7 +515,8 @@ export class ProjectConfiguration {
 
                 if (findRes && findRes.length > 0) {
                     let depFile = findRes[0];
-                    this.fs.addFile(`node_modules/@types/${dep}/index.d.ts`, fs.readFileSync(res[0], 'utf8'));
+                    //adding content of file to file system under node_modules/@types/ name
+                    this.fs.addFile(`node_modules/@types/${dep}/index.d.ts`, fs.readFileSync(findRes[0], 'utf8'));
                     this.dtsNames[dep] = path_.basename(depFile);
                 }
             }
@@ -546,12 +550,16 @@ export class ProjectConfiguration {
                 }
 
                 if (self.packageJsonFileName) {
-                    let parsedResult = JSON.parse(self.fs.readFile(self.packageJsonFileName));
-                    let devDeps = parsedResult.devDependencies;
-                    let deps = parsedResult.dependencies;
+                    try {
+                        let parsedResult = JSON.parse(self.fs.readFile(self.packageJsonFileName));
+                        let devDeps = parsedResult.devDependencies;
+                        let deps = parsedResult.dependencies;
 
-                    self.processDeps(deps);
-                    self.processDeps(devDeps);
+                        self.processDeps(deps);
+                        self.processDeps(devDeps);
+                    } catch (exc) {
+                        console.error("Error occurred while processing package.json, ", exc)
+                    }
                 }
 
                 self.host = new InMemoryLanguageServiceHost(self.fs.path,
