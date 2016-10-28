@@ -299,12 +299,12 @@ export default class TypeScriptService {
         }
         const configuration = configurations[index];
 
-        function maybeEnough() {
+        const maybeEnough = () => {
             if (limit && items.length >= limit || index == configurations.length - 1) {
                 return callback();
             }
             this.collectWorkspaceSymbols(query, limit, configurations, index + 1, items, callback);
-        }
+        };
 
         configuration.get().then(() => {
             setImmediate(() => {
