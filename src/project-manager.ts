@@ -275,26 +275,7 @@ export class ProjectManager {
             if (dir == '.') {
                 dir = '';
             }
-            self.configs.set(dir, new ProjectConfiguration(self.localFs, k, null, null));
-        });
-
-        files.forEach(function (k) {
-            if (!/(^|\/)package\.json$/.test(k)) {
-                return;
-            }
-            if (/(^|\/)node_modules\//.test(k)) {
-                return;
-            }
-            let dir = path_.posix.dirname(k);
-            if (dir == '.') {
-                dir = '';
-            }
-            let config = self.configs.get(dir);
-            if (config) {
-                config.setPackageJsonFile(k);
-            } else {
-                self.configs.set(dir, new ProjectConfiguration(self.localFs, null, null, k));
-            }
+            self.configs.set(dir, new ProjectConfiguration(self.localFs, k, null));
         });
 
         // collecting all the files in workspace by making fake configuration object         
@@ -314,7 +295,6 @@ export class ProjectManager {
  * Implementaton of LanguageServiceHost that works with in-memory file system
  */
 class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
-
     complete: boolean;
 
     private root: string;
@@ -324,12 +304,15 @@ class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 
     private projectVersion: number;
 
+    dtsNames: any;
+
     constructor(root: string, options: ts.CompilerOptions, fs: InMemoryFileSystem, expectedFiles: string[]) {
         this.root = root;
         this.options = options;
         this.fs = fs;
         this.expectedFiles = expectedFiles;
         this.projectVersion = 1;
+        this.dtsNames = {};
     }
 
     /**
@@ -361,6 +344,29 @@ class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
         return entry ? "1" : undefined;
     }
 
+    /**
+     * Finds d.ts files located in /tmp/DefinitelyTyped folder which are related to dependencies from package.json
+     * @param deps list of dependecies from package.json file
+     */
+    public processDep(dep, fileName) {
+        let findRes = findfiles(`/tmp/DefinitelyTyped/${dep}`, {
+            exclude: [],
+            matcher: function (directory, name) {
+                return (/\.d\.ts$/i).test(name);
+            }
+        }).map(function (f) {
+            return path_.normalize(f);
+        });
+
+        if (findRes && findRes.length > 0) {
+            let depFile = findRes[0];
+            //adding content of file to file system under node_modules/@types/ name
+            this.fs.addFile(`node_modules/@types/${dep}/index.d.ts`, fs.readFileSync(findRes[0], 'utf8'));
+            //this.fs.addFile(fileName, fs.readFileSync(findRes[0], 'utf8'));
+            this.dtsNames[dep] = path_.basename(depFile);
+        }
+    }
+
     getScriptSnapshot(fileName: string): ts.IScriptSnapshot {
         let entry = this.fs.readFile(fileName);
         if (!entry) {
@@ -368,8 +374,16 @@ class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
             entry = this.fs.readFile(fileName);
         }
         if (!entry) {
+            if (/(^|\/)node_modules\/\@types\//.test(fileName) && (/\.d\.ts$/i).test(fileName)) {
+                let depFile = path_.basename(fileName);
+                //let dep = path_.parse(depFile).name; - does not work for d.ts properly
+                let dep = depFile.split('.')[0];
+                this.processDep(dep, fileName);
+            }
+
             return undefined;
         }
+
         return ts.ScriptSnapshot.fromString(entry);
     }
 
@@ -475,9 +489,6 @@ export class ProjectConfiguration {
     private fs: InMemoryFileSystem;
     private configFileName: string;
     private configContent: any;
-    private packageJsonFileName: string;
-
-    dtsNames: any;
 
 
     /**
@@ -486,46 +497,10 @@ export class ProjectConfiguration {
      * @param configContent optional configuration content to use instead of reading configuration file)
      * @param packageJsonFileName optional package.json file (relative to workspace root)
      */
-    constructor(fs: InMemoryFileSystem, configFileName: string, configContent?: any, packageJsonFileName?: string) {
+    constructor(fs: InMemoryFileSystem, configFileName: string, configContent?: any) {
         this.fs = fs;
         this.configFileName = configFileName;
         this.configContent = configContent;
-        this.packageJsonFileName = packageJsonFileName;
-        this.dtsNames = {};
-    }
-
-    /**
-     * Setter for package.json file for project configuration
-     * @param packageJsonFileName package.json file (relative to workspace root)
-     */
-    public setPackageJsonFile(packageJsonFileName: string) {
-        this.packageJsonFileName = packageJsonFileName;
-    }
-
-    /**
-     * Finds d.ts files located in /tmp/DefinitelyTyped folder which are related to dependencies from package.json
-     * @param deps list of dependecies from package.json file
-     */
-    public processDeps(deps) {
-        if (deps) {
-            for (let dep in deps) {
-                let findRes = findfiles(`/tmp/DefinitelyTyped/${dep}`, {
-                    exclude: [],
-                    matcher: function (directory, name) {
-                        return (/\.d\.ts$/i).test(name);
-                    }
-                }).map(function (f) {
-                    return path_.normalize(f);
-                });
-
-                if (findRes && findRes.length > 0) {
-                    let depFile = findRes[0];
-                    //adding content of file to file system under node_modules/@types/ name
-                    this.fs.addFile(`node_modules/@types/${dep}/index.d.ts`, fs.readFileSync(findRes[0], 'utf8'));
-                    this.dtsNames[dep] = path_.basename(depFile);
-                }
-            }
-        }
     }
 
     get(): Promise<ProjectConfiguration> {
@@ -552,19 +527,6 @@ export class ProjectConfiguration {
                 const options = configParseResult.options;
                 if (/(^|\/)jsconfig\.json$/.test(self.configFileName)) {
                     options.allowJs = true;
-                }
-
-                if (self.packageJsonFileName) {
-                    try {
-                        let parsedResult = JSON.parse(self.fs.readFile(self.packageJsonFileName));
-                        let devDeps = parsedResult.devDependencies;
-                        let deps = parsedResult.dependencies;
-
-                        self.processDeps(deps);
-                        self.processDeps(devDeps);
-                    } catch (exc) {
-                        console.error("Error occurred while processing package.json, ", exc)
-                    }
                 }
 
                 self.host = new InMemoryLanguageServiceHost(self.fs.path,

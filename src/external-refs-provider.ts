@@ -105,7 +105,6 @@ export default class ExternalRefsProvider {
                                         importRefs.push(newRef);
                                     });
                                 } else {
-                                    console.error("hereeree  = ", posInFile);
                                     let path = importedName && importedName.kind == ts.SyntaxKind.Identifier ? `${libName}.${importedName['text']}` : libName;
                                     let newRef = {
                                         name: name.text, path: libName, file: fileName, start: posInFile,
