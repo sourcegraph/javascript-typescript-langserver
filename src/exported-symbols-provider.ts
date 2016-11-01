@@ -16,22 +16,21 @@ export default class ExportedSymbolsProvider {
 
     collectExportedEntities() {
         let exportedRefs = [];
-        let self = this;
         let allExports = [];
         let pkgMap = null;
 
         function findCurrentProjectInfo(fileName) {
             // (alexsaveliev) TypeScript returns lowercase path items
             if (pkgMap === null) {
-                const packageDefs = packages.collectFiles(self.service.root, ["node_modules"]);
+                const packageDefs = packages.collectFiles(this.service.root, ["node_modules"]);
                 pkgMap = new Map<string, any>();
-                packageDefs.forEach(function (packageDef) {
+                packageDefs.forEach((packageDef) => {
                     const def = {
                         name: packageDef.package.name,
                         repo: packageDef.package.repository && packageDef.package.repository.url,
                         version: packageDef.package._shasum
                     };
-                    packageDef.files.forEach(function (f) {
+                    packageDef.files.forEach((f) => {
                         pkgMap.set(path.normalize(f).toLowerCase(), def);
                     });
                 });
@@ -45,7 +44,7 @@ export default class ExportedSymbolsProvider {
             let sourceFile = node.getSourceFile();
             let fileName = sourceFile.fileName;
             let posInFile = name.getStart(sourceFile);
-            let type = self.service.projectManager.getConfiguration(fileName).service.getTypeDefinitionAtPosition(fileName, posInFile);
+            let type = this.service.projectManager.getConfiguration(fileName).service.getTypeDefinitionAtPosition(fileName, posInFile);
             let kind = "";
             if (type && type.length > 0) {
                 kind = type[0].kind;
@@ -53,7 +52,7 @@ export default class ExportedSymbolsProvider {
 
             let path = `${pathInfo}.${name.text}`;
 
-            let range = Range.create(self.service.getPositionFromOffset(fileName, posInFile), self.service.getPositionFromOffset(fileName, name.getEnd()));
+            let range = Range.create(this.service.getPositionFromOffset(fileName, posInFile), this.service.getPositionFromOffset(fileName, name.getEnd()));
             allExports.push({ name: text || name.text, path: path });
             exportedRefs.push({
                 name: name.text,
@@ -63,7 +62,7 @@ export default class ExportedSymbolsProvider {
                     file: fileName,
                     range: range
                 },
-                documentation: self.service.doc(node)
+                documentation: this.service.doc(node)
             });
         }
 
@@ -152,11 +151,11 @@ export default class ExportedSymbolsProvider {
                 });
             }
             if (node.kind == ts.SyntaxKind.FunctionDeclaration) {
-                if ((node.flags & ts.ModifierFlags.Export) != 0) {
+                if ((node.flags & ts.NodeFlags.Export) != 0) {
                     let decl = <ts.FunctionDeclaration>node;
                     let text = decl.name.text;
                     let path = parentPath ? `${parentPath}.${text}` : `${pkgInfo.name}.${text}`;
-                    let range = Range.create(self.service.getPositionFromOffset(fileName, decl.name.getStart(sourceFile)), self.service.getPositionFromOffset(fileName, decl.name.getEnd()));
+                    let range = Range.create(this.service.getPositionFromOffset(fileName, decl.name.getStart(sourceFile)), this.service.getPositionFromOffset(fileName, decl.name.getEnd()));
                     exportedRefs.push({
                         name: text,
                         kind: "function",
@@ -165,18 +164,18 @@ export default class ExportedSymbolsProvider {
                             file: fileName,
                             range: range
                         },
-                        documentation: self.service.doc(node)
+                        documentation: this.service.doc(node)
                     });
                 }
             } else if (node.kind == ts.SyntaxKind.ClassDeclaration) {
-                if (parentPath || (node.flags & ts.ModifierFlags.Export) != 0) {
+                if (parentPath || (node.flags & ts.NodeFlags.Export) != 0) {
                     let decl = <ts.ClassDeclaration>node;
                     if (!decl.name) {
                         // TODO: add support of "export class {}"
                         return;
                     }
                     let path = `${pkgInfo.name}.${decl.name.text}`;
-                    let range = Range.create(self.service.getPositionFromOffset(fileName, decl.name.getStart(sourceFile)), self.service.getPositionFromOffset(fileName, decl.name.getEnd()));
+                    let range = Range.create(this.service.getPositionFromOffset(fileName, decl.name.getStart(sourceFile)), this.service.getPositionFromOffset(fileName, decl.name.getEnd()));
                     exportedRefs.push({
                         name: decl.name.text,
                         kind: "class",
@@ -185,7 +184,7 @@ export default class ExportedSymbolsProvider {
                             file: fileName,
                             range: range
                         },
-                        documentation: self.service.doc(node)
+                        documentation: this.service.doc(node)
                     });
                     // collecting methods and vars
                     node.getChildren().forEach(child => {
@@ -198,7 +197,7 @@ export default class ExportedSymbolsProvider {
                     if (decl.name.kind == ts.SyntaxKind.Identifier) {
                         let name = <ts.Identifier>decl.name;
                         let path = `${parentPath}.${name.text}`;
-                        let range = Range.create(self.service.getPositionFromOffset(fileName, decl.name.getStart(sourceFile)), self.service.getPositionFromOffset(fileName, decl.name.getEnd()));
+                        let range = Range.create(this.service.getPositionFromOffset(fileName, decl.name.getStart(sourceFile)), this.service.getPositionFromOffset(fileName, decl.name.getEnd()));
                         exportedRefs.push({
                             name: name.text,
                             kind: "method",
@@ -207,17 +206,17 @@ export default class ExportedSymbolsProvider {
                                 file: fileName,
                                 range: range
                             },
-                            documentation: self.service.doc(node)
+                            documentation: this.service.doc(node)
                         });
                     }
                 }
             } else if (node.kind == ts.SyntaxKind.VariableDeclaration) {
-                if (parentPath || (node.flags & ts.ModifierFlags.Export) != 0) {
+                if (parentPath || (node.flags & ts.NodeFlags.Export) != 0) {
                     let decl = <ts.VariableDeclaration>node;
                     if (decl.name.kind == ts.SyntaxKind.Identifier) {
                         let name = <ts.Identifier>decl.name;
                         let path = parentPath ? `${parentPath}.${name.text}` : `${pkgInfo.name}.${name.text}`;
-                        let range = Range.create(self.service.getPositionFromOffset(fileName, decl.name.getStart(sourceFile)), self.service.getPositionFromOffset(fileName, decl.name.getEnd()));
+                        let range = Range.create(this.service.getPositionFromOffset(fileName, decl.name.getStart(sourceFile)), this.service.getPositionFromOffset(fileName, decl.name.getEnd()));
                         exportedRefs.push({
                             name: name.text,
                             kind: "var",

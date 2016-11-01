@@ -47,13 +47,11 @@ export class ProjectManager {
      */
     initialize(): Promise<void> {
 
-        let self = this;
-
         let done = false;
 
-        return new Promise<void>(function (resolve, reject) {
+        return new Promise<void>((resolve, reject) => {
             // fetch directory tree from VFS
-            self.getFiles(self.root, function (err, files) {
+            this.getFiles(this.root, (err, files) => {
                 // HACK (callback is called twice) 
                 if (done) {
                     return;
@@ -64,14 +62,14 @@ export class ProjectManager {
                     return reject(err);
                 }
                 // fetch files from VFS
-                self.fetchContent(files, function (err) {
+                this.fetchContent(files, (err) => {
                     if (err) {
                         console.error('An error occurred while fetching files content', err);
                         return reject(err);
                     }
 
                     // Determine and initialize sub-projects
-                    self.processProjects();
+                    this.processProjects();
                     return resolve();
 
                 });
@@ -102,15 +100,14 @@ export class ProjectManager {
             return;
         }
         let changed = false;
-        (config.host.expectedFiles || []).forEach(function (fileName) {
+        (config.host.expectedFiles || []).forEach((fileName) => {
             const sourceFile = config.program.getSourceFile(fileName);
             if (!sourceFile) {
-                config.program.addFile(fileName);
+                config.host.addFile(fileName);
                 changed = true;
             }
         });
         if (changed) {
-            config.host.incProjectVersion();
             // requery program object to synchonize LanguageService's data
             config.program = config.service.getProgram();
         }
@@ -122,7 +119,7 @@ export class ProjectManager {
      */
     getConfigurations(): ProjectConfiguration[] {
         const ret = [];
-        this.configs.forEach(function (v, k) {
+        this.configs.forEach((v, k) => {
             ret.push(v);
         });
         return ret;
@@ -132,7 +129,7 @@ export class ProjectManager {
     // we should process all subprojects instead
     getAnyConfiguration(): ProjectConfiguration {
         let config = null;
-        this.configs.forEach(function (v) {
+        this.configs.forEach((v) => {
             if (!config) {
                 config = v;
             }
@@ -147,23 +144,22 @@ export class ProjectManager {
 
         const start = new Date().getTime();
 
-        let self = this;
         let files: string[] = [];
         let counter: number = 0;
 
-        let cb = function (err: Error, result?: FileSystem.FileInfo[]) {
+        let cb = (err: Error, result?: FileSystem.FileInfo[]) => {
             if (err) {
                 console.error('got error while reading dir', err);
                 return callback(err)
             }
             let tasks = [];
-            result.forEach(function (fi) {
+            result.forEach((fi) => {
                 if (fi.name.indexOf('/.') >= 0) {
                     return
                 }
                 if (fi.dir) {
                     counter++;
-                    tasks.push(self.fetchDir(fi.name))
+                    tasks.push(this.fetchDir(fi.name))
                 } else {
 
                     if (/\.[tj]sx?$/.test(fi.name) || /(^|\/)[tj]sconfig\.json$/.test(fi.name) || /(^|\/)package\.json$/.test(fi.name)) {
@@ -172,7 +168,8 @@ export class ProjectManager {
                 }
             });
 
-            async.parallel(tasks, function (err: Error, result?: FileSystem.FileInfo[][]) {
+            async.parallel(tasks, (err: Error, result?: FileSystem.FileInfo[][]) => {
+
                 if (err) {
                     return callback(err)
                 }
@@ -214,11 +211,10 @@ export class ProjectManager {
      * @return asynchronous function that fetches directory content from VFS
      */
     private fetchDir(path: string): AsyncFunction<FileSystem.FileInfo[]> {
-        let self = this;
-        return function (callback: (err?: Error, result?: FileSystem.FileInfo[]) => void) {
-            self.remoteFs.readDir(path, (err?: Error, result?: FileSystem.FileInfo[]) => {
+        return (callback: (err?: Error, result?: FileSystem.FileInfo[]) => void) => {
+            this.remoteFs.readDir(path, (err?: Error, result?: FileSystem.FileInfo[]) => {
                 if (result) {
-                    result.forEach(function (fi) {
+                    result.forEach((fi) => {
                         fi.name = path_.posix.join(path, fi.name)
                     })
                 }
@@ -232,27 +228,26 @@ export class ProjectManager {
      */
     private fetchContent(files: string[], callback: (err?: Error) => void) {
         let tasks = [];
-        const self = this;
-        const fetch = function (path: string): AsyncFunction<string> {
-            return function (callback: (err?: Error, result?: string) => void) {
-                self.remoteFs.readFile(path, (err?: Error, result?: string) => {
+        const fetch = (path: string): AsyncFunction<string> => {
+            return (callback: (err?: Error, result?: string) => void) => {
+                this.remoteFs.readFile(path, (err?: Error, result?: string) => {
                     if (err) {
                         console.error('Unable to fetch content of ' + path, err);
                         return callback(err)
                     }
-                    const rel = path_.posix.relative(self.root, path);
-                    self.localFs.addFile(rel, result);
+                    const rel = path_.posix.relative(this.root, path);
+                    this.localFs.addFile(rel, result);
                     return callback()
                 })
             }
         };
-        files.forEach(function (path) {
+        files.forEach((path) => {
             tasks.push(fetch(path))
         });
         const start = new Date().getTime();
         // Why parallelLimit: There may be too many open files when working with local FS and trying
         // to open them in parallel
-        async.parallelLimit(tasks, 100, function (err) {
+        async.parallelLimit(tasks, 100, (err) => {
             console.error('files fetched in', (new Date().getTime() - start) / 1000.0);
             return callback(err);
         });
@@ -262,9 +257,8 @@ export class ProjectManager {
      * Detects projects denoted by tsconfig.json
      */
     private processProjects() {
-        const self = this;
-        const files = Object.keys(this.localFs.entries);
-        files.forEach(function (k) {
+        Object.keys(this.localFs.entries).forEach((k) => {
+
             if (!/(^|\/)[tj]sconfig\.json$/.test(k)) {
                 return;
             }
@@ -275,12 +269,14 @@ export class ProjectManager {
             if (dir == '.') {
                 dir = '';
             }
-            self.configs.set(dir, new ProjectConfiguration(self.localFs, k, null));
+
+            this.configs.set(dir, new ProjectConfiguration(this.localFs, k));
+
         });
 
         // collecting all the files in workspace by making fake configuration object         
-        if (!self.configs.get('')) {
-            self.configs.set('', new ProjectConfiguration(self.localFs, '', {
+        if (!this.configs.get('')) {
+            this.configs.set('', new ProjectConfiguration(this.localFs, '', {
                 compilerOptions: {
                     module: ts.ModuleKind.CommonJS,
                     allowNonTsExtensions: false,
@@ -302,6 +298,8 @@ class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
     private fs: InMemoryFileSystem;
     expectedFiles: string[];
 
+    private files: string[];
+
     private projectVersion: number;
 
     dtsNames: any;
@@ -313,6 +311,7 @@ class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
         this.expectedFiles = expectedFiles;
         this.projectVersion = 1;
         this.dtsNames = {};
+        this.files = [];
     }
 
     /**
@@ -323,20 +322,21 @@ class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
         return '' + this.projectVersion;
     }
 
-    /**
-     * Increments project version, used in conjunction with getProjectVersion()
-     * which may be called by TypeScript to check if internal data is up to date
-     */
-    incProjectVersion() {
-        this.projectVersion++;
-    }
-
     getCompilationSettings(): ts.CompilerOptions {
         return this.options;
     }
 
     getScriptFileNames(): string[] {
-        return [];
+        return this.files;
+    }
+
+    /**
+     * Adds a file and increments project version, used in conjunction with getProjectVersion()
+     * which may be called by TypeScript to check if internal data is up to date
+     */
+    addFile(fileName: string) {
+        this.files.push(fileName);
+        this.projectVersion++;
     }
 
     getScriptVersion(fileName: string): string {
@@ -418,7 +418,7 @@ class InMemoryFileSystem implements ts.ParseConfigHost {
     addFile(path: string, content: string) {
         this.entries[path] = content;
         let node = this.rootNode;
-        path.split('/').forEach(function (component, i, components) {
+        path.split('/').forEach((component, i, components) => {
             const n = node[component];
             if (!n) {
                 node[component] = i == components.length - 1 ? '*' : {};
@@ -438,16 +438,13 @@ class InMemoryFileSystem implements ts.ParseConfigHost {
     }
 
     readDirectory(rootDir: string, extensions: string[], excludes: string[], includes: string[]): string[] {
-        const self = this;
         return match.matchFiles(rootDir,
             extensions,
             excludes,
             includes,
             true,
             this.path,
-            function () {
-                return self.getFileSystemEntries.apply(self, arguments);
-            });
+            (p) => this.getFileSystemEntries(p));
     }
 
     getFileSystemEntries(path: string): match.FileSystemEntries {
@@ -456,7 +453,7 @@ class InMemoryFileSystem implements ts.ParseConfigHost {
         let node = this.rootNode;
         const components = path.split('/');
         if (components.length != 1 || components[0]) {
-            components.forEach(function (component) {
+            components.forEach((component) => {
                 const n = node[component];
                 if (!n) {
                     return ret;
@@ -464,7 +461,7 @@ class InMemoryFileSystem implements ts.ParseConfigHost {
                 node = n;
             });
         }
-        Object.keys(node).forEach(function (name) {
+        Object.keys(node).forEach((name) => {
             if (typeof node[name] == 'string') {
                 ret.files.push(name);
             } else {
@@ -505,37 +502,36 @@ export class ProjectConfiguration {
 
     get(): Promise<ProjectConfiguration> {
         if (!this.promise) {
-            const self = this;
-            this.promise = new Promise<ProjectConfiguration>(function (resolve, reject) {
+            this.promise = new Promise<ProjectConfiguration>((resolve, reject) => {
                 let configObject;
-                if (!self.configContent) {
-                    const jsonConfig = ts.parseConfigFileTextToJson(self.configFileName, self.fs.readFile(self.configFileName));
+                if (!this.configContent) {
+                    const jsonConfig = ts.parseConfigFileTextToJson(this.configFileName, this.fs.readFile(this.configFileName));
                     if (jsonConfig.error) {
-                        console.error('Cannot parse ' + self.configFileName + ': ' + jsonConfig.error.messageText);
-                        return reject(new Error('Cannot parse ' + self.configFileName + ': ' + jsonConfig.error.messageText));
+                        console.error('Cannot parse ' + this.configFileName + ': ' + jsonConfig.error.messageText);
+                        return reject(new Error('Cannot parse ' + this.configFileName + ': ' + jsonConfig.error.messageText));
                     }
                     configObject = jsonConfig.config;
                 } else {
-                    configObject = self.configContent;
+                    configObject = this.configContent;
                 }
-                let dir = path_.posix.dirname(self.configFileName);
+                let dir = path_.posix.dirname(this.configFileName);
                 if (dir == '.') {
                     dir = '';
                 }
-                const base = dir || self.fs.path;
-                const configParseResult = ts.parseJsonConfigFileContent(configObject, self.fs, base);
+                const base = dir || this.fs.path;
+                const configParseResult = ts.parseJsonConfigFileContent(configObject, this.fs, base);
                 const options = configParseResult.options;
-                if (/(^|\/)jsconfig\.json$/.test(self.configFileName)) {
+                if (/(^|\/)jsconfig\.json$/.test(this.configFileName)) {
                     options.allowJs = true;
                 }
 
-                self.host = new InMemoryLanguageServiceHost(self.fs.path,
+                this.host = new InMemoryLanguageServiceHost(this.fs.path,
                     options,
-                    self.fs,
+                    this.fs,
                     configParseResult.fileNames);
-                self.service = ts.createLanguageService(self.host, ts.createDocumentRegistry());
-                self.program = self.service.getProgram();
-                return resolve(self);
+                this.service = ts.createLanguageService(this.host, ts.createDocumentRegistry());
+                this.program = this.service.getProgram();
+                return resolve(this);
             });
         }
         return this.promise;
