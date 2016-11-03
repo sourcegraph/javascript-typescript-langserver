@@ -27,13 +27,14 @@ const numCPUs = require('os').cpus().length;
 if (cluster.isMaster) {
     console.error(`Master node process spawning ${numCPUs} workers`)
     for (let i = 0; i < numCPUs; ++i) {
-        cluster.fork().on('disconnect', (worker, code, signal) => {
+        const worker = cluster.fork().on('disconnect', () => {
             console.error(`worker ${worker.process.pid} disconnect`)
         });
     }
 
     cluster.on('exit', (worker, code, signal) => {
-        console.error(`worker ${worker.process.pid} exit (${code})`);
+        const reason = code === null ? signal : code;
+        console.error(`worker ${worker.process.pid} exit (${reason})`);
     });
 } else {
     console.error('Listening for incoming LSP connections on', lspPort);
