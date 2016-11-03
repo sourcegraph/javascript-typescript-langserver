@@ -251,4 +251,31 @@ describe('LSP', function () {
             utils.tearDown(done);
         });
     });
+    describe('sourcegraph/sourcegraph#2052', function () {
+        before(function (done: () => void) {
+            utils.setUp({
+                'a.ts': "let parameters = [];"
+            }, done);
+        });
+        it('type of parameters should be "any[]"', function (done: (err?: Error) => void) {
+            utils.hover({
+                textDocument: {
+                    uri: 'file:///a.ts'
+                },
+                position: {
+                    line: 0,
+                    character: 5
+                }
+            }, {
+                    contents: [{
+                        language: 'typescript',
+                        value: 'let parameters: any[]'
+                    }]
+                }
+                , done);
+        });
+        afterEach(function (done: () => void) {
+            utils.tearDown(done);
+        });
+    });
 });

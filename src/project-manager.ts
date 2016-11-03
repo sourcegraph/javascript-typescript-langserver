@@ -1,4 +1,5 @@
 import * as path_ from 'path';
+import * as fs_ from 'fs';
 
 import * as ts from 'typescript';
 import { IConnection } from 'vscode-languageserver';
@@ -297,6 +298,9 @@ class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
         this.expectedFiles = expectedFiles;
         this.projectVersion = 1;
         this.files = [];
+        // adding content of default library file read from the local file system 
+        const defaultLib = util.normalizePath(this.getDefaultLibFileName(options));
+        this.fs.entries[defaultLib] = fs_.readFileSync(defaultLib).toString();
     }
 
     /**

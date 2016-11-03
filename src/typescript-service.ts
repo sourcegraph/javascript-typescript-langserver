@@ -312,7 +312,7 @@ export default class TypeScriptService {
                 const chunkSize = limit ? Math.min(limit, limit - items.length) : undefined;
                 setImmediate(() => {
                     if (query) {
-                        const chunk = configuration.service.getNavigateToItems(query, chunkSize);
+                        const chunk = configuration.service.getNavigateToItems(query, chunkSize, true);
                         const tasks = [];
                         chunk.forEach((item) => {
                             tasks.push(this.transformNavItem(this.root, configuration.program, item));
@@ -336,7 +336,11 @@ export default class TypeScriptService {
      */
     private getNavigationTreeItems(configuration: pm.ProjectConfiguration, limit?: number): SymbolInformation[] {
         const result = [];
+        const defaultLib = configuration.host.getDefaultLibFileName(configuration.host.getCompilationSettings());
         for (const sourceFile of configuration.program.getSourceFiles()) {
+            if (sourceFile.fileName == defaultLib) {
+                continue;
+            }
             const tree = configuration.service.getNavigationTree(sourceFile.fileName);
             this.flattenNavigationTreeItem(tree, null, sourceFile, result, limit);
             if (limit && result.length >= limit) {
