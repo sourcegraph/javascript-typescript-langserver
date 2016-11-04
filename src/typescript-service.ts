@@ -14,6 +14,8 @@ import ExternalRefsProvider from './external-refs-provider';
 var sanitizeHtml = require('sanitize-html');
 var JSONPath = require('jsonpath-plus');
 
+var github = require('download-github-repo');
+
 export default class TypeScriptService {
 
     projectManager: pm.ProjectManager;
@@ -32,9 +34,28 @@ export default class TypeScriptService {
         this.root = root;
         this.projectManager = new pm.ProjectManager(root, strict, connection);
 
+        this.fetchDefinitelyTypedRepo();
+
         //initialize providers 
         this.exportedSymbolProvider = new ExportedSymbolsProvider(this);
         this.externalRefsProvider = new ExternalRefsProvider(this);
+    }
+
+    /**
+     * Fetch repository from https://github.com/DefinitelyTyped/DefinitelyTyped into /tmp/DefinitelyTyped/
+     */
+    fetchDefinitelyTypedRepo() {
+        fs.exists('/tmp/DefinitelyTyped', (exists) => {
+            if (!exists) {
+                github('DefinitelyTyped/DefinitelyTyped', '/tmp/DefinitelyTyped', function (err) {
+                    if (err) {
+                        console.error("Error downloading DefinitelyTyped repo ", err);
+                    } else {
+                        console.error("DefinitelyTyped repo downloading completed");
+                    }
+                });
+            }
+        });
     }
 
     getExternalRefs() {
@@ -103,12 +124,26 @@ export default class TypeScriptService {
                                 const sourceFile = configuration.program.getSourceFile(def.fileName);
                                 const start = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start);
                                 const end = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start + def.textSpan.length);
-                                ret.push(Location.create(util.path2uri(this.root, def.fileName), {
-                                    start: start,
-                                    end: end
-                                }));
+
+                                let pathParts = def.fileName.split(path.sep);
+                                let index1 = pathParts.indexOf("node_modules")
+                                let index2 = pathParts.indexOf("@types");
+                                if (index2 - index1 == 1) {
+                                    let dtsFolder = pathParts[index2 + 1];
+                                    let dtsFileName = configuration.host.dtsNames[dtsFolder];
+                                    ret.push(Location.create(`git://github.com/DefinitelyTyped/DefinitelyTyped?master#${dtsFolder}/${dtsFileName}`, {
+                                        start: start,
+                                        end: end
+                                    }));
+                                } else {
+                                    ret.push(Location.create(util.path2uri(this.root, def.fileName), {
+                                        start: start,
+                                        end: end
+                                    }));
+                                }
                             }
                         }
+
                         return resolve(ret);
                     } catch (e) {
                         return reject(e);

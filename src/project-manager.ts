@@ -9,6 +9,10 @@ import * as FileSystem from './fs';
 import * as util from './util';
 import * as match from './match-files';
 
+import * as fs from 'fs';
+const findfiles = require('find-files-excluding-dirs');
+
+
 /**
  * ProjectManager translates VFS files to one or many projects denoted by [tj]config.json.
  * It uses either local or remote file system to fetch directory tree and files from and then
@@ -158,12 +162,15 @@ export class ProjectManager {
                     counter++;
                     tasks.push(this.fetchDir(fi.name))
                 } else {
-                    if (/\.[tj]sx?$/.test(fi.name) || /(^|\/)[tj]sconfig\.json$/.test(fi.name)) {
+
+                    if (/\.[tj]sx?$/.test(fi.name) || /(^|\/)[tj]sconfig\.json$/.test(fi.name) || /(^|\/)package\.json$/.test(fi.name)) {
                         files.push(fi.name)
                     }
                 }
             });
+
             async.parallel(tasks, (err: Error, result?: FileSystem.FileInfo[][]) => {
+
                 if (err) {
                     return callback(err)
                 }
@@ -177,6 +184,8 @@ export class ProjectManager {
                 }
             })
         };
+
+
         this.fetchDir(path)(cb)
     }
 
@@ -250,6 +259,7 @@ export class ProjectManager {
      */
     private processProjects() {
         Object.keys(this.localFs.entries).forEach((k) => {
+
             if (!/(^|\/)[tj]sconfig\.json$/.test(k)) {
                 return;
             }
@@ -260,8 +270,11 @@ export class ProjectManager {
             if (dir == '.') {
                 dir = '';
             }
+
             this.configs.set(dir, new ProjectConfiguration(this.localFs, k));
+
         });
+
         // collecting all the files in workspace by making fake configuration object         
         if (!this.configs.get('')) {
             this.configs.set('', new ProjectConfiguration(this.localFs, '', {
@@ -279,7 +292,6 @@ export class ProjectManager {
  * Implementaton of LanguageServiceHost that works with in-memory file system
  */
 class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
-
     complete: boolean;
 
     private root: string;
@@ -291,12 +303,15 @@ class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 
     private projectVersion: number;
 
+    dtsNames: any;
+
     constructor(root: string, options: ts.CompilerOptions, fs: InMemoryFileSystem, expectedFiles: string[]) {
         this.root = root;
         this.options = options;
         this.fs = fs;
         this.expectedFiles = expectedFiles;
         this.projectVersion = 1;
+        this.dtsNames = {};
         this.files = [];
         // adding content of default library file read from the local file system 
         const defaultLib = util.normalizePath(this.getDefaultLibFileName(options));
@@ -333,6 +348,29 @@ class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
         return entry ? "1" : undefined;
     }
 
+    /**
+     * Finds d.ts files located in /tmp/DefinitelyTyped folder which are related to dependencies from package.json
+     * @param deps list of dependecies from package.json file
+     */
+    public processDep(dep, fileName) {
+        let findRes = findfiles(`/tmp/DefinitelyTyped/${dep}`, {
+            exclude: [],
+            matcher: function (directory, name) {
+                return (/\.d\.ts$/i).test(name);
+            }
+        }).map(function (f) {
+            return path_.normalize(f);
+        });
+
+        if (findRes && findRes.length > 0) {
+            let depFile = findRes[0];
+            //adding content of file to file system under node_modules/@types/ name
+            this.fs.addFile(`node_modules/@types/${dep}/index.d.ts`, fs.readFileSync(findRes[0], 'utf8'));
+            //this.fs.addFile(fileName, fs.readFileSync(findRes[0], 'utf8'));
+            this.dtsNames[dep] = path_.basename(depFile);
+        }
+    }
+
     getScriptSnapshot(fileName: string): ts.IScriptSnapshot {
         let entry = this.fs.readFile(fileName);
         if (!entry) {
@@ -340,8 +378,16 @@ class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
             entry = this.fs.readFile(fileName);
         }
         if (!entry) {
+            if (/(^|\/)node_modules\/\@types\//.test(fileName) && (/\.d\.ts$/i).test(fileName)) {
+                let depFile = path_.basename(fileName);
+                //let dep = path_.parse(depFile).name; - does not work for d.ts properly
+                let dep = depFile.split('.')[0];
+                this.processDep(dep, fileName);
+            }
+
             return undefined;
         }
+
         return ts.ScriptSnapshot.fromString(entry);
     }
 
@@ -445,10 +491,12 @@ export class ProjectConfiguration {
     private configFileName: string;
     private configContent: any;
 
+
     /**
      * @param fs file system to use
      * @param configFileName configuration file name (relative to workspace root)
      * @param configContent optional configuration content to use instead of reading configuration file)
+     * @param packageJsonFileName optional package.json file (relative to workspace root)
      */
     constructor(fs: InMemoryFileSystem, configFileName: string, configContent?: any) {
         this.fs = fs;
@@ -480,6 +528,7 @@ export class ProjectConfiguration {
                 if (/(^|\/)jsconfig\.json$/.test(this.configFileName)) {
                     options.allowJs = true;
                 }
+
                 this.host = new InMemoryLanguageServiceHost(this.fs.path,
                     options,
                     this.fs,
