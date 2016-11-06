@@ -50,13 +50,18 @@ export class ProjectManager {
 		let done = false;
 
 		return new Promise<void>((resolve, reject) => {
+			// this.getFiles(this.root, (err, files) => {
+			// 	console.error("# all files", files);
+			// });
+
 			return resolve();	// DEBUG: don't fetch & process files on initialization
-
-
-
-
 			// // fetch directory tree from VFS
 			// this.getFiles(this.root, (err, files) => {
+
+			// 	// files.forEach((file) => {
+			// 	// 	console.log("# file", file);
+			// 	// });
+
 			// 	// HACK (callback is called twice) 
 			// 	if (done) {
 			// 		console.error("# initialize DONE (early))", (new Date().getTime() - start) / 1000);
@@ -152,19 +157,148 @@ export class ProjectManager {
 		return config;
 	}
 
-	getFilesForHover(path: string): Promise<void> {
+
+	// TODO: factor out the part of this that extracts the import filenames from file contents and pass that in as a function
+	fetchFilesAndDependencies(paths: string[]): Promise<void> {
+		// HACK/DEBUG (make sure the tsconfig.json file is available so we can read it)
+		// >> in initialization, should read in all tsconfig.json files *and* whatever else is necessary to resolve
+		// module imports to file paths
+		paths.push("/ui/tsconfig.json");
+
 		return new Promise<void>((resolve, reject) => {
+			const fetchPaths = paths.map(p => '/' + p);
+			this.fetchContent(fetchPaths, (err) => {
+				if (err) {
+					console.error("An error occurred while fetching files content", err);
+					return reject(err);
+				}
+
+				for (const path of paths) {
+					const contents = this.localFs.readFile(path);
+					const info = ts.preProcessFile(contents, true, true);
+					for (const imp of info.importedFiles) {
+						console.error("# imp", imp);
+						const absImp = "/" + imp.fileName;
+						const impDir = absImp.substring(0, absImp.lastIndexOf("/"));
+
+						impDir = "/ui/web_modules" + impDir;
+
+						console.error("# impDir", impDir);
+						this.getFiles(impDir, (err, files) => {
+							// for (const file of files) {
+							// 	console.error("# possible file import", file);
+							// }
+
+							this.fetchContent(files, (err) => {
+								if (err) {
+									console.error("An error occurred while fetching files content", err);
+									return reject(err);
+								}
+
+								this.processProjects();
+
+								return resolve();
+							});
+						});
+					}
+				}
+			})
+		});
+	}
+
+	/*
+	getFilesForHover(path: string): Promise<void> {
+		const start = new Date().getTime();
+		console.error("# getFilesForHover");
+
+		return new Promise<void>((resolve, reject) => {
+			// fetch directory tree from VFS
+
+			// fetch files from VFS
 			this.fetchContent([path], (err) => {
+				if (err) {
+					console.error('An error occurred while fetching files content', err);
+					return reject(err);
+				}
+
+
+				// ts.preProcessFile(
+				// 	const contents = this.localFs.readFile(path);
+				// )
+
+
+
+				// Determine and initialize sub-projects
+				this.processProjects();
+
+				console.error("# getFilesForHover DONE", (new Date().getTime() - start) / 1000);
+
+				return resolve();
+			});
+			// });
+		});
+
+
+		/////////////////////////////////////////////////
+
+
+		return new Promise<void>((resolve, reject) => {
+
+			const toFetch = [
+				// path,
+				"/ui/web_modules/sourcegraph/api/index.tsx",
+				"/ui/web_modules/sourcegraph/app/App.tsx",
+				"/ui/web_modules/sourcegraph/app/Footer.tsx",
+				"/ui/web_modules/sourcegraph/app/context.tsx",
+				"/ui/web_modules/sourcegraph/app/routeParams.tsx",
+				"/ui/web_modules/sourcegraph/app/routePatterns.tsx",
+				"/ui/web_modules/sourcegraph/app/routePatterns_test.tsx",
+				"/ui/web_modules/sourcegraph/app/routerScrollBehavior.tsx",
+				"/ui/web_modules/sourcegraph/app/router_test.tsx",
+			];
+
+			this.fetchContent(toFetch, (err) => {
+
+				for (const fn in this.localFs.entries) {
+					console.error("# localFs entry", fn);
+				}
+
+				if (path.startsWith('/')) {
+					path = path.substr(1);
+				}
+
+				// const contents = this.localFs.readFile(path);
+				// const contents = this.localFs.readFile("ui/web_modules/sourcegraph/app/context.tsx");
+				// console.error("# contents: ", contents);
+
+				// ts.preProcessFile(sourceText: string, readImportFiles?: boolean, detectJavaScriptImports?: boolean);
+				// const info = ts.preProcessFile(contents, true, true);
+				// console.error(info);
+
+				// for (const imp of info.importedFiles) {
+				// 	console.error("# imp", imp);
+				// 	ts.resolveModuleName(imp.fileName, path, {});
+				// }
+
+
+
+				// ts.findSourceFile
+				// ts.processImportedModules
+
+
+
 				if (err) {
 					return reject(err);
 				}
 
 				this.processProjects(); // necessary or expensive?
+
 				return resolve();
 			});
 
 		});
 	}
+*/
 
 	/**
 	 * Collects all files in the given path
@@ -251,6 +385,8 @@ export class ProjectManager {
      * Fetches content of the specified files
      */
 	private fetchContent(files: string[], callback: (err?: Error) => void) {
+		// console.error("# fetchContent", files);
+
 		let tasks = [];
 		const fetch = (path: string): AsyncFunction<string> => {
 			return (callback: (err?: Error, result?: string) => void) => {
@@ -366,16 +502,16 @@ class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	}
 
 	getScriptSnapshot(fileName: string): ts.IScriptSnapshot {
-		console.log("# getScriptSnapshot", fileName);
-		// console.error(new Error().stack);
 		let entry = this.fs.readFile(fileName);
 		if (!entry) {
 			fileName = path_.posix.relative(this.root, fileName);
 			entry = this.fs.readFile(fileName);
 		}
 		if (!entry) {
+			// console.error("# missing file", fileName);
 			return undefined;
 		}
+		console.error("# found file", fileName);
 		return ts.ScriptSnapshot.fromString(entry);
 	}
 

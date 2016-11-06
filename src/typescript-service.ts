@@ -132,9 +132,12 @@ export default class TypeScriptService {
 	}
 
 	getHover(uri: string, line: number, column: number): Promise<ts.QuickInfo> {
+		console.error("# getHover");
 		return new Promise<ts.QuickInfo>((resolve, reject) => {
 			const fileName: string = util.uri2path(uri);
-			return this.projectManager.getFilesForHover('/' + fileName).then(() => {
+			return this.projectManager.fetchFilesAndDependencies([fileName]).then(() => {
+				console.error("# getHover (proceeding)");
+
 				try {
 					const configuration = this.projectManager.getConfiguration(fileName);
 					configuration.get().then(() => {
@@ -238,6 +241,9 @@ export default class TypeScriptService {
 		const start = new Date().getTime();
 
 		return new Promise<SymbolInformation[]>((resolve, reject) => {
+			console.error("# workspaceSymbols (PUNT)");
+			return resolve([]);
+
 			console.error("# getWorkspaceSymbols (promise)");
 			// testcode: ignore workspace/symbol requests
 
