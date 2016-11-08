@@ -1,7 +1,7 @@
 import * as path from "path";
 
 import * as ts from "typescript";
-import { SymbolKind, Range, Position} from 'vscode-languageserver';
+import { SymbolKind, Range, Position } from 'vscode-languageserver';
 
 export function formEmptyRange(): Range {
     return Range.create(Position.create(0, 0), Position.create(0, 0))
@@ -169,3 +169,32 @@ export function uri2relpath(uri, root: string): string {
     return uri;
 }
 
+let jstsPattern = /\.[tj]sx?$/;
+
+export function isJSTSFile(filename: string): boolean {
+    return jstsPattern.test(filename);
+}
+
+let jstsConfigPattern = /(^|\/)[tj]sconfig\.json$/;
+
+export function isConfigFile(filename: string): boolean {
+    return jstsConfigPattern.test(filename);
+}
+
+let packageJsonPattern = /(^|\/)package\.json$/;
+
+export function isPackageJsonFile(filename: string): boolean {
+    return packageJsonPattern.test(filename);
+}
+
+let globalTSPattern = /(^|\/)globals?\.d\.ts$/;
+
+// isGlobalTSFile returns whether or not the filename contains global
+// variables based on a best practices heuristic
+// (https://basarat.gitbooks.io/typescript/content/docs/project/modules.html). In
+// reality, a file has global scope if it does not begin with an
+// import statement, but to check this, we'd have to read each
+// TypeScript file.
+export function isGlobalTSFile(filename: string): boolean {
+    return globalTSPattern.test(filename);
+}

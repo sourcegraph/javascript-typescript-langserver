@@ -13,20 +13,21 @@ process.on('uncaughtException', (err) => {
 });
 
 const defaultLspPort = 2089;
+const numCPUs = require('os').cpus().length;
 
 program
     .version('0.0.1')
     .option('-s, --strict', 'Strict mode')
     .option('-p, --port [port]', 'LSP port (' + defaultLspPort + ')', parseInt)
+    .option('-c, --cluster [num]', 'Number of concurrent cluster workers (defaults to number of CPUs, ' + numCPUs + ')', parseInt)
     .parse(process.argv);
 
 const lspPort = program.port || defaultLspPort;
+const clusterSize = program.cluster || numCPUs;
 
-
-const numCPUs = require('os').cpus().length;
 if (cluster.isMaster) {
-    console.error(`Master node process spawning ${numCPUs} workers`)
-    for (let i = 0; i < numCPUs; ++i) {
+    console.error(`Master node process spawning ${clusterSize} workers`)
+    for (let i = 0; i < clusterSize; ++i) {
         const worker = cluster.fork().on('disconnect', () => {
             console.error(`worker ${worker.process.pid} disconnect`)
         });
