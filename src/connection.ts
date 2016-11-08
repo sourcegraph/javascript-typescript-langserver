@@ -53,16 +53,6 @@ export default class Connection {
 
         let service: TypeScriptService;
 
-        let initialized: Thenable<void> = null;
-
-        function initialize(): Thenable<void> {
-            if (!initialized) {
-                initialized = service.projectManager.initialize();
-            }
-            return initialized;
-        }
-
-
         this.connection.onRequest(rt.InitializeRequest.type, (params: InitializeParams): Promise<InitializeResult> => {
             console.error('initialize', params.rootPath);
             return new Promise<InitializeResult>((resolve) => {
@@ -91,10 +81,9 @@ export default class Connection {
         this.connection.onRequest(rt.WorkspaceSymbolsRequest.type, (params: rt.WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]> => {
             const enter = new Date().getTime();
             return new Promise<SymbolInformation[]>((resolve, reject) => {
-                initialize().then(() => {
-                    let result = [];
-                    const init = new Date().getTime();
-                    try {
+                let result = [];
+                const init = new Date().getTime();
+                try {
                         // TODO: optimize and restore exported and externals processing
                         /*if (params.query == "exported") {
                             const exported = service.getExportedEnts();
@@ -112,131 +101,106 @@ export default class Connection {
                                 });
                             }
                         } else */ {
-                            return service.getWorkspaceSymbols(params.query, params.limit).then((result) => {
-                                const exit = new Date().getTime();
-                                console.error('symbol', params.query, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
-                                return resolve(result);
-                            });
-                        }
-                    } catch (e) {
-                        console.error(params, e);
-                        return resolve([]);
+                        return service.getWorkspaceSymbols(params.query, params.limit).then((result) => {
+                            const exit = new Date().getTime();
+                            console.error('symbol', params.query, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
+                            return resolve(result);
+                        });
                     }
-                }, (err) => {
-                    initialized = null;
-                    return reject(err)
-                })
+                } catch (e) {
+                    console.error(params, e);
+                    return resolve([]);
+                }
             });
         });
 
         this.connection.onDefinition((params: TextDocumentPositionParams): Promise<Definition> => {
             const enter = new Date().getTime();
             return new Promise<Definition>((resolve, reject) => {
-                initialize().then(() => {
-                    try {
-                        const init = new Date().getTime();
-                        let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
-                        service.getDefinition(reluri, params.position.line, params.position.character).then((result) => {
-                            const exit = new Date().getTime();
-                            console.error('definition', params.textDocument.uri, params.position.line, params.position.character, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
-                            return resolve(result);
-                        }, (e) => {
-                            return reject(e);
-                        });
-                    } catch (e) {
-                        console.error(params, e);
-                        return resolve([]);
-                    }
-                }, (err) => {
-                    initialized = null;
-                    return reject(err)
-                });
+                try {
+                    const init = new Date().getTime();
+                    let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
+                    service.getDefinition(reluri, params.position.line, params.position.character).then((result) => {
+                        const exit = new Date().getTime();
+                        console.error('definition', params.textDocument.uri, params.position.line, params.position.character, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
+                        return resolve(result);
+                    }, (e) => {
+                        return reject(e);
+                    });
+                } catch (e) {
+                    console.error(params, e);
+                    return resolve([]);
+                }
             });
         });
 
         this.connection.onHover((params: TextDocumentPositionParams): Promise<Hover> => {
             const enter = new Date().getTime();
             return new Promise<Hover>((resolve, reject) => {
-                initialize().then(() => {
-                    const init = new Date().getTime();
-                    try {
-                        let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
-                        service.getHover(reluri, params.position.line, params.position.character).then((quickInfo) => {
-                            let contents = [];
-                            if (quickInfo) {
-                                contents.push({
-                                    language: 'typescript',
-                                    value: ts.displayPartsToString(quickInfo.displayParts)
-                                });
-                                let documentation = ts.displayPartsToString(quickInfo.documentation);
-                                if (documentation) {
-                                    contents.push(documentation);
-                                }
+                const init = new Date().getTime();
+                try {
+                    let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
+                    service.getHover(reluri, params.position.line, params.position.character).then((quickInfo) => {
+                        let contents = [];
+                        if (quickInfo) {
+                            contents.push({
+                                language: 'typescript',
+                                value: ts.displayPartsToString(quickInfo.displayParts)
+                            });
+                            let documentation = ts.displayPartsToString(quickInfo.documentation);
+                            if (documentation) {
+                                contents.push(documentation);
                             }
-                            const exit = new Date().getTime();
-                            console.error('hover', params.textDocument.uri, params.position.line, params.position.character, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
-                            resolve({ contents: contents });
-                        }, (e) => {
-                            return reject(e);
-                        });
-                    } catch (e) {
-                        console.error(params, e);
-                        resolve({ contents: [] });
-                    }
-                }, (err) => {
-                    initialized = null;
-                    return reject(err)
-                })
+                        }
+                        const exit = new Date().getTime();
+                        console.error('hover', params.textDocument.uri, params.position.line, params.position.character, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
+                        resolve({ contents: contents });
+                    }, (e) => {
+                        return reject(e);
+                    });
+                } catch (e) {
+                    console.error(params, e);
+                    resolve({ contents: [] });
+                }
             });
         });
 
         this.connection.onReferences((params: ReferenceParams): Promise<Location[]> => {
             return new Promise<Location[]>((resolve, reject) => {
                 const enter = new Date().getTime();
-                initialize().then(() => {
-                    const init = new Date().getTime();
-                    try {
-                        let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
-                        service.getReferences(reluri, params.position.line, params.position.character).then(
-                            (result) => {
-                                const exit = new Date().getTime();
-                                console.error('references', params.textDocument.uri, params.position.line, params.position.character, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
-                                return resolve(result);
-                            }
-                        );
-                    } catch (e) {
-                        console.error(params, e);
-                        return resolve([]);
-                    }
-                }, (err) => {
-                    initialized = null;
-                    return reject(err)
-                })
+                const init = new Date().getTime();
+                try {
+                    let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
+                    service.getReferences(reluri, params.position.line, params.position.character).then(
+                        (result) => {
+                            const exit = new Date().getTime();
+                            console.error('references', params.textDocument.uri, params.position.line, params.position.character, 'found', result.length, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
+                            return resolve(result);
+                        }
+                    );
+                } catch (e) {
+                    console.error(params, e);
+                    return resolve([]);
+                }
             });
         });
 
         this.connection.onRequest(rt.GlobalRefsRequest.type, (params: WorkspaceSymbolParams): Promise<SymbolInformation[]> => {
             return new Promise<SymbolInformation[]>((resolve, reject) => {
-                initialize().then(() => {
-
-                    try {
-                        console.error('global-refs', params.query);
-                        const externals = service.getExternalRefs();
-                        if (externals) {
-                            let res = externals.map(external => {
-                                return SymbolInformation.create(external.name, util.formEmptyKind(), util.formEmptyRange(), util.formExternalUri(external));
-                            });
-                            return resolve(res);
-                        }
-                        return resolve([]);
-                    } catch (e) {
-                        console.error(params, e);
-                        return resolve([]);
+                try {
+                    console.error('global-refs', params.query);
+                    const externals = service.getExternalRefs();
+                    if (externals) {
+                        let res = externals.map(external => {
+                            return SymbolInformation.create(external.name, util.formEmptyKind(), util.formEmptyRange(), util.formExternalUri(external));
+                        });
+                        return resolve(res);
                     }
-                }, (err) => {
-                    initialized = null;
-                    return reject(err)
-                })
+                    return resolve([]);
+                } catch (e) {
+                    console.error(params, e);
+                    return resolve([]);
+                }
             });
         });
     }

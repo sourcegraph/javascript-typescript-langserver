@@ -9,6 +9,11 @@
         "sourceMap": true,
         "outDir": "build"
     },
+    "formatCodeOptions": {
+        "indentSize": 4,
+        "tabSize": 4,
+        "convertTabsToSpaces": true
+    },
     "files": [
         "src/language-server.ts",
         "src/language-server-stdio.ts",

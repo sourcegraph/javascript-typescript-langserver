@@ -5,6 +5,7 @@ import { IConnection, Position, Location, SymbolInformation, Range } from 'vscod
 
 import * as async from 'async';
 
+import * as FileSystem from './fs';
 import * as util from './util';
 import * as pm from './project-manager';
 
@@ -83,13 +84,161 @@ export default class TypeScriptService {
         return res;
     }
 
+    private ensuredFilesForHoverAndDefinition = new Map<string, Promise<void>>();
+
+    private ensureFilesForHoverAndDefinition(uri: string): Promise<void> {
+        if (this.ensuredFilesForHoverAndDefinition.get(uri)) {
+            return this.ensuredFilesForHoverAndDefinition.get(uri);
+        }
+
+        const fileName: string = util.uri2path(uri);
+        const absFileName = "/" + fileName;
+
+        const promise = this.projectManager.ensureModuleStructure().then(() => {
+            return this.projectManager.ensureFiles([absFileName]);
+        }).then(() => {
+            return this.projectManager.refreshConfigurations();
+        }).then(() => {
+            return this.projectManager.getConfiguration(fileName).get().then((config) => {
+                const contents = config.moduleResolutionHost().readFile(fileName);
+                const info = ts.preProcessFile(contents, true, true);
+                const compilerOpt = config.host.getCompilationSettings();
+
+                const importDirs = new Set<string>();
+                for (const imp of info.importedFiles) {
+                    const resolved = ts.resolveModuleName(imp.fileName, fileName, compilerOpt, config.moduleResolutionHost());
+                    if (!resolved || !resolved.resolvedModule) {
+                        // This means we didn't find a file defining
+                        // the module. It could still exist as an
+                        // ambient module, which is why we fetch
+                        // global*.d.ts files.
+                        continue;
+                    }
+
+                    // Aggressively fetch the entire containing directory of each imported file.
+                    // If this becomes too expensive, we can fall back to just fetching the file.
+                    let impDir = ("/" + resolved.resolvedModule.resolvedFileName);
+                    impDir = impDir.substring(0, impDir.lastIndexOf("/"));
+                    importDirs.add(impDir);
+                }
+
+                return Promise.all(
+                    Array.from(importDirs).map((impDir) => {
+                        const filesToEnsure = []
+                        return this.projectManager.walkRemote(impDir, function(path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
+                            if (err) {
+                                return err;
+                            } else if (info.dir) {
+                                return null;
+                            }
+
+                            if (util.isJSTSFile(info.name)) {
+                                filesToEnsure.push(info.name);
+                            }
+
+                            return null;
+                        }).then(() => {
+                            return this.projectManager.ensureFiles(filesToEnsure)
+                        });
+                    })
+                );
+            });
+        }).then(() => {
+            return this.projectManager.refreshConfigurations();
+        });
+
+        this.ensuredFilesForHoverAndDefinition.set(uri, promise);
+        promise.catch((err) => {
+            console.error("Failed to fetch files for hover/definition for uri ", uri, ", error:", err);
+            this.ensuredFilesForHoverAndDefinition.delete(uri);
+        });
+        return promise;
+    }
+
+    private ensuredFilesForWorkspaceSymbol: Promise<void> = null;
+
+    private ensureFilesForWorkspaceSymbol(): Promise<void> {
+        if (this.ensuredFilesForWorkspaceSymbol) {
+            return this.ensuredFilesForWorkspaceSymbol;
+        }
+
+        const self = this;
+        const filesToEnsure = [];
+        const promise = this.projectManager.walkRemote(this.projectManager.getRemoteRoot(), function(path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
+            if (err) {
+                return err;
+            } else if (info.dir) {
+                if (info.name.indexOf("/node_modules/") !== -1) {
+                    return pm.skipDir;
+                } else {
+                    return null;
+                }
+            }
+            if (util.isJSTSFile(path)) {
+                filesToEnsure.push(path);
+            }
+            return null;
+        }).then(() => {
+            return this.projectManager.ensureFiles(filesToEnsure)
+        }).then(() => {
+            return this.projectManager.refreshConfigurations();
+        });
+
+        this.ensuredFilesForWorkspaceSymbol = promise;
+        promise.catch((err) => {
+            console.error("Failed to fetch files for workspace/symbol:", err);
+            this.ensuredFilesForWorkspaceSymbol = null;
+        });
+
+        return promise;
+    }
+
+    private ensuredAllFiles: Promise<void> = null;
+
+    private ensureFilesForReferences(uri: string): Promise<void> {
+        const fileName: string = util.uri2path(uri);
+        if (fileName.indexOf("/node_modules/") !== -1) {
+            return this.ensureFilesForWorkspaceSymbol();
+        }
+
+        if (this.ensuredAllFiles) {
+            return this.ensuredAllFiles;
+        }
+
+        const filesToEnsure = [];
+        const promise = this.projectManager.walkRemote(this.projectManager.getRemoteRoot(), function(path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
+            if (err) {
+                return err;
+            } else if (info.dir) {
+                return null;
+            }
+            if (util.isJSTSFile(path)) {
+                filesToEnsure.push(path);
+            }
+            return null;
+        }).then(() => {
+            return this.projectManager.ensureFiles(filesToEnsure)
+        }).then(() => {
+            return this.projectManager.refreshConfigurations();
+        });
+
+        this.ensuredAllFiles = promise;
+        promise.catch((err) => {
+            console.error("Failed to fetch files for references:", err);
+            this.ensuredAllFiles = null;
+        });
+
+        return promise;
+    }
+
     getDefinition(uri: string, line: number, column: number): Promise<Location[]> {
-        return new Promise<Location[]>((resolve, reject) => {
+        return this.ensureFilesForHoverAndDefinition(uri).then(() => new Promise<Location[]>((resolve, reject) => {
+            const fileName: string = util.uri2path(uri);
             try {
-                const fileName: string = util.uri2path(uri);
                 const configuration = this.projectManager.getConfiguration(fileName);
-                configuration.get().then(() => {
+                configuration.get().then((configuration) => {
                     try {
+                        this.projectManager.syncConfiguration(configuration); // resync after getting new config
                         const sourceFile = this.getSourceFile(configuration, fileName);
                         if (!sourceFile) {
                             return resolve([]);
@@ -120,16 +269,18 @@ export default class TypeScriptService {
             } catch (e) {
                 return reject(e);
             }
-        });
+        }));
     }
 
     getHover(uri: string, line: number, column: number): Promise<ts.QuickInfo> {
-        return new Promise<ts.QuickInfo>((resolve, reject) => {
+        return this.ensureFilesForHoverAndDefinition(uri).then(() => new Promise<ts.QuickInfo>((resolve, reject) => {
+            const fileName: string = util.uri2path(uri);
             try {
-                const fileName: string = util.uri2path(uri);
                 const configuration = this.projectManager.getConfiguration(fileName);
                 configuration.get().then(() => {
                     try {
+                        this.projectManager.syncConfiguration(configuration); // resync after getting new config
+
                         const sourceFile = this.getSourceFile(configuration, fileName);
                         if (!sourceFile) {
                             return resolve(null);
@@ -145,14 +296,13 @@ export default class TypeScriptService {
             } catch (e) {
                 return reject(e);
             }
-        });
+        }));
     }
 
     getReferences(uri: string, line: number, column: number): Promise<Location[]> {
-        return new Promise<Location[]>((resolve, reject) => {
+        return this.ensureFilesForReferences(uri).then(() => new Promise<Location[]>((resolve, reject) => {
+            const fileName: string = util.uri2path(uri);
             try {
-                const fileName: string = util.uri2path(uri);
-
                 const configuration = this.projectManager.getConfiguration(fileName);
                 configuration.get().then(() => {
                     try {
@@ -195,11 +345,11 @@ export default class TypeScriptService {
             } catch (e) {
                 return reject(e);
             }
-        });
+        }));
     }
 
     getWorkspaceSymbols(query: string, limit?: number): Promise<SymbolInformation[]> {
-        return new Promise<SymbolInformation[]>((resolve, reject) => {
+        return this.ensureFilesForWorkspaceSymbol().then(() => new Promise<SymbolInformation[]>((resolve, reject) => {
             // TODO: cache all symbols or slice of them?
             if (!query && this.workspaceSymbols) {
                 return resolve(this.workspaceSymbols);
@@ -215,7 +365,7 @@ export default class TypeScriptService {
                 }
                 resolve(items);
             });
-        });
+        }));
     }
 
     getPositionFromOffset(fileName: string, offset: number): Position {
