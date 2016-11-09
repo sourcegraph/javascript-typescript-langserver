@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as ts from 'typescript';
-import { IConnection, Position, Location, SymbolInformation, Range } from 'vscode-languageserver';
+import { IConnection, Position, Location, SymbolInformation, Range, Hover } from 'vscode-languageserver';
 
 import * as async from 'async';
 
@@ -123,8 +123,8 @@ export default class TypeScriptService {
         });
     }
 
-    getHover(uri: string, line: number, column: number): Promise<ts.QuickInfo> {
-        return new Promise<ts.QuickInfo>((resolve, reject) => {
+    getHover(uri: string, line: number, column: number): Promise<Hover> {
+        return new Promise<Hover>((resolve, reject) => {
             try {
                 const fileName: string = util.uri2path(uri);
                 const configuration = this.projectManager.getConfiguration(fileName);
@@ -135,7 +135,24 @@ export default class TypeScriptService {
                             return resolve(null);
                         }
                         const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
-                        return resolve(configuration.service.getQuickInfoAtPosition(fileName, offset));
+                        const info = configuration.service.getQuickInfoAtPosition(fileName, offset);
+                        if (!info) {
+                            return resolve(null);
+                        }
+
+                        const contents = [];
+                        contents.push({
+                            language: 'typescript',
+                            value: ts.displayPartsToString(info.displayParts)
+                        });
+                        let documentation = ts.displayPartsToString(info.documentation);
+                        if (documentation) {
+                            contents.push(documentation);
+                        }
+                        const start = ts.getLineAndCharacterOfPosition(sourceFile, info.textSpan.start);
+                        const end = ts.getLineAndCharacterOfPosition(sourceFile, info.textSpan.start + info.textSpan.length);
+
+                        return resolve({ contents: contents, range: Range.create(start.line, start.character, end.line, end.character) });
                     } catch (e) {
                         return reject(e);
                     }
@@ -274,7 +291,7 @@ export default class TypeScriptService {
             callback(null, SymbolInformation.create(item.name,
                 util.convertStringtoSymbolKind(item.kind),
                 Range.create(start.line, start.character, end.line, end.character),
-                'file:///' + item.fileName, item.containerName));
+                util.path2uri('', item.fileName), item.containerName));
         }
     }
 
@@ -380,7 +397,7 @@ export default class TypeScriptService {
         return SymbolInformation.create(item.text,
             util.convertStringtoSymbolKind(item.kind),
             Range.create(start.line, start.character, end.line, end.character),
-            'file:///' + sourceFile.fileName, parent ? parent.text : '');
+            util.path2uri('', sourceFile.fileName), parent ? parent.text : '');
     }
 
     /**

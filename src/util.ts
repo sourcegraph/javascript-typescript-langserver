@@ -1,7 +1,17 @@
 import * as path from "path";
 
 import * as ts from "typescript";
-import { SymbolKind, Range, Position} from 'vscode-languageserver';
+import { SymbolKind, Range, Position } from 'vscode-languageserver';
+
+var strict = false;
+
+/**
+ * Toggles "strict" flag, affects how we are parsing/generating URLs.
+ * In strict mode we using "file://PATH", otherwise on Windows we are using "file:///PATH"
+ */
+export function setStrict(value: boolean) {
+    strict = value;
+}
 
 export function formEmptyRange(): Range {
     return Range.create(Position.create(0, 0), Position.create(0, 0))
@@ -136,10 +146,28 @@ export function collectAllParents(node, parents) {
 
 export function path2uri(root, file: string): string {
     let ret = 'file://';
-    if (process.platform == 'win32') {
+    if (!strict && process.platform == 'win32') {
         ret += '/';
     }
-    let p = root ? path.resolve(root, file) : file;
+    let p;
+    if (root) {
+        if (!strict) {
+            p = path.resolve(root, file);
+        } else {
+            // we can't use path::resolve on Windows in strict mode
+            // because it adds bogus drive information
+            if (file.startsWith('/')) {
+                // absolute notation
+                p = file;
+            } else {
+                // relative
+                const prefix = root.endsWith('/') ? root : root + '/';
+                p = prefix + file;
+            }
+        }
+    } else {
+        p = file;
+    }
     return ret + normalizePath(p);
 }
 
@@ -147,7 +175,10 @@ export function uri2path(uri: string): string {
     if (uri.startsWith('file://')) {
         uri = uri.substring(7);
         if (process.platform == 'win32') {
-            uri = uri.substring(1).replace(/%3A/g, ':');
+            if (!strict) {
+                uri = uri.substring(1);
+            }
+            uri = uri.replace(/%3A/g, ':');
         }
     }
     return uri;

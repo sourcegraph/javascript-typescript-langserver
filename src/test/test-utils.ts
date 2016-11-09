@@ -2,28 +2,24 @@ import * as net from 'net';
 import * as os from 'os';
 import * as fs from 'fs';
 
-import * as tmp from 'tmp';
 import * as mocha from 'mocha';
 import * as chai from 'chai';
 
 import * as vscode from 'vscode-languageserver';
 
 import Connection from '../connection';
-import {FileInfo} from '../fs';
+import { FileInfo } from '../fs';
 import * as rt from '../request-type';
-import * as utils from './test-utils';
 
 class Channel {
     server: net.Server;
     serverIn: net.Socket;
     serverOut: net.Socket;
-    serverFile: string;
     serverConnection: Connection;
 
     client: net.Server;
     clientIn: net.Socket;
     clientOut: net.Socket;
-    clientFile: string;
     clientConnection: Connection;
 }
 
@@ -32,15 +28,6 @@ let channel: Channel;
 export function setUp(memfs: any, done: (err?: Error) => void) {
 
     channel = new Channel();
-
-    const input = tmp.fileSync();
-    const output = tmp.fileSync();
-
-    fs.unlinkSync(input.name);
-    fs.unlinkSync(output.name);
-
-    channel.serverFile = input.name;
-    channel.clientFile = output.name;
 
     let counter = 2;
 
@@ -70,16 +57,18 @@ export function setUp(memfs: any, done: (err?: Error) => void) {
         channel.serverConnection = new Connection(channel.serverIn, channel.serverOut, true);
         maybeDone();
     });
-    channel.server.listen(input.name);
     channel.client = net.createServer((stream) => {
         channel.clientIn = stream;
         channel.clientConnection = new Connection(channel.clientIn, channel.clientOut, true);
         initFs(channel.clientConnection, memfs);
         maybeDone();
     });
-    channel.client.listen(output.name);
-    channel.clientOut = net.connect(input.name);
-    channel.serverOut = net.connect(output.name);
+    channel.server.listen(0, () => {
+        channel.client.listen(0, () => {
+            channel.clientOut = net.connect(channel.server.address().port);
+            channel.serverOut = net.connect(channel.client.address().port);
+        });
+    });
 }
 
 function initFs(connection: Connection, memfs: any) {
@@ -91,7 +80,7 @@ function initFs(connection: Connection, memfs: any) {
         while (i < path.length) {
             node = node[path[i]];
             if (!node || typeof node != 'object') {
-                throw new Error('no such file');
+                throw new Error('no such file: ' + params);
             }
             i++;
         }

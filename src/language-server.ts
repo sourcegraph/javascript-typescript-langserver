@@ -5,6 +5,7 @@ import * as os from 'os';
 import * as cluster from 'cluster';
 
 import Connection from './connection';
+import * as util from './util';
 
 const program = require('commander');
 
@@ -20,6 +21,7 @@ program
     .option('-p, --port [port]', 'LSP port (' + defaultLspPort + ')', parseInt)
     .parse(process.argv);
 
+util.setStrict(program.strict);
 const lspPort = program.port || defaultLspPort;
 
 

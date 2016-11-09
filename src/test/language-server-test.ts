@@ -2,7 +2,6 @@ import * as net from 'net';
 import * as os from 'os';
 import * as fs from 'fs';
 
-import * as tmp from 'tmp';
 import * as mocha from 'mocha';
 import * as chai from 'chai';
 
@@ -12,6 +11,10 @@ import Connection from '../connection';
 import { FileInfo } from '../fs';
 import * as rt from '../request-type';
 import * as utils from './test-utils';
+
+// forcing strict mode
+import * as util from '../util';
+util.setStrict(true);
 
 describe('LSP', function () {
 
@@ -159,7 +162,7 @@ describe('LSP', function () {
                                     "line": 0
                                 }
                             },
-                            "uri": "file:////a.ts"
+                            "uri": "file:///a.ts"
                         },
                         "name": "a"
                     },
@@ -177,7 +180,7 @@ describe('LSP', function () {
                                     "line": 0
                                 }
                             },
-                            "uri": "file:////a.ts"
+                            "uri": "file:///a.ts"
                         },
                         "name": "foo"
                     },
@@ -195,7 +198,7 @@ describe('LSP', function () {
                                     "line": 0
                                 }
                             },
-                            "uri": "file:////a.ts"
+                            "uri": "file:///a.ts"
                         },
                         "name": "i"
                     }
@@ -221,7 +224,7 @@ describe('LSP', function () {
                                     "line": 0
                                 },
                             },
-                            "uri": "file:////foo/b.ts"
+                            "uri": "file:///foo/b.ts"
                         },
                         "name": "bar"
                     },
@@ -239,7 +242,7 @@ describe('LSP', function () {
                                     "line": 0
                                 }
                             },
-                            "uri": "file:////foo/b.ts"
+                            "uri": "file:///foo/b.ts"
                         },
                         "name": "baz"
                     }

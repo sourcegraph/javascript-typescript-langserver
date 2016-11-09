@@ -1,2 +1,2 @@
 @echo off
-node "%~dp0/../build/language-server-stdio.js" 2>sublime.log
+node "%~dp0/../build/language-server-stdio.js" 2>"%~dp0/sublime.log"

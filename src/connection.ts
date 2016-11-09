@@ -18,11 +18,13 @@ import {
 } from 'vscode-languageserver';
 
 import * as ts from 'typescript';
+import * as types from 'vscode-languageserver-types';
 
 import * as util from './util';
 import TypeScriptService from './typescript-service';
 
 import * as rt from './request-type';
+
 
 export default class Connection {
 
@@ -86,6 +88,9 @@ export default class Connection {
         this.connection.onNotification(rt.ExitRequest.type, close);
 
         this.connection.onRequest(rt.ShutdownRequest.type, () => []);
+
+        this.connection.onDidOpenTextDocument(() => { });
+        this.connection.onDidCloseTextDocument(() => { });
 
 
         this.connection.onRequest(rt.WorkspaceSymbolsRequest.type, (params: rt.WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]> => {
@@ -161,21 +166,10 @@ export default class Connection {
                     const init = new Date().getTime();
                     try {
                         let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
-                        service.getHover(reluri, params.position.line, params.position.character).then((quickInfo) => {
-                            let contents = [];
-                            if (quickInfo) {
-                                contents.push({
-                                    language: 'typescript',
-                                    value: ts.displayPartsToString(quickInfo.displayParts)
-                                });
-                                let documentation = ts.displayPartsToString(quickInfo.documentation);
-                                if (documentation) {
-                                    contents.push(documentation);
-                                }
-                            }
+                        service.getHover(reluri, params.position.line, params.position.character).then((hover) => {
                             const exit = new Date().getTime();
                             console.error('hover', params.textDocument.uri, params.position.line, params.position.character, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
-                            resolve({ contents: contents });
+                            resolve(hover);
                         }, (e) => {
                             return reject(e);
                         });

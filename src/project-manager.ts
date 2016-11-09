@@ -350,7 +350,7 @@ class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
     }
 
     getDefaultLibFileName(options: ts.CompilerOptions): string {
-        return ts.getDefaultLibFilePath(options);
+        return util.normalizePath(ts.getDefaultLibFilePath(options));
     }
 }
 

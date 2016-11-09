@@ -9,11 +9,6 @@
         "sourceMap": true,
         "outDir": "build"
     },
-    "files": [
-        "src/language-server.ts",
-        "src/language-server-stdio.ts",
-        "src/test/language-server-test.ts"
-    ],
     "exclude": [
         "node_modules"
     ]
