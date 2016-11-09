@@ -1,5 +1,5 @@
 import * as fs from 'fs';
-import * as path from 'path';
+import * as path_ from 'path';
 import * as ts from 'typescript';
 import { IConnection, Position, Location, SymbolInformation, Range } from 'vscode-languageserver';
 
@@ -92,7 +92,7 @@ export default class TypeScriptService {
         }
 
         const fileName: string = util.uri2path(uri);
-        const absFileName = "/" + fileName;
+        const absFileName = path_.join(path_.sep, fileName);
 
         const promise = this.projectManager.ensureModuleStructure().then(() => {
             return this.projectManager.ensureFiles([absFileName]);
@@ -117,8 +117,8 @@ export default class TypeScriptService {
 
                     // Aggressively fetch the entire containing directory of each imported file.
                     // If this becomes too expensive, we can fall back to just fetching the file.
-                    let impDir = ("/" + resolved.resolvedModule.resolvedFileName);
-                    impDir = impDir.substring(0, impDir.lastIndexOf("/"));
+                    let impDir = path_.join(path_.sep, resolved.resolvedModule.resolvedFileName);
+                    impDir = impDir.substring(0, impDir.lastIndexOf(path_.sep));
                     importDirs.add(impDir);
                 }
 
@@ -168,7 +168,7 @@ export default class TypeScriptService {
             if (err) {
                 return err;
             } else if (info.dir) {
-                if (info.name.indexOf("/node_modules/") !== -1) {
+                if (info.name.indexOf(`${path_.sep}node_modules${path_.sep}`) !== -1) {
                     return pm.skipDir;
                 } else {
                     return null;
@@ -197,7 +197,7 @@ export default class TypeScriptService {
 
     private ensureFilesForReferences(uri: string): Promise<void> {
         const fileName: string = util.uri2path(uri);
-        if (fileName.indexOf("/node_modules/") !== -1) {
+        if (fileName.indexOf(`${path_.sep}node_modules${path_.sep}`) !== -1) {
             return this.ensureFilesForWorkspaceSymbol();
         }
 

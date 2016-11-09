@@ -138,7 +138,7 @@ export class ProjectManager {
             } else if (info.dir) {
                 return null;
             }
-            const rel = path_.posix.relative(self.root, path);
+            const rel = path_.posix.relative(self.root, util.normalizePath(path));
             if (util.isGlobalTSFile(rel) || util.isConfigFile(rel) || util.isPackageJsonFile(rel)) {
                 filesToFetch.push(path);
             } else {
@@ -163,7 +163,7 @@ export class ProjectManager {
                 if (err) {
                     return reject(err);
                 }
-                filesToFetch.forEach((f) => this.fetched.add(f));
+                filesToFetch.forEach((f) => this.fetched.add(util.normalizePath(f)));
                 return resolve();
             });
         });
