@@ -26,9 +26,11 @@ export class ProjectManager {
     private remoteFs: FileSystem.FileSystem;
     private localFs: InMemoryFileSystem;
 
-    // fetched keeps track of which files in localFs have actually
-    // been fetched from remoteFs. Some might have a placeholder
-    // value.
+    /**
+     * fetched keeps track of which files in localFs have actually
+     * been fetched from remoteFs. Some might have a placeholder
+     * value.
+     */
     private fetched: Set<string>;
 
     constructor(root: string, strict: boolean, connection: IConnection) {
@@ -111,12 +113,14 @@ export class ProjectManager {
 
     private ensuredModuleStructure: Promise<void> = null;
 
-    // ensureModuleStructure ensures that the module structure of the
-    // project exists in localFs. TypeScript/JavaScript module
-    // structure is determined by [jt]sconfig.json, filesystem layout,
-    // global*.d.ts files. For performance reasons, we only read in
-    // the contents of some files and store "var dummy_0ff1bd;" as the
-    // contents of all other files.
+    /**
+     * ensureModuleStructure ensures that the module structure of the
+     * project exists in localFs. TypeScript/JavaScript module
+     * structure is determined by [jt]sconfig.json, filesystem layout,
+     * global*.d.ts files. For performance reasons, we only read in
+     * the contents of some files and store "var dummy_0ff1bd;" as the
+     * contents of all other files.
+     */
     ensureModuleStructure(): Promise<void> {
         if (!this.ensuredModuleStructure) {
             this.ensuredModuleStructure = this.ensureModuleStructure_();
@@ -150,12 +154,14 @@ export class ProjectManager {
         }).then(() => this.ensureFiles(filesToFetch));
     }
 
-    // ensureFiles ensures the following files have been fetched to
-    // localFs. The files parameter is expected to contain paths in
-    // the remote FS. ensureFiles only syncs unfetched file content
-    // from remoteFs to localFs. It does not update project
-    // state. Callers that want to do so after file contents have been
-    // fetched should call this.refreshConfigurations().
+    /**
+     * ensureFiles ensures the following files have been fetched to
+     * localFs. The files parameter is expected to contain paths in
+     * the remote FS. ensureFiles only syncs unfetched file content
+     * from remoteFs to localFs. It does not update project
+     * state. Callers that want to do so after file contents have been
+     * fetched should call this.refreshConfigurations().
+     */
     ensureFiles(files: string[]): Promise<void> {
         const filesToFetch = files.filter((f) => !this.fetched.has(f));
         if (filesToFetch.length === 0) {

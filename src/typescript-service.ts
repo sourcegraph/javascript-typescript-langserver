@@ -33,7 +33,7 @@ export default class TypeScriptService {
         this.root = root;
         this.projectManager = new pm.ProjectManager(root, strict, connection);
 
-        //initialize providers 
+        // initialize providers
         this.exportedSymbolProvider = new ExportedSymbolsProvider(this);
         this.externalRefsProvider = new ExternalRefsProvider(this);
     }
