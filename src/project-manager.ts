@@ -26,11 +26,19 @@ export class ProjectManager {
     private remoteFs: FileSystem.FileSystem;
     private localFs: InMemoryFileSystem;
 
+    /**
+     * fetched keeps track of which files in localFs have actually
+     * been fetched from remoteFs. Some might have a placeholder
+     * value.
+     */
+    private fetched: Set<string>;
+
     constructor(root: string, strict: boolean, connection: IConnection) {
         this.root = util.normalizePath(root);
         this.strict = strict;
         this.configs = new Map<string, ProjectConfiguration>();
         this.localFs = new InMemoryFileSystem(this.root);
+        this.fetched = new Set<string>();
 
         if (strict) {
             this.remoteFs = new FileSystem.RemoteFileSystem(connection)
@@ -39,59 +47,28 @@ export class ProjectManager {
         }
     }
 
-    /**
-     * Fetches directory tree and files from VFS, identifies and initializes sub-projects
-     */
-    initialize(): Promise<void> {
-
-        let done = false;
-
-        return new Promise<void>((resolve, reject) => {
-            // fetch directory tree from VFS
-            this.getFiles(this.root, (err, files) => {
-                // HACK (callback is called twice) 
-                if (done) {
-                    return;
-                }
-                done = true;
-                if (err) {
-                    console.error('An error occurred while collecting files', err);
-                    return reject(err);
-                }
-                // fetch files from VFS
-                this.fetchContent(files, (err) => {
-                    if (err) {
-                        console.error('An error occurred while fetching files content', err);
-                        return reject(err);
-                    }
-
-                    // Determine and initialize sub-projects
-                    this.processProjects();
-                    return resolve();
-
-                });
-            });
-        });
+    getRemoteRoot(): string {
+        return this.root;
     }
 
-    /**
-     * @return true if there is a file with a given name
-     */
+	/**
+	 * @return true if there is a file with a given name
+	 */
     hasFile(name: string) {
         return this.localFs.fileExists(name);
     }
 
-    /**
-     * Ensures that all files are added (and parsed) to the project to which fileName belongs. 
-     */
+	/**
+	 * Ensures that all files are added (and parsed) to the project to which fileName belongs. 
+	 */
     syncConfigurationFor(fileName: string) {
         return this.syncConfiguration(this.getConfiguration(fileName));
     }
 
-    /**
-     * Ensures that all files are added (and parsed) for the given project.
-     * Uses tsconfig.json settings to identify what files make a project (root files)
-     */
+	/**
+	 * Ensures that all files are added (and parsed) for the given project.
+	 * Uses tsconfig.json settings to identify what files make a project (root files)
+	 */
     syncConfiguration(config: ProjectConfiguration) {
         if (config.host.complete) {
             return;
@@ -111,9 +88,9 @@ export class ProjectManager {
         config.host.complete = true;
     }
 
-    /**
-     * @return all projects
-     */
+	/**
+	 * @return all projects
+	 */
     getConfigurations(): ProjectConfiguration[] {
         const ret = [];
         this.configs.forEach((v, k) => {
@@ -134,55 +111,122 @@ export class ProjectManager {
         return config;
     }
 
+    private ensuredModuleStructure: Promise<void> = null;
+
     /**
-     * Collects all files in the given path
+     * ensureModuleStructure ensures that the module structure of the
+     * project exists in localFs. TypeScript/JavaScript module
+     * structure is determined by [jt]sconfig.json, filesystem layout,
+     * global*.d.ts files. For performance reasons, we only read in
+     * the contents of some files and store "var dummy_0ff1bd;" as the
+     * contents of all other files.
      */
-    getFiles(path: string, callback: (err: Error, result?: string[]) => void) {
-
-        const start = new Date().getTime();
-
-        let files: string[] = [];
-        let counter: number = 0;
-
-        let cb = (err: Error, result?: FileSystem.FileInfo[]) => {
-            if (err) {
-                console.error('got error while reading dir', err);
-                return callback(err)
-            }
-            let tasks = [];
-            result.forEach((fi) => {
-                if (fi.name.indexOf('/.') >= 0) {
-                    return
-                }
-                if (fi.dir) {
-                    counter++;
-                    tasks.push(this.fetchDir(fi.name))
-                } else {
-                    if (/\.[tj]sx?$/.test(fi.name) || /(^|\/)[tj]sconfig\.json$/.test(fi.name)) {
-                        files.push(fi.name)
-                    }
-                }
+    ensureModuleStructure(): Promise<void> {
+        if (!this.ensuredModuleStructure) {
+            this.ensuredModuleStructure = this.ensureModuleStructure_();
+            this.ensuredModuleStructure.catch((err) => {
+                console.error("Failed to fetch module structure:", err);
+                this.ensuredModuleStructure = null;
             });
-            async.parallel(tasks, (err: Error, result?: FileSystem.FileInfo[][]) => {
-                if (err) {
-                    return callback(err)
+        }
+        return this.ensuredModuleStructure;
+    }
+
+    private ensureModuleStructure_(): Promise<void> {
+        const start = new Date().getTime();
+        const self = this;
+        const filesToFetch = [];
+        return this.walkRemote(this.root, function (path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
+            if (err) {
+                return err;
+            } else if (info.dir) {
+                return null;
+            }
+            const rel = path_.posix.relative(self.root, util.normalizePath(path));
+            if (util.isGlobalTSFile(rel) || util.isConfigFile(rel) || util.isPackageJsonFile(rel)) {
+                filesToFetch.push(path);
+            } else {
+                if (!self.localFs.fileExists(rel)) {
+                    self.localFs.addFile(rel, "var dummy_0ff1bd;");
                 }
-                result.forEach((items) => {
-                    counter--;
-                    cb(null, items)
-                });
-                if (counter == 0) {
-                    console.error(files.length + ' found, fs scan complete in', (new Date().getTime() - start) / 1000.0);
-                    callback(null, files)
-                }
-            })
-        };
-        this.fetchDir(path)(cb)
+            }
+            return null;
+        }).then(() => this.ensureFiles(filesToFetch));
     }
 
     /**
-     * @return project configuration for a given source file. Climbs directory tree up to workspace root if needed 
+     * ensureFiles ensures the following files have been fetched to
+     * localFs. The files parameter is expected to contain paths in
+     * the remote FS. ensureFiles only syncs unfetched file content
+     * from remoteFs to localFs. It does not update project
+     * state. Callers that want to do so after file contents have been
+     * fetched should call this.refreshConfigurations().
      */
+    ensureFiles(files: string[]): Promise<void> {
+        const filesToFetch = files.filter((f) => !this.fetched.has(f));
+        if (filesToFetch.length === 0) {
+            return Promise.resolve();
+        }
+        return new Promise<void>((resolve, reject) => {
+            this.fetchContent(filesToFetch, (err) => {
+                if (err) {
+                    return reject(err);
+                }
+                filesToFetch.forEach((f) => this.fetched.add(util.normalizePath(f)));
+                return resolve();
+            });
+        });
+    }
+
+    walkRemote(root: string, walkfn: (path: string, info: FileSystem.FileInfo, err?: Error) => Error | null): Promise<void> {
+        const info = {
+            name: root,
+            size: 0,
+            dir: true,
+        }
+        return this.walkRemoter(root, info, walkfn);
+    }
+
+    private walkRemoter(path: string, info: FileSystem.FileInfo, walkfn: (path: string, info: FileSystem.FileInfo, err?: Error) => Error | null): Promise<void> {
+        if (info.name.indexOf('/.') >= 0) {
+            return Promise.resolve();
+        }
+
+        const err = walkfn(path, info);
+        if (err === skipDir) {
+            return Promise.resolve();
+        } else if (err) {
+            return Promise.reject(err);
+        }
+
+        if (!info.dir) {
+            return Promise.resolve();
+        }
+
+        return new Promise<void>((resolve, reject) => {
+            this.fetchDir(path)((err: Error, result?: FileSystem.FileInfo[]) => {
+                if (err) {
+                    const err2 = walkfn(path, info, err);
+                    if (err2) {
+                        return reject(err);
+                    } else {
+                        return resolve();
+                    }
+                }
+
+                Promise.all(result.map((fi) => this.walkRemoter(fi.name, fi, walkfn))).then(() => {
+                    return resolve();
+                }, (err) => {
+                    return reject(err);
+                });
+            });
+        });
+    }
+
+
+	/**
+	 * @return project configuration for a given source file. Climbs directory tree up to workspace root if needed 
+	 */
     getConfiguration(fileName: string): ProjectConfiguration {
         let dir = path_.posix.dirname(fileName);
         let config;
@@ -219,6 +263,10 @@ export class ProjectManager {
      * Fetches content of the specified files
      */
     private fetchContent(files: string[], callback: (err?: Error) => void) {
+        if (!files || files.length === 0) {
+            return callback();
+        }
+
         let tasks = [];
         const fetch = (path: string): AsyncFunction<string> => {
             return (callback: (err?: Error, result?: string) => void) => {
@@ -248,7 +296,8 @@ export class ProjectManager {
     /**
      * Detects projects denoted by tsconfig.json
      */
-    private processProjects() {
+    refreshConfigurations() {
+        const rootdirs = new Set<string>();
         Object.keys(this.localFs.entries).forEach((k) => {
             if (!/(^|\/)[tj]sconfig\.json$/.test(k)) {
                 return;
@@ -261,9 +310,10 @@ export class ProjectManager {
                 dir = '';
             }
             this.configs.set(dir, new ProjectConfiguration(this.localFs, k));
+            rootdirs.add(dir);
         });
-        // collecting all the files in workspace by making fake configuration object         
-        if (!this.configs.get('')) {
+        if (!rootdirs.has('')) {
+            // collecting all the files in workspace by making fake configuration object
             this.configs.set('', new ProjectConfiguration(this.localFs, '', {
                 compilerOptions: {
                     module: ts.ModuleKind.CommonJS,
@@ -388,11 +438,18 @@ class InMemoryFileSystem implements ts.ParseConfigHost {
     }
 
     fileExists(path: string): boolean {
-        return !!this.entries[path];
+        if (!!this.entries[path]) {
+            return !!this.entries[path];
+        }
+        return !!this.entries[path_.posix.relative('/', path)];
     }
 
     readFile(path: string): string {
-        return this.entries[path];
+        let entry = this.entries[path];
+        if (entry) {
+            return entry;
+        }
+        return this.entries[path_.posix.relative('/', path)];
     }
 
     readDirectory(rootDir: string, extensions: string[], excludes: string[], includes: string[]): string[] {
@@ -456,6 +513,10 @@ export class ProjectConfiguration {
         this.configContent = configContent;
     }
 
+    moduleResolutionHost(): ts.ModuleResolutionHost {
+        return this.fs;
+    }
+
     get(): Promise<ProjectConfiguration> {
         if (!this.promise) {
             this.promise = new Promise<ProjectConfiguration>((resolve, reject) => {
@@ -493,4 +554,9 @@ export class ProjectConfiguration {
     }
 
 
+}
+
+export const skipDir: Error = {
+    name: "WALK_FN_SKIP_DIR",
+    message: "",
 }
