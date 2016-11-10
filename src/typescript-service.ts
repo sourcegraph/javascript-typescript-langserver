@@ -91,67 +91,54 @@ export default class TypeScriptService {
             return this.ensuredFilesForHoverAndDefinition.get(uri);
         }
 
-        const fileName: string = util.uri2path(uri);
-        const absFileName = path_.join(path_.sep, fileName);
-
         const promise = this.projectManager.ensureModuleStructure().then(() => {
-            return this.projectManager.ensureFiles([absFileName]);
-        }).then(() => {
-            return this.projectManager.refreshConfigurations();
-        }).then(() => {
-            return this.projectManager.getConfiguration(fileName).get().then((config) => {
-                const contents = config.moduleResolutionHost().readFile(fileName);
-                const info = ts.preProcessFile(contents, true, true);
-                const compilerOpt = config.host.getCompilationSettings();
-
-                const importDirs = new Set<string>();
-                for (const imp of info.importedFiles) {
-                    const resolved = ts.resolveModuleName(imp.fileName, fileName, compilerOpt, config.moduleResolutionHost());
-                    if (!resolved || !resolved.resolvedModule) {
-                        // This means we didn't find a file defining
-                        // the module. It could still exist as an
-                        // ambient module, which is why we fetch
-                        // global*.d.ts files.
-                        continue;
-                    }
-
-                    // Aggressively fetch the entire containing directory of each imported file.
-                    // If this becomes too expensive, we can fall back to just fetching the file.
-                    let impDir = path_.join(path_.sep, resolved.resolvedModule.resolvedFileName);
-                    impDir = impDir.substring(0, impDir.lastIndexOf(path_.sep));
-                    importDirs.add(impDir);
-                }
-
-                return Promise.all(
-                    Array.from(importDirs).map((impDir) => {
-                        const filesToEnsure = []
-                        return this.projectManager.walkRemote(impDir, function(path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
-                            if (err) {
-                                return err;
-                            } else if (info.dir) {
-                                return null;
-                            }
-
-                            if (util.isJSTSFile(info.name)) {
-                                filesToEnsure.push(info.name);
-                            }
-
-                            return null;
-                        }).then(() => {
-                            return this.projectManager.ensureFiles(filesToEnsure)
-                        });
-                    })
-                );
-            });
-        }).then(() => {
-            return this.projectManager.refreshConfigurations();
+            return this.ensureFilesForHoverAndDefinition_([util.uri2path(uri)], 4, new Set<string>());
         });
-
         this.ensuredFilesForHoverAndDefinition.set(uri, promise);
         promise.catch((err) => {
             console.error("Failed to fetch files for hover/definition for uri ", uri, ", error:", err);
             this.ensuredFilesForHoverAndDefinition.delete(uri);
         });
+        return promise;
+    }
+
+    private ensureFilesForHoverAndDefinition_(fileNames: string[], level: number, seen: Set<string>): Promise<void> {
+        fileNames = fileNames.filter((f) => !seen.has(f));
+        if (fileNames.length === 0) {
+            return Promise.resolve();
+        }
+        fileNames.forEach((f) => seen.add(f));
+
+        const absFileNames = fileNames.map((f) => path_.join(path_.sep, f));
+        let promise = this.projectManager.ensureFiles(absFileNames).then(() => {
+            return this.projectManager.refreshConfigurations();
+        });
+
+        if (level > 0) {
+            promise = promise.then(() => {
+                const importFiles = new Set<string>();
+                return Promise.all(fileNames.map((fileName) => {
+                    return this.projectManager.getConfiguration(fileName).get().then((config) => {
+                        const contents = config.moduleResolutionHost().readFile(fileName);
+                        const info = ts.preProcessFile(contents, true, true);
+                        const compilerOpt = config.host.getCompilationSettings();
+                        for (const imp of info.importedFiles) {
+                            const resolved = ts.resolveModuleName(imp.fileName, fileName, compilerOpt, config.moduleResolutionHost());
+                            if (!resolved || !resolved.resolvedModule) {
+                                // This means we didn't find a file defining
+                                // the module. It could still exist as an
+                                // ambient module, which is why we fetch
+                                // global*.d.ts files.
+                                continue;
+                            }
+                            importFiles.add(resolved.resolvedModule.resolvedFileName);
+                        }
+                    });
+                })).then(() => {
+                    return this.ensureFilesForHoverAndDefinition_(Array.from(importFiles), level - 1, seen);
+                });
+            });
+        }
         return promise;
     }
 
@@ -164,7 +151,7 @@ export default class TypeScriptService {
 
         const self = this;
         const filesToEnsure = [];
-        const promise = this.projectManager.walkRemote(this.projectManager.getRemoteRoot(), function(path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
+        const promise = this.projectManager.walkRemote(this.projectManager.getRemoteRoot(), function (path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
             if (err) {
                 return err;
             } else if (info.dir) {
@@ -206,7 +193,7 @@ export default class TypeScriptService {
         }
 
         const filesToEnsure = [];
-        const promise = this.projectManager.walkRemote(this.projectManager.getRemoteRoot(), function(path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
+        const promise = this.projectManager.walkRemote(this.projectManager.getRemoteRoot(), function (path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
             if (err) {
                 return err;
             } else if (info.dir) {

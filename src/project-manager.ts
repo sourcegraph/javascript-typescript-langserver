@@ -158,6 +158,9 @@ export class ProjectManager {
     // fetched should call this.refreshConfigurations().
     ensureFiles(files: string[]): Promise<void> {
         const filesToFetch = files.filter((f) => !this.fetched.has(f));
+        if (filesToFetch.length === 0) {
+            return Promise.resolve();
+        }
         return new Promise<void>((resolve, reject) => {
             this.fetchContent(filesToFetch, (err) => {
                 if (err) {
