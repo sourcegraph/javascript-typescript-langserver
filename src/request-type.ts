@@ -86,3 +86,36 @@ export namespace WorkspaceSymbolsRequest {
         }
     };
 }
+
+export namespace TextDocumentDidOpenNotification {
+    export const type: vscode.NotificationType<vscode.DidOpenTextDocumentParams> = {
+        get method() {
+            return 'textDocument/didOpen';
+        }
+    };
+}
+
+export namespace TextDocumentDidCloseNotification {
+    export const type: vscode.NotificationType<vscode.DidCloseTextDocumentParams> = {
+        get method() {
+            return 'textDocument/didClose';
+        }
+    };
+}
+
+export namespace TextDocumentDidSaveNotification {
+    export const type: vscode.NotificationType<vscode.DidSaveTextDocumentParams> = {
+        get method() {
+            return 'textDocument/didSave';
+        }
+    };
+}
+
+export namespace TextDocumentDidChangeNotification {
+    export const type: vscode.NotificationType<vscode.DidChangeTextDocumentParams> = {
+        get method() {
+            return 'textDocument/didChange';
+        }
+    };
+}
+

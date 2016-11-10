@@ -26,11 +26,14 @@ export class ProjectManager {
     private remoteFs: FileSystem.FileSystem;
     private localFs: InMemoryFileSystem;
 
+    private versions: Map<string, number>;
+
     constructor(root: string, strict: boolean, connection: IConnection) {
         this.root = util.normalizePath(root);
         this.strict = strict;
         this.configs = new Map<string, ProjectConfiguration>();
         this.localFs = new InMemoryFileSystem(this.root);
+        this.versions = new Map<string, number>();
 
         if (strict) {
             this.remoteFs = new FileSystem.RemoteFileSystem(connection)
@@ -199,6 +202,35 @@ export class ProjectManager {
         return this.configs.get('');
     }
 
+    didOpen(fileName: string, text: string) {
+        this.didChange(fileName, text);
+    }
+
+    didClose(fileName: string) {
+        this.localFs.didClose(fileName);
+        let version = this.versions.get(fileName) || 0;
+        this.versions.set(fileName, ++version);
+        this.getConfiguration(fileName).get().then((config) => {
+            config.host.incProjectVersion();
+            config.program = config.service.getProgram();
+        });
+    }
+
+    didChange(fileName: string, text: string) {
+        this.localFs.didChange(fileName, text);
+        let version = this.versions.get(fileName) || 0;
+        this.versions.set(fileName, ++version);
+        this.getConfiguration(fileName).get().then((config) => {
+            config.host.incProjectVersion();
+            config.program = config.service.getProgram();
+        });
+    }
+
+    didSave(fileName: string) {
+        this.localFs.didSave(fileName);
+    }
+
+
     /**
      * @return asynchronous function that fetches directory content from VFS
      */
@@ -260,11 +292,11 @@ export class ProjectManager {
             if (dir == '.') {
                 dir = '';
             }
-            this.configs.set(dir, new ProjectConfiguration(this.localFs, k));
+            this.configs.set(dir, new ProjectConfiguration(this.localFs, this.versions, k));
         });
         // collecting all the files in workspace by making fake configuration object         
         if (!this.configs.get('')) {
-            this.configs.set('', new ProjectConfiguration(this.localFs, '', {
+            this.configs.set('', new ProjectConfiguration(this.localFs, this.versions, '', {
                 compilerOptions: {
                     module: ts.ModuleKind.CommonJS,
                     allowNonTsExtensions: false,
@@ -291,11 +323,14 @@ class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 
     private projectVersion: number;
 
-    constructor(root: string, options: ts.CompilerOptions, fs: InMemoryFileSystem, expectedFiles: string[]) {
+    private versions: Map<string, number>;
+
+    constructor(root: string, options: ts.CompilerOptions, fs: InMemoryFileSystem, expectedFiles: string[], versions: Map<string, number>) {
         this.root = root;
         this.options = options;
         this.fs = fs;
         this.expectedFiles = expectedFiles;
+        this.versions = versions;
         this.projectVersion = 1;
         this.files = [];
         // adding content of default library file read from the local file system 
@@ -309,6 +344,10 @@ class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
      */
     getProjectVersion(): string {
         return '' + this.projectVersion;
+    }
+
+    incProjectVersion() {
+        this.projectVersion++;
     }
 
     getCompilationSettings(): ts.CompilerOptions {
@@ -325,12 +364,19 @@ class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
      */
     addFile(fileName: string) {
         this.files.push(fileName);
-        this.projectVersion++;
+        this.incProjectVersion();
     }
 
     getScriptVersion(fileName: string): string {
-        const entry = this.getScriptSnapshot(fileName);
-        return entry ? "1" : undefined;
+        if (path_.posix.isAbsolute(fileName) || path_.isAbsolute(fileName)) {
+            fileName = path_.posix.relative(this.root, util.normalizePath(fileName));
+        }
+        let version = this.versions.get(fileName);
+        if (!version) {
+            version = 1;
+            this.versions.set(fileName, version);
+        }
+        return "" + version;
     }
 
     getScriptSnapshot(fileName: string): ts.IScriptSnapshot {
@@ -360,6 +406,7 @@ class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 class InMemoryFileSystem implements ts.ParseConfigHost {
 
     entries: any;
+    overlay: any;
 
     useCaseSensitiveFileNames: boolean;
 
@@ -370,6 +417,7 @@ class InMemoryFileSystem implements ts.ParseConfigHost {
     constructor(path: string) {
         this.path = path;
         this.entries = {};
+        this.overlay = {};
         this.rootNode = {};
     }
 
@@ -388,11 +436,24 @@ class InMemoryFileSystem implements ts.ParseConfigHost {
     }
 
     fileExists(path: string): boolean {
-        return !!this.entries[path];
+        return !!this.overlay[path] || !!this.entries[path];
     }
 
     readFile(path: string): string {
-        return this.entries[path];
+        let content = this.overlay[path];
+        return content === undefined ? this.entries[path] : content;
+    }
+
+    didClose(path: string) {
+        delete this.overlay[path];
+    }
+
+    didSave(path: string) {
+        this.addFile(path, this.readFile(path));
+    }
+
+    didChange(path: string, text: string) {
+        this.overlay[path] = text;
     }
 
     readDirectory(rootDir: string, extensions: string[], excludes: string[], includes: string[]): string[] {
@@ -444,16 +505,18 @@ export class ProjectConfiguration {
     private fs: InMemoryFileSystem;
     private configFileName: string;
     private configContent: any;
+    private versions: Map<string, number>;
 
     /**
      * @param fs file system to use
      * @param configFileName configuration file name (relative to workspace root)
      * @param configContent optional configuration content to use instead of reading configuration file)
      */
-    constructor(fs: InMemoryFileSystem, configFileName: string, configContent?: any) {
+    constructor(fs: InMemoryFileSystem, versions: Map<string, number>, configFileName: string, configContent?: any) {
         this.fs = fs;
         this.configFileName = configFileName;
         this.configContent = configContent;
+        this.versions = versions;
     }
 
     get(): Promise<ProjectConfiguration> {
@@ -483,7 +546,8 @@ export class ProjectConfiguration {
                 this.host = new InMemoryLanguageServiceHost(this.fs.path,
                     options,
                     this.fs,
-                    configParseResult.fileNames);
+                    configParseResult.fileNames,
+                    this.versions);
                 this.service = ts.createLanguageService(this.host, ts.createDocumentRegistry());
                 this.program = this.service.getProgram();
                 return resolve(this);

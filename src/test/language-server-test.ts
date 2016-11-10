@@ -281,4 +281,68 @@ describe('LSP', function () {
             utils.tearDown(done);
         });
     });
+    describe('live updates', function () {
+        before(function (done: () => void) {
+            utils.setUp({
+                'a.ts': 'let parameters = [];'
+            }, done);
+        });
+        it('hover updates', function (done: (err?: Error) => void) {
+
+            const input = {
+                textDocument: {
+                    uri: 'file:///a.ts'
+                },
+                position: {
+                    line: 0,
+                    character: 5
+                }
+            };
+
+            const expected = [{
+                contents: [{
+                    language: 'typescript',
+                    value: 'let parameters: any[]'
+                }]
+            }, {
+                contents: [{
+                    language: 'typescript',
+                    value: 'let parameters: string[]'
+                }]
+            }, {
+                contents: [{
+                    language: 'typescript',
+                    value: 'let parameters: number[]'
+                }]
+            }, {
+                contents: [{
+                    language: 'typescript',
+                    value: 'let parameters: any[]'
+                }]
+            }];
+
+            utils.hover(input, expected[0], (err) => {
+                if (err) {
+                    return done(err);
+                }
+                utils.open('file:///a.ts', 'let parameters: string[]');
+                utils.hover(input, expected[1], (err) => {
+                    if (err) {
+                        return done(err);
+                    }
+                    utils.change('file:///a.ts', 'let parameters: number[]');
+                    utils.hover(input, expected[2], (err) => {
+                        if (err) {
+                            return done(err);
+                        }
+                        utils.close('file:///a.ts');
+                        utils.hover(input, expected[3], done);
+                    });
+                });
+                afterEach(function (done: () => void) {
+                    utils.tearDown(done);
+                });
+            });
+        });
+    });
 });

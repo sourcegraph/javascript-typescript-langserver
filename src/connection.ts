@@ -14,7 +14,11 @@ import {
     WorkspaceSymbolParams,
     SymbolInformation,
     RequestType,
-    Range
+    Range,
+    DidOpenTextDocumentParams,
+    DidCloseTextDocumentParams,
+    DidChangeTextDocumentParams,
+    DidSaveTextDocumentParams
 } from 'vscode-languageserver';
 
 import * as ts from 'typescript';
@@ -89,8 +93,41 @@ export default class Connection {
 
         this.connection.onRequest(rt.ShutdownRequest.type, () => []);
 
-        this.connection.onDidOpenTextDocument(() => { });
-        this.connection.onDidCloseTextDocument(() => { });
+        this.connection.onDidOpenTextDocument((params: DidOpenTextDocumentParams) => {
+            initialize().then(() => {
+                const fileName: string = util.uri2relpath(params.textDocument.uri, workspaceRoot);
+                service.projectManager.didOpen(fileName, params.textDocument.text);
+            });
+        });
+        this.connection.onDidChangeTextDocument((params: DidChangeTextDocumentParams) => {
+            initialize().then(() => {
+                const fileName: string = util.uri2relpath(params.textDocument.uri, workspaceRoot);
+                let text = null;
+                params.contentChanges.forEach((change) => {
+                    if (change.range || change.rangeLength) {
+                        text = null
+                        return;
+                    }
+                    text = change.text;
+                });
+                if (!text) {
+                    return;
+                }
+                service.projectManager.didChange(fileName, text);
+            });
+        });
+        this.connection.onDidSaveTextDocument((params: DidSaveTextDocumentParams) => {
+            initialize().then(() => {
+                const fileName: string = util.uri2relpath(params.textDocument.uri, workspaceRoot);
+                service.projectManager.didSave(fileName);
+            });
+        });
+        this.connection.onDidCloseTextDocument((params: DidCloseTextDocumentParams) => {
+            initialize().then(() => {
+                const fileName: string = util.uri2relpath(params.textDocument.uri, workspaceRoot);
+                service.projectManager.didClose(fileName);
+            });
+        });
 
 
         this.connection.onRequest(rt.WorkspaceSymbolsRequest.type, (params: rt.WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]> => {

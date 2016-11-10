@@ -206,3 +206,29 @@ export function symbols(params: rt.WorkspaceSymbolParamsWithLimit, expected: vsc
     })
 }
 
+export function open(uri: string, text: string) {
+    channel.clientConnection.connection.sendNotification(rt.TextDocumentDidOpenNotification.type, {
+        textDocument: {
+            uri: uri,
+            text: text
+        }
+    });
+}
+
+export function close(uri: string) {
+    channel.clientConnection.connection.sendNotification(rt.TextDocumentDidCloseNotification.type, {
+        textDocument: {
+            uri: uri
+        }
+    });
+}
+
+export function change(uri: string, text: string) {
+    channel.clientConnection.connection.sendNotification(rt.TextDocumentDidChangeNotification.type, {
+        textDocument: {
+            uri: uri
+        }, contentChanges: [{
+            text: text
+        }]
+    });
+}
