@@ -429,11 +429,18 @@ class InMemoryFileSystem implements ts.ParseConfigHost {
     }
 
     fileExists(path: string): boolean {
-        return !!this.entries[path];
+        if (!!this.entries[path]) {
+            return !!this.entries[path];
+        }
+        return !!this.entries[path_.posix.relative('/', path)];
     }
 
     readFile(path: string): string {
-        return this.entries[path];
+        let entry = this.entries[path];
+        if (entry) {
+            return entry;
+        }
+        return this.entries[path_.posix.relative('/', path)];
     }
 
     readDirectory(rootDir: string, extensions: string[], excludes: string[], includes: string[]): string[] {
