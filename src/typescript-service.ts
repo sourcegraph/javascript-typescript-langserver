@@ -92,8 +92,8 @@ export default class TypeScriptService {
         }
 
         const promise = this.projectManager.ensureModuleStructure().then(() => {
-            // include dependencies up to depth 4
-            return this.ensureFilesForHoverAndDefinition_([util.uri2path(uri)], 4, new Set<string>());
+            // include dependencies up to depth 3
+            return this.ensureFilesForHoverAndDefinition_([util.uri2path(uri)], 3, new Set<string>());
         });
         this.ensuredFilesForHoverAndDefinition.set(uri, promise);
         promise.catch((err) => {
