@@ -20,6 +20,8 @@ export default class TypeScriptService {
     projectManager: pm.ProjectManager;
     root: string;
 
+    private connection: IConnection;
+
     private externalRefs = null;
     private exportedEnts = null;
     private exportedSymbolProvider: ExportedSymbolsProvider;
@@ -32,6 +34,7 @@ export default class TypeScriptService {
     constructor(root: string, strict: boolean, connection: IConnection) {
         this.root = root;
         this.projectManager = new pm.ProjectManager(root, strict, connection);
+        this.connection = connection;
 
         // initialize providers
         this.exportedSymbolProvider = new ExportedSymbolsProvider(this);
@@ -110,7 +113,7 @@ export default class TypeScriptService {
         }
         fileNames.forEach((f) => seen.add(f));
 
-        const absFileNames = fileNames.map((f) => path_.posix.join(path_.posix.sep, f));
+        const absFileNames = fileNames.map((f) => util.normalizePath(util.resolve(this.root, f)));
         let promise = this.projectManager.ensureFiles(absFileNames).then(() => {
             return this.projectManager.refreshConfigurations();
         });
@@ -119,7 +122,7 @@ export default class TypeScriptService {
             promise = promise.then(() => {
                 const importFiles = new Set<string>();
                 return Promise.all(fileNames.map((fileName) => {
-                    return this.projectManager.getConfiguration(fileName).get().then((config) => {
+                    return this.projectManager.getConfiguration(fileName).prepare(this.connection).then((config) => {
                         const contents = config.moduleResolutionHost().readFile(fileName);
                         const info = ts.preProcessFile(contents, true, true);
                         const compilerOpt = config.host.getCompilationSettings();
@@ -156,7 +159,7 @@ export default class TypeScriptService {
             if (err) {
                 return err;
             } else if (info.dir) {
-                if (info.name.indexOf(`${path_.sep}node_modules${path_.sep}`) !== -1) {
+                if (util.normalizePath(info.name).indexOf(`${path_.posix.sep}node_modules${path_.posix.sep}`) !== -1) {
                     return pm.skipDir;
                 } else {
                     return null;
@@ -185,7 +188,7 @@ export default class TypeScriptService {
 
     private ensureFilesForReferences(uri: string): Promise<void> {
         const fileName: string = util.uri2path(uri);
-        if (fileName.indexOf(`${path_.sep}node_modules${path_.sep}`) !== -1) {
+        if (util.normalizePath(fileName).indexOf(`${path_.posix.sep}node_modules${path_.posix.sep}`) !== -1) {
             return this.ensureFilesForWorkspaceSymbol();
         }
 
@@ -224,9 +227,9 @@ export default class TypeScriptService {
             const fileName: string = util.uri2path(uri);
             try {
                 const configuration = this.projectManager.getConfiguration(fileName);
-                configuration.get().then((configuration) => {
+                configuration.prepare(this.connection).then((configuration) => {
                     try {
-                        this.projectManager.syncConfiguration(configuration); // resync after getting new config
+                        this.projectManager.syncConfiguration(configuration, this.connection); // resync after getting new config
                         const sourceFile = this.getSourceFile(configuration, fileName);
                         if (!sourceFile) {
                             return resolve([]);
@@ -265,9 +268,9 @@ export default class TypeScriptService {
             const fileName: string = util.uri2path(uri);
             try {
                 const configuration = this.projectManager.getConfiguration(fileName);
-                configuration.get().then(() => {
+                configuration.prepare(this.connection).then(() => {
                     try {
-                        this.projectManager.syncConfiguration(configuration); // resync after getting new config
+                        this.projectManager.syncConfiguration(configuration, this.connection); // resync after getting new config
 
                         const sourceFile = this.getSourceFile(configuration, fileName);
                         if (!sourceFile) {
@@ -309,7 +312,7 @@ export default class TypeScriptService {
             const fileName: string = util.uri2path(uri);
             try {
                 const configuration = this.projectManager.getConfiguration(fileName);
-                configuration.get().then(() => {
+                configuration.prepare(this.connection).then(() => {
                     try {
                         const sourceFile = this.getSourceFile(configuration, fileName);
                         if (!sourceFile) {
@@ -318,7 +321,7 @@ export default class TypeScriptService {
 
                         const started = new Date().getTime();
 
-                        this.projectManager.syncConfigurationFor(fileName);
+                        this.projectManager.syncConfigurationFor(fileName, this.connection);
 
                         const prepared = new Date().getTime();
 
@@ -386,22 +389,22 @@ export default class TypeScriptService {
 
     didOpen(uri: string, text: string) {
         return this.ensureFilesForHoverAndDefinition(uri).then(() => {
-            this.projectManager.didOpen(util.uri2path(uri), text);
+            this.projectManager.didOpen(util.uri2path(uri), text, this.connection);
         });
     }
 
     didChange(uri: string, text: string) {
         return this.ensureFilesForHoverAndDefinition(uri).then(() => {
-            this.projectManager.didChange(util.uri2path(uri), text);
+            this.projectManager.didChange(util.uri2path(uri), text, this.connection);
         });
     }
 
     didClose(uri: string) {
         return this.ensureFilesForHoverAndDefinition(uri).then(() => {
-            this.projectManager.didClose(util.uri2path(uri));
+            this.projectManager.didClose(util.uri2path(uri), this.connection);
         });
     }
-    
+
     didSave(uri: string) {
         return this.ensureFilesForHoverAndDefinition(uri).then(() => {
             this.projectManager.didSave(util.uri2path(uri));
@@ -424,6 +427,7 @@ export default class TypeScriptService {
         configuration.host.addFile(fileName);
         // requery program object to synchonize LanguageService's data
         configuration.program = configuration.service.getProgram();
+        pm.processDiagnostics(this.connection, configuration.program);
         return configuration.program.getSourceFile(fileName);
     }
 
@@ -485,9 +489,9 @@ export default class TypeScriptService {
             this.collectWorkspaceSymbols(query, limit, configurations, index + 1, items, callback);
         };
 
-        configuration.get().then(() => {
+        configuration.prepare(this.connection).then(() => {
             setImmediate(() => {
-                this.projectManager.syncConfiguration(configuration);
+                this.projectManager.syncConfiguration(configuration, this.connection);
                 const chunkSize = limit ? Math.min(limit, limit - items.length) : undefined;
                 setImmediate(() => {
                     if (query) {

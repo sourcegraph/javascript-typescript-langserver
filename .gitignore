@@ -3,4 +3,3 @@ build
 .idea
 .vscode
 *.iml
-bin/sublime.log

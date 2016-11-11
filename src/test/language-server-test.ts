@@ -17,7 +17,7 @@ import * as util from '../util';
 util.setStrict(true);
 
 describe('LSP', function () {
-
+    this.timeout(5000);
     describe('definitions and hovers', function () {
         before(function (done: () => void) {
             utils.setUp({
@@ -282,6 +282,7 @@ describe('LSP', function () {
         });
     });
     describe('live updates', function () {
+        this.timeout(10000);
         before(function (done: () => void) {
             utils.setUp({
                 'a.ts': 'let parameters = [];'

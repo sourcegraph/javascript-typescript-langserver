@@ -1,3 +1,4 @@
+import * as os from "os";
 import * as path from "path";
 
 import * as ts from "typescript";
@@ -151,20 +152,7 @@ export function path2uri(root, file: string): string {
     }
     let p;
     if (root) {
-        if (!strict) {
-            p = path.resolve(root, file);
-        } else {
-            // we can't use path::resolve on Windows in strict mode
-            // because it adds bogus drive information
-            if (file.startsWith('/')) {
-                // absolute notation
-                p = file;
-            } else {
-                // relative
-                const prefix = root.endsWith('/') ? root : root + '/';
-                p = prefix + file;
-            }
-        }
+        p = resolve(root, file);
     } else {
         p = file;
     }
@@ -200,6 +188,14 @@ export function uri2relpath(uri, root: string): string {
     return uri;
 }
 
+export function resolve(root: string, file: string): string {
+    if (!strict || os.platform() != 'win32') {
+        return path.resolve(root, file);
+    } else {
+        return path.posix.resolve(root, file);
+    }
+
+}
 let jstsPattern = /\.[tj]sx?$/;
 
 export function isJSTSFile(filename: string): boolean {

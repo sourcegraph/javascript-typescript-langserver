@@ -113,7 +113,7 @@ function initFs(connection: Connection, memfs: any) {
         while (i < path.length - 1) {
             node = node[path[i]];
             if (!node || typeof node != 'object') {
-                throw new Error('no such file');
+                throw new Error('no such file: ' + params);
             }
             i++;
         }

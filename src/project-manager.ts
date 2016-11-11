@@ -2,7 +2,7 @@ import * as path_ from 'path';
 import * as fs_ from 'fs';
 
 import * as ts from 'typescript';
-import { IConnection } from 'vscode-languageserver';
+import { IConnection, PublishDiagnosticsParams } from 'vscode-languageserver';
 import * as async from 'async';
 
 import * as FileSystem from './fs';
@@ -63,15 +63,15 @@ export class ProjectManager {
 	/**
 	 * Ensures that all files are added (and parsed) to the project to which fileName belongs. 
 	 */
-    syncConfigurationFor(fileName: string) {
-        return this.syncConfiguration(this.getConfiguration(fileName));
+    syncConfigurationFor(fileName: string, connection: IConnection) {
+        return this.syncConfiguration(this.getConfiguration(fileName), connection);
     }
 
 	/**
 	 * Ensures that all files are added (and parsed) for the given project.
 	 * Uses tsconfig.json settings to identify what files make a project (root files)
 	 */
-    syncConfiguration(config: ProjectConfiguration) {
+    syncConfiguration(config: ProjectConfiguration, connection: IConnection) {
         if (config.host.complete) {
             return;
         }
@@ -86,6 +86,7 @@ export class ProjectManager {
         if (changed) {
             // requery program object to synchonize LanguageService's data
             config.program = config.service.getProgram();
+            processDiagnostics(connection, config.program);
         }
         config.host.complete = true;
     }
@@ -245,27 +246,29 @@ export class ProjectManager {
         return this.configs.get('');
     }
 
-    didOpen(fileName: string, text: string) {
-        this.didChange(fileName, text);
+    didOpen(fileName: string, text: string, connection: IConnection) {
+        this.didChange(fileName, text, connection);
     }
 
-    didClose(fileName: string) {
+    didClose(fileName: string, connection: IConnection) {
         this.localFs.didClose(fileName);
         let version = this.versions.get(fileName) || 0;
         this.versions.set(fileName, ++version);
-        this.getConfiguration(fileName).get().then((config) => {
+        this.getConfiguration(fileName).prepare(null).then((config) => {
             config.host.incProjectVersion();
             config.program = config.service.getProgram();
+            processDiagnostics(connection, config.program);
         });
     }
 
-    didChange(fileName: string, text: string) {
+    didChange(fileName: string, text: string, connection: IConnection) {
         this.localFs.didChange(fileName, text);
         let version = this.versions.get(fileName) || 0;
         this.versions.set(fileName, ++version);
-        this.getConfiguration(fileName).get().then((config) => {
+        this.getConfiguration(fileName).prepare(null).then((config) => {
             config.host.incProjectVersion();
             config.program = config.service.getProgram();
+            processDiagnostics(connection, config.program);
         });
     }
 
@@ -507,7 +510,7 @@ class InMemoryFileSystem implements ts.ParseConfigHost {
         }
 
         const rel = path_.posix.relative('/', path);
-        
+
         content = this.overlay[rel];
         if (content !== undefined) {
             return content;
@@ -600,7 +603,7 @@ export class ProjectConfiguration {
         return this.fs;
     }
 
-    get(): Promise<ProjectConfiguration> {
+    prepare(connection: IConnection): Promise<ProjectConfiguration> {
         if (!this.promise) {
             this.promise = new Promise<ProjectConfiguration>((resolve, reject) => {
                 let configObject;
@@ -631,16 +634,26 @@ export class ProjectConfiguration {
                     this.versions);
                 this.service = ts.createLanguageService(this.host, ts.createDocumentRegistry());
                 this.program = this.service.getProgram();
+                processDiagnostics(connection, this.program);
                 return resolve(this);
             });
         }
         return this.promise;
     }
-
-
 }
 
 export const skipDir: Error = {
     name: "WALK_FN_SKIP_DIR",
     message: "",
+}
+
+export function processDiagnostics(connection: IConnection, program: ts.Program) {
+    if (!connection) {
+        return;
+    }
+    const diagnostics = ts.getPreEmitDiagnostics(program);
+    if (!diagnostics || !diagnostics.length) {
+        return;
+    }
+    // TODO
 }
