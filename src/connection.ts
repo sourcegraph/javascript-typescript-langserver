@@ -14,15 +14,21 @@ import {
     WorkspaceSymbolParams,
     SymbolInformation,
     RequestType,
-    Range
+    Range,
+    DidOpenTextDocumentParams,
+    DidCloseTextDocumentParams,
+    DidChangeTextDocumentParams,
+    DidSaveTextDocumentParams
 } from 'vscode-languageserver';
 
 import * as ts from 'typescript';
+import * as types from 'vscode-languageserver-types';
 
 import * as util from './util';
 import TypeScriptService from './typescript-service';
 
 import * as rt from './request-type';
+
 
 export default class Connection {
 
@@ -76,6 +82,36 @@ export default class Connection {
         this.connection.onNotification(rt.ExitRequest.type, close);
 
         this.connection.onRequest(rt.ShutdownRequest.type, () => []);
+
+        this.connection.onDidOpenTextDocument((params: DidOpenTextDocumentParams) => {
+            const reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
+            service.didOpen(reluri, params.textDocument.text);
+        });
+
+        this.connection.onDidChangeTextDocument((params: DidChangeTextDocumentParams) => {
+            const reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);            
+            let text = null;
+            params.contentChanges.forEach((change) => {
+                if (change.range || change.rangeLength) {
+                    throw new Error('incremental updates in textDocument/didChange not supported for file ' + params.textDocument.uri);
+                }
+                text = change.text;
+            });
+            if (!text) {
+                return;
+            }
+            service.didChange(reluri, text);
+        });
+
+        this.connection.onDidSaveTextDocument((params: DidSaveTextDocumentParams) => {
+            const reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
+            service.didSave(reluri);
+        });
+
+        this.connection.onDidCloseTextDocument((params: DidCloseTextDocumentParams) => {
+            const reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
+            service.didClose(reluri);
+        });
 
 
         this.connection.onRequest(rt.WorkspaceSymbolsRequest.type, (params: rt.WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]> => {
@@ -140,21 +176,10 @@ export default class Connection {
                 const init = new Date().getTime();
                 try {
                     let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
-                    service.getHover(reluri, params.position.line, params.position.character).then((quickInfo) => {
-                        let contents = [];
-                        if (quickInfo) {
-                            contents.push({
-                                language: 'typescript',
-                                value: ts.displayPartsToString(quickInfo.displayParts)
-                            });
-                            let documentation = ts.displayPartsToString(quickInfo.documentation);
-                            if (documentation) {
-                                contents.push(documentation);
-                            }
-                        }
+                    service.getHover(reluri, params.position.line, params.position.character).then((hover) => {
                         const exit = new Date().getTime();
                         console.error('hover', params.textDocument.uri, params.position.line, params.position.character, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
-                        resolve({ contents: contents });
+                        resolve(hover);
                     }, (e) => {
                         return reject(e);
                     });

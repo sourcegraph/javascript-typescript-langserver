@@ -29,10 +29,8 @@
   "devDependencies": {
     "@types/chai": "^3.4.34",
     "@types/mocha": "^2.2.32",
-    "@types/tmp": "0.0.31",
     "chai": "^3.4.34",
     "mocha": "^2.2.32",
-    "tmp": "0.0.29",
     "ts-node": "^1.6.1"
   }
 }

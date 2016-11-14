@@ -2,7 +2,6 @@ import * as net from 'net';
 import * as os from 'os';
 import * as fs from 'fs';
 
-import * as tmp from 'tmp';
 import * as mocha from 'mocha';
 import * as chai from 'chai';
 
@@ -13,8 +12,12 @@ import { FileInfo } from '../fs';
 import * as rt from '../request-type';
 import * as utils from './test-utils';
 
-describe('LSP', function () {
+// forcing strict mode
+import * as util from '../util';
+util.setStrict(true);
 
+describe('LSP', function () {
+    this.timeout(5000);
     describe('definitions and hovers', function () {
         before(function (done: () => void) {
             utils.setUp({
@@ -159,7 +162,7 @@ describe('LSP', function () {
                                     "line": 0
                                 }
                             },
-                            "uri": "file:////a.ts"
+                            "uri": "file:///a.ts"
                         },
                         "name": "a"
                     },
@@ -177,7 +180,7 @@ describe('LSP', function () {
                                     "line": 0
                                 }
                             },
-                            "uri": "file:////a.ts"
+                            "uri": "file:///a.ts"
                         },
                         "name": "foo"
                     },
@@ -195,7 +198,7 @@ describe('LSP', function () {
                                     "line": 0
                                 }
                             },
-                            "uri": "file:////a.ts"
+                            "uri": "file:///a.ts"
                         },
                         "name": "i"
                     }
@@ -221,7 +224,7 @@ describe('LSP', function () {
                                     "line": 0
                                 },
                             },
-                            "uri": "file:////foo/b.ts"
+                            "uri": "file:///foo/b.ts"
                         },
                         "name": "bar"
                     },
@@ -239,7 +242,7 @@ describe('LSP', function () {
                                     "line": 0
                                 }
                             },
-                            "uri": "file:////foo/b.ts"
+                            "uri": "file:///foo/b.ts"
                         },
                         "name": "baz"
                     }
@@ -276,6 +279,71 @@ describe('LSP', function () {
         });
         afterEach(function (done: () => void) {
             utils.tearDown(done);
+        });
+    });
+    describe('live updates', function () {
+        this.timeout(10000);
+        before(function (done: () => void) {
+            utils.setUp({
+                'a.ts': 'let parameters = [];'
+            }, done);
+        });
+        it('hover updates', function (done: (err?: Error) => void) {
+
+            const input = {
+                textDocument: {
+                    uri: 'file:///a.ts'
+                },
+                position: {
+                    line: 0,
+                    character: 5
+                }
+            };
+
+            const expected = [{
+                contents: [{
+                    language: 'typescript',
+                    value: 'let parameters: any[]'
+                }]
+            }, {
+                contents: [{
+                    language: 'typescript',
+                    value: 'let parameters: string[]'
+                }]
+            }, {
+                contents: [{
+                    language: 'typescript',
+                    value: 'let parameters: number[]'
+                }]
+            }, {
+                contents: [{
+                    language: 'typescript',
+                    value: 'let parameters: any[]'
+                }]
+            }];
+
+            utils.hover(input, expected[0], (err) => {
+                if (err) {
+                    return done(err);
+                }
+                utils.open('file:///a.ts', 'let parameters: string[]');
+                utils.hover(input, expected[1], (err) => {
+                    if (err) {
+                        return done(err);
+                    }
+                    utils.change('file:///a.ts', 'let parameters: number[]');
+                    utils.hover(input, expected[2], (err) => {
+                        if (err) {
+                            return done(err);
+                        }
+                        utils.close('file:///a.ts');
+                        utils.hover(input, expected[3], done);
+                    });
+                });
+                afterEach(function (done: () => void) {
+                    utils.tearDown(done);
+                });
+            });
         });
     });
 });

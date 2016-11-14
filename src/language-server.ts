@@ -5,6 +5,7 @@ import * as os from 'os';
 import * as cluster from 'cluster';
 
 import Connection from './connection';
+import * as util from './util';
 
 const program = require('commander');
 
@@ -22,6 +23,7 @@ program
     .option('-c, --cluster [num]', 'Number of concurrent cluster workers (defaults to number of CPUs, ' + numCPUs + ')', parseInt)
     .parse(process.argv);
 
+util.setStrict(program.strict);
 const lspPort = program.port || defaultLspPort;
 const clusterSize = program.cluster || numCPUs;
 
