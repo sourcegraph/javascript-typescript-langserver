@@ -86,7 +86,6 @@ export class ProjectManager {
         if (changed) {
             // requery program object to synchonize LanguageService's data
             config.program = config.service.getProgram();
-            processDiagnostics(connection, config.program);
         }
         config.host.complete = true;
     }
@@ -257,7 +256,6 @@ export class ProjectManager {
         this.getConfiguration(fileName).prepare(null).then((config) => {
             config.host.incProjectVersion();
             config.program = config.service.getProgram();
-            processDiagnostics(connection, config.program);
         });
     }
 
@@ -268,7 +266,6 @@ export class ProjectManager {
         this.getConfiguration(fileName).prepare(null).then((config) => {
             config.host.incProjectVersion();
             config.program = config.service.getProgram();
-            processDiagnostics(connection, config.program);
         });
     }
 
@@ -634,7 +631,6 @@ export class ProjectConfiguration {
                     this.versions);
                 this.service = ts.createLanguageService(this.host, ts.createDocumentRegistry());
                 this.program = this.service.getProgram();
-                processDiagnostics(connection, this.program);
                 return resolve(this);
             });
         }
@@ -645,15 +641,4 @@ export class ProjectConfiguration {
 export const skipDir: Error = {
     name: "WALK_FN_SKIP_DIR",
     message: "",
-}
-
-export function processDiagnostics(connection: IConnection, program: ts.Program) {
-    if (!connection) {
-        return;
-    }
-    const diagnostics = ts.getPreEmitDiagnostics(program);
-    if (!diagnostics || !diagnostics.length) {
-        return;
-    }
-    // TODO
 }

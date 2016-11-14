@@ -93,8 +93,7 @@ export default class Connection {
             let text = null;
             params.contentChanges.forEach((change) => {
                 if (change.range || change.rangeLength) {
-                    text = null
-                    return;
+                    throw new Error('incremental updates in textDocument/didChange not supported for file ' + params.textDocument.uri);
                 }
                 text = change.text;
             });

@@ -427,7 +427,6 @@ export default class TypeScriptService {
         configuration.host.addFile(fileName);
         // requery program object to synchonize LanguageService's data
         configuration.program = configuration.service.getProgram();
-        pm.processDiagnostics(this.connection, configuration.program);
         return configuration.program.getSourceFile(fileName);
     }
 
