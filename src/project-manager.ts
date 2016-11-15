@@ -53,6 +53,11 @@ export class ProjectManager {
         return this.root;
     }
 
+
+    getFs(): InMemoryFileSystem {
+        return this.localFs;
+    }
+
 	/**
 	 * @return true if there is a file with a given name
 	 */
@@ -304,7 +309,8 @@ export class ProjectManager {
                 this.remoteFs.readFile(path, (err?: Error, result?: string) => {
                     if (err) {
                         console.error('Unable to fetch content of ' + path, err);
-                        return callback(err)
+                        // There is a chance that we request unexistent file.
+                        result = '';
                     }
                     const rel = path_.posix.relative(this.root, path);
                     this.localFs.addFile(rel, result);
@@ -447,12 +453,26 @@ class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
     getDefaultLibFileName(options: ts.CompilerOptions): string {
         return util.normalizePath(ts.getDefaultLibFilePath(options));
     }
+
+    trace(message: string) {
+        console.error(message);
+    }
+
+    log(message: string) {
+        console.error(message);
+    }
+
+    error(message: string) {
+        console.error(message);
+    }
+
+
 }
 
 /**
  * In-memory file system, can be served as a ParseConfigHost (thus allowing listing files that belong to project based on tsconfig.json options)
  */
-class InMemoryFileSystem implements ts.ParseConfigHost {
+export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResolutionHost {
 
     entries: any;
     overlay: any;
@@ -500,7 +520,6 @@ class InMemoryFileSystem implements ts.ParseConfigHost {
     }
 
     readFile(path: string): string {
-
         let content = this.overlay[path];
         if (content !== undefined) {
             return content;
@@ -565,6 +584,10 @@ class InMemoryFileSystem implements ts.ParseConfigHost {
             }
         });
         return ret;
+    }
+
+    trace(message: string) {
+        console.error(message);
     }
 }
 

@@ -151,9 +151,11 @@ export function definition(pos: vscode.TextDocumentPositionParams, expected: vsc
         }
     }).then((results: vscode.Location[]) => {
         check(done, () => {
-            chai.expect(results.length).to.equal(1);
-            const result = results[0];
-            chai.expect(result).to.deep.equal(expected);
+            chai.expect(results.length).to.equal(expected ? 1 : 0);
+            if (expected) {
+                const result = results[0];
+                chai.expect(result).to.deep.equal(expected);
+            }
         });
     }, (err?: Error) => {
         return done(err || new Error('definition request failed'))

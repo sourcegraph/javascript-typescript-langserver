@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path_ from 'path';
 import * as ts from 'typescript';
 import { IConnection, Position, Location, SymbolInformation, Range, Hover } from 'vscode-languageserver';
@@ -31,10 +32,13 @@ export default class TypeScriptService {
 
     private workspaceSymbols: SymbolInformation[];
 
+    private strict: boolean;
+
     constructor(root: string, strict: boolean, connection: IConnection) {
         this.root = root;
         this.projectManager = new pm.ProjectManager(root, strict, connection);
         this.connection = connection;
+        this.strict = strict;
 
         // initialize providers
         this.exportedSymbolProvider = new ExportedSymbolsProvider(this);
@@ -123,7 +127,7 @@ export default class TypeScriptService {
                 const importFiles = new Set<string>();
                 return Promise.all(fileNames.map((fileName) => {
                     return this.projectManager.getConfiguration(fileName).prepare(this.connection).then((config) => {
-                        const contents = config.moduleResolutionHost().readFile(fileName);
+                        const contents = this.projectManager.getFs().readFile(fileName) || '';
                         const info = ts.preProcessFile(contents, true, true);
                         const compilerOpt = config.host.getCompilationSettings();
                         for (const imp of info.importedFiles) {
@@ -136,6 +140,17 @@ export default class TypeScriptService {
                                 continue;
                             }
                             importFiles.add(resolved.resolvedModule.resolvedFileName);
+                        }
+                        const resolver = !this.strict && os.platform() == 'win32' ? path_ : path_.posix;
+                        for (const ref of info.referencedFiles) {
+                            // Resolving triple slash references relative to current file
+                            // instead of using module resolution host because it behaves
+                            // differently in "nodejs" mode
+                            const refFileName = util.normalizePath(path_.relative(this.root,
+                                resolver.resolve(this.root,
+                                    resolver.dirname(fileName),
+                                    ref.fileName)));
+                            importFiles.add(refFileName);
                         }
                     });
                 })).then(() => {
@@ -229,7 +244,6 @@ export default class TypeScriptService {
                 const configuration = this.projectManager.getConfiguration(fileName);
                 configuration.prepare(this.connection).then((configuration) => {
                     try {
-                        this.projectManager.syncConfiguration(configuration, this.connection); // resync after getting new config
                         const sourceFile = this.getSourceFile(configuration, fileName);
                         if (!sourceFile) {
                             return resolve([]);
@@ -270,8 +284,6 @@ export default class TypeScriptService {
                 const configuration = this.projectManager.getConfiguration(fileName);
                 configuration.prepare(this.connection).then(() => {
                     try {
-                        this.projectManager.syncConfiguration(configuration, this.connection); // resync after getting new config
-
                         const sourceFile = this.getSourceFile(configuration, fileName);
                         if (!sourceFile) {
                             return resolve(null);
