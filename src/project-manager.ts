@@ -309,7 +309,7 @@ export class ProjectManager {
                 this.remoteFs.readFile(path, (err?: Error, result?: string) => {
                     if (err) {
                         console.error('Unable to fetch content of ' + path, err);
-                        // There is a chance that we request unexistent file.
+                        // There is a chance that we request not-existent file.
                         result = '';
                     }
                     const rel = path_.posix.relative(this.root, path);

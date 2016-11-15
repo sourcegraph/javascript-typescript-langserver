@@ -498,7 +498,7 @@ describe('LSP', function () {
                 'a.ts': "function foo(n: Node): {console.log(n.parentNode})}"
             }, done);
         });
-        it('thou shall load local library file', function (done: (err?: Error) => void) {
+        it('loads local library file', function (done: (err?: Error) => void) {
             utils.hover({
                 textDocument: {
                     uri: 'file:///a.ts'
