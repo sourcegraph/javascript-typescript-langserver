@@ -388,9 +388,10 @@ class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
         this.versions = versions;
         this.projectVersion = 1;
         this.files = [];
-        // adding content of default library file read from the local file system 
-        const defaultLib = util.normalizePath(this.getDefaultLibFileName(options));
-        this.fs.entries[defaultLib] = fs_.readFileSync(defaultLib).toString();
+        // adding library files from the local file system
+        readTsLibraries().forEach((content, name) => {
+            this.fs.entries[name] = content;
+        });
     }
 
     /**
@@ -477,6 +478,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
     entries: any;
     overlay: any;
 
+
     useCaseSensitiveFileNames: boolean;
 
     path: string;
@@ -505,18 +507,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
     }
 
     fileExists(path: string): boolean {
-        if (!!this.overlay[path]) {
-            return true;
-        }
-        const rel = path_.posix.relative('/', path);
-        if (!!this.overlay[rel]) {
-            return true;
-        }
-
-        if (!!this.entries[path]) {
-            return !!this.entries[path];
-        }
-        return !!this.entries[rel];
+        return this.readFile(path) !== undefined;
     }
 
     readFile(path: string): string {
@@ -664,4 +655,23 @@ export class ProjectConfiguration {
 export const skipDir: Error = {
     name: "WALK_FN_SKIP_DIR",
     message: "",
+}
+
+var tsLibraries: Map<string, string>;
+
+/**
+ * Fetches TypeScript library files from local file system
+ */
+function readTsLibraries(): Map<string, string> {
+    if (!tsLibraries) {
+        tsLibraries = new Map<string, string>();
+        const path = path_.dirname(ts.getDefaultLibFilePath({ target: 2 }));
+        fs_.readdirSync(path).forEach((file) => {
+            const fullPath = path_.join(path, file);
+            if (fs_.statSync(fullPath).isFile()) {
+                tsLibraries.set(util.normalizePath(fullPath), fs_.readFileSync(fullPath).toString());
+            }
+        });
+    }
+    return tsLibraries;
 }
