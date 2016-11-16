@@ -151,7 +151,7 @@ export function definition(pos: vscode.TextDocumentPositionParams, expected: vsc
         }
     }).then((results: vscode.Location[]) => {
         check(done, () => {
-            chai.expect(results.length).to.equal(expected ? 1 : 0);
+            chai.expect(results.length).to.equal(expected ? 1 : 0, 'unexpected locations count');
             if (expected) {
                 const result = results[0];
                 chai.expect(result).to.deep.equal(expected);

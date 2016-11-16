@@ -356,10 +356,11 @@ describe('LSP', function() {
                     'd.ts': 'export function bar() {}'
                 },
                 'deeprefs': {
-                    'a.ts': '/// <reference path="b.ts"/>\nfoo()\nbar()',
+                    'a.ts': '/// <reference path="b.ts"/>\nnamespace qux {\nlet f : foo;\n}',
                     'b.ts': '/// <reference path="c.ts"/>',
-                    'c.ts': '/// <reference path="d.ts"/>\nexport function foo() {}',
-                    'd.ts': 'export function bar() {}',
+                    'c.ts': '/// <reference path="d.ts"/>',
+                    'd.ts': '/// <reference path="e.ts"/>',
+                    'e.ts': 'namespace qux {\nexport interface foo {}\n}',
                 },
                 'missing': {
                     'a.ts': '/// <reference path="b.ts"/>\n/// <reference path="missing.ts"/>\nnamespace t {\n    function foo() : Bar {\n        return null;\n    }\n}',
@@ -435,7 +436,7 @@ describe('LSP', function() {
                     }
                 }, done);
         });
-        it('TODO deep definition', function(done: (err?: Error) => void) {
+        it('should resolve deep definitions', function(done: (err?: Error) => void) {
             // This test passes only because we expect no response from LSP server
             // for definition located in file references with depth 3 or more (a -> b -> c -> d (...))
             // This test will fail once we'll increase (or remove) depth limit
@@ -444,44 +445,22 @@ describe('LSP', function() {
                     uri: 'file:///deeprefs/a.ts'
                 },
                 position: {
-                    line: 1,
-                    character: 0
+                    line: 2,
+                    character: 8
                 }
             }, {
-                    uri: 'file:///deeprefs/c.ts',
+                    uri: 'file:///deeprefs/e.ts',
                     range: {
                         start: {
-                            line: 0,
+                            line: 1,
                             character: 0
                         },
                         end: {
-                            line: 0,
-                            character: 24
+                            line: 1,
+                            character: 23
                         }
                     }
-                }, () => {
-                    utils.definition({
-                        textDocument: {
-                            uri: 'file:///deeprefs/a.ts'
-                        },
-                        position: {
-                            line: 2,
-                            character: 0
-                        }
-                    }, null /*{
-                            uri: 'file:///deeprefs/d.ts',
-                            range: {
-                                start: {
-                                    line: 0,
-                                    character: 0
-                                },
-                                end: {
-                                    line: 0,
-                                    character: 24
-                                }
-                            }
-                        }*/, done);
-                });
+                }, done);
         });
         afterEach(function(done: () => void) {
             utils.tearDown(done);
