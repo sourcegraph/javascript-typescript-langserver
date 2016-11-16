@@ -130,7 +130,9 @@ export class ProjectManager {
      */
     ensureModuleStructure(): Promise<void> {
         if (!this.ensuredModuleStructure) {
-            this.ensuredModuleStructure = this.ensureModuleStructure_();
+            this.ensuredModuleStructure = this.ensureModuleStructure_().then(() => {
+                this.refreshConfigurations();
+            });
             this.ensuredModuleStructure.catch((err) => {
                 console.error("Failed to fetch module structure:", err);
                 this.ensuredModuleStructure = null;
@@ -154,7 +156,7 @@ export class ProjectManager {
                 filesToFetch.push(path);
             } else {
                 if (!self.localFs.fileExists(rel)) {
-                    self.localFs.addFile(rel, "var dummy_0ff1bd;");
+                    self.localFs.addFile(rel, localFSPlaceholder);
                 }
             }
             return null;
@@ -469,6 +471,8 @@ class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 
 
 }
+
+const localFSPlaceholder = "var dummy_0ff1bd;";
 
 /**
  * In-memory file system, can be served as a ParseConfigHost (thus allowing listing files that belong to project based on tsconfig.json options)
