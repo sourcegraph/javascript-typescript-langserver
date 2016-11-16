@@ -249,7 +249,6 @@ export default class TypeScriptService {
                         if (!sourceFile) {
                             return resolve([]);
                         }
-
                         const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
                         const defs: ts.DefinitionInfo[] = configuration.service.getDefinitionAtPosition(fileName, offset);
                         const ret = [];
@@ -258,7 +257,7 @@ export default class TypeScriptService {
                                 const sourceFile = configuration.program.getSourceFile(def.fileName);
                                 const start = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start);
                                 const end = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start + def.textSpan.length);
-                                ret.push(Location.create(util.path2uri(this.root, def.fileName), {
+                                ret.push(Location.create(this.defUri(def.fileName), {
                                     start: start,
                                     end: end
                                 }));
@@ -527,13 +526,26 @@ export default class TypeScriptService {
     }
 
     /**
+     * Transforms definition's file name to URI. If definition belongs to TypeScript library,
+     * returns git://github.com/Microsoft/TypeScript URL, otherwise returns file:// one
+     */
+    private defUri(filePath: string): string {
+        filePath = util.normalizePath(filePath);
+        if (pm.getTypeScriptLibraries().has(filePath)) {
+            return 'git://github.com/Microsoft/TypeScript?master#lib/' + path_.basename(filePath);
+        }
+        return util.path2uri(this.root, filePath);
+    }
+
+    /**
      * Fetches up to limit navigation bar items from given project, flattennes them  
      */
     private getNavigationTreeItems(configuration: pm.ProjectConfiguration, limit?: number): SymbolInformation[] {
         const result = [];
-        const defaultLib = configuration.host.getDefaultLibFileName(configuration.host.getCompilationSettings());
+        const libraries = pm.getTypeScriptLibraries();
         for (const sourceFile of configuration.program.getSourceFiles()) {
-            if (sourceFile.fileName == defaultLib) {
+            // excluding navigation items from TypeScript libraries
+            if (libraries.has(util.normalizePath(sourceFile.fileName))) {
                 continue;
             }
             const tree = configuration.service.getNavigationTree(sourceFile.fileName);

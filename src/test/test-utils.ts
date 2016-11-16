@@ -140,7 +140,7 @@ function check(done: (err?: Error) => void, conditions: () => void) {
     }
 }
 
-export function definition(pos: vscode.TextDocumentPositionParams, expected: vscode.Location, done: (err?: Error) => void) {
+export function definition(pos: vscode.TextDocumentPositionParams, expected: vscode.Location | vscode.Location[], done: (err?: Error) => void) {
     channel.clientConnection.sendRequest(rt.DefinitionRequest.type, {
         textDocument: {
             uri: pos.textDocument.uri
@@ -150,12 +150,9 @@ export function definition(pos: vscode.TextDocumentPositionParams, expected: vsc
             character: pos.position.character
         }
     }).then((results: vscode.Location[]) => {
+        expected = expected ? Array.isArray(expected) ? expected : [expected] : null;
         check(done, () => {
-            chai.expect(results.length).to.equal(expected ? 1 : 0, 'unexpected locations count');
-            if (expected) {
-                const result = results[0];
-                chai.expect(result).to.deep.equal(expected);
-            }
+            chai.expect(results).to.deep.equal(expected);
         });
     }, (err?: Error) => {
         return done(err || new Error('definition request failed'))

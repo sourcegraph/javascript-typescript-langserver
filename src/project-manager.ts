@@ -391,7 +391,7 @@ class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
         this.projectVersion = 1;
         this.files = [];
         // adding library files from the local file system
-        readTsLibraries().forEach((content, name) => {
+        getTypeScriptLibraries().forEach((content, name) => {
             this.fs.entries[name] = content;
         });
     }
@@ -666,7 +666,7 @@ var tsLibraries: Map<string, string>;
 /**
  * Fetches TypeScript library files from local file system
  */
-function readTsLibraries(): Map<string, string> {
+export function getTypeScriptLibraries(): Map<string, string> {
     if (!tsLibraries) {
         tsLibraries = new Map<string, string>();
         const path = path_.dirname(ts.getDefaultLibFilePath({ target: ts.ScriptTarget.ES2015 }));
