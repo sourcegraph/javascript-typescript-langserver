@@ -9,11 +9,6 @@
         "sourceMap": true,
         "outDir": "build"
     },
-    "formatCodeOptions": {
-        "indentSize": 4,
-        "tabSize": 4,
-        "convertTabsToSpaces": true
-    },
     "exclude": [
         "node_modules"
     ]

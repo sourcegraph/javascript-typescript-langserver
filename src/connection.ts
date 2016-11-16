@@ -89,7 +89,7 @@ export default class Connection {
         });
 
         this.connection.onDidChangeTextDocument((params: DidChangeTextDocumentParams) => {
-            const reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);            
+            const reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
             let text = null;
             params.contentChanges.forEach((change) => {
                 if (change.range || change.rangeLength) {

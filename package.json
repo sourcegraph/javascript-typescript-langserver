@@ -1,36 +1,39 @@
 {
-  "version": "1.0.0",
-  "name": "javascript-typescript-langserver",
-  "engines": {
-    "node": ">=5.10.0"
-  },
-  "scripts": {
-    "test": "./node_modules/.bin/mocha -r ts-node/register src/test/**/*.ts"
-  },
-  "dependencies": {
-    "@types/async": "^2.0.32",
-    "@types/node": "^6.0.46",
-    "async": "^2.0.32",
-    "body-parser": "^1.15.2",
-    "commander": "^2.9.0",
-    "es6-promise": "^3.2.1",
-    "express": "^4.14.0",
-    "find-files-excluding-dirs": "alexsaveliev/find-files-excluding-dirs",
-    "jsonpath-plus": "^0.15.0",
-    "node-fs": "^0.1.7",
-    "node-mkdirp": "0.0.1",
-    "read-json-sync": "^1.1.1",
-    "sanitize-html": "^1.13.0",
-    "typescript": "^2.0.6",
-    "vscode": "^1.0.1",
-    "vscode-languageserver": "^2.2.1",
-    "vscode-languageserver-types": "^1.0.3"
-  },
-  "devDependencies": {
-    "@types/chai": "^3.4.34",
-    "@types/mocha": "^2.2.32",
-    "chai": "^3.4.34",
-    "mocha": "^2.2.32",
-    "ts-node": "^1.6.1"
-  }
+    "version": "1.0.0",
+    "name": "javascript-typescript-langserver",
+    "engines": {
+        "node": ">=5.10.0"
+    },
+    "scripts": {
+        "test": "./node_modules/.bin/mocha -r ts-node/register src/test/**/*.ts",
+        "check": "./node_modules/.bin/tsfmt --verify",
+        "fmt": "./node_modules/.bin/tsfmt -r"
+    },
+    "dependencies": {
+        "@types/async": "^2.0.32",
+        "@types/node": "^6.0.46",
+        "async": "^2.0.32",
+        "body-parser": "^1.15.2",
+        "commander": "^2.9.0",
+        "es6-promise": "^3.2.1",
+        "express": "^4.14.0",
+        "find-files-excluding-dirs": "alexsaveliev/find-files-excluding-dirs",
+        "jsonpath-plus": "^0.15.0",
+        "node-fs": "^0.1.7",
+        "node-mkdirp": "0.0.1",
+        "read-json-sync": "^1.1.1",
+        "sanitize-html": "^1.13.0",
+        "typescript": "^2.0.6",
+        "vscode": "^1.0.1",
+        "vscode-languageserver": "^2.2.1",
+        "vscode-languageserver-types": "^1.0.3"
+    },
+    "devDependencies": {
+        "@types/chai": "^3.4.34",
+        "@types/mocha": "^2.2.32",
+        "chai": "^3.4.34",
+        "mocha": "^2.2.32",
+        "ts-node": "^1.6.1",
+        "typescript-formatter": "^4.0.0"
+    }
 }

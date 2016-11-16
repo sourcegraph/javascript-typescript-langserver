@@ -16,10 +16,10 @@ import * as utils from './test-utils';
 import * as util from '../util';
 util.setStrict(true);
 
-describe('LSP', function () {
+describe('LSP', function() {
     this.timeout(5000);
-    describe('definitions and hovers', function () {
-        before(function (done: () => void) {
+    describe('definitions and hovers', function() {
+        before(function(done: () => void) {
             utils.setUp({
                 'a.ts': "const abc = 1; console.log(abc);",
                 'foo': {
@@ -28,7 +28,7 @@ describe('LSP', function () {
                 }
             }, done);
         });
-        it('definition in same file', function (done: (err?: Error) => void) {
+        it('definition in same file', function(done: (err?: Error) => void) {
             utils.definition({
                 textDocument: {
                     uri: 'file:///a.ts'
@@ -51,7 +51,7 @@ describe('LSP', function () {
                     }
                 }, done);
         });
-        it('hover in same file', function (done: (err?: Error) => void) {
+        it('hover in same file', function(done: (err?: Error) => void) {
             utils.hover({
                 textDocument: {
                     uri: 'file:///a.ts'
@@ -67,7 +67,7 @@ describe('LSP', function () {
                     }]
                 }, done);
         });
-        it('definition in other file', function (done: (err?: Error) => void) {
+        it('definition in other file', function(done: (err?: Error) => void) {
             utils.definition({
                 textDocument: {
                     uri: 'file:///foo/c.ts'
@@ -90,7 +90,7 @@ describe('LSP', function () {
                     }
                 }, done);
         });
-        it('hover in other file', function (done: (err?: Error) => void) {
+        it('hover in other file', function(done: (err?: Error) => void) {
             utils.hover({
                 textDocument: {
                     uri: 'file:///foo/c.ts'
@@ -106,12 +106,12 @@ describe('LSP', function () {
                     }]
                 }, done);
         });
-        afterEach(function (done: () => void) {
+        afterEach(function(done: () => void) {
             utils.tearDown(done);
         });
     });
-    describe('js-project-no-config', function () {
-        before(function (done: () => void) {
+    describe('js-project-no-config', function() {
+        before(function(done: () => void) {
             utils.setUp({
                 'a.js': "module.exports = {foo: function() {}}",
                 'foo': {
@@ -120,7 +120,7 @@ describe('LSP', function () {
                 }
             }, done);
         });
-        it('references', function (done: (err?: Error) => void) {
+        it('references', function(done: (err?: Error) => void) {
             utils.references({
                 textDocument: {
                     uri: 'file:///a.js'
@@ -131,12 +131,12 @@ describe('LSP', function () {
                 }
             }, 3, done);
         });
-        afterEach(function (done: () => void) {
+        afterEach(function(done: () => void) {
             utils.tearDown(done);
         });
     });
-    describe('workspace symbols', function () {
-        before(function (done: () => void) {
+    describe('workspace symbols', function() {
+        before(function(done: () => void) {
             utils.setUp({
                 'a.ts': "class a { foo() { const i = 1;} }",
                 'foo': {
@@ -144,7 +144,7 @@ describe('LSP', function () {
                 }
             }, done);
         });
-        it('workspace symbols with empty query', function (done: (err?: Error) => void) {
+        it('workspace symbols with empty query', function(done: (err?: Error) => void) {
             utils.symbols({
                 query: '',
                 limit: 3
@@ -205,7 +205,7 @@ describe('LSP', function () {
                 ]
                 , done);
         });
-        it('workspace symbols with not-empty query', function (done: (err?: Error) => void) {
+        it('workspace symbols with not-empty query', function(done: (err?: Error) => void) {
             utils.symbols({
                 query: 'ba',
                 limit: 100
@@ -250,17 +250,17 @@ describe('LSP', function () {
 
                 , done);
         });
-        afterEach(function (done: () => void) {
+        afterEach(function(done: () => void) {
             utils.tearDown(done);
         });
     });
-    describe('sourcegraph/sourcegraph#2052', function () {
-        before(function (done: () => void) {
+    describe('sourcegraph/sourcegraph#2052', function() {
+        before(function(done: () => void) {
             utils.setUp({
                 'a.ts': "let parameters = [];"
             }, done);
         });
-        it('type of parameters should be "any[]"', function (done: (err?: Error) => void) {
+        it('type of parameters should be "any[]"', function(done: (err?: Error) => void) {
             utils.hover({
                 textDocument: {
                     uri: 'file:///a.ts'
@@ -277,18 +277,18 @@ describe('LSP', function () {
                 }
                 , done);
         });
-        afterEach(function (done: () => void) {
+        afterEach(function(done: () => void) {
             utils.tearDown(done);
         });
     });
-    describe('live updates', function () {
+    describe('live updates', function() {
         this.timeout(10000);
-        before(function (done: () => void) {
+        before(function(done: () => void) {
             utils.setUp({
                 'a.ts': 'let parameters = [];'
             }, done);
         });
-        it('hover updates', function (done: (err?: Error) => void) {
+        it('hover updates', function(done: (err?: Error) => void) {
 
             const input = {
                 textDocument: {
@@ -340,14 +340,14 @@ describe('LSP', function () {
                         utils.hover(input, expected[3], done);
                     });
                 });
-                afterEach(function (done: () => void) {
+                afterEach(function(done: () => void) {
                     utils.tearDown(done);
                 });
             });
         });
     });
-    describe('references and imports', function () {
-        before(function (done: () => void) {
+    describe('references and imports', function() {
+        before(function(done: () => void) {
             utils.setUp({
                 'a.ts': '/// <reference path="b.ts"/>\nimport * as d from "./foo/d"\nfoo()\nd.bar()',
                 'b.ts': '/// <reference path="foo/c.ts"/>',
@@ -367,7 +367,7 @@ describe('LSP', function () {
                 }
             }, done);
         });
-        it('definition', function (done: (err?: Error) => void) {
+        it('definition', function(done: (err?: Error) => void) {
             utils.definition({
                 textDocument: {
                     uri: 'file:///a.ts'
@@ -412,7 +412,7 @@ describe('LSP', function () {
                         }, done);
                 });
         });
-        it('definition with missing ref', function (done: (err?: Error) => void) {
+        it('definition with missing ref', function(done: (err?: Error) => void) {
             utils.definition({
                 textDocument: {
                     uri: 'file:///missing/a.ts'
@@ -435,7 +435,7 @@ describe('LSP', function () {
                     }
                 }, done);
         });
-        it('TODO deep definition', function (done: (err?: Error) => void) {
+        it('TODO deep definition', function(done: (err?: Error) => void) {
             // This test passes only because we expect no response from LSP server
             // for definition located in file references with depth 3 or more (a -> b -> c -> d (...))
             // This test will fail once we'll increase (or remove) depth limit
@@ -483,12 +483,12 @@ describe('LSP', function () {
                         }*/, done);
                 });
         });
-        afterEach(function (done: () => void) {
+        afterEach(function(done: () => void) {
             utils.tearDown(done);
         });
     });
-    describe('typescript libs', function () {
-        before(function (done: () => void) {
+    describe('typescript libs', function() {
+        before(function(done: () => void) {
             utils.setUp({
                 'tsconfig.json': JSON.stringify({
                     compilerOptions: {
@@ -498,7 +498,7 @@ describe('LSP', function () {
                 'a.ts': "function foo(n: Node): {console.log(n.parentNode})}"
             }, done);
         });
-        it('loads local library file', function (done: (err?: Error) => void) {
+        it('loads local library file', function(done: (err?: Error) => void) {
             utils.hover({
                 textDocument: {
                     uri: 'file:///a.ts'
@@ -514,7 +514,7 @@ describe('LSP', function () {
                     }]
                 }, done);
         });
-        afterEach(function (done: () => void) {
+        afterEach(function(done: () => void) {
             utils.tearDown(done);
         });
     });

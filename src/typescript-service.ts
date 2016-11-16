@@ -170,7 +170,7 @@ export default class TypeScriptService {
 
         const self = this;
         const filesToEnsure = [];
-        const promise = this.projectManager.walkRemote(this.projectManager.getRemoteRoot(), function (path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
+        const promise = this.projectManager.walkRemote(this.projectManager.getRemoteRoot(), function(path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
             if (err) {
                 return err;
             } else if (info.dir) {
@@ -212,7 +212,7 @@ export default class TypeScriptService {
         }
 
         const filesToEnsure = [];
-        const promise = this.projectManager.walkRemote(this.projectManager.getRemoteRoot(), function (path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
+        const promise = this.projectManager.walkRemote(this.projectManager.getRemoteRoot(), function(path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
             if (err) {
                 return err;
             } else if (info.dir) {

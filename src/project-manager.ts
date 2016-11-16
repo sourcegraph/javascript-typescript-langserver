@@ -143,7 +143,7 @@ export class ProjectManager {
         const start = new Date().getTime();
         const self = this;
         const filesToFetch = [];
-        return this.walkRemote(this.root, function (path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
+        return this.walkRemote(this.root, function(path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
             if (err) {
                 return err;
             } else if (info.dir) {
