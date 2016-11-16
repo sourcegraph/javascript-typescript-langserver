@@ -99,8 +99,11 @@ export default class TypeScriptService {
         }
 
         const promise = this.projectManager.ensureModuleStructure().then(() => {
-            // include dependencies up to depth 3
-            return this.ensureFilesForHoverAndDefinition_([util.uri2path(uri)], 3, new Set<string>());
+            // include dependencies up to depth 30
+            const deps = new Set<string>();
+            return this.ensureTransitiveFileDependencies([util.uri2path(uri)], 30, deps).then(() => {
+                return this.projectManager.refreshConfigurations();
+            });
         });
         this.ensuredFilesForHoverAndDefinition.set(uri, promise);
         promise.catch((err) => {
@@ -110,7 +113,7 @@ export default class TypeScriptService {
         return promise;
     }
 
-    private ensureFilesForHoverAndDefinition_(fileNames: string[], level: number, seen: Set<string>): Promise<void> {
+    private ensureTransitiveFileDependencies(fileNames: string[], maxDepth: number, seen: Set<string>): Promise<void> {
         fileNames = fileNames.filter((f) => !seen.has(f));
         if (fileNames.length === 0) {
             return Promise.resolve();
@@ -118,11 +121,9 @@ export default class TypeScriptService {
         fileNames.forEach((f) => seen.add(f));
 
         const absFileNames = fileNames.map((f) => util.normalizePath(util.resolve(this.root, f)));
-        let promise = this.projectManager.ensureFiles(absFileNames).then(() => {
-            return this.projectManager.refreshConfigurations();
-        });
+        let promise = this.projectManager.ensureFiles(absFileNames);
 
-        if (level > 0) {
+        if (maxDepth > 0) {
             promise = promise.then(() => {
                 const importFiles = new Set<string>();
                 return Promise.all(fileNames.map((fileName) => {
@@ -154,7 +155,7 @@ export default class TypeScriptService {
                         }
                     });
                 })).then(() => {
-                    return this.ensureFilesForHoverAndDefinition_(Array.from(importFiles), level - 1, seen);
+                    return this.ensureTransitiveFileDependencies(Array.from(importFiles), maxDepth - 1, seen);
                 });
             });
         }
