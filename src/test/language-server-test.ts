@@ -349,10 +349,11 @@ describe('LSP', function() {
     describe('references and imports', function() {
         before(function(done: () => void) {
             utils.setUp({
-                'a.ts': '/// <reference path="b.ts"/>\nimport * as d from "./foo/d"\nfoo()\nd.bar()',
+                'a.ts': '/// <reference path="b.ts"/>\nnamespace qux {let f : foo;}',
                 'b.ts': '/// <reference path="foo/c.ts"/>',
+                'c.ts': 'import * as d from "./foo/d"\nd.bar()',
                 'foo': {
-                    'c.ts': 'export function foo() {}',
+                    'c.ts': 'namespace qux {export interface foo {}}',
                     'd.ts': 'export function bar() {}'
                 },
                 'deeprefs': {
@@ -374,28 +375,31 @@ describe('LSP', function() {
                     uri: 'file:///a.ts'
                 },
                 position: {
-                    line: 2,
-                    character: 0
+                    line: 1,
+                    character: 23
                 }
             }, {
                     uri: 'file:///foo/c.ts',
                     range: {
                         start: {
                             line: 0,
-                            character: 0
+                            character: 15
                         },
                         end: {
                             line: 0,
-                            character: 24
+                            character: 38
                         }
                     }
-                }, () => {
+                }, (err) => {
+                    if (err) {
+                        return done(err);
+                    }
                     utils.definition({
                         textDocument: {
-                            uri: 'file:///a.ts'
+                            uri: 'file:///c.ts'
                         },
                         position: {
-                            line: 3,
+                            line: 1,
                             character: 2
                         }
                     }, {
@@ -474,10 +478,10 @@ describe('LSP', function() {
                         lib: ['es2016', 'dom']
                     }
                 }),
-                'a.ts': "function foo(n: Node): {console.log(n.parentNode})}"
+                'a.ts': "function foo(n: Node): {console.log(n.parentNode, NaN})}"
             }, done);
         });
-        it('loads local library file', function(done: (err?: Error) => void) {
+        it('should load local library file', function(done: (err?: Error) => void) {
             utils.hover({
                 textDocument: {
                     uri: 'file:///a.ts'
@@ -492,6 +496,66 @@ describe('LSP', function() {
                         value: 'interface Node\nvar Node: {\n    new (): Node;\n    prototype: Node;\n    readonly ATTRIBUTE_NODE: number;\n    readonly CDATA_SECTION_NODE: number;\n    readonly COMMENT_NODE: number;\n    readonly DOCUMENT_FRAGMENT_NODE: number;\n    readonly DOCUMENT_NODE: number;\n    readonly DOCUMENT_POSITION_CONTAINED_BY: number;\n    readonly DOCUMENT_POSITION_CONTAINS: number;\n    readonly DOCUMENT_POSITION_DISCONNECTED: number;\n    readonly DOCUMENT_POSITION_FOLLOWING: number;\n    readonly DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC: number;\n    readonly DOCUMENT_POSITION_PRECEDING: number;\n    readonly DOCUMENT_TYPE_NODE: number;\n    readonly ELEMENT_NODE: number;\n    readonly ENTITY_NODE: number;\n    readonly ENTITY_REFERENCE_NODE: number;\n    readonly NOTATION_NODE: number;\n    readonly PROCESSING_INSTRUCTION_NODE: number;\n    readonly TEXT_NODE: number;\n}'
                     }]
                 }, done);
+        });
+        it('should resolve TS libraries to github URL', function(done: (err?: Error) => void) {
+            utils.definition({
+                textDocument: {
+                    uri: 'file:///a.ts'
+                },
+                position: {
+                    line: 0,
+                    character: 16
+                }
+            }, [{
+                uri: 'git://github.com/Microsoft/TypeScript?master#lib/lib.dom.d.ts',
+                range: {
+                    start: {
+                        line: 8745,
+                        character: 0
+                    },
+                    end: {
+                        line: 8795,
+                        character: 1
+                    }
+                }
+            }, {
+                uri: 'git://github.com/Microsoft/TypeScript?master#lib/lib.dom.d.ts',
+                range: {
+                    start: {
+                        line: 8797,
+                        character: 12
+                    },
+                    end: {
+                        line: 8818,
+                        character: 1
+                    }
+                }
+            }], (err) => {
+                if (err) {
+                    return done(err);
+                }
+                utils.definition({
+                    textDocument: {
+                        uri: 'file:///a.ts'
+                    },
+                    position: {
+                        line: 0,
+                        character: 50
+                    }
+                }, {
+                        uri: 'git://github.com/Microsoft/TypeScript?master#lib/lib.es5.d.ts',
+                        range: {
+                            start: {
+                                line: 20,
+                                character: 14
+                            },
+                            end: {
+                                line: 20,
+                                character: 25
+                            }
+                        }
+                    }, done);
+            });
         });
         afterEach(function(done: () => void) {
             utils.tearDown(done);
