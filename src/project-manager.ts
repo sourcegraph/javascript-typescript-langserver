@@ -665,7 +665,7 @@ var tsLibraries: Map<string, string>;
 function readTsLibraries(): Map<string, string> {
     if (!tsLibraries) {
         tsLibraries = new Map<string, string>();
-        const path = path_.dirname(ts.getDefaultLibFilePath({ target: 2 }));
+        const path = path_.dirname(ts.getDefaultLibFilePath({ target: ts.ScriptTarget.ES2015 }));
         fs_.readdirSync(path).forEach((file) => {
             const fullPath = path_.join(path, file);
             if (fs_.statSync(fullPath).isFile()) {
