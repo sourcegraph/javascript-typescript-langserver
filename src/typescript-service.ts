@@ -532,7 +532,7 @@ export default class TypeScriptService {
     private defUri(filePath: string): string {
         filePath = util.normalizePath(filePath);
         if (pm.getTypeScriptLibraries().has(filePath)) {
-            return 'git://github.com/Microsoft/TypeScript?master#lib/' + path_.basename(filePath);
+            return 'git://github.com/Microsoft/TypeScript?v2.0.6#lib/' + path_.basename(filePath);
         }
         return util.path2uri(this.root, filePath);
     }
