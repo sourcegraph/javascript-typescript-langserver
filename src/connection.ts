@@ -138,6 +138,7 @@ export default class Connection {
                             }
                         } else */ {
                         return service.getWorkspaceSymbols(params.query, params.limit).then((result) => {
+                            result = result ? result : [];
                             const exit = new Date().getTime();
                             console.error('symbol', params.query, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
                             return resolve(result);
@@ -157,6 +158,8 @@ export default class Connection {
                     const init = new Date().getTime();
                     let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
                     service.getDefinition(reluri, params.position.line, params.position.character).then((result) => {
+                        result = result ? result : [];
+
                         const exit = new Date().getTime();
                         console.error('definition', params.textDocument.uri, params.position.line, params.position.character, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
                         return resolve(result);
@@ -177,6 +180,7 @@ export default class Connection {
                 try {
                     let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
                     service.getHover(reluri, params.position.line, params.position.character).then((hover) => {
+                        hover = hover ? hover : { contents: [] };
                         const exit = new Date().getTime();
                         console.error('hover', params.textDocument.uri, params.position.line, params.position.character, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
                         resolve(hover);
@@ -196,12 +200,13 @@ export default class Connection {
                 const init = new Date().getTime();
                 try {
                     let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
-                    service.getReferences(reluri, params.position.line, params.position.character).then(
-                        (result) => {
-                            const exit = new Date().getTime();
-                            console.error('references', params.textDocument.uri, params.position.line, params.position.character, 'found', result.length, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
-                            return resolve(result);
-                        }
+                    service.getReferences(reluri, params.position.line, params.position.character).then((result) => {
+                        result = result ? result : [];
+
+                        const exit = new Date().getTime();
+                        console.error('references', params.textDocument.uri, params.position.line, params.position.character, 'found', result.length, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
+                        return resolve(result);
+                    }
                     );
                 } catch (e) {
                     console.error(params, e);

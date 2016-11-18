@@ -51,6 +51,17 @@ describe('LSP', function() {
                     }
                 }, done);
         });
+        it('definition on keyword (non-null)', function(done: (err?: Error) => void) {
+            utils.definition({
+                textDocument: {
+                    uri: 'file:///a.ts'
+                },
+                position: {
+                    line: 0,
+                    character: 0
+                }
+            }, [], done);
+        });
         it('hover in same file', function(done: (err?: Error) => void) {
             utils.hover({
                 textDocument: {
@@ -104,6 +115,19 @@ describe('LSP', function() {
                         language: 'typescript',
                         value: 'import Foo'
                     }]
+                }, done);
+        });
+        it('hover over keyword (non-null)', function(done: (err?: Error) => void) {
+            utils.hover({
+                textDocument: {
+                    uri: 'file:///foo/a.ts'
+                },
+                position: {
+                    line: 0,
+                    character: 0
+                }
+            }, {
+                    contents: []
                 }, done);
         });
         afterEach(function(done: () => void) {
