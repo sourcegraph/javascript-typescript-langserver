@@ -239,6 +239,7 @@ export default class TypeScriptService {
     }
 
     getDefinition(uri: string, line: number, column: number): Promise<Location[]> {
+        this.ensureFilesForWorkspaceSymbol(); // start fetching all non-dependency files, but don't block
         return this.ensureFilesForHoverAndDefinition(uri).then(() => new Promise<Location[]>((resolve, reject) => {
             const fileName: string = util.uri2path(uri);
             try {
@@ -278,6 +279,7 @@ export default class TypeScriptService {
     }
 
     getHover(uri: string, line: number, column: number): Promise<Hover> {
+        this.ensureFilesForWorkspaceSymbol(); // start fetching all non-dependency files, but don't block
         return this.ensureFilesForHoverAndDefinition(uri).then(() => new Promise<Hover>((resolve, reject) => {
             const fileName: string = util.uri2path(uri);
             try {
