@@ -402,6 +402,7 @@ export default class TypeScriptService {
     }
 
     didOpen(uri: string, text: string) {
+        this.ensureFilesForWorkspaceSymbol(); // start fetching all non-dependency files, but don't block
         return this.ensureFilesForHoverAndDefinition(uri).then(() => {
             this.projectManager.didOpen(util.uri2path(uri), text, this.connection);
         });
