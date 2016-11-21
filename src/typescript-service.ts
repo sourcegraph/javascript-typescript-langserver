@@ -43,6 +43,9 @@ export default class TypeScriptService {
         // initialize providers
         this.exportedSymbolProvider = new ExportedSymbolsProvider(this);
         this.externalRefsProvider = new ExternalRefsProvider(this);
+
+        // kick off prefetching for workspace/symbol, but don't block
+        this.ensureFilesForWorkspaceSymbol();
     }
 
     getExternalRefs() {
