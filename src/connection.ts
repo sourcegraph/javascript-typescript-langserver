@@ -83,7 +83,7 @@ export default class Connection {
 
         this.connection.onRequest(rt.ShutdownRequest.type, () => []);
 
-        this.connection.onNotification(rt.TextDocumentDidOpenNotification.type, (params: DidOpenTextDocumentParams) => {
+        this.connection.onDidOpenTextDocument((params: DidOpenTextDocumentParams) => {
             const reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
             service.didOpen(reluri, params.textDocument.text);
         });

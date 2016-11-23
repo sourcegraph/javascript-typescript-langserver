@@ -405,22 +405,10 @@ export default class TypeScriptService {
     }
 
     didOpen(uri: string, text: string) {
-        // Start fetching file dependencies and all non-node-module
-        // files, but don't block.
-        this.ensureFilesForWorkspaceSymbol();
-        this.ensureFilesForHoverAndDefinition(uri).then(() => {
-            const fileName = util.uri2path(uri);
-            const config = this.projectManager.getConfiguration(fileName);
-            return config.prepare(this.connection).then(() => {
-                this.getSourceFile(config, fileName);
-            });
-        });
-        // Only update the project manager if the text field is
-        // non-empty. The Sourcegraph frontend sets the field to empty
-        // for now.
-        if (text) {
+        this.ensureFilesForWorkspaceSymbol(); // start fetching all non-dependency files, but don't block
+        return this.ensureFilesForHoverAndDefinition(uri).then(() => {
             this.projectManager.didOpen(util.uri2path(uri), text, this.connection);
-        }
+        });
     }
 
     didChange(uri: string, text: string) {
