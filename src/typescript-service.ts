@@ -30,7 +30,7 @@ export default class TypeScriptService {
 
     private envDefs = [];
 
-    private workspaceSymbols: SymbolInformation[];
+    private emptyQueryWorkspaceSymbols: Promise<SymbolInformation[]>; // cached response for empty workspace/symbol query
 
     private strict: boolean;
 
@@ -372,23 +372,30 @@ export default class TypeScriptService {
     }
 
     getWorkspaceSymbols(query: string, limit?: number): Promise<SymbolInformation[]> {
-        return this.ensureFilesForWorkspaceSymbol().then(() => new Promise<SymbolInformation[]>((resolve, reject) => {
-            // TODO: cache all symbols or slice of them?
-            if (!query && this.workspaceSymbols) {
-                return resolve(this.workspaceSymbols);
+        return this.ensureFilesForWorkspaceSymbol().then(() => {
+            if (!query && this.emptyQueryWorkspaceSymbols) {
+                return this.emptyQueryWorkspaceSymbols;
             }
-            const configurations = this.projectManager.getConfigurations();
-            const index = 0;
-            const items = [];
-            this.collectWorkspaceSymbols(query, limit, configurations, index, items, () => {
-                if (!query) {
-                    this.workspaceSymbols = items.sort((a, b) =>
-                        a.matchKind - b.matchKind ||
-                        a.name.toLocaleLowerCase().localeCompare(b.name.toLocaleLowerCase()));
-                }
-                resolve(items);
+
+            const p = new Promise<SymbolInformation[]>((resolve, reject) => {
+                const configurations = this.projectManager.getConfigurations();
+                const index = 0;
+                const items = [];
+                this.collectWorkspaceSymbols(query, limit, configurations, index, items, () => {
+                    if (!query) {
+                        const sortedItems = items.sort((a, b) =>
+                            a.matchKind - b.matchKind ||
+                            a.name.toLocaleLowerCase().localeCompare(b.name.toLocaleLowerCase()));
+                        return resolve(sortedItems);
+                    }
+                    return resolve(items);
+                });
             });
-        }));
+            if (!query) {
+                this.emptyQueryWorkspaceSymbols = p;
+            }
+            return p;
+        });
     }
 
     getPositionFromOffset(fileName: string, offset: number): Position {
