@@ -4,7 +4,7 @@ This is a language server for JavaScript and TypeScript that adheres to the [Lan
 
 ## Getting started
 
-1. `npm install`
+1. `yarn install`
 1. `node_modules/.bin/tsc`
 1. `node build/language-server.js`
 
@@ -16,7 +16,7 @@ Run `node_modules/.bin/tsc --watch`.
 
 ## Tests
 
-Run `npm test` or `yarn test`.
+Run `yarn test`.
 
 ## Command line arguments 
 
