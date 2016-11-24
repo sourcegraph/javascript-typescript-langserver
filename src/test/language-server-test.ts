@@ -74,7 +74,7 @@ describe('LSP', function () {
 			}, {
 					contents: [{
 						language: 'typescript',
-						value: 'const abc: number'
+						value: 'const abc: 1'
 					}]
 				}, done);
 		});
@@ -534,11 +534,11 @@ describe('LSP', function () {
 				uri: 'git://github.com/Microsoft/TypeScript?v2.0.6#lib/lib.dom.d.ts',
 				range: {
 					start: {
-						line: 8745,
+						line: 8750,
 						character: 0
 					},
 					end: {
-						line: 8795,
+						line: 8800,
 						character: 1
 					}
 				}
@@ -546,11 +546,11 @@ describe('LSP', function () {
 				uri: 'git://github.com/Microsoft/TypeScript?v2.0.6#lib/lib.dom.d.ts',
 				range: {
 					start: {
-						line: 8797,
+						line: 8802,
 						character: 12
 					},
 					end: {
-						line: 8818,
+						line: 8823,
 						character: 1
 					}
 				}
@@ -570,11 +570,11 @@ describe('LSP', function () {
 						uri: 'git://github.com/Microsoft/TypeScript?v2.0.6#lib/lib.es5.d.ts',
 						range: {
 							start: {
-								line: 20,
+								line: 24,
 								character: 14
 							},
 							end: {
-								line: 20,
+								line: 24,
 								character: 25
 							}
 						}

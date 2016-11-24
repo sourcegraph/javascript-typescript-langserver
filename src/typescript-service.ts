@@ -10,9 +10,6 @@ import * as FileSystem from './fs';
 import * as util from './util';
 import * as pm from './project-manager';
 
-import ExportedSymbolsProvider from './exported-symbols-provider'
-import ExternalRefsProvider from './external-refs-provider';
-
 var sanitizeHtml = require('sanitize-html');
 var JSONPath = require('jsonpath-plus');
 
@@ -22,13 +19,6 @@ export default class TypeScriptService {
 	root: string;
 
 	private connection: IConnection;
-
-	private externalRefs = null;
-	private exportedEnts = null;
-	private exportedSymbolProvider: ExportedSymbolsProvider;
-	private externalRefsProvider: ExternalRefsProvider;
-
-	private envDefs = [];
 
 	private emptyQueryWorkspaceSymbols: Promise<SymbolInformation[]>; // cached response for empty workspace/symbol query
 
@@ -40,58 +30,8 @@ export default class TypeScriptService {
 		this.connection = connection;
 		this.strict = strict;
 
-		// initialize providers
-		this.exportedSymbolProvider = new ExportedSymbolsProvider(this);
-		this.externalRefsProvider = new ExternalRefsProvider(this);
-
 		// kick off prefetching for workspace/symbol, but don't block
 		this.ensureFilesForWorkspaceSymbol();
-	}
-
-	getExternalRefs() {
-		if (this.externalRefs === null) {
-			this.externalRefs = this.externalRefsProvider.collectExternals();
-		}
-		return this.externalRefs;
-	}
-
-	getExportedEnts() {
-		if (this.exportedEnts === null) {
-			this.exportedEnts = this.exportedSymbolProvider.collectExportedEntities();
-		}
-		return this.exportedEnts;
-	}
-
-	doc(node: ts.Node): string {
-		let text = node.getSourceFile().getFullText();
-		let comments1 = (ts as any).getLeadingCommentRanges(text, node.getFullStart());
-		let comments2 = (ts as any).getTrailingCommentRanges(text, node.getEnd());
-		let comments = [];
-		if (!comments1 && !comments2) {
-			let parents = util.collectAllParents(node, []);
-			for (let i = 0; i < parents.length; i++) {
-				let parent = parents[i];
-				let comments1 = (ts as any).getLeadingCommentRanges(text, parent.getFullStart());
-				let comments2 = (ts as any).getTrailingCommentRanges(text, parent.getEnd());
-				if (comments1) {
-					comments = comments.concat(comments1);
-				}
-				if (comments2) {
-					comments = comments.concat(comments2);
-				}
-				if (comments1 || comments2) break;
-			}
-		} else {
-			comments = comments1 || comments2;
-		}
-
-		let res = "";
-		if (comments) {
-			comments.forEach(comment => {
-				res = res + sanitizeHtml(`<p>${text.substring(comment.pos + 2, comment.end)}</p>`);
-			});
-		}
-		return res;
 	}
 
 	private ensuredFilesForHoverAndDefinition = new Map<string, Promise<void>>();
@@ -516,7 +456,7 @@ export default class TypeScriptService {
 				const chunkSize = limit ? Math.min(limit, limit - items.length) : undefined;
 				setImmediate(() => {
 					if (query) {
-						const chunk = configuration.service.getNavigateToItems(query, chunkSize, true);
+						const chunk = configuration.service.getNavigateToItems(query, chunkSize, undefined, true);
 						const tasks = [];
 						chunk.forEach((item) => {
 							tasks.push(this.transformNavItem(this.root, configuration.program, item));

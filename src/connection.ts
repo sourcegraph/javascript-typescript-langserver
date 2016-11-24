@@ -120,30 +120,12 @@ export default class Connection {
 				let result = [];
 				const init = new Date().getTime();
 				try {
-                        // TODO: optimize and restore exported and externals processing
-                        /*if (params.query == "exported") {
-                            const exported = service.getExportedEnts();
-                            if (exported) {
-                                result = exported.map(ent => {
-                                    return SymbolInformation.create(ent.name, ent.kind, ent.location.range,
-                                        'file:///' + ent.location.file, util.formExternalUri(ent));
-                                });
-                            }
-                        } else if (params.query == "externals") {
-                            const externals = service.getExternalRefs();
-                            if (externals) {
-                                result = externals.map(external => {
-                                    return SymbolInformation.create(external.name, util.formEmptyKind(), util.formEmptyRange(), util.formExternalUri(external));
-                                });
-                            }
-                        } else */ {
-						return service.getWorkspaceSymbols(params.query, params.limit).then((result) => {
-							result = result ? result : [];
-							const exit = new Date().getTime();
-							console.error('symbol', params.query, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
-							return resolve(result);
-						});
-					}
+					return service.getWorkspaceSymbols(params.query, params.limit).then((result) => {
+						result = result ? result : [];
+						const exit = new Date().getTime();
+						console.error('symbol', params.query, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
+						return resolve(result);
+					});
 				} catch (e) {
 					console.error(params, e);
 					return resolve([]);
@@ -208,25 +190,6 @@ export default class Connection {
 						return resolve(result);
 					}
 					);
-				} catch (e) {
-					console.error(params, e);
-					return resolve([]);
-				}
-			});
-		});
-
-		this.connection.onRequest(rt.GlobalRefsRequest.type, (params: WorkspaceSymbolParams): Promise<SymbolInformation[]> => {
-			return new Promise<SymbolInformation[]>((resolve, reject) => {
-				try {
-					console.error('global-refs', params.query);
-					const externals = service.getExternalRefs();
-					if (externals) {
-						let res = externals.map(external => {
-							return SymbolInformation.create(external.name, util.formEmptyKind(), util.formEmptyRange(), util.formExternalUri(external));
-						});
-						return resolve(res);
-					}
-					return resolve([]);
 				} catch (e) {
 					console.error(params, e);
 					return resolve([]);
