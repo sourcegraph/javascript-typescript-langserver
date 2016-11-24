@@ -455,7 +455,7 @@ export default class TypeScriptService {
     /**
      * Produces async function that converts ReferenceEntry object to Location
      */
-	private transformReference(root: string, program: ts.Program, ref: ts.ReferenceEntry): AsyncFunction<Location> {
+	private transformReference(root: string, program: ts.Program, ref: ts.ReferenceEntry): AsyncFunction<Location, Error> {
 		return (callback: (err?: Error, result?: Location) => void) => {
 			const sourceFile = program.getSourceFile(ref.fileName);
 			let start = ts.getLineAndCharacterOfPosition(sourceFile, ref.textSpan.start);
@@ -470,7 +470,7 @@ export default class TypeScriptService {
     /**
      * Produces async function that converts NavigateToItem object to SymbolInformation
      */
-	private transformNavItem(root: string, program: ts.Program, item: ts.NavigateToItem): AsyncFunction<SymbolInformation> {
+	private transformNavItem(root: string, program: ts.Program, item: ts.NavigateToItem): AsyncFunction<SymbolInformation, Error> {
 		return (callback: (err?: Error, result?: SymbolInformation) => void) => {
 			const sourceFile = program.getSourceFile(item.fileName);
 			let start = ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start);

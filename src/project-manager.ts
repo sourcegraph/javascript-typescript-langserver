@@ -284,7 +284,7 @@ export class ProjectManager {
     /**
      * @return asynchronous function that fetches directory content from VFS
      */
-	private fetchDir(path: string): AsyncFunction<FileSystem.FileInfo[]> {
+	private fetchDir(path: string): AsyncFunction<FileSystem.FileInfo[], Error> {
 		return (callback: (err?: Error, result?: FileSystem.FileInfo[]) => void) => {
 			this.remoteFs.readDir(path, (err?: Error, result?: FileSystem.FileInfo[]) => {
 				if (result) {
@@ -305,8 +305,7 @@ export class ProjectManager {
 			return callback();
 		}
 
-		let tasks = [];
-		const fetch = (path: string): AsyncFunction<string> => {
+		const fetch = (path: string): AsyncFunction<string, Error> => {
 			return (callback: (err?: Error, result?: string) => void) => {
 				this.remoteFs.readFile(path, (err?: Error, result?: string) => {
 					if (err) {
@@ -320,9 +319,7 @@ export class ProjectManager {
 				})
 			}
 		};
-		files.forEach((path) => {
-			tasks.push(fetch(path))
-		});
+		let tasks = files.map(fetch);
 		const start = new Date().getTime();
 		// Why parallelLimit: There may be too many open files when working with local FS and trying
 		// to open them in parallel
