@@ -6,7 +6,7 @@
     },
     "scripts": {
         "test": "./node_modules/.bin/mocha -r ts-node/register src/test/**/*.ts",
-        "check": "./node_modules/.bin/tsfmt --verify",
+        "fmt-check": "./node_modules/.bin/tsfmt --verify",
         "fmt": "./node_modules/.bin/tsfmt -r"
     },
     "dependencies": {

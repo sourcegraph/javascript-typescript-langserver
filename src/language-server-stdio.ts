@@ -8,13 +8,13 @@ import Connection from './connection';
 import * as util from './util';
 
 process.on('uncaughtException', (err) => {
-    console.error(err);
+	console.error(err);
 });
 
 program
-    .version('0.0.1')
-    .option('-s, --strict', 'Strict mode')
-    .parse(process.argv);
+	.version('0.0.1')
+	.option('-s, --strict', 'Strict mode')
+	.parse(process.argv);
 
 util.setStrict(program.strict);
 let connection = new Connection(process.stdin, process.stdout, program.strict);

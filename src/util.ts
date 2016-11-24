@@ -11,121 +11,121 @@ var strict = false;
  * In strict mode we using "file://PATH", otherwise on Windows we are using "file:///PATH"
  */
 export function setStrict(value: boolean) {
-    strict = value;
+	strict = value;
 }
 
 export function formEmptyRange(): Range {
-    return Range.create(Position.create(0, 0), Position.create(0, 0))
+	return Range.create(Position.create(0, 0), Position.create(0, 0))
 }
 
 export function formEmptyPosition(): Position {
-    return Position.create(0, 0);
+	return Position.create(0, 0);
 }
 
 export function formEmptyKind(): number {
-    return SymbolKind.Namespace
+	return SymbolKind.Namespace
 }
 
 export function formExternalUri(external) {
-    return external.repoName ? external.repoName + "$" + external.repoURL + "$" + external.repoCommit + "$" + external.path
-        : external.path;
+	return external.repoName ? external.repoName + "$" + external.repoURL + "$" + external.repoCommit + "$" + external.path
+		: external.path;
 }
 
 /**
  * Makes documentation string from symbol display part array returned by TS
  */
 export function docstring(parts: ts.SymbolDisplayPart[]): string {
-    return ts.displayPartsToString(parts);
+	return ts.displayPartsToString(parts);
 }
 
 /**
  * Normalizes path to match POSIX standard (slashes)
  */
 export function normalizePath(file: string): string {
-    return file.replace(new RegExp('\\' + path.sep, 'g'), path.posix.sep);
+	return file.replace(new RegExp('\\' + path.sep, 'g'), path.posix.sep);
 }
 
 export function isNamedDeclaration(node): boolean {
-    if (node.name && node.name.kind == ts.SyntaxKind.Identifier) {
-        if (node.kind == ts.SyntaxKind.MethodDeclaration) {
-            return true;
-        }
-        if (node.kind == ts.SyntaxKind.FunctionDeclaration) {
-            return true;
-        }
-        if (node.kind == ts.SyntaxKind.ClassDeclaration) {
-            return true;
-        }
-        if (node.kind == ts.SyntaxKind.VariableDeclaration) {
-            return true;
-        }
-        if (node.kind == ts.SyntaxKind.EnumDeclaration) {
-            return true;
-        }
-        if (node.kind == ts.SyntaxKind.InterfaceDeclaration) {
-            return true;
-        }
-    }
-    return false;
+	if (node.name && node.name.kind == ts.SyntaxKind.Identifier) {
+		if (node.kind == ts.SyntaxKind.MethodDeclaration) {
+			return true;
+		}
+		if (node.kind == ts.SyntaxKind.FunctionDeclaration) {
+			return true;
+		}
+		if (node.kind == ts.SyntaxKind.ClassDeclaration) {
+			return true;
+		}
+		if (node.kind == ts.SyntaxKind.VariableDeclaration) {
+			return true;
+		}
+		if (node.kind == ts.SyntaxKind.EnumDeclaration) {
+			return true;
+		}
+		if (node.kind == ts.SyntaxKind.InterfaceDeclaration) {
+			return true;
+		}
+	}
+	return false;
 }
 
 export function getNamedDeclarationKind(node) {
-    if (node.name && node.name.kind == ts.SyntaxKind.Identifier) {
-        if (node.kind == ts.SyntaxKind.MethodDeclaration) {
-            return SymbolKind.Method;
-        }
-        if (node.kind == ts.SyntaxKind.FunctionDeclaration) {
-            return SymbolKind.Function;
-        }
-        if (node.kind == ts.SyntaxKind.ClassDeclaration) {
-            return SymbolKind.Class;
-        }
-        if (node.kind == ts.SyntaxKind.VariableDeclaration) {
-            return SymbolKind.Variable;
-        }
-        if (node.kind == ts.SyntaxKind.EnumDeclaration) {
-            return SymbolKind.Enum;
-        }
-        if (node.kind == ts.SyntaxKind.InterfaceDeclaration) {
-            return SymbolKind.Interface;
-        }
-    }
-    return SymbolKind.String;
+	if (node.name && node.name.kind == ts.SyntaxKind.Identifier) {
+		if (node.kind == ts.SyntaxKind.MethodDeclaration) {
+			return SymbolKind.Method;
+		}
+		if (node.kind == ts.SyntaxKind.FunctionDeclaration) {
+			return SymbolKind.Function;
+		}
+		if (node.kind == ts.SyntaxKind.ClassDeclaration) {
+			return SymbolKind.Class;
+		}
+		if (node.kind == ts.SyntaxKind.VariableDeclaration) {
+			return SymbolKind.Variable;
+		}
+		if (node.kind == ts.SyntaxKind.EnumDeclaration) {
+			return SymbolKind.Enum;
+		}
+		if (node.kind == ts.SyntaxKind.InterfaceDeclaration) {
+			return SymbolKind.Interface;
+		}
+	}
+	return SymbolKind.String;
 }
 
 export function convertStringtoSymbolKind(kind: string): SymbolKind {
-    switch (kind) {
-        case "file": return SymbolKind.File;
-        case "module": return SymbolKind.Module
-        case "namespace": return SymbolKind.Namespace
-        case "package": return SymbolKind.Package
-        case "class": return SymbolKind.Class
-        case "method": return SymbolKind.Method
-        case "property": return SymbolKind.Property
-        case "field": return SymbolKind.Field
-        case "constructor": return SymbolKind.Constructor
-        case "enum": return SymbolKind.Enum
-        case "interface": return SymbolKind.Interface
-        case "function": return SymbolKind.Function
-        case "variable": return SymbolKind.Variable
-        case "constant": return SymbolKind.Constant
-        case "string": return SymbolKind.String
-        case "number": return SymbolKind.Number
-        case "boolean": return SymbolKind.Boolean
-        case "array": return SymbolKind.Array
-        case "array": return SymbolKind.Array
-        case "sourcefile": return SymbolKind.File
-        default: return SymbolKind.String
-    }
+	switch (kind) {
+		case "file": return SymbolKind.File;
+		case "module": return SymbolKind.Module
+		case "namespace": return SymbolKind.Namespace
+		case "package": return SymbolKind.Package
+		case "class": return SymbolKind.Class
+		case "method": return SymbolKind.Method
+		case "property": return SymbolKind.Property
+		case "field": return SymbolKind.Field
+		case "constructor": return SymbolKind.Constructor
+		case "enum": return SymbolKind.Enum
+		case "interface": return SymbolKind.Interface
+		case "function": return SymbolKind.Function
+		case "variable": return SymbolKind.Variable
+		case "constant": return SymbolKind.Constant
+		case "string": return SymbolKind.String
+		case "number": return SymbolKind.Number
+		case "boolean": return SymbolKind.Boolean
+		case "array": return SymbolKind.Array
+		case "array": return SymbolKind.Array
+		case "sourcefile": return SymbolKind.File
+		default: return SymbolKind.String
+	}
 }
 
 export function collectAllParents(node, parents) {
-    if (node.parent) {
-        parents.push(node.parent);
-        return collectAllParents(node.parent, parents);
-    } else {
-        return parents;
-    }
+	if (node.parent) {
+		parents.push(node.parent);
+		return collectAllParents(node.parent, parents);
+	} else {
+		return parents;
+	}
 }
 
 // function collectAllComments(node) {
@@ -146,72 +146,72 @@ export function collectAllParents(node, parents) {
 // }
 
 export function path2uri(root, file: string): string {
-    let ret = 'file://';
-    if (!strict && process.platform == 'win32') {
-        ret += '/';
-    }
-    let p;
-    if (root) {
-        p = resolve(root, file);
-    } else {
-        p = file;
-    }
-    return ret + normalizePath(p);
+	let ret = 'file://';
+	if (!strict && process.platform == 'win32') {
+		ret += '/';
+	}
+	let p;
+	if (root) {
+		p = resolve(root, file);
+	} else {
+		p = file;
+	}
+	return ret + normalizePath(p);
 }
 
 export function uri2path(uri: string): string {
-    if (uri.startsWith('file://')) {
-        uri = uri.substring(7);
-        if (process.platform == 'win32') {
-            if (!strict) {
-                uri = uri.substring(1);
-            }
-            uri = uri.replace(/%3A/g, ':');
-        }
-    }
-    return uri;
+	if (uri.startsWith('file://')) {
+		uri = uri.substring(7);
+		if (process.platform == 'win32') {
+			if (!strict) {
+				uri = uri.substring(1);
+			}
+			uri = uri.replace(/%3A/g, ':');
+		}
+	}
+	return uri;
 }
 
 export function uri2reluri(uri, root: string): string {
-    return path2uri('', uri2relpath(uri, root));
+	return path2uri('', uri2relpath(uri, root));
 }
 
 export function uri2relpath(uri, root: string): string {
-    uri = uri2path(uri);
-    root = normalizePath(root);
-    if (uri.startsWith(root)) {
-        uri = uri.substring(root.length);
-    }
-    while (uri.startsWith('/')) {
-        uri = uri.substring(1);
-    }
-    return uri;
+	uri = uri2path(uri);
+	root = normalizePath(root);
+	if (uri.startsWith(root)) {
+		uri = uri.substring(root.length);
+	}
+	while (uri.startsWith('/')) {
+		uri = uri.substring(1);
+	}
+	return uri;
 }
 
 export function resolve(root: string, file: string): string {
-    if (!strict || os.platform() != 'win32') {
-        return path.resolve(root, file);
-    } else {
-        return path.posix.resolve(root, file);
-    }
+	if (!strict || os.platform() != 'win32') {
+		return path.resolve(root, file);
+	} else {
+		return path.posix.resolve(root, file);
+	}
 
 }
 let jstsPattern = /\.[tj]sx?$/;
 
 export function isJSTSFile(filename: string): boolean {
-    return jstsPattern.test(filename);
+	return jstsPattern.test(filename);
 }
 
 let jstsConfigPattern = /(^|\/)[tj]sconfig\.json$/;
 
 export function isConfigFile(filename: string): boolean {
-    return jstsConfigPattern.test(filename);
+	return jstsConfigPattern.test(filename);
 }
 
 let packageJsonPattern = /(^|\/)package\.json$/;
 
 export function isPackageJsonFile(filename: string): boolean {
-    return packageJsonPattern.test(filename);
+	return packageJsonPattern.test(filename);
 }
 
 let globalTSPattern = /(^|\/)globals?\.d\.ts$/;
@@ -223,5 +223,5 @@ let globalTSPattern = /(^|\/)globals?\.d\.ts$/;
 // import statement, but to check this, we'd have to read each
 // TypeScript file.
 export function isGlobalTSFile(filename: string): boolean {
-    return globalTSPattern.test(filename);
+	return globalTSPattern.test(filename);
 }
