@@ -531,7 +531,7 @@ describe('LSP', function () {
 					character: 16
 				}
 			}, [{
-				uri: 'git://github.com/Microsoft/TypeScript?v2.0.6#lib/lib.dom.d.ts',
+				uri: 'git://github.com/Microsoft/TypeScript?v2.1.1#lib/lib.dom.d.ts',
 				range: {
 					start: {
 						line: 8750,
@@ -543,7 +543,7 @@ describe('LSP', function () {
 					}
 				}
 			}, {
-				uri: 'git://github.com/Microsoft/TypeScript?v2.0.6#lib/lib.dom.d.ts',
+				uri: 'git://github.com/Microsoft/TypeScript?v2.1.1#lib/lib.dom.d.ts',
 				range: {
 					start: {
 						line: 8802,
@@ -567,7 +567,7 @@ describe('LSP', function () {
 						character: 50
 					}
 				}, {
-						uri: 'git://github.com/Microsoft/TypeScript?v2.0.6#lib/lib.es5.d.ts',
+						uri: 'git://github.com/Microsoft/TypeScript?v2.1.1#lib/lib.es5.d.ts',
 						range: {
 							start: {
 								line: 24,
