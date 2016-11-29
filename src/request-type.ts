@@ -1,4 +1,5 @@
 import * as vscode from 'vscode-languageserver';
+import { WorkspaceReferenceParams, ReferenceInformation } from "./util";
 
 import * as fs from './fs';
 
@@ -83,6 +84,14 @@ export namespace WorkspaceSymbolsRequest {
 	export const type: vscode.RequestType<WorkspaceSymbolParamsWithLimit, vscode.SymbolInformation[], any> = {
 		get method() {
 			return 'workspace/symbol';
+		}
+	};
+}
+
+export namespace WorkspaceReferenceRequest {
+	export const type: vscode.RequestType<WorkspaceReferenceParams, ReferenceInformation[], any> = {
+		get method() {
+			return 'workspace/reference';
 		}
 	};
 }
