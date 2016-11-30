@@ -12,6 +12,7 @@ import {
 	Location,
 	Hover,
 	WorkspaceSymbolParams,
+	DocumentSymbolParams,
 	SymbolInformation,
 	RequestType,
 	Range,
@@ -123,7 +124,26 @@ export default class Connection {
 					return service.getWorkspaceSymbols(params.query, params.limit).then((result) => {
 						result = result ? result : [];
 						const exit = new Date().getTime();
-						console.error('symbol', params.query, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
+						console.error('workspace/symbol', params.query, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
+						return resolve(result);
+					});
+				} catch (e) {
+					console.error(params, e);
+					return resolve([]);
+				}
+			});
+		});
+
+		this.connection.onRequest(rt.DocumentSymbolRequest.type, (params: DocumentSymbolParams): Promise<SymbolInformation[]> => {
+			const enter = new Date().getTime();
+			return new Promise<SymbolInformation[]>((resolve, reject) => {
+				let result = [];
+				const init = new Date().getTime();
+				try {
+					return service.getDocumentSymbol(params).then((result) => {
+						result = result ? result : [];
+						const exit = new Date().getTime();
+						console.error('textDocument/documentSymbol', "", 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
 						return resolve(result);
 					});
 				} catch (e) {

@@ -96,6 +96,14 @@ export namespace WorkspaceReferenceRequest {
 	};
 }
 
+export namespace DocumentSymbolRequest {
+	export const type: vscode.RequestType<vscode.DocumentSymbolParams, vscode.SymbolInformation[], any> = {
+		get method() {
+			return "textDocument/documentSymbol";
+		}
+	};
+}
+
 export namespace TextDocumentDidOpenNotification {
 	export const type: vscode.NotificationType<vscode.DidOpenTextDocumentParams> = {
 		get method() {

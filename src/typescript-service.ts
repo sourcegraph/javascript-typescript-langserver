@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path_ from 'path';
 import * as ts from 'typescript';
-import { IConnection, Position, Location, SymbolInformation, Range, Hover } from 'vscode-languageserver';
+import { IConnection, Position, Location, SymbolInformation, Range, Hover, DocumentSymbolParams } from 'vscode-languageserver';
 
 import * as async from 'async';
 
@@ -335,6 +335,23 @@ export default class TypeScriptService {
 				this.emptyQueryWorkspaceSymbols = p;
 			}
 			return p;
+		});
+	}
+
+	getDocumentSymbol(params: DocumentSymbolParams): Promise<SymbolInformation[]> {
+		const uri = params.textDocument.uri;
+		return this.ensureFilesForHoverAndDefinition(uri).then(() => {
+			const fileName = util.uri2path(uri);
+			const config = this.projectManager.getConfiguration(uri);
+			return config.prepare(this.connection).then(() => {
+				const sourceFile = config.program.getSourceFile(fileName);
+				this.projectManager.syncConfiguration(config, this.connection);
+				const tree = config.service.getNavigationTree(fileName);
+				const limit = 100000;
+				const result: SymbolInformation[] = [];
+				this.flattenNavigationTreeItem(tree, null, sourceFile, result, limit);
+				return Promise.resolve(result);
+			});
 		});
 	}
 
@@ -1312,7 +1329,7 @@ export default class TypeScriptService {
 	}
 
     /**
-     * Fetches up to limit navigation bar items from given project, flattennes them  
+     * Fetches up to limit navigation bar items from given project, flattens them
      */
 	private getNavigationTreeItems(configuration: pm.ProjectConfiguration, limit?: number): SymbolInformation[] {
 		const result = [];
