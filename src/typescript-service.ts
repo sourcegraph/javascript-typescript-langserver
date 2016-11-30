@@ -124,7 +124,7 @@ export default class TypeScriptService {
 					return null;
 				}
 			}
-			if (util.isJSTSFile(path)) {
+			if (util.isJSTSFile(path) || util.isConfigFile(path) || util.isPackageJsonFile(path)) {
 				filesToEnsure.push(path);
 			}
 			return null;
@@ -339,38 +339,53 @@ export default class TypeScriptService {
 	}
 
 	getWorkspaceReference(params: util.WorkspaceReferenceParams): Promise<util.ReferenceInformation[]> {
-		console.error("# getWorkspaceReference", params);
+		const refInfo: util.ReferenceInformation[] = [];
 		return this.ensureFilesForWorkspaceSymbol().then(() => {
-			for (const config of this.projectManager.getConfigurations()) {
-				config.prepare(this.connection).then(() => {
-					setImmediate(() => { // TODO(beyang): necessary?
-						this.projectManager.syncConfiguration(config, this.connection);
-						for (const source of config.service.getProgram().getSourceFiles()) {
-							this.walkMostAST(source, (node) => {
-								console.error("# visiting node", node.kind, node.pos)
-							});
+			return Promise.all(this.projectManager.getConfigurations().map((config) => {
+				return config.prepare(this.connection).then((config) => {
+					this.projectManager.syncConfiguration(config, this.connection);
+					for (let source of config.service.getProgram().getSourceFiles()) {
+						if (source.fileName.indexOf("/node_modules/") !== -1) {
+							continue;
 						}
-					});
+						this.walkMostAST(source, (node) => {
+							switch (node.kind) {
+								case ts.SyntaxKind.Identifier: {
+									const fileName = source.fileName.startsWith("/") ? source.fileName.substr(1) : source.fileName;
+									const id = node as ts.Identifier;
+									const defs = config.service.getDefinitionAtPosition(fileName, node.pos + 1);
+
+									if (defs && defs.length > 0) {
+										const def = defs[0];
+										const start = ts.getLineAndCharacterOfPosition(source, node.pos);
+										const end = ts.getLineAndCharacterOfPosition(source, node.end);
+										const ref = {
+											location: {
+												uri: util.path2uri('', source.fileName),
+												range: {
+													start: start,
+													end: end,
+												},
+											},
+											name: def.name,
+											containerName: def.containerName,
+											uri: util.path2uri('', def.fileName),
+										};
+										refInfo.push(ref);
+									}
+									break;
+								}
+								case ts.SyntaxKind.StringLiteral: {
+									// TODO
+									break;
+								}
+							}
+						});
+					}
 				});
-			}
-			return [{
-				location: {
-					uri: "defURI",
-					range: {
-						start: {
-							line: 0,
-							character: 0,
-						},
-						end: {
-							line: 0,
-							character: 0,
-						},
-					},
-				},
-				name: "name",
-				containerName: "containerName",
-				uri: "defURI",
-			}];
+			}));
+		}).then(() => {
+			return refInfo;
 		});
 	}
 
@@ -806,7 +821,10 @@ export default class TypeScriptService {
 			}
 			case ts.SyntaxKind.FunctionDeclaration: {
 				const n = node as ts.FunctionDeclaration;
-				children.push(n.name, n.body);
+				children.push(n.name, n.body, n.type, ...n.parameters);
+				if (n.typeParameters) {
+					children.push(...n.typeParameters);
+				}
 				break;
 			}
 			case ts.SyntaxKind.ClassDeclaration: {
@@ -1134,6 +1152,8 @@ export default class TypeScriptService {
 				children.push(...n._children);
 				break;
 			}
+			default:
+				break;
 		}
 		for (const child of children) {
 			if (child) {
