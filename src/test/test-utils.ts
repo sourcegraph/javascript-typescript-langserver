@@ -205,6 +205,16 @@ export function symbols(params: rt.WorkspaceSymbolParamsWithLimit, expected: vsc
 	})
 }
 
+export function documentSymbols(params: vscode.DocumentSymbolParams, expected: vscode.SymbolInformation[], done: (err?: Error) => void) {
+	channel.clientConnection.sendRequest(rt.DocumentSymbolRequest.type, params).then((result: vscode.SymbolInformation[]) => {
+		check(done, () => {
+			chai.expect(result).to.deep.equal(expected);
+		});
+	}, (err?: Error) => {
+		return done(err || new Error('workspace symbols request failed'))
+	})
+}
+
 export function open(uri: string, text: string) {
 	channel.clientConnection.connection.sendNotification(rt.TextDocumentDidOpenNotification.type, {
 		textDocument: {

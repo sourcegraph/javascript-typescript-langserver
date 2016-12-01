@@ -161,7 +161,7 @@ describe('LSP', function () {
 			utils.tearDown(done);
 		});
 	});
-	describe('workspace symbols', function () {
+	describe('workspace/symbol and textDocument/documentSymbol', function () {
 		before(function (done: () => void) {
 			utils.setUp({
 				'a.ts': "class a { foo() { const i = 1;} }",
@@ -169,6 +169,145 @@ describe('LSP', function () {
 					'b.ts': "class b { bar: number; baz(): number { return this.bar;}}; function qux() {}"
 				}
 			}, done);
+		});
+		it('document/symbol:a.ts', function (done: (err?: Error) => void) {
+			utils.documentSymbols({
+				textDocument: {
+					uri: "file:///a.ts",
+				}
+			}, [
+					{
+						"kind": 5,
+						"location": {
+							"range": {
+								"end": {
+									"character": 33,
+									"line": 0
+								},
+								"start": {
+									"character": 0,
+									"line": 0
+								}
+							},
+							"uri": "file:///a.ts"
+						},
+						"name": "a"
+					},
+					{
+						"containerName": "a",
+						"kind": 6,
+						"location": {
+							"range": {
+								"end": {
+									"character": 31,
+									"line": 0
+								},
+								"start": {
+									"character": 10,
+									"line": 0
+								}
+							},
+							"uri": "file:///a.ts"
+						},
+						"name": "foo"
+					},
+					{
+						"containerName": "foo",
+						"kind": 15,
+						"location": {
+							"range": {
+								"end": {
+									"character": 29,
+									"line": 0
+								},
+								"start": {
+									"character": 24,
+									"line": 0
+								}
+							},
+							"uri": "file:///a.ts"
+						},
+						"name": "i"
+					}
+				], done);
+		});
+		it('document/symbol:foo/b.ts', function (done: (err?: Error) => void) {
+			utils.documentSymbols({
+				textDocument: {
+					uri: "file:///foo/b.ts",
+				}
+			}, [
+					{
+						"kind": 5,
+						"location": {
+							"range": {
+								"end": {
+									"character": 57,
+									"line": 0
+								},
+								"start": {
+									"character": 0,
+									"line": 0
+								}
+							},
+							"uri": "file:///foo/b.ts"
+						},
+						"name": "b"
+					},
+					{
+						"containerName": "b",
+						"kind": 7,
+						"location": {
+							"range": {
+								"end": {
+									"character": 22,
+									"line": 0
+								},
+								"start": {
+									"character": 10,
+									"line": 0
+								},
+							},
+							"uri": "file:///foo/b.ts"
+						},
+						"name": "bar"
+					},
+					{
+						"containerName": "b",
+						"kind": 6,
+						"location": {
+							"range": {
+								"end": {
+									"character": 56,
+									"line": 0
+								},
+								"start": {
+									"character": 23,
+									"line": 0
+								},
+							},
+							"uri": "file:///foo/b.ts",
+						},
+						"name": "baz"
+					},
+					{
+						"kind": 12,
+						"location": {
+							"range": {
+								"end": {
+									"character": 76,
+									"line": 0
+								},
+								"start": {
+									"character": 59,
+									"line": 0
+								},
+							},
+							"uri": "file:///foo/b.ts",
+						},
+						"name": "qux",
+					}
+				], done);
 		});
 		it('workspace symbols with empty query', function (done: (err?: Error) => void) {
 			utils.symbols({
@@ -228,8 +367,7 @@ describe('LSP', function () {
 						},
 						"name": "i"
 					}
-				]
-				, done);
+				], done);
 		});
 		it('workspace symbols with not-empty query', function (done: (err?: Error) => void) {
 			utils.symbols({

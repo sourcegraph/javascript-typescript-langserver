@@ -344,8 +344,8 @@ export default class TypeScriptService {
 			const fileName = util.uri2path(uri);
 			const config = this.projectManager.getConfiguration(uri);
 			return config.prepare(this.connection).then(() => {
-				const sourceFile = config.program.getSourceFile(fileName);
 				this.projectManager.syncConfiguration(config, this.connection);
+				const sourceFile = config.program.getSourceFile(fileName);
 				const tree = config.service.getNavigationTree(fileName);
 				const limit = 100000;
 				const result: SymbolInformation[] = [];
