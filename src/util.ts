@@ -225,22 +225,3 @@ let globalTSPattern = /(^|\/)globals?\.d\.ts$/;
 export function isGlobalTSFile(filename: string): boolean {
 	return globalTSPattern.test(filename);
 }
-
-
-/*
- * WorkspaceReferenceParams holds parameters for the
- * workspace/reference endpoint (an extension of the original LSP
- * spec).
- */
-export interface WorkspaceReferenceParams { }
-
-/*
- * ReferenceInformation enapsulates the metadata for a symbol
- * reference in code.
- */
-export interface ReferenceInformation {
-	location: Location;
-	name: string;
-	containerName: string;
-	uri: string;
-}

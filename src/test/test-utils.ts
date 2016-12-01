@@ -196,8 +196,8 @@ export function references(pos: vscode.TextDocumentPositionParams, expected: num
 	})
 }
 
-export function workspaceReferences(params: util.WorkspaceReferenceParams, expected: util.ReferenceInformation[], done: (err?: Error) => void) {
-	channel.clientConnection.sendRequest(rt.WorkspaceReferenceRequest.type, params).then((result: util.ReferenceInformation[]) => {
+export function workspaceReferences(params: rt.WorkspaceReferenceParams, expected: rt.ReferenceInformation[], done: (err?: Error) => void) {
+	channel.clientConnection.sendRequest(rt.WorkspaceReferenceRequest.type, params).then((result: rt.ReferenceInformation[]) => {
 		check(done, () => {
 			chai.expect(result).to.deep.equal(expected);
 		});
@@ -212,7 +212,7 @@ export function symbols(params: rt.WorkspaceSymbolParamsWithLimit, expected: vsc
 			chai.expect(result).to.deep.equal(expected);
 		});
 	}, (err?: Error) => {
-		return done(err || new Error('workspace symbols request failed'))
+		return done(err || new Error('workspace/symbol request failed'))
 	})
 }
 
@@ -222,7 +222,7 @@ export function documentSymbols(params: vscode.DocumentSymbolParams, expected: v
 			chai.expect(result).to.deep.equal(expected);
 		});
 	}, (err?: Error) => {
-		return done(err || new Error('workspace symbols request failed'))
+		return done(err || new Error('textDocument/documentSymbol request failed'))
 	})
 }
 

@@ -9,6 +9,7 @@ import * as async from 'async';
 import * as FileSystem from './fs';
 import * as util from './util';
 import * as pm from './project-manager';
+import * as rt from './request-type';
 
 var sanitizeHtml = require('sanitize-html');
 var JSONPath = require('jsonpath-plus');
@@ -347,16 +348,15 @@ export default class TypeScriptService {
 				this.projectManager.syncConfiguration(config, this.connection);
 				const sourceFile = config.program.getSourceFile(fileName);
 				const tree = config.service.getNavigationTree(fileName);
-				const limit = 100000;
 				const result: SymbolInformation[] = [];
-				this.flattenNavigationTreeItem(tree, null, sourceFile, result, limit);
+				this.flattenNavigationTreeItem(tree, null, sourceFile, result, 100000);
 				return Promise.resolve(result);
 			});
 		});
 	}
 
-	getWorkspaceReference(params: util.WorkspaceReferenceParams): Promise<util.ReferenceInformation[]> {
-		const refInfo: util.ReferenceInformation[] = [];
+	getWorkspaceReference(params: rt.WorkspaceReferenceParams): Promise<rt.ReferenceInformation[]> {
+		const refInfo: rt.ReferenceInformation[] = [];
 		return this.ensureFilesForWorkspaceSymbol().then(() => {
 			return Promise.all(this.projectManager.getConfigurations().map((config) => {
 				return config.prepare(this.connection).then((config) => {
@@ -409,7 +409,7 @@ export default class TypeScriptService {
 	/*
 	 * walkMostAST walks most of the AST (the part that matters for gathering all references)
 	 */
-	walkMostAST(node: ts.Node, visit: (node: ts.Node) => void) {
+	private walkMostAST(node: ts.Node, visit: (node: ts.Node) => void) {
 		visit(node);
 		const children: ts.Node[] = [];
 		switch (node.kind) {

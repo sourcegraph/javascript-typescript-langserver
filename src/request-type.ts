@@ -1,5 +1,4 @@
 import * as vscode from 'vscode-languageserver';
-import { WorkspaceReferenceParams, ReferenceInformation } from "./util";
 
 import * as fs from './fs';
 
@@ -94,6 +93,24 @@ export namespace WorkspaceReferenceRequest {
 			return 'workspace/reference';
 		}
 	};
+}
+
+/*
+ * WorkspaceReferenceParams holds parameters for the
+ * workspace/reference endpoint (an extension of the original LSP
+ * spec).
+ */
+export interface WorkspaceReferenceParams { }
+
+/*
+ * ReferenceInformation enapsulates the metadata for a symbol
+ * reference in code.
+ */
+export interface ReferenceInformation {
+	location: vscode.Location;
+	name: string;
+	containerName: string;
+	uri: string;
 }
 
 export namespace DocumentSymbolRequest {
