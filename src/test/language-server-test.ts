@@ -418,6 +418,167 @@ describe('LSP', function () {
 			utils.tearDown(done);
 		});
 	});
+	describe('workspace/reference', function () {
+		before(function (done: () => void) {
+			utils.setUp({
+				'a.ts': "class a { foo() { const i = 1;} }",
+				'foo': {
+					'b.ts': "class b { bar: number; baz(): number { return this.bar;}}; function qux() {}"
+				}
+			}, done);
+		});
+		it('references', function (done: (err?: Error) => void) {
+			utils.workspaceReferences({}, [
+				{
+					"containerName": "",
+					"location": {
+						"range": {
+							"end": {
+								"character": 7,
+								"line": 0
+							},
+							"start": {
+								"character": 5,
+								"line": 0
+							},
+						},
+						"uri": "file:///a.ts",
+					},
+					"name": "a",
+					"uri": "file:///a.ts"
+				},
+				{
+					"containerName": "a",
+					"location": {
+						"range": {
+							"end": {
+								"character": 13,
+								"line": 0
+							},
+							"start": {
+								"character": 9,
+								"line": 0
+							},
+						},
+						"uri": "file:///a.ts",
+					},
+					"name": "foo",
+					"uri": "file:///a.ts"
+				},
+				{
+					"containerName": "",
+					"location": {
+						"range": {
+							"end": {
+								"character": 25,
+								"line": 0
+							},
+							"start": {
+								"character": 23,
+								"line": 0
+							},
+						},
+						"uri": "file:///a.ts",
+					},
+					"name": "i",
+					"uri": "file:///a.ts"
+				},
+				{
+					"containerName": "",
+					"location": {
+						"range": {
+							"end": {
+								"character": 7,
+								"line": 0
+							},
+							"start": {
+								"character": 5,
+								"line": 0
+							},
+						},
+						"uri": "file:///foo/b.ts",
+					},
+					"name": "b",
+					"uri": "file:///foo/b.ts"
+				},
+				{
+					"containerName": "b",
+					"location": {
+						"range": {
+							"end": {
+								"character": 13,
+								"line": 0
+							},
+							"start": {
+								"character": 9,
+								"line": 0
+							},
+						},
+						"uri": "file:///foo/b.ts",
+					},
+					"name": "bar",
+					"uri": "file:///foo/b.ts"
+				},
+				{
+					"containerName": "b",
+					"location": {
+						"range": {
+							"end": {
+								"character": 26,
+								"line": 0
+							},
+							"start": {
+								"character": 22,
+								"line": 0
+							},
+						},
+						"uri": "file:///foo/b.ts",
+					},
+					"name": "baz",
+					"uri": "file:///foo/b.ts"
+				},
+				{
+					"containerName": "b",
+					"location": {
+						"range": {
+							"end": {
+								"character": 54,
+								"line": 0
+							},
+							"start": {
+								"character": 51,
+								"line": 0
+							},
+						},
+						"uri": "file:///foo/b.ts",
+					},
+					"name": "bar",
+					"uri": "file:///foo/b.ts"
+				},
+				{
+					"containerName": "",
+					"location": {
+						"range": {
+							"end": {
+								"character": 71,
+								"line": 0
+							},
+							"start": {
+								"character": 67,
+								"line": 0
+							},
+						},
+						"uri": "file:///foo/b.ts",
+					},
+					"name": "qux",
+					"uri": "file:///foo/b.ts"
+				},
+			], done);
+		});
+		afterEach(function (done: () => void) {
+			utils.tearDown(done);
+		});
+	});
 	describe('sourcegraph/sourcegraph#2052', function () {
 		before(function (done: () => void) {
 			utils.setUp({

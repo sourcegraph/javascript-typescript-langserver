@@ -10,6 +10,7 @@ import * as vscode from 'vscode-languageserver';
 import Connection from '../connection';
 import { FileInfo } from '../fs';
 import * as rt from '../request-type';
+import * as util from '../util';
 
 class Channel {
 	server: net.Server;
@@ -189,6 +190,16 @@ export function references(pos: vscode.TextDocumentPositionParams, expected: num
 	}).then((result: vscode.Location[]) => {
 		check(done, () => {
 			chai.expect(result.length).to.equal(expected);
+		});
+	}, (err?: Error) => {
+		return done(err || new Error('references request failed'))
+	})
+}
+
+export function workspaceReferences(params: util.WorkspaceReferenceParams, expected: util.ReferenceInformation[], done: (err?: Error) => void) {
+	channel.clientConnection.sendRequest(rt.WorkspaceReferenceRequest.type, params).then((result: util.ReferenceInformation[]) => {
+		check(done, () => {
+			chai.expect(result).to.deep.equal(expected);
 		});
 	}, (err?: Error) => {
 		return done(err || new Error('references request failed'))

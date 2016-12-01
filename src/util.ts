@@ -232,9 +232,7 @@ export function isGlobalTSFile(filename: string): boolean {
  * workspace/reference endpoint (an extension of the original LSP
  * spec).
  */
-export interface WorkspaceReferenceParams {
-	limit: number;
-}
+export interface WorkspaceReferenceParams { }
 
 /*
  * ReferenceInformation enapsulates the metadata for a symbol
