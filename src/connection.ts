@@ -138,7 +138,8 @@ export default class Connection {
 			return new Promise<SymbolInformation[]>((resolve, reject) => {
 				const init = new Date().getTime();
 				try {
-					return service.getDocumentSymbol(params).then((result) => {
+					const reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
+					return service.getDocumentSymbol(reluri).then((result) => {
 						result = result ? result : [];
 						const exit = new Date().getTime();
 						console.error('textDocument/documentSymbol', "", 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
@@ -176,7 +177,7 @@ export default class Connection {
 			return new Promise<Definition>((resolve, reject) => {
 				try {
 					const init = new Date().getTime();
-					let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
+					const reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
 					service.getDefinition(reluri, params.position.line, params.position.character).then((result) => {
 						result = result ? result : [];
 
@@ -198,7 +199,7 @@ export default class Connection {
 			return new Promise<Hover>((resolve, reject) => {
 				const init = new Date().getTime();
 				try {
-					let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
+					const reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
 					service.getHover(reluri, params.position.line, params.position.character).then((hover) => {
 						hover = hover ? hover : { contents: [] };
 						const exit = new Date().getTime();
@@ -219,7 +220,7 @@ export default class Connection {
 				const enter = new Date().getTime();
 				const init = new Date().getTime();
 				try {
-					let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
+					const reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
 					service.getReferences(reluri, params.position.line, params.position.character).then((result) => {
 						result = result ? result : [];
 

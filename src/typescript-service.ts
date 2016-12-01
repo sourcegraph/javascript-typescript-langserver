@@ -339,8 +339,7 @@ export default class TypeScriptService {
 		});
 	}
 
-	getDocumentSymbol(params: DocumentSymbolParams): Promise<SymbolInformation[]> {
-		const uri = params.textDocument.uri;
+	getDocumentSymbol(uri: string): Promise<SymbolInformation[]> {
 		return this.ensureFilesForHoverAndDefinition(uri).then(() => {
 			const fileName = util.uri2path(uri);
 			const config = this.projectManager.getConfiguration(uri);
@@ -362,15 +361,14 @@ export default class TypeScriptService {
 				return config.prepare(this.connection).then((config) => {
 					this.projectManager.syncConfiguration(config, this.connection);
 					for (let source of config.service.getProgram().getSourceFiles()) {
-						if (source.fileName.indexOf("/node_modules/") !== -1) {
+						if (util.normalizePath(source.fileName).indexOf(`${path_.posix.sep}node_modules${path_.posix.sep}`) !== -1) {
 							continue;
 						}
 						this.walkMostAST(source, (node) => {
 							switch (node.kind) {
 								case ts.SyntaxKind.Identifier: {
-									const fileName = source.fileName.startsWith("/") ? source.fileName.substr(1) : source.fileName;
 									const id = node as ts.Identifier;
-									const defs = config.service.getDefinitionAtPosition(fileName, node.pos + 1);
+									const defs = config.service.getDefinitionAtPosition(source.fileName, node.pos + 1);
 
 									if (defs && defs.length > 0) {
 										const def = defs[0];
@@ -378,7 +376,7 @@ export default class TypeScriptService {
 										const end = ts.getLineAndCharacterOfPosition(source, node.end);
 										const ref = {
 											location: {
-												uri: util.path2uri('', source.fileName),
+												uri: this.defUri(source.fileName),
 												range: {
 													start: start,
 													end: end,
@@ -386,7 +384,7 @@ export default class TypeScriptService {
 											},
 											name: def.name,
 											containerName: def.containerName,
-											uri: util.path2uri('', def.fileName),
+											uri: this.defUri(def.fileName),
 										};
 										refInfo.push(ref);
 									}
