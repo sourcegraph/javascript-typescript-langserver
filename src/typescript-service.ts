@@ -198,7 +198,7 @@ export default class TypeScriptService {
 						const ret = [];
 						if (defs) {
 							for (let def of defs) {
-								const sourceFile = configuration.program.getSourceFile(def.fileName);
+								const sourceFile = this.getSourceFile(configuration, def.fileName);
 								const start = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start);
 								const end = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start + def.textSpan.length);
 								ret.push(Location.create(this.defUri(def.fileName), {
@@ -1218,12 +1218,12 @@ export default class TypeScriptService {
      * @param fileName file name to fetch source file for or create it
      */
 	private getSourceFile(configuration: pm.ProjectConfiguration, fileName: string): ts.SourceFile {
-		if (!this.projectManager.hasFile(fileName)) {
-			return null;
-		}
 		const sourceFile = configuration.program.getSourceFile(fileName);
 		if (sourceFile) {
 			return sourceFile;
+		}
+		if (!this.projectManager.hasFile(fileName)) {
+			return null;
 		}
 		configuration.host.addFile(fileName);
 		// requery program object to synchonize LanguageService's data
