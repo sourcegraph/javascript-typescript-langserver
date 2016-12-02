@@ -87,6 +87,40 @@ export namespace WorkspaceSymbolsRequest {
 	};
 }
 
+export namespace WorkspaceReferenceRequest {
+	export const type: vscode.RequestType<WorkspaceReferenceParams, ReferenceInformation[], any> = {
+		get method() {
+			return 'workspace/reference';
+		}
+	};
+}
+
+/*
+ * WorkspaceReferenceParams holds parameters for the
+ * workspace/reference endpoint (an extension of the original LSP
+ * spec).
+ */
+export interface WorkspaceReferenceParams { }
+
+/*
+ * ReferenceInformation enapsulates the metadata for a symbol
+ * reference in code.
+ */
+export interface ReferenceInformation {
+	location: vscode.Location;
+	name: string;
+	containerName: string;
+	uri: string;
+}
+
+export namespace DocumentSymbolRequest {
+	export const type: vscode.RequestType<vscode.DocumentSymbolParams, vscode.SymbolInformation[], any> = {
+		get method() {
+			return "textDocument/documentSymbol";
+		}
+	};
+}
+
 export namespace TextDocumentDidOpenNotification {
 	export const type: vscode.NotificationType<vscode.DidOpenTextDocumentParams> = {
 		get method() {

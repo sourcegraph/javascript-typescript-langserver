@@ -12,6 +12,7 @@ import {
 	Location,
 	Hover,
 	WorkspaceSymbolParams,
+	DocumentSymbolParams,
 	SymbolInformation,
 	RequestType,
 	Range,
@@ -117,14 +118,12 @@ export default class Connection {
 		this.connection.onRequest(rt.WorkspaceSymbolsRequest.type, (params: rt.WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]> => {
 			const enter = new Date().getTime();
 			return new Promise<SymbolInformation[]>((resolve, reject) => {
-				let result = [];
 				const init = new Date().getTime();
 				try {
 					return service.getWorkspaceSymbols(params.query, params.limit).then((result) => {
-						result = result ? result : [];
 						const exit = new Date().getTime();
-						console.error('symbol', params.query, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
-						return resolve(result);
+						console.error('workspace/symbol', params.query, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
+						return resolve(result || []);
 					});
 				} catch (e) {
 					console.error(params, e);
@@ -133,12 +132,49 @@ export default class Connection {
 			});
 		});
 
+		this.connection.onRequest(rt.DocumentSymbolRequest.type, (params: DocumentSymbolParams): Promise<SymbolInformation[]> => {
+			const enter = new Date().getTime();
+			return new Promise<SymbolInformation[]>((resolve, reject) => {
+				const init = new Date().getTime();
+				try {
+					const reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
+					return service.getDocumentSymbol(reluri).then((result) => {
+						result = result ? result : [];
+						const exit = new Date().getTime();
+						console.error('textDocument/documentSymbol', "", 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
+						return resolve(result || []);
+					});
+				} catch (e) {
+					console.error(params, e);
+					return resolve([]);
+				}
+			});
+		});
+
+		this.connection.onRequest(rt.WorkspaceReferenceRequest.type, (params: rt.WorkspaceReferenceParams): Promise<rt.ReferenceInformation[]> => {
+			const enter = new Date().getTime();
+			return new Promise<rt.ReferenceInformation[]>((resolve, reject) => {
+				const init = new Date().getTime();
+				try {
+					return service.getWorkspaceReference(params).then((result) => {
+						const exit = new Date().getTime();
+						console.error('workspace/reference', 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
+						return resolve(result || []);
+					});
+				} catch (e) {
+					console.error(params, e);
+					return resolve([]);
+				}
+			});
+		});
+
+
 		this.connection.onDefinition((params: TextDocumentPositionParams): Promise<Definition> => {
 			const enter = new Date().getTime();
 			return new Promise<Definition>((resolve, reject) => {
 				try {
 					const init = new Date().getTime();
-					let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
+					const reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
 					service.getDefinition(reluri, params.position.line, params.position.character).then((result) => {
 						result = result ? result : [];
 
@@ -160,7 +196,7 @@ export default class Connection {
 			return new Promise<Hover>((resolve, reject) => {
 				const init = new Date().getTime();
 				try {
-					let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
+					const reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
 					service.getHover(reluri, params.position.line, params.position.character).then((hover) => {
 						hover = hover ? hover : { contents: [] };
 						const exit = new Date().getTime();
@@ -181,7 +217,7 @@ export default class Connection {
 				const enter = new Date().getTime();
 				const init = new Date().getTime();
 				try {
-					let reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
+					const reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
 					service.getReferences(reluri, params.position.line, params.position.character).then((result) => {
 						result = result ? result : [];
 

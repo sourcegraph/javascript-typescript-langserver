@@ -2,7 +2,7 @@ import * as os from "os";
 import * as path from "path";
 
 import * as ts from "typescript";
-import { SymbolKind, Range, Position } from 'vscode-languageserver';
+import { SymbolKind, Range, Position, Location } from 'vscode-languageserver';
 
 var strict = false;
 

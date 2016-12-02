@@ -10,6 +10,7 @@ import * as vscode from 'vscode-languageserver';
 import Connection from '../connection';
 import { FileInfo } from '../fs';
 import * as rt from '../request-type';
+import * as util from '../util';
 
 class Channel {
 	server: net.Server;
@@ -195,13 +196,33 @@ export function references(pos: vscode.TextDocumentPositionParams, expected: num
 	})
 }
 
+export function workspaceReferences(params: rt.WorkspaceReferenceParams, expected: rt.ReferenceInformation[], done: (err?: Error) => void) {
+	channel.clientConnection.sendRequest(rt.WorkspaceReferenceRequest.type, params).then((result: rt.ReferenceInformation[]) => {
+		check(done, () => {
+			chai.expect(result).to.deep.equal(expected);
+		});
+	}, (err?: Error) => {
+		return done(err || new Error('references request failed'))
+	})
+}
+
 export function symbols(params: rt.WorkspaceSymbolParamsWithLimit, expected: vscode.SymbolInformation[], done: (err?: Error) => void) {
 	channel.clientConnection.sendRequest(rt.WorkspaceSymbolsRequest.type, params).then((result: vscode.SymbolInformation[]) => {
 		check(done, () => {
 			chai.expect(result).to.deep.equal(expected);
 		});
 	}, (err?: Error) => {
-		return done(err || new Error('workspace symbols request failed'))
+		return done(err || new Error('workspace/symbol request failed'))
+	})
+}
+
+export function documentSymbols(params: vscode.DocumentSymbolParams, expected: vscode.SymbolInformation[], done: (err?: Error) => void) {
+	channel.clientConnection.sendRequest(rt.DocumentSymbolRequest.type, params).then((result: vscode.SymbolInformation[]) => {
+		check(done, () => {
+			chai.expect(result).to.deep.equal(expected);
+		});
+	}, (err?: Error) => {
+		return done(err || new Error('textDocument/documentSymbol request failed'))
 	})
 }
 
