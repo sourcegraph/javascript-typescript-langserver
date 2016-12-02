@@ -121,7 +121,6 @@ export default class Connection {
 				const init = new Date().getTime();
 				try {
 					return service.getWorkspaceSymbols(params.query, params.limit).then((result) => {
-						result = result ? result : [];
 						const exit = new Date().getTime();
 						console.error('workspace/symbol', params.query, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
 						return resolve(result || []);
@@ -155,14 +154,12 @@ export default class Connection {
 		this.connection.onRequest(rt.WorkspaceReferenceRequest.type, (params: rt.WorkspaceReferenceParams): Promise<rt.ReferenceInformation[]> => {
 			const enter = new Date().getTime();
 			return new Promise<rt.ReferenceInformation[]>((resolve, reject) => {
-				let result = [];
 				const init = new Date().getTime();
 				try {
 					return service.getWorkspaceReference(params).then((result) => {
-						result = result ? result : [];
 						const exit = new Date().getTime();
 						console.error('workspace/reference', 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
-						return resolve(result);
+						return resolve(result || []);
 					});
 				} catch (e) {
 					console.error(params, e);
