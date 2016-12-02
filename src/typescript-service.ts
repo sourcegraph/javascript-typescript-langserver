@@ -342,13 +342,13 @@ export default class TypeScriptService {
 	getDocumentSymbol(uri: string): Promise<SymbolInformation[]> {
 		return this.ensureFilesForHoverAndDefinition(uri).then(() => {
 			const fileName = util.uri2path(uri);
+
 			const config = this.projectManager.getConfiguration(uri);
 			return config.prepare(this.connection).then(() => {
-				this.projectManager.syncConfiguration(config, this.connection);
-				const sourceFile = config.program.getSourceFile(fileName);
+				const sourceFile = this.getSourceFile(config, fileName);
 				const tree = config.service.getNavigationTree(fileName);
 				const result: SymbolInformation[] = [];
-				this.flattenNavigationTreeItem(tree, null, sourceFile, result, 100000);
+				this.flattenNavigationTreeItem(tree, null, sourceFile, result);
 				return Promise.resolve(result);
 			});
 		});
@@ -360,7 +360,7 @@ export default class TypeScriptService {
 			return Promise.all(this.projectManager.getConfigurations().map((config) => {
 				return config.prepare(this.connection).then((config) => {
 					this.projectManager.syncConfiguration(config, this.connection);
-					for (let source of config.service.getProgram().getSourceFiles()) {
+					for (let source of config.service.getProgram().getSourceFiles().sort((a, b) => a.fileName.localeCompare(b.fileName))) {
 						if (util.normalizePath(source.fileName).indexOf(`${path_.posix.sep}node_modules${path_.posix.sep}`) !== -1) {
 							continue;
 						}
@@ -1257,7 +1257,7 @@ export default class TypeScriptService {
 			callback(null, SymbolInformation.create(item.name,
 				util.convertStringtoSymbolKind(item.kind),
 				Range.create(start.line, start.character, end.line, end.character),
-				util.path2uri('', item.fileName), item.containerName));
+				this.defUri(item.fileName), item.containerName));
 		}
 	}
 
@@ -1332,7 +1332,7 @@ export default class TypeScriptService {
 	private getNavigationTreeItems(configuration: pm.ProjectConfiguration, limit?: number): SymbolInformation[] {
 		const result = [];
 		const libraries = pm.getTypeScriptLibraries();
-		for (const sourceFile of configuration.program.getSourceFiles()) {
+		for (const sourceFile of configuration.program.getSourceFiles().sort((a, b) => a.fileName.localeCompare(b.fileName))) {
 			// excluding navigation items from TypeScript libraries
 			if (libraries.has(util.normalizePath(sourceFile.fileName))) {
 				continue;
@@ -1376,7 +1376,7 @@ export default class TypeScriptService {
 		return SymbolInformation.create(item.text,
 			util.convertStringtoSymbolKind(item.kind),
 			Range.create(start.line, start.character, end.line, end.character),
-			util.path2uri('', sourceFile.fileName), parent ? parent.text : '');
+			this.defUri(sourceFile.fileName), parent ? parent.text : '');
 	}
 
     /**
