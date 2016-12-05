@@ -31,6 +31,13 @@ import TypeScriptService from './typescript-service';
 import * as rt from './request-type';
 
 
+/**
+ * Connection handles incoming requests and sends responses over the
+ * JSONRPC connection. There is one Connection instance created for
+ * each workspace. Connection also includes cached data from the
+ * compiler that lets it respond more quickly. These caches are
+ * deleted after the Connection is torn down.
+ */
 export default class Connection {
 
 	connection: IConnection;

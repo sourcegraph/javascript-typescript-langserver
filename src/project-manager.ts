@@ -584,12 +584,29 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 }
 
 /**
- * Project configuration holder
+ * ProjectConfiguration wraps together a number of components and
+ * pieces of state related to a single TypeScript/JavaScript
+ * program. These include the program configuration, the
+ * LanguageServiceHost (which provides information and operations that
+ * a language server expects from its host, like file I/O), and the
+ * parsed ts.Program itself.
+ *
+ * After construction, ProjectConfiguration must be explicitly
+ * initialized via the prepare() method. This returns a Promise that
+ * resolves to the ProjectConfiguration, itself, once it is
+ * initialized.
  */
 export class ProjectConfiguration {
 
 	service: ts.LanguageService;
+
+	// program is "a collection of SourceFiles and a set of
+	// compilation options that represent a compilation unit. The
+	// program is the main entry point to the type system and code
+	// generation."
+	// (https://github.com/Microsoft/TypeScript-wiki/blob/master/Architectural-Overview.md#data-structures)
 	program: ts.Program;
+
 	host: InMemoryLanguageServiceHost;
 
 	private promise: Promise<ProjectConfiguration>;
