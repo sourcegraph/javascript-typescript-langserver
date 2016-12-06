@@ -7,6 +7,7 @@ import {
 	InitializeResult,
 	TextDocuments,
 	TextDocumentPositionParams,
+	TextDocumentSyncKind,
 	Definition,
 	ReferenceParams,
 	Location,
@@ -30,7 +31,6 @@ import TypeScriptService from './typescript-service';
 
 import * as rt from './request-type';
 
-
 /**
  * Connection handles incoming requests and sends responses over the
  * JSONRPC connection. There is one Connection instance created for
@@ -52,9 +52,6 @@ export default class Connection {
 		output.removeAllListeners('close');
 
 		let workspaceRoot: string;
-
-		let documents: TextDocuments = new TextDocuments();
-
 		let closed = false;
 
 		function close() {
@@ -64,70 +61,27 @@ export default class Connection {
 				closed = true;
 			}
 		}
-
-		let service: TypeScriptService;
+		const service = new TypeScriptService();
 
 		this.connection.onRequest(rt.InitializeRequest.type, (params: InitializeParams): Promise<InitializeResult> => {
 			console.error('initialize', params.rootPath);
-			return new Promise<InitializeResult>((resolve) => {
-				if (params.rootPath) {
-					workspaceRoot = util.uri2path(params.rootPath);
-					service = new TypeScriptService(workspaceRoot, strict, this.connection);
-					resolve({
-						capabilities: {
-							// Tell the client that the server works in FULL text document sync mode
-							textDocumentSync: documents.syncKind,
-							hoverProvider: true,
-							definitionProvider: true,
-							referencesProvider: true,
-							workspaceSymbolProvider: true
-						}
-					})
-				}
-			});
+			return service.initialize(params, this.connection, strict);
 		});
 
 		this.connection.onNotification(rt.ExitRequest.type, close);
-
 		this.connection.onRequest(rt.ShutdownRequest.type, () => []);
 
-		this.connection.onDidOpenTextDocument((params: DidOpenTextDocumentParams) => {
-			const reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
-			service.didOpen(reluri, params.textDocument.text);
-		});
-
-		this.connection.onDidChangeTextDocument((params: DidChangeTextDocumentParams) => {
-			const reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
-			let text = null;
-			params.contentChanges.forEach((change) => {
-				if (change.range || change.rangeLength) {
-					throw new Error('incremental updates in textDocument/didChange not supported for file ' + params.textDocument.uri);
-				}
-				text = change.text;
-			});
-			if (!text) {
-				return;
-			}
-			service.didChange(reluri, text);
-		});
-
-		this.connection.onDidSaveTextDocument((params: DidSaveTextDocumentParams) => {
-			const reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
-			service.didSave(reluri);
-		});
-
-		this.connection.onDidCloseTextDocument((params: DidCloseTextDocumentParams) => {
-			const reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
-			service.didClose(reluri);
-		});
-
+		this.connection.onDidOpenTextDocument((params: DidOpenTextDocumentParams) => service.didOpen(params));
+		this.connection.onDidChangeTextDocument((params: DidChangeTextDocumentParams) => service.didChange(params));
+		this.connection.onDidSaveTextDocument((params: DidSaveTextDocumentParams) => service.didSave(params));
+		this.connection.onDidCloseTextDocument((params: DidCloseTextDocumentParams) => service.didClose(params));
 
 		this.connection.onRequest(rt.WorkspaceSymbolsRequest.type, (params: rt.WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]> => {
 			const enter = new Date().getTime();
 			return new Promise<SymbolInformation[]>((resolve, reject) => {
 				const init = new Date().getTime();
 				try {
-					return service.getWorkspaceSymbols(params.query, params.limit).then((result) => {
+					return service.getWorkspaceSymbols(params).then((result) => {
 						const exit = new Date().getTime();
 						console.error('workspace/symbol', params.query, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
 						return resolve(result || []);
@@ -144,9 +98,7 @@ export default class Connection {
 			return new Promise<SymbolInformation[]>((resolve, reject) => {
 				const init = new Date().getTime();
 				try {
-					const reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
-					return service.getDocumentSymbol(reluri).then((result) => {
-						result = result ? result : [];
+					return service.getDocumentSymbol(params).then((result) => {
 						const exit = new Date().getTime();
 						console.error('textDocument/documentSymbol', "", 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
 						return resolve(result || []);
@@ -181,13 +133,10 @@ export default class Connection {
 			return new Promise<Definition>((resolve, reject) => {
 				try {
 					const init = new Date().getTime();
-					const reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
-					service.getDefinition(reluri, params.position.line, params.position.character).then((result) => {
-						result = result ? result : [];
-
+					service.getDefinition(params).then((result) => {
 						const exit = new Date().getTime();
 						console.error('definition', params.textDocument.uri, params.position.line, params.position.character, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
-						return resolve(result);
+						return resolve(result || []);
 					}, (e) => {
 						return reject(e);
 					});
@@ -203,12 +152,10 @@ export default class Connection {
 			return new Promise<Hover>((resolve, reject) => {
 				const init = new Date().getTime();
 				try {
-					const reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
-					service.getHover(reluri, params.position.line, params.position.character).then((hover) => {
-						hover = hover ? hover : { contents: [] };
+					service.getHover(params).then((hover) => {
 						const exit = new Date().getTime();
 						console.error('hover', params.textDocument.uri, params.position.line, params.position.character, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
-						resolve(hover);
+						resolve(hover || { contents: [] });
 					}, (e) => {
 						return reject(e);
 					});
@@ -224,13 +171,10 @@ export default class Connection {
 				const enter = new Date().getTime();
 				const init = new Date().getTime();
 				try {
-					const reluri = util.uri2reluri(params.textDocument.uri, workspaceRoot);
-					service.getReferences(reluri, params.position.line, params.position.character).then((result) => {
-						result = result ? result : [];
-
+					service.getReferences(params).then((result) => {
 						const exit = new Date().getTime();
 						console.error('references', params.textDocument.uri, params.position.line, params.position.character, 'found', result.length, 'total', (exit - enter) / 1000.0, 'busy', (exit - init) / 1000.0, 'wait', (init - enter) / 1000.0);
-						return resolve(result);
+						return resolve(result || []);
 					}
 					);
 				} catch (e) {
@@ -245,8 +189,8 @@ export default class Connection {
 		this.connection.listen();
 	}
 
+	// TODO(beyang): remove
 	sendRequest<P, R, E>(type: RequestType<P, R, E>, params?: P): Thenable<R> {
 		return this.connection.sendRequest(type, params);
 	}
-
 }

@@ -2,7 +2,29 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path_ from 'path';
 import * as ts from 'typescript';
-import { IConnection, Position, Location, SymbolInformation, Range, Hover, DocumentSymbolParams } from 'vscode-languageserver';
+import {
+	IConnection,
+	createConnection,
+	InitializeParams,
+	InitializeResult,
+	TextDocuments,
+	TextDocumentPositionParams,
+	TextDocumentSyncKind,
+	Definition,
+	ReferenceParams,
+	Position,
+	Location,
+	Hover,
+	WorkspaceSymbolParams,
+	DocumentSymbolParams,
+	SymbolInformation,
+	RequestType,
+	Range,
+	DidOpenTextDocumentParams,
+	DidCloseTextDocumentParams,
+	DidChangeTextDocumentParams,
+	DidSaveTextDocumentParams
+} from 'vscode-languageserver';
 
 import * as async from 'async';
 
@@ -14,7 +36,29 @@ import * as rt from './request-type';
 var sanitizeHtml = require('sanitize-html');
 var JSONPath = require('jsonpath-plus');
 
-export default class TypeScriptService {
+
+/*
+ * LanguageHandler handles LSP requests. It includes a handler method
+ * for each LSP method that this language server supports. Each
+ * handler method should be registered to the corresponding
+ * registration method on IConnection.
+ */
+export interface LanguageHandler {
+	initialize(params: InitializeParams, connection: IConnection, strict: boolean): Promise<InitializeResult>;
+	getDefinition(params: TextDocumentPositionParams): Promise<Location[]>;
+	getHover(params: TextDocumentPositionParams): Promise<Hover>;
+	getReferences(params: ReferenceParams): Promise<Location[]>;
+	getWorkspaceSymbols(params: rt.WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]>;
+	getDocumentSymbol(params: DocumentSymbolParams): Promise<SymbolInformation[]>;
+	getWorkspaceReference(params: rt.WorkspaceReferenceParams): Promise<rt.ReferenceInformation[]>;
+	didOpen(params: DidOpenTextDocumentParams);
+	didChange(params: DidChangeTextDocumentParams);
+	didClose(params: DidCloseTextDocumentParams);
+	didSave(params: DidSaveTextDocumentParams);
+}
+
+
+export default class TypeScriptService implements LanguageHandler {
 
 	projectManager: pm.ProjectManager;
 	root: string;
@@ -25,14 +69,34 @@ export default class TypeScriptService {
 
 	private strict: boolean;
 
-	constructor(root: string, strict: boolean, connection: IConnection) {
-		this.root = root;
-		this.projectManager = new pm.ProjectManager(root, strict, connection);
-		this.connection = connection;
-		this.strict = strict;
+	private initialized: Promise<InitializeResult>;
 
-		// kick off prefetching for workspace/symbol, but don't block
-		this.ensureFilesForWorkspaceSymbol();
+	initialize(params: InitializeParams, connection: IConnection, strict: boolean): Promise<InitializeResult> {
+		if (this.initialized) {
+			return this.initialized;
+		}
+		this.initialized = new Promise<InitializeResult>((resolve) => {
+			if (params.rootPath) {
+				this.root = util.uri2path(params.rootPath);
+				this.connection = connection;
+				this.strict = strict;
+				this.projectManager = new pm.ProjectManager(this.root, strict, connection);
+
+				this.ensureFilesForWorkspaceSymbol(); // pre-fetching
+
+				resolve({
+					capabilities: {
+						// Tell the client that the server works in FULL text document sync mode
+						textDocumentSync: TextDocumentSyncKind.Full,
+						hoverProvider: true,
+						definitionProvider: true,
+						referencesProvider: true,
+						workspaceSymbolProvider: true
+					}
+				})
+			}
+		});
+		return this.initialized;
 	}
 
 	private ensuredFilesForHoverAndDefinition = new Map<string, Promise<void>>();
@@ -182,7 +246,10 @@ export default class TypeScriptService {
 		return promise;
 	}
 
-	getDefinition(uri: string, line: number, column: number): Promise<Location[]> {
+	getDefinition(params: TextDocumentPositionParams): Promise<Location[]> {
+		const uri = util.uri2reluri(params.textDocument.uri, this.root);
+		const line = params.position.line;
+		const column = params.position.character;
 		return this.ensureFilesForHoverAndDefinition(uri).then(() => new Promise<Location[]>((resolve, reject) => {
 			const fileName: string = util.uri2path(uri);
 			try {
@@ -221,7 +288,10 @@ export default class TypeScriptService {
 		}));
 	}
 
-	getHover(uri: string, line: number, column: number): Promise<Hover> {
+	getHover(params: TextDocumentPositionParams): Promise<Hover> {
+		const uri = util.uri2reluri(params.textDocument.uri, this.root)
+		const line = params.position.line;
+		const column = params.position.character;
 		return this.ensureFilesForHoverAndDefinition(uri).then(() => new Promise<Hover>((resolve, reject) => {
 			const fileName: string = util.uri2path(uri);
 			try {
@@ -263,7 +333,10 @@ export default class TypeScriptService {
 		}));
 	}
 
-	getReferences(uri: string, line: number, column: number): Promise<Location[]> {
+	getReferences(params: ReferenceParams): Promise<Location[]> {
+		const uri = util.uri2reluri(params.textDocument.uri, this.root)
+		const line = params.position.line;
+		const column = params.position.character;
 		return this.ensureFilesForReferences(uri).then(() => new Promise<Location[]>((resolve, reject) => {
 			const fileName: string = util.uri2path(uri);
 			try {
@@ -312,7 +385,9 @@ export default class TypeScriptService {
 		}));
 	}
 
-	getWorkspaceSymbols(query: string, limit?: number): Promise<SymbolInformation[]> {
+	getWorkspaceSymbols(params: rt.WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]> {
+		const query = params.query;
+		const limit = params.limit;
 		return this.ensureFilesForWorkspaceSymbol().then(() => {
 			if (!query && this.emptyQueryWorkspaceSymbols) {
 				return this.emptyQueryWorkspaceSymbols;
@@ -339,7 +414,8 @@ export default class TypeScriptService {
 		});
 	}
 
-	getDocumentSymbol(uri: string): Promise<SymbolInformation[]> {
+	getDocumentSymbol(params: DocumentSymbolParams): Promise<SymbolInformation[]> {
+		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		return this.ensureFilesForHoverAndDefinition(uri).then(() => {
 			const fileName = util.uri2path(uri);
 
@@ -1177,38 +1253,39 @@ export default class TypeScriptService {
 		}
 	}
 
-	getPositionFromOffset(fileName: string, offset: number): Position {
-		// TODO: initialize configuration object by calling .get()
-		const configuration = this.projectManager.getConfiguration(fileName);
-		const sourceFile = this.getSourceFile(configuration, fileName);
-		if (!sourceFile) {
-			return null;
+	didOpen(params: DidOpenTextDocumentParams) {
+		const uri = util.uri2reluri(params.textDocument.uri, this.root);
+		return this.ensureFilesForHoverAndDefinition(uri).then(() => {
+			this.projectManager.didOpen(util.uri2path(uri), params.textDocument.text, this.connection);
+		});
+	}
+
+	didChange(params: DidChangeTextDocumentParams) {
+		const uri = util.uri2reluri(params.textDocument.uri, this.root);
+		let text = null;
+		params.contentChanges.forEach((change) => {
+			if (change.range || change.rangeLength) {
+				throw new Error('incremental updates in textDocument/didChange not supported for file ' + params.textDocument.uri);
+			}
+			text = change.text;
+		});
+		if (!text) {
+			return;
 		}
-		let res = ts.getLineAndCharacterOfPosition(sourceFile, offset);
-		return Position.create(res.line, res.character);
+		this.projectManager.didChange(util.uri2path(uri), text, this.connection);
 	}
 
-	didOpen(uri: string, text: string) {
-		return this.ensureFilesForHoverAndDefinition(uri).then(() => {
-			this.projectManager.didOpen(util.uri2path(uri), text, this.connection);
-		});
-	}
-
-	didChange(uri: string, text: string) {
-		return this.ensureFilesForHoverAndDefinition(uri).then(() => {
-			this.projectManager.didChange(util.uri2path(uri), text, this.connection);
-		});
-	}
-
-	didClose(uri: string) {
-		return this.ensureFilesForHoverAndDefinition(uri).then(() => {
-			this.projectManager.didClose(util.uri2path(uri), this.connection);
-		});
-	}
-
-	didSave(uri: string) {
+	didSave(params: DidSaveTextDocumentParams) {
+		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		return this.ensureFilesForHoverAndDefinition(uri).then(() => {
 			this.projectManager.didSave(util.uri2path(uri));
+		});
+	}
+
+	didClose(params: DidCloseTextDocumentParams) {
+		const uri = util.uri2reluri(params.textDocument.uri, this.root);
+		return this.ensureFilesForHoverAndDefinition(uri).then(() => {
+			this.projectManager.didClose(util.uri2path(uri), this.connection);
 		});
 	}
 
