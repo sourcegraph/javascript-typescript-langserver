@@ -364,7 +364,7 @@ export class ProjectManager {
 /**
  * Implementaton of LanguageServiceHost that works with in-memory file system
  */
-class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
+export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 
 	complete: boolean;
 
