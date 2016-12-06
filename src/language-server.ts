@@ -1,10 +1,13 @@
+/// <reference path="../node_modules/vscode/thenable.d.ts" />
+
 import * as net from 'net';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as cluster from 'cluster';
 
-import Connection from './connection';
+import NewConnection from './connection';
+import { TypeScriptService } from './typescript-service';
 import * as util from './util';
 
 const program = require('commander');
@@ -42,8 +45,8 @@ if (cluster.isMaster) {
 } else {
 	console.error('Listening for incoming LSP connections on', lspPort);
 	var server = net.createServer((socket) => {
-		let connection = new Connection(socket, socket, program.strict);
-		connection.start();
+		let connection = NewConnection(socket, socket, program.strict, new TypeScriptService());
+		connection.listen();
 	});
 
 	server.listen(lspPort);

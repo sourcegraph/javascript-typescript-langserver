@@ -4,7 +4,8 @@ var os = require('os');
 
 var program = require('commander');
 
-import Connection from './connection';
+import NewConnection from './connection';
+import { TypeScriptService } from './typescript-service';
 import * as util from './util';
 
 process.on('uncaughtException', (err) => {
@@ -17,5 +18,5 @@ program
 	.parse(process.argv);
 
 util.setStrict(program.strict);
-let connection = new Connection(process.stdin, process.stdout, program.strict);
-connection.start();
+let connection = NewConnection(process.stdin, process.stdout, program.strict, new TypeScriptService());
+connection.listen();

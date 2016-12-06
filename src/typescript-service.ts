@@ -37,7 +37,7 @@ var sanitizeHtml = require('sanitize-html');
 var JSONPath = require('jsonpath-plus');
 
 
-/*
+/**
  * LanguageHandler handles LSP requests. It includes a handler method
  * for each LSP method that this language server supports. Each
  * handler method should be registered to the corresponding
@@ -57,8 +57,16 @@ export interface LanguageHandler {
 	didSave(params: DidSaveTextDocumentParams);
 }
 
-
-export default class TypeScriptService implements LanguageHandler {
+/**
+ * TypeScriptService handles incoming requests and return
+ * responses. There is a one-to-one-to-one correspondence between TCP
+ * connection, TypeScriptService instance, and language
+ * workspace. TypeScriptService caches data from the compiler across
+ * requests. The lifetime of the TypeScriptService instance is tied to
+ * the lifetime of the TCP connection, so its caches are deleted after
+ * the connection is torn down.
+ */
+export class TypeScriptService implements LanguageHandler {
 
 	projectManager: pm.ProjectManager;
 	root: string;

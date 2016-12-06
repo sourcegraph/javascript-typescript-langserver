@@ -7,21 +7,23 @@ import * as chai from 'chai';
 
 import * as vscode from 'vscode-languageserver';
 
-import Connection from '../connection';
+import NewConnection from '../connection';
+import { TypeScriptService } from '../typescript-service';
 import { FileInfo } from '../fs';
 import * as rt from '../request-type';
 import * as util from '../util';
+import { IConnection } from 'vscode-languageserver';
 
 class Channel {
 	server: net.Server;
 	serverIn: net.Socket;
 	serverOut: net.Socket;
-	serverConnection: Connection;
+	serverConnection: IConnection;
 
 	client: net.Server;
 	clientIn: net.Socket;
 	clientOut: net.Socket;
-	clientConnection: Connection;
+	clientConnection: IConnection;
 }
 
 let channel: Channel;
@@ -35,8 +37,8 @@ export function setUp(memfs: any, done: (err?: Error) => void) {
 	function maybeDone() {
 		counter--;
 		if (counter === 0) {
-			channel.serverConnection.start();
-			channel.clientConnection.start();
+			channel.serverConnection.listen();
+			channel.clientConnection.listen();
 
 			const params: vscode.InitializeParams = {
 				processId: null,
@@ -55,12 +57,12 @@ export function setUp(memfs: any, done: (err?: Error) => void) {
 
 	channel.server = net.createServer((stream) => {
 		channel.serverIn = stream;
-		channel.serverConnection = new Connection(channel.serverIn, channel.serverOut, true);
+		channel.serverConnection = NewConnection(channel.serverIn, channel.serverOut, true, new TypeScriptService());
 		maybeDone();
 	});
 	channel.client = net.createServer((stream) => {
 		channel.clientIn = stream;
-		channel.clientConnection = new Connection(channel.clientIn, channel.clientOut, true);
+		channel.clientConnection = NewConnection(channel.clientIn, channel.clientOut, true, new TypeScriptService());
 		initFs(channel.clientConnection, memfs);
 		maybeDone();
 	});
@@ -72,8 +74,8 @@ export function setUp(memfs: any, done: (err?: Error) => void) {
 	});
 }
 
-function initFs(connection: Connection, memfs: any) {
-	connection.connection.onRequest(rt.ReadDirRequest.type, (params: string): FileInfo[] => {
+function initFs(connection: IConnection, memfs: any) {
+	connection.onRequest(rt.ReadDirRequest.type, (params: string): FileInfo[] => {
 		params = params.substring(1);
 		const path = params.length ? params.split('/') : [];
 		let node = memfs;
@@ -106,7 +108,7 @@ function initFs(connection: Connection, memfs: any) {
 		return result;
 	});
 
-	connection.connection.onRequest(rt.ReadFileRequest.type, (params: string): string => {
+	connection.onRequest(rt.ReadFileRequest.type, (params: string): string => {
 		params = params.substring(1);
 		const path = params.length ? params.split('/') : [];
 		let node = memfs;
@@ -227,7 +229,7 @@ export function documentSymbols(params: vscode.DocumentSymbolParams, expected: v
 }
 
 export function open(uri: string, text: string) {
-	channel.clientConnection.connection.sendNotification(rt.TextDocumentDidOpenNotification.type, {
+	channel.clientConnection.sendNotification(rt.TextDocumentDidOpenNotification.type, {
 		textDocument: {
 			uri: uri,
 			text: text
@@ -236,7 +238,7 @@ export function open(uri: string, text: string) {
 }
 
 export function close(uri: string) {
-	channel.clientConnection.connection.sendNotification(rt.TextDocumentDidCloseNotification.type, {
+	channel.clientConnection.sendNotification(rt.TextDocumentDidCloseNotification.type, {
 		textDocument: {
 			uri: uri
 		}
@@ -244,7 +246,7 @@ export function close(uri: string) {
 }
 
 export function change(uri: string, text: string) {
-	channel.clientConnection.connection.sendNotification(rt.TextDocumentDidChangeNotification.type, {
+	channel.clientConnection.sendNotification(rt.TextDocumentDidChangeNotification.type, {
 		textDocument: {
 			uri: uri
 		}, contentChanges: [{
