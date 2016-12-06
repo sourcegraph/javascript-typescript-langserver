@@ -4,7 +4,7 @@ var os = require('os');
 
 var program = require('commander');
 
-import NewConnection from './connection';
+import { newConnectionWithLangHandler } from './connection';
 import { TypeScriptService } from './typescript-service';
 import * as util from './util';
 
@@ -18,5 +18,5 @@ program
 	.parse(process.argv);
 
 util.setStrict(program.strict);
-let connection = NewConnection(process.stdin, process.stdout, program.strict, new TypeScriptService());
+let connection = newConnectionWithLangHandler(process.stdin, process.stdout, program.strict, new TypeScriptService());
 connection.listen();

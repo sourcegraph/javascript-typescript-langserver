@@ -29,7 +29,7 @@ import { LanguageHandler, TypeScriptService } from './typescript-service';
 
 import * as rt from './request-type';
 
-export default function NewConnection(input: any, output: any, strict: boolean, handler: LanguageHandler): IConnection {
+export function newConnectionWithLangHandler(input: any, output: any, strict: boolean, handler: LanguageHandler): IConnection {
 	const connection = createConnection(input, output);
 
 	input.removeAllListeners('end');

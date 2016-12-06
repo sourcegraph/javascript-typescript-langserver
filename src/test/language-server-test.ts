@@ -9,7 +9,6 @@ import * as ts from 'typescript';
 
 import * as vscode from 'vscode-languageserver';
 
-import Connection from '../connection';
 import { FileInfo } from '../fs';
 import * as rt from '../request-type';
 import * as utils from './test-utils';
