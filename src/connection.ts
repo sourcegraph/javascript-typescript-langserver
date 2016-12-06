@@ -25,7 +25,8 @@ import * as ts from 'typescript';
 import * as types from 'vscode-languageserver-types';
 
 import * as util from './util';
-import { LanguageHandler, TypeScriptService } from './typescript-service';
+import { TypeScriptService } from './typescript-service';
+import { LanguageHandler } from './lang-handler';
 
 import * as rt from './request-type';
 

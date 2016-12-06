@@ -33,29 +33,10 @@ import * as util from './util';
 import * as pm from './project-manager';
 import * as rt from './request-type';
 
+import { LanguageHandler } from './lang-handler';
+
 var sanitizeHtml = require('sanitize-html');
 var JSONPath = require('jsonpath-plus');
-
-
-/**
- * LanguageHandler handles LSP requests. It includes a handler method
- * for each LSP method that this language server supports. Each
- * handler method should be registered to the corresponding
- * registration method on IConnection.
- */
-export interface LanguageHandler {
-	initialize(params: InitializeParams, connection: IConnection, strict: boolean): Promise<InitializeResult>;
-	getDefinition(params: TextDocumentPositionParams): Promise<Location[]>;
-	getHover(params: TextDocumentPositionParams): Promise<Hover>;
-	getReferences(params: ReferenceParams): Promise<Location[]>;
-	getWorkspaceSymbols(params: rt.WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]>;
-	getDocumentSymbol(params: DocumentSymbolParams): Promise<SymbolInformation[]>;
-	getWorkspaceReference(params: rt.WorkspaceReferenceParams): Promise<rt.ReferenceInformation[]>;
-	didOpen(params: DidOpenTextDocumentParams);
-	didChange(params: DidChangeTextDocumentParams);
-	didClose(params: DidCloseTextDocumentParams);
-	didSave(params: DidSaveTextDocumentParams);
-}
 
 /**
  * TypeScriptService handles incoming requests and return
