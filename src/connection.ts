@@ -49,7 +49,12 @@ export function newConnectionWithLangHandler(input: any, output: any, strict: bo
 
 	connection.onRequest(rt.InitializeRequest.type, (params: InitializeParams): Promise<InitializeResult> => {
 		console.error('initialize', params.rootPath);
-		return handler.initialize(params, connection, strict);
+		try {
+			return handler.initialize(params, connection, strict);
+		} catch (e) {
+			console.error(params, e);
+			return Promise.reject(e);
+		}
 	});
 
 	connection.onNotification(rt.ExitRequest.type, close);
