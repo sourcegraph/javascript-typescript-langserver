@@ -47,8 +47,11 @@ export function newConnection(input: any, output: any): IConnection {
 		}
 	}
 
+	// We attach one notification handler on `exit` here to handle the
+	// teardown of the connection.  If other handlers want to do
+	// something on connection destruction, they should register a
+	// handler on `shutdown`.
 	connection.onNotification(rt.ExitRequest.type, close);
-	connection.onRequest(rt.ShutdownRequest.type, () => []);
 
 	return connection;
 }
@@ -70,6 +73,7 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 		}
 	});
 
+	connection.onShutdown(handler.shutdown);
 
 	connection.onDidOpenTextDocument((params: DidOpenTextDocumentParams) => handler.didOpen(params));
 	connection.onDidChangeTextDocument((params: DidChangeTextDocumentParams) => handler.didChange(params));
