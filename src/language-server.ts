@@ -6,7 +6,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as cluster from 'cluster';
 
-import { newConnectionWithLangHandler } from './connection';
+import { newConnection, registerLanguageHandler } from './connection';
 import { TypeScriptService } from './typescript-service';
 import * as util from './util';
 
@@ -45,7 +45,8 @@ if (cluster.isMaster) {
 } else {
 	console.error('Listening for incoming LSP connections on', lspPort);
 	var server = net.createServer((socket) => {
-		let connection = newConnectionWithLangHandler(socket, socket, program.strict, new TypeScriptService());
+		const connection = newConnection(socket, socket);
+		registerLanguageHandler(connection, program.strict, new TypeScriptService());
 		connection.listen();
 	});
 

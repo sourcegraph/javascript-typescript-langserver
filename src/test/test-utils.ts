@@ -7,7 +7,7 @@ import * as chai from 'chai';
 
 import * as vscode from 'vscode-languageserver';
 
-import { newConnectionWithLangHandler } from '../connection';
+import { newConnection, registerLanguageHandler } from '../connection';
 import { TypeScriptService } from '../typescript-service';
 import { FileInfo } from '../fs';
 import * as rt from '../request-type';
@@ -57,12 +57,14 @@ export function setUp(memfs: any, done: (err?: Error) => void) {
 
 	channel.server = net.createServer((stream) => {
 		channel.serverIn = stream;
-		channel.serverConnection = newConnectionWithLangHandler(channel.serverIn, channel.serverOut, true, new TypeScriptService());
+		channel.serverConnection = newConnection(channel.serverIn, channel.serverOut);
+		registerLanguageHandler(channel.serverConnection, true, new TypeScriptService());
 		maybeDone();
 	});
 	channel.client = net.createServer((stream) => {
 		channel.clientIn = stream;
-		channel.clientConnection = newConnectionWithLangHandler(channel.clientIn, channel.clientOut, true, new TypeScriptService());
+		channel.clientConnection = newConnection(channel.clientIn, channel.clientOut);
+		registerLanguageHandler(channel.clientConnection, true, new TypeScriptService());
 		initFs(channel.clientConnection, memfs);
 		maybeDone();
 	});

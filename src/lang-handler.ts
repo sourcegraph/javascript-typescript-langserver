@@ -22,6 +22,8 @@ import {
 	DidSaveTextDocumentParams
 } from 'vscode-languageserver';
 
+import { FileSystem } from './fs';
+
 import * as rt from './request-type';
 
 /**
@@ -31,7 +33,8 @@ import * as rt from './request-type';
  * registration method on IConnection.
  */
 export interface LanguageHandler {
-	initialize(params: InitializeParams, connection: IConnection, strict: boolean): Promise<InitializeResult>;
+	initialize(params: InitializeParams, remoteFs: FileSystem, strict: boolean): Promise<InitializeResult>;
+	shutdown(): Promise<void>;
 	getDefinition(params: TextDocumentPositionParams): Promise<Location[]>;
 	getHover(params: TextDocumentPositionParams): Promise<Hover>;
 	getReferences(params: ReferenceParams): Promise<Location[]>;

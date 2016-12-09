@@ -1,7 +1,7 @@
 {
 
     "compilerOptions": {
-        "target": "ES5",
+        "target": "ES6",
         "lib": ["es2016"],
         "types": ["node", "mocha", "chai"],
         "module": "commonjs",

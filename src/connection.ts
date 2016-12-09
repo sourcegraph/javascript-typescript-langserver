@@ -27,12 +27,12 @@ import * as types from 'vscode-languageserver-types';
 import * as util from './util';
 import { TypeScriptService } from './typescript-service';
 import { LanguageHandler } from './lang-handler';
+import * as fs from './fs';
 
 import * as rt from './request-type';
 
-export function newConnectionWithLangHandler(input: any, output: any, strict: boolean, handler: LanguageHandler): IConnection {
+export function newConnection(input: any, output: any): IConnection {
 	const connection = createConnection(input, output);
-
 	input.removeAllListeners('end');
 	input.removeAllListeners('close');
 	output.removeAllListeners('end');
@@ -47,18 +47,33 @@ export function newConnectionWithLangHandler(input: any, output: any, strict: bo
 		}
 	}
 
+	// We attach one notification handler on `exit` here to handle the
+	// teardown of the connection.  If other handlers want to do
+	// something on connection destruction, they should register a
+	// handler on `shutdown`.
+	connection.onNotification(rt.ExitRequest.type, close);
+
+	return connection;
+}
+
+export function registerLanguageHandler(connection: IConnection, strict: boolean, handler: LanguageHandler): void {
 	connection.onRequest(rt.InitializeRequest.type, (params: InitializeParams): Promise<InitializeResult> => {
 		console.error('initialize', params.rootPath);
+		let remoteFs: fs.FileSystem;
+		if (strict) {
+			remoteFs = new fs.RemoteFileSystem(connection);
+		} else {
+			remoteFs = new fs.LocalFileSystem(util.uri2path(params.rootPath));
+		}
 		try {
-			return handler.initialize(params, connection, strict);
+			return handler.initialize(params, remoteFs, strict);
 		} catch (e) {
 			console.error(params, e);
 			return Promise.reject(e);
 		}
 	});
 
-	connection.onNotification(rt.ExitRequest.type, close);
-	connection.onRequest(rt.ShutdownRequest.type, () => []);
+	connection.onShutdown(handler.shutdown);
 
 	connection.onDidOpenTextDocument((params: DidOpenTextDocumentParams) => handler.didOpen(params));
 	connection.onDidChangeTextDocument((params: DidChangeTextDocumentParams) => handler.didChange(params));
@@ -172,6 +187,4 @@ export function newConnectionWithLangHandler(input: any, output: any, strict: bo
 			}
 		});
 	});
-
-	return connection;
 }
