@@ -19,8 +19,6 @@ import * as match from './match-files';
 export class ProjectManager {
 
 	private root: string;
-	private strict: boolean;
-
 	private configs: Map<string, ProjectConfiguration>;
 
 	private remoteFs: FileSystem.FileSystem;
@@ -34,19 +32,19 @@ export class ProjectManager {
      */
 	private fetched: Set<string>;
 
-	constructor(root: string, strict: boolean, connection: IConnection) {
+	constructor(root: string, remoteFs: FileSystem.FileSystem) {
 		this.root = util.normalizePath(root);
-		this.strict = strict;
 		this.configs = new Map<string, ProjectConfiguration>();
 		this.localFs = new InMemoryFileSystem(this.root);
 		this.versions = new Map<string, number>();
 		this.fetched = new Set<string>();
+		this.remoteFs = remoteFs;
 
-		if (strict) {
-			this.remoteFs = new FileSystem.RemoteFileSystem(connection)
-		} else {
-			this.remoteFs = new FileSystem.LocalFileSystem(root)
-		}
+		// if (strict) {
+		// 	this.remoteFs = new FileSystem.RemoteFileSystem(connection)
+		// } else {
+		// 	this.remoteFs = new FileSystem.LocalFileSystem(root)
+		// }
 	}
 
 	getRemoteRoot(): string {
