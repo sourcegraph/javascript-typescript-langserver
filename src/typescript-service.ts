@@ -83,6 +83,8 @@ export class TypeScriptService implements LanguageHandler {
 		return this.initialized;
 	}
 
+	shutdown(): Promise<void> { return Promise.resolve(); }
+
 	private ensuredFilesForHoverAndDefinition = new Map<string, Promise<void>>();
 
 	private ensureFilesForHoverAndDefinition(uri: string): Promise<void> {

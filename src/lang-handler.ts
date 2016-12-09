@@ -34,6 +34,7 @@ import * as rt from './request-type';
  */
 export interface LanguageHandler {
 	initialize(params: InitializeParams, remoteFs: FileSystem, strict: boolean): Promise<InitializeResult>;
+	shutdown(): Promise<void>;
 	getDefinition(params: TextDocumentPositionParams): Promise<Location[]>;
 	getHover(params: TextDocumentPositionParams): Promise<Hover>;
 	getReferences(params: ReferenceParams): Promise<Location[]>;
