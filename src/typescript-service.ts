@@ -52,24 +52,19 @@ export class TypeScriptService implements LanguageHandler {
 	projectManager: pm.ProjectManager;
 	root: string;
 
-	private connection: IConnection;
-
-	private emptyQueryWorkspaceSymbols: Promise<SymbolInformation[]>; // cached response for empty workspace/symbol query
-
 	private strict: boolean;
-
+	private emptyQueryWorkspaceSymbols: Promise<SymbolInformation[]>; // cached response for empty workspace/symbol query
 	private initialized: Promise<InitializeResult>;
 
-	initialize(params: InitializeParams, connection: IConnection, strict: boolean): Promise<InitializeResult> {
+	initialize(params: InitializeParams, remoteFs: FileSystem.FileSystem, strict: boolean): Promise<InitializeResult> {
 		if (this.initialized) {
 			return this.initialized;
 		}
 		this.initialized = new Promise<InitializeResult>((resolve) => {
 			if (params.rootPath) {
 				this.root = util.uri2path(params.rootPath);
-				this.connection = connection;
 				this.strict = strict;
-				this.projectManager = new pm.ProjectManager(this.root, strict, connection);
+				this.projectManager = new pm.ProjectManager(this.root, remoteFs);
 
 				this.ensureFilesForWorkspaceSymbol(); // pre-fetching
 
