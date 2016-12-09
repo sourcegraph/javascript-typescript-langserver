@@ -68,15 +68,15 @@ export class ProjectManager {
 	/**
 	 * Ensures that all files are added (and parsed) to the project to which fileName belongs. 
 	 */
-	syncConfigurationFor(fileName: string, connection: IConnection) {
-		return this.syncConfiguration(this.getConfiguration(fileName), connection);
+	syncConfigurationFor(fileName: string) {
+		return this.syncConfiguration(this.getConfiguration(fileName));
 	}
 
 	/**
 	 * Ensures that all files are added (and parsed) for the given project.
 	 * Uses tsconfig.json settings to identify what files make a project (root files)
 	 */
-	syncConfiguration(config: ProjectConfiguration, connection: IConnection) {
+	syncConfiguration(config: ProjectConfiguration) {
 		if (config.host.complete) {
 			return;
 		}
@@ -252,25 +252,25 @@ export class ProjectManager {
 		return this.configs.get('');
 	}
 
-	didOpen(fileName: string, text: string, connection: IConnection) {
-		this.didChange(fileName, text, connection);
+	didOpen(fileName: string, text: string) {
+		this.didChange(fileName, text);
 	}
 
-	didClose(fileName: string, connection: IConnection) {
+	didClose(fileName: string) {
 		this.localFs.didClose(fileName);
 		let version = this.versions.get(fileName) || 0;
 		this.versions.set(fileName, ++version);
-		this.getConfiguration(fileName).prepare(null).then((config) => {
+		this.getConfiguration(fileName).prepare().then((config) => {
 			config.host.incProjectVersion();
 			config.program = config.service.getProgram();
 		});
 	}
 
-	didChange(fileName: string, text: string, connection: IConnection) {
+	didChange(fileName: string, text: string) {
 		this.localFs.didChange(fileName, text);
 		let version = this.versions.get(fileName) || 0;
 		this.versions.set(fileName, ++version);
-		this.getConfiguration(fileName).prepare(null).then((config) => {
+		this.getConfiguration(fileName).prepare().then((config) => {
 			config.host.incProjectVersion();
 			config.program = config.service.getProgram();
 		});
@@ -632,7 +632,7 @@ export class ProjectConfiguration {
 		return this.fs;
 	}
 
-	prepare(connection: IConnection): Promise<ProjectConfiguration> {
+	prepare(): Promise<ProjectConfiguration> {
 		if (!this.promise) {
 			this.promise = new Promise<ProjectConfiguration>((resolve, reject) => {
 				let configObject;

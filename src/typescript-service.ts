@@ -124,7 +124,7 @@ export class TypeScriptService implements LanguageHandler {
 			promise = promise.then(() => {
 				const importFiles = new Set<string>();
 				return Promise.all(fileNames.map((fileName) => {
-					return this.projectManager.getConfiguration(fileName).prepare(this.connection).then((config) => {
+					return this.projectManager.getConfiguration(fileName).prepare().then((config) => {
 						const contents = this.projectManager.getFs().readFile(fileName) || '';
 						const info = ts.preProcessFile(contents, true, true);
 						const compilerOpt = config.host.getCompilationSettings();
@@ -243,7 +243,7 @@ export class TypeScriptService implements LanguageHandler {
 			const fileName: string = util.uri2path(uri);
 			try {
 				const configuration = this.projectManager.getConfiguration(fileName);
-				configuration.prepare(this.connection).then((configuration) => {
+				configuration.prepare().then((configuration) => {
 					try {
 						const sourceFile = this.getSourceFile(configuration, fileName);
 						if (!sourceFile) {
@@ -285,7 +285,7 @@ export class TypeScriptService implements LanguageHandler {
 			const fileName: string = util.uri2path(uri);
 			try {
 				const configuration = this.projectManager.getConfiguration(fileName);
-				configuration.prepare(this.connection).then(() => {
+				configuration.prepare().then(() => {
 					try {
 						const sourceFile = this.getSourceFile(configuration, fileName);
 						if (!sourceFile) {
@@ -330,7 +330,7 @@ export class TypeScriptService implements LanguageHandler {
 			const fileName: string = util.uri2path(uri);
 			try {
 				const configuration = this.projectManager.getConfiguration(fileName);
-				configuration.prepare(this.connection).then(() => {
+				configuration.prepare().then(() => {
 					try {
 						const sourceFile = this.getSourceFile(configuration, fileName);
 						if (!sourceFile) {
@@ -339,7 +339,7 @@ export class TypeScriptService implements LanguageHandler {
 
 						const started = new Date().getTime();
 
-						this.projectManager.syncConfigurationFor(fileName, this.connection);
+						this.projectManager.syncConfigurationFor(fileName);
 
 						const prepared = new Date().getTime();
 
@@ -409,7 +409,7 @@ export class TypeScriptService implements LanguageHandler {
 			const fileName = util.uri2path(uri);
 
 			const config = this.projectManager.getConfiguration(uri);
-			return config.prepare(this.connection).then(() => {
+			return config.prepare().then(() => {
 				const sourceFile = this.getSourceFile(config, fileName);
 				const tree = config.service.getNavigationTree(fileName);
 				const result: SymbolInformation[] = [];
@@ -423,8 +423,8 @@ export class TypeScriptService implements LanguageHandler {
 		const refInfo: rt.ReferenceInformation[] = [];
 		return this.ensureFilesForWorkspaceSymbol().then(() => {
 			return Promise.all(this.projectManager.getConfigurations().map((config) => {
-				return config.prepare(this.connection).then((config) => {
-					this.projectManager.syncConfiguration(config, this.connection);
+				return config.prepare().then((config) => {
+					this.projectManager.syncConfiguration(config);
 					for (let source of config.service.getProgram().getSourceFiles().sort((a, b) => a.fileName.localeCompare(b.fileName))) {
 						if (util.normalizePath(source.fileName).indexOf(`${path_.posix.sep}node_modules${path_.posix.sep}`) !== -1) {
 							continue;
@@ -1245,7 +1245,7 @@ export class TypeScriptService implements LanguageHandler {
 	didOpen(params: DidOpenTextDocumentParams) {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		return this.ensureFilesForHoverAndDefinition(uri).then(() => {
-			this.projectManager.didOpen(util.uri2path(uri), params.textDocument.text, this.connection);
+			this.projectManager.didOpen(util.uri2path(uri), params.textDocument.text);
 		});
 	}
 
@@ -1261,7 +1261,7 @@ export class TypeScriptService implements LanguageHandler {
 		if (!text) {
 			return;
 		}
-		this.projectManager.didChange(util.uri2path(uri), text, this.connection);
+		this.projectManager.didChange(util.uri2path(uri), text);
 	}
 
 	didSave(params: DidSaveTextDocumentParams) {
@@ -1274,7 +1274,7 @@ export class TypeScriptService implements LanguageHandler {
 	didClose(params: DidCloseTextDocumentParams) {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		return this.ensureFilesForHoverAndDefinition(uri).then(() => {
-			this.projectManager.didClose(util.uri2path(uri), this.connection);
+			this.projectManager.didClose(util.uri2path(uri));
 		});
 	}
 
@@ -1355,9 +1355,9 @@ export class TypeScriptService implements LanguageHandler {
 			this.collectWorkspaceSymbols(query, limit, configurations, index + 1, items, callback);
 		};
 
-		configuration.prepare(this.connection).then(() => {
+		configuration.prepare().then(() => {
 			setImmediate(() => {
-				this.projectManager.syncConfiguration(configuration, this.connection);
+				this.projectManager.syncConfiguration(configuration);
 				const chunkSize = limit ? Math.min(limit, limit - items.length) : undefined;
 				setImmediate(() => {
 					if (query) {
