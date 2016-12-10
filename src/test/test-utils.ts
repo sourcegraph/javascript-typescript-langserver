@@ -8,7 +8,7 @@ import * as chai from 'chai';
 import * as vscode from 'vscode-languageserver';
 
 import { newConnection, registerLanguageHandler } from '../connection';
-import { TypeScriptService } from '../typescript-service';
+import { LanguageHandler } from '../lang-handler';
 import { FileInfo } from '../fs';
 import * as rt from '../request-type';
 import * as util from '../util';
@@ -28,8 +28,7 @@ class Channel {
 
 let channel: Channel;
 
-export function setUp(memfs: any, done: (err?: Error) => void) {
-
+export function setUp(langhandler: LanguageHandler, memfs: any, done: (err?: Error) => void) {
 	channel = new Channel();
 
 	let counter = 2;
@@ -58,13 +57,12 @@ export function setUp(memfs: any, done: (err?: Error) => void) {
 	channel.server = net.createServer((stream) => {
 		channel.serverIn = stream;
 		channel.serverConnection = newConnection(channel.serverIn, channel.serverOut);
-		registerLanguageHandler(channel.serverConnection, true, new TypeScriptService());
+		registerLanguageHandler(channel.serverConnection, true, langhandler);
 		maybeDone();
 	});
 	channel.client = net.createServer((stream) => {
 		channel.clientIn = stream;
 		channel.clientConnection = newConnection(channel.clientIn, channel.clientOut);
-		registerLanguageHandler(channel.clientConnection, true, new TypeScriptService());
 		initFs(channel.clientConnection, memfs);
 		maybeDone();
 	});

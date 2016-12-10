@@ -13,6 +13,8 @@ import { FileInfo } from '../fs';
 import * as rt from '../request-type';
 import * as utils from './test-utils';
 
+import { TypeScriptService } from '../typescript-service';
+
 // forcing strict mode
 import * as util from '../util';
 util.setStrict(true);
@@ -21,7 +23,7 @@ describe('LSP', function () {
 	this.timeout(5000);
 	describe('definitions and hovers', function () {
 		before(function (done: () => void) {
-			utils.setUp({
+			utils.setUp(new TypeScriptService(), {
 				'a.ts': "const abc = 1; console.log(abc);",
 				'foo': {
 					'b.ts': "/* This is class Foo */\nexport class Foo {}",
@@ -137,7 +139,7 @@ describe('LSP', function () {
 	});
 	describe('js-project-no-config', function () {
 		before(function (done: () => void) {
-			utils.setUp({
+			utils.setUp(new TypeScriptService(), {
 				'a.js': "module.exports = {foo: function() {}}",
 				'foo': {
 					'b.js': "var a = require('../a.js'); a.foo();",
@@ -162,7 +164,7 @@ describe('LSP', function () {
 	});
 	describe('workspace/symbol and textDocument/documentSymbol', function () {
 		before(function (done: () => void) {
-			utils.setUp({
+			utils.setUp(new TypeScriptService(), {
 				'a.ts': "class a { foo() { const i = 1;} }",
 				'foo': {
 					'b.ts': "class b { bar: number; baz(): number { return this.bar;}}; function qux() {}"
@@ -419,7 +421,7 @@ describe('LSP', function () {
 	});
 	describe('workspace/reference', function () {
 		before(function (done: () => void) {
-			utils.setUp({
+			utils.setUp(new TypeScriptService(), {
 				'a.ts': "class a { foo() { const i = 1;} }",
 				'foo': {
 					'b.ts': "class b { bar: number; baz(): number { return this.bar;}}; function qux() {}"
@@ -580,7 +582,7 @@ describe('LSP', function () {
 	});
 	describe('sourcegraph/sourcegraph#2052', function () {
 		before(function (done: () => void) {
-			utils.setUp({
+			utils.setUp(new TypeScriptService(), {
 				'a.ts': "let parameters = [];"
 			}, done);
 		});
@@ -608,7 +610,7 @@ describe('LSP', function () {
 	describe('live updates', function () {
 		this.timeout(10000);
 		before(function (done: () => void) {
-			utils.setUp({
+			utils.setUp(new TypeScriptService(), {
 				'a.ts': 'let parameters = [];'
 			}, done);
 		});
@@ -672,7 +674,7 @@ describe('LSP', function () {
 	});
 	describe('references and imports', function () {
 		before(function (done: () => void) {
-			utils.setUp({
+			utils.setUp(new TypeScriptService(), {
 				'a.ts': '/// <reference path="b.ts"/>\nnamespace qux {let f : foo;}',
 				'b.ts': '/// <reference path="foo/c.ts"/>',
 				'c.ts': 'import * as d from "./foo/d"\nd.bar()',
@@ -796,7 +798,7 @@ describe('LSP', function () {
 	});
 	describe('typescript libs', function () {
 		before(function (done: () => void) {
-			utils.setUp({
+			utils.setUp(new TypeScriptService(), {
 				'tsconfig.json': JSON.stringify({
 					compilerOptions: {
 						lib: ['es2016', 'dom']
