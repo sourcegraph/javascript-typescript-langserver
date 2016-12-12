@@ -73,7 +73,7 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 		}
 	});
 
-	connection.onShutdown(handler.shutdown);
+	connection.onShutdown(() => handler.shutdown());
 
 	connection.onDidOpenTextDocument((params: DidOpenTextDocumentParams) => handler.didOpen(params));
 	connection.onDidChangeTextDocument((params: DidChangeTextDocumentParams) => handler.didChange(params));
