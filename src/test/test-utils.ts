@@ -129,9 +129,14 @@ function initFs(connection: IConnection, memfs: any) {
 }
 
 export function tearDown(done: () => void) {
-	channel.client.close();
-	channel.server.close();
-	done();
+	channel.clientConnection.sendRequest(rt.ShutdownRequest.type).then(() => {
+		channel.clientConnection.sendNotification(rt.ExitRequest.type);
+		channel.client.close();
+		channel.server.close();
+		done();
+	}, (e) => {
+		console.error("error on tearDown:", e);
+	});
 }
 
 function check(done: (err?: Error) => void, conditions: () => void) {
