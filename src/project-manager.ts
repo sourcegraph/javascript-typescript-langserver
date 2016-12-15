@@ -122,7 +122,7 @@ export class ProjectManager {
      */
 	ensureModuleStructure(): Promise<void> {
 		if (!this.ensuredModuleStructure) {
-			this.ensuredModuleStructure = this.ensureModuleStructure_().then(() => {
+			this.ensuredModuleStructure = this.refreshModuleStructureAt(this.root).then(() => {
 				this.refreshConfigurations();
 			});
 			this.ensuredModuleStructure.catch((err) => {
@@ -133,11 +133,23 @@ export class ProjectManager {
 		return this.ensuredModuleStructure;
 	}
 
-	private ensureModuleStructure_(): Promise<void> {
+	/*
+	 * refreshModuleStructureAt refreshes the local in-memory
+	 * filesytem's (this.localFs) files under the specified path
+	 * (root) with the contents of the remote filesystem
+	 * (this.remoteFs).
+	 *
+	 * This method is public because a ProjectManager instance assumes
+	 * there are no changes made to the remote filesystem structure
+	 * after initialization. If such changes are made, it is necessary
+	 * to call this method to alert the ProjectManager instance of the
+	 * change.
+	 */
+	refreshModuleStructureAt(root: string): Promise<void> {
 		const start = new Date().getTime();
 		const self = this;
 		const filesToFetch = [];
-		return this.walkRemote(this.root, function (path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
+		return this.walkRemote(root, function (path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
 			if (err) {
 				return err;
 			} else if (info.dir) {
