@@ -107,7 +107,8 @@ export class ProjectManager {
 	 * refreshModuleStructureAt refreshes the local in-memory
 	 * filesytem's (this.localFs) files under the specified path
 	 * (root) with the contents of the remote filesystem
-	 * (this.remoteFs).
+	 * (this.remoteFs). It will also reset the ProjectConfigurations
+	 * that are affected by the refreshed files.
 	 *
 	 * This method is public because a ProjectManager instance assumes
 	 * there are no changes made to the remote filesystem structure
@@ -115,11 +116,17 @@ export class ProjectManager {
 	 * to call this method to alert the ProjectManager instance of the
 	 * change.
 	 */
-	refreshModuleStructureAt(root: string): Promise<void> {
+	async refreshModuleStructureAt(root: string): Promise<void> {
+		if (!root.startsWith('/')) {
+			root = '/' + root;
+		}
+		if (root !== '/' && root.endsWith('/')) {
+			root = root.substring(0, root.length - 1);
+		}
 		const start = new Date().getTime();
 		const self = this;
 		const filesToFetch = [];
-		return this.walkRemote(root, function (path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
+		await this.walkRemote(root, function (path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
 			if (err) {
 				return err;
 			} else if (info.dir) {
@@ -134,7 +141,20 @@ export class ProjectManager {
 				}
 			}
 			return null;
-		}).then(() => this.ensureFiles(filesToFetch));
+		});
+		await this.ensureFiles(filesToFetch);
+		for (let [dir, config] of this.configs) {
+			if (!dir.startsWith('/')) {
+				dir = '/' + dir;
+			}
+			if (dir !== '/' && dir.endsWith('/')) {
+				dir = dir.substring(0, dir.length - 1);
+			}
+
+			if (dir.startsWith(root + '/') || root.startsWith(dir + '/') || root === dir) {
+				config.reset();
+			}
+		}
 	}
 
     /**
@@ -602,6 +622,22 @@ export class ProjectConfiguration {
 
 	moduleResolutionHost(): ts.ModuleResolutionHost {
 		return this.fs;
+	}
+
+	/**
+	 * reset resets a ProjectConfiguration to its state immediately
+	 * after construction. It should be called whenever the underlying
+	 * local filesystem (fs) has changed, and so the
+	 * ProjectConfiguration can no longer assume its state reflects
+	 * that of the underlying files.
+	 */
+	reset(): void {
+		this.initialized = null;
+		this.ensuredBasicFiles = null;
+		this.ensuredAllFiles = null;
+		this.service = null;
+		this.program = null;
+		this.host = null;
 	}
 
 	private initialized: Promise<void>;
