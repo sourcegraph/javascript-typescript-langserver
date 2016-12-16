@@ -107,7 +107,7 @@ export class TypeScriptService implements LanguageHandler {
 		return promise;
 	}
 
-	private ensureTransitiveFileDependencies(fileNames: string[], maxDepth: number, seen: Set<string>): Promise<void> {
+	private async ensureTransitiveFileDependencies(fileNames: string[], maxDepth: number, seen: Set<string>): Promise<void> {
 		fileNames = fileNames.filter((f) => !seen.has(f));
 		if (fileNames.length === 0) {
 			return Promise.resolve();
@@ -115,45 +115,41 @@ export class TypeScriptService implements LanguageHandler {
 		fileNames.forEach((f) => seen.add(f));
 
 		const absFileNames = fileNames.map((f) => util.normalizePath(util.resolve(this.root, f)));
-		let promise = this.projectManager.ensureFiles(absFileNames);
+		await this.projectManager.ensureFiles(absFileNames);
 
 		if (maxDepth > 0) {
-			promise = promise.then(() => {
-				const importFiles = new Set<string>();
-				return Promise.all(fileNames.map((fileName) => {
-					return this.projectManager.getConfiguration(fileName).prepare().then((config) => {
-						const contents = this.projectManager.getFs().readFile(fileName) || '';
-						const info = ts.preProcessFile(contents, true, true);
-						const compilerOpt = config.host.getCompilationSettings();
-						for (const imp of info.importedFiles) {
-							const resolved = ts.resolveModuleName(imp.fileName, fileName, compilerOpt, config.moduleResolutionHost());
-							if (!resolved || !resolved.resolvedModule) {
-								// This means we didn't find a file defining
-								// the module. It could still exist as an
-								// ambient module, which is why we fetch
-								// global*.d.ts files.
-								continue;
-							}
-							importFiles.add(resolved.resolvedModule.resolvedFileName);
-						}
-						const resolver = !this.strict && os.platform() == 'win32' ? path_ : path_.posix;
-						for (const ref of info.referencedFiles) {
-							// Resolving triple slash references relative to current file
-							// instead of using module resolution host because it behaves
-							// differently in "nodejs" mode
-							const refFileName = util.normalizePath(path_.relative(this.root,
-								resolver.resolve(this.root,
-									resolver.dirname(fileName),
-									ref.fileName)));
-							importFiles.add(refFileName);
-						}
-					});
-				})).then(() => {
-					return this.ensureTransitiveFileDependencies(Array.from(importFiles), maxDepth - 1, seen);
-				});
-			});
-		}
-		return promise;
+			const importFiles = new Set<string>();
+			await Promise.all(fileNames.map(async (fileName) => {
+				const config = this.projectManager.getConfiguration(fileName);
+				await config.ensureBasicFiles();
+				const contents = this.projectManager.getFs().readFile(fileName) || '';
+				const info = ts.preProcessFile(contents, true, true);
+				const compilerOpt = config.host.getCompilationSettings();
+				for (const imp of info.importedFiles) {
+					const resolved = ts.resolveModuleName(imp.fileName, fileName, compilerOpt, config.moduleResolutionHost());
+					if (!resolved || !resolved.resolvedModule) {
+						// This means we didn't find a file defining
+						// the module. It could still exist as an
+						// ambient module, which is why we fetch
+						// global*.d.ts files.
+						continue;
+					}
+					importFiles.add(resolved.resolvedModule.resolvedFileName);
+				}
+				const resolver = !this.strict && os.platform() == 'win32' ? path_ : path_.posix;
+				for (const ref of info.referencedFiles) {
+					// Resolving triple slash references relative to current file
+					// instead of using module resolution host because it behaves
+					// differently in "nodejs" mode
+					const refFileName = util.normalizePath(path_.relative(this.root,
+						resolver.resolve(this.root,
+							resolver.dirname(fileName),
+							ref.fileName)));
+					importFiles.add(refFileName);
+				}
+			}));
+			await this.ensureTransitiveFileDependencies(Array.from(importFiles), maxDepth - 1, seen);
+		};
 	}
 
 	private ensuredFilesForWorkspaceSymbol: Promise<void> = null;
@@ -232,143 +228,111 @@ export class TypeScriptService implements LanguageHandler {
 		return promise;
 	}
 
-	getDefinition(params: TextDocumentPositionParams): Promise<Location[]> {
+	async getDefinition(params: TextDocumentPositionParams): Promise<Location[]> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
-		return this.ensureFilesForHoverAndDefinition(uri).then(() => new Promise<Location[]>((resolve, reject) => {
-			const fileName: string = util.uri2path(uri);
-			try {
-				const configuration = this.projectManager.getConfiguration(fileName);
-				configuration.prepare().then((configuration) => {
-					try {
-						const sourceFile = this.getSourceFile(configuration, fileName);
-						if (!sourceFile) {
-							return resolve([]);
-						}
-						const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
-						const defs: ts.DefinitionInfo[] = configuration.service.getDefinitionAtPosition(fileName, offset);
-						const ret = [];
-						if (defs) {
-							for (let def of defs) {
-								const sourceFile = this.getSourceFile(configuration, def.fileName);
-								const start = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start);
-								const end = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start + def.textSpan.length);
-								ret.push(Location.create(this.defUri(def.fileName), {
-									start: start,
-									end: end
-								}));
-							}
-						}
-						return resolve(ret);
-					} catch (e) {
-						return reject(e);
-					}
+		await this.ensureFilesForHoverAndDefinition(uri);
 
-				}, (e) => {
-					return reject(e);
-				});
-			} catch (e) {
-				return reject(e);
+		const fileName: string = util.uri2path(uri);
+		const configuration = this.projectManager.getConfiguration(fileName);
+		await configuration.ensureBasicFiles();
+
+		const sourceFile = this.getSourceFile(configuration, fileName);
+		if (!sourceFile) {
+			return [];
+		}
+
+		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
+		const defs: ts.DefinitionInfo[] = configuration.service.getDefinitionAtPosition(fileName, offset);
+		const ret = [];
+		if (defs) {
+			for (let def of defs) {
+				const sourceFile = this.getSourceFile(configuration, def.fileName);
+				const start = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start);
+				const end = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start + def.textSpan.length);
+				ret.push(Location.create(this.defUri(def.fileName), {
+					start: start,
+					end: end
+				}));
 			}
-		}));
+		}
+		return ret;
 	}
 
-	getHover(params: TextDocumentPositionParams): Promise<Hover> {
+	async getHover(params: TextDocumentPositionParams): Promise<Hover> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root)
 		const line = params.position.line;
 		const column = params.position.character;
-		return this.ensureFilesForHoverAndDefinition(uri).then(() => new Promise<Hover>((resolve, reject) => {
-			const fileName: string = util.uri2path(uri);
-			try {
-				const configuration = this.projectManager.getConfiguration(fileName);
-				configuration.prepare().then(() => {
-					try {
-						const sourceFile = this.getSourceFile(configuration, fileName);
-						if (!sourceFile) {
-							return resolve(null);
-						}
-						const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
-						const info = configuration.service.getQuickInfoAtPosition(fileName, offset);
-						if (!info) {
-							return resolve(null);
-						}
+		await this.ensureFilesForHoverAndDefinition(uri)
 
-						const contents = [];
-						contents.push({
-							language: 'typescript',
-							value: ts.displayPartsToString(info.displayParts)
-						});
-						let documentation = ts.displayPartsToString(info.documentation);
-						if (documentation) {
-							contents.push(documentation);
-						}
-						const start = ts.getLineAndCharacterOfPosition(sourceFile, info.textSpan.start);
-						const end = ts.getLineAndCharacterOfPosition(sourceFile, info.textSpan.start + info.textSpan.length);
+		const fileName: string = util.uri2path(uri);
+		const configuration = this.projectManager.getConfiguration(fileName);
+		await configuration.ensureBasicFiles();
 
-						return resolve({ contents: contents, range: Range.create(start.line, start.character, end.line, end.character) });
-					} catch (e) {
-						return reject(e);
-					}
-				}, (e) => {
-					return reject(e);
-				});
-			} catch (e) {
-				return reject(e);
-			}
-		}));
+		const sourceFile = this.getSourceFile(configuration, fileName);
+		if (!sourceFile) {
+			return null;
+		}
+		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
+		const info = configuration.service.getQuickInfoAtPosition(fileName, offset);
+		if (!info) {
+			return null;
+		}
+
+		const contents = [];
+		contents.push({
+			language: 'typescript',
+			value: ts.displayPartsToString(info.displayParts)
+		});
+		let documentation = ts.displayPartsToString(info.documentation);
+		if (documentation) {
+			contents.push(documentation);
+		}
+		const start = ts.getLineAndCharacterOfPosition(sourceFile, info.textSpan.start);
+		const end = ts.getLineAndCharacterOfPosition(sourceFile, info.textSpan.start + info.textSpan.length);
+
+		return { contents: contents, range: Range.create(start.line, start.character, end.line, end.character) };
 	}
 
-	getReferences(params: ReferenceParams): Promise<Location[]> {
+	async getReferences(params: ReferenceParams): Promise<Location[]> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root)
 		const line = params.position.line;
 		const column = params.position.character;
-		return this.ensureFilesForReferences(uri).then(() => new Promise<Location[]>((resolve, reject) => {
-			const fileName: string = util.uri2path(uri);
-			try {
-				const configuration = this.projectManager.getConfiguration(fileName);
-				configuration.prepare().then(() => {
-					try {
-						const sourceFile = this.getSourceFile(configuration, fileName);
-						if (!sourceFile) {
-							return resolve([]);
-						}
+		const fileName: string = util.uri2path(uri);
 
-						const started = new Date().getTime();
+		await this.ensureFilesForReferences(uri);
 
-						this.projectManager.syncConfigurationFor(fileName);
+		const configuration = this.projectManager.getConfiguration(fileName);
+		await configuration.ensureAllFiles();
 
-						const prepared = new Date().getTime();
+		const sourceFile = this.getSourceFile(configuration, fileName);
+		if (!sourceFile) {
+			return [];
+		}
 
-						const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
-						const refs = configuration.service.getReferencesAtPosition(fileName, offset);
+		const started = new Date().getTime();
+		const prepared = new Date().getTime();
 
-						const fetched = new Date().getTime();
-						const ret = [];
-						const tasks = [];
+		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
+		const refs = configuration.service.getReferencesAtPosition(fileName, offset);
 
-						if (refs) {
-							for (let ref of refs) {
-								tasks.push(this.transformReference(this.root, configuration.program, ref));
-							}
-						}
-						async.parallel(tasks, (err: Error, results: Location[]) => {
-							const finished = new Date().getTime();
-							console.error('references', 'transform', (finished - fetched) / 1000.0, 'fetch', (fetched - prepared) / 1000.0, 'prepare', (prepared - started) / 1000.0);
-							return resolve(results);
-						});
+		const fetched = new Date().getTime();
+		const ret = [];
+		const tasks = [];
 
-					} catch (e) {
-						return reject(e);
-					}
-				}, (e) => {
-					return reject(e);
-				});
-
-			} catch (e) {
-				return reject(e);
+		if (refs) {
+			for (let ref of refs) {
+				tasks.push(this.transformReference(this.root, configuration.program, ref));
 			}
-		}));
+		}
+		return new Promise<Location[]>((resolve, reject) => {
+			async.parallel(tasks, (err: Error, results: Location[]) => {
+				const finished = new Date().getTime();
+				console.error('references', 'transform', (finished - fetched) / 1000.0, 'fetch', (fetched - prepared) / 1000.0, 'prepare', (prepared - started) / 1000.0);
+				return resolve(results);
+			});
+		});
 	}
 
 	getWorkspaceSymbols(params: rt.WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]> {
@@ -400,66 +364,62 @@ export class TypeScriptService implements LanguageHandler {
 		});
 	}
 
-	getDocumentSymbol(params: DocumentSymbolParams): Promise<SymbolInformation[]> {
+	async getDocumentSymbol(params: DocumentSymbolParams): Promise<SymbolInformation[]> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		return this.ensureFilesForHoverAndDefinition(uri).then(() => {
-			const fileName = util.uri2path(uri);
+		await this.ensureFilesForHoverAndDefinition(uri);
+		const fileName = util.uri2path(uri);
 
-			const config = this.projectManager.getConfiguration(uri);
-			return config.prepare().then(() => {
-				const sourceFile = this.getSourceFile(config, fileName);
-				const tree = config.service.getNavigationTree(fileName);
-				const result: SymbolInformation[] = [];
-				this.flattenNavigationTreeItem(tree, null, sourceFile, result);
-				return Promise.resolve(result);
-			});
-		});
+		const config = this.projectManager.getConfiguration(uri);
+		await config.ensureBasicFiles();
+		const sourceFile = this.getSourceFile(config, fileName);
+		const tree = config.service.getNavigationTree(fileName);
+		const result: SymbolInformation[] = [];
+		this.flattenNavigationTreeItem(tree, null, sourceFile, result);
+		return Promise.resolve(result);
 	}
 
-	getWorkspaceReference(params: rt.WorkspaceReferenceParams): Promise<rt.ReferenceInformation[]> {
+	async getWorkspaceReference(params: rt.WorkspaceReferenceParams): Promise<rt.ReferenceInformation[]> {
 		const refInfo: rt.ReferenceInformation[] = [];
 		return this.ensureFilesForWorkspaceSymbol().then(() => {
-			return Promise.all(this.projectManager.getConfigurations().map((config) => {
-				return config.prepare().then((config) => {
-					this.projectManager.syncConfiguration(config);
-					for (let source of config.service.getProgram().getSourceFiles().sort((a, b) => a.fileName.localeCompare(b.fileName))) {
-						if (util.normalizePath(source.fileName).indexOf(`${path_.posix.sep}node_modules${path_.posix.sep}`) !== -1) {
-							continue;
-						}
-						this.walkMostAST(source, (node) => {
-							switch (node.kind) {
-								case ts.SyntaxKind.Identifier: {
-									const id = node as ts.Identifier;
-									const defs = config.service.getDefinitionAtPosition(source.fileName, node.pos + 1);
-
-									if (defs && defs.length > 0) {
-										const def = defs[0];
-										const start = ts.getLineAndCharacterOfPosition(source, node.pos);
-										const end = ts.getLineAndCharacterOfPosition(source, node.end);
-										const ref = {
-											location: {
-												uri: this.defUri(source.fileName),
-												range: {
-													start: start,
-													end: end,
-												},
-											},
-											name: def.name,
-											containerName: def.containerName,
-											uri: this.defUri(def.fileName),
-										};
-										refInfo.push(ref);
-									}
-									break;
-								}
-								case ts.SyntaxKind.StringLiteral: {
-									// TODO
-									break;
-								}
-							}
-						});
+			return Promise.all(this.projectManager.getConfigurations().map(async (config) => {
+				await config.ensureAllFiles();
+				for (let source of config.service.getProgram().getSourceFiles().sort((a, b) => a.fileName.localeCompare(b.fileName))) {
+					if (util.normalizePath(source.fileName).indexOf(`${path_.posix.sep}node_modules${path_.posix.sep}`) !== -1) {
+						continue;
 					}
-				});
+					this.walkMostAST(source, (node) => {
+						switch (node.kind) {
+							case ts.SyntaxKind.Identifier: {
+								const id = node as ts.Identifier;
+								const defs = config.service.getDefinitionAtPosition(source.fileName, node.pos + 1);
+
+								if (defs && defs.length > 0) {
+									const def = defs[0];
+									const start = ts.getLineAndCharacterOfPosition(source, node.pos);
+									const end = ts.getLineAndCharacterOfPosition(source, node.end);
+									const ref = {
+										location: {
+											uri: this.defUri(source.fileName),
+											range: {
+												start: start,
+												end: end,
+											},
+										},
+										name: def.name,
+										containerName: def.containerName,
+										uri: this.defUri(def.fileName),
+									};
+									refInfo.push(ref);
+								}
+								break;
+							}
+							case ts.SyntaxKind.StringLiteral: {
+								// TODO
+								break;
+							}
+						}
+					});
+				}
 			}));
 		}).then(() => {
 			return refInfo;
@@ -1324,8 +1284,9 @@ export class TypeScriptService implements LanguageHandler {
 		}
 	}
 
-    /**
+	/**
      * Collects workspace symbols from all sub-projects until there are no more sub-projects left or we found enough items
+     *
      * @param query search query
      * @param limit max number of items to fetch (if greather than zero)
      * @param configurations array of project configurations
@@ -1344,17 +1305,15 @@ export class TypeScriptService implements LanguageHandler {
 			return callback();
 		}
 		const configuration = configurations[index];
+		configuration.ensureAllFiles().then(() => {
+			const maybeEnough = () => {
+				if (limit && items.length >= limit || index == configurations.length - 1) {
+					return callback();
+				}
+				this.collectWorkspaceSymbols(query, limit, configurations, index + 1, items, callback);
+			};
 
-		const maybeEnough = () => {
-			if (limit && items.length >= limit || index == configurations.length - 1) {
-				return callback();
-			}
-			this.collectWorkspaceSymbols(query, limit, configurations, index + 1, items, callback);
-		};
-
-		configuration.prepare().then(() => {
 			setImmediate(() => {
-				this.projectManager.syncConfiguration(configuration);
 				const chunkSize = limit ? Math.min(limit, limit - items.length) : undefined;
 				setImmediate(() => {
 					if (query) {
@@ -1373,8 +1332,8 @@ export class TypeScriptService implements LanguageHandler {
 						maybeEnough();
 					}
 				});
-			});
-		}, callback);
+			}, callback);
+		});
 	}
 
     /**

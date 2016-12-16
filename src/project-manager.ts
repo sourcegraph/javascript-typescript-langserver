@@ -58,36 +58,6 @@ export class ProjectManager {
 	}
 
 	/**
-	 * Ensures that all files are added (and parsed) to the project to which fileName belongs. 
-	 */
-	syncConfigurationFor(fileName: string) {
-		return this.syncConfiguration(this.getConfiguration(fileName));
-	}
-
-	/**
-	 * Ensures that all files are added (and parsed) for the given project.
-	 * Uses tsconfig.json settings to identify what files make a project (root files)
-	 */
-	syncConfiguration(config: ProjectConfiguration) {
-		if (config.host.complete) {
-			return;
-		}
-		let changed = false;
-		(config.host.expectedFiles || []).forEach((fileName) => {
-			const sourceFile = config.program.getSourceFile(fileName);
-			if (!sourceFile) {
-				config.host.addFile(fileName);
-				changed = true;
-			}
-		});
-		if (changed) {
-			// requery program object to synchonize LanguageService's data
-			config.program = config.service.getProgram();
-		}
-		config.host.complete = true;
-	}
-
-	/**
 	 * @return all projects
 	 */
 	getConfigurations(): ProjectConfiguration[] {
@@ -264,7 +234,8 @@ export class ProjectManager {
 		this.localFs.didClose(fileName);
 		let version = this.versions.get(fileName) || 0;
 		this.versions.set(fileName, ++version);
-		this.getConfiguration(fileName).prepare().then((config) => {
+		const config = this.getConfiguration(fileName)
+		config.ensureConfigFile().then(() => {
 			config.host.incProjectVersion();
 			config.program = config.service.getProgram();
 		});
@@ -274,7 +245,8 @@ export class ProjectManager {
 		this.localFs.didChange(fileName, text);
 		let version = this.versions.get(fileName) || 0;
 		this.versions.set(fileName, ++version);
-		this.getConfiguration(fileName).prepare().then((config) => {
+		const config = this.getConfiguration(fileName)
+		config.ensureConfigFile().then(() => {
 			config.host.incProjectVersion();
 			config.program = config.service.getProgram();
 		});
@@ -334,7 +306,7 @@ export class ProjectManager {
 	}
 
     /**
-     * Detects projects denoted by tsconfig.json
+     * Detects projects and creates projects denoted by tsconfig.json. Previously detected projects are discarded.
      */
 	refreshConfigurations() {
 		const rootdirs = new Set<string>();
@@ -482,10 +454,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 
 	entries: any;
 	overlay: any;
-
-
 	useCaseSensitiveFileNames: boolean;
-
 	path: string;
 
 	private rootNode: any;
@@ -503,7 +472,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 		path.split('/').forEach((component, i, components) => {
 			const n = node[component];
 			if (!n) {
-				node[component] = i == components.length - 1 ? '*' : {};
+				node[component] = (i === components.length - 1) ? '*' : {};
 				node = node[component];
 			} else {
 				node = n;
@@ -588,17 +557,18 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 }
 
 /**
- * ProjectConfiguration wraps together a number of components and
- * pieces of state related to a single TypeScript/JavaScript
- * program. These include the program configuration, the
- * LanguageServiceHost (which provides information and operations that
- * a language server expects from its host, like file I/O), and the
- * parsed ts.Program itself.
+ * ProjectConfiguration instances track the compiler configuration (as
+ * defined by {tj}sconfig.json if it exists) and state for a single
+ * TypeScript project. It represents the world of the view as
+ * presented to the compiler.
  *
- * After construction, ProjectConfiguration must be explicitly
- * initialized via the prepare() method. This returns a Promise that
- * resolves to the ProjectConfiguration, itself, once it is
- * initialized.
+ * For efficiency, a ProjectConfiguration instance may hide some files
+ * from the compiler, preventing them from being parsed and
+ * type-checked. Depending on the use, the caller should call one of
+ * the ensure* methods to ensure that the appropriate files have been
+ * made available to the compiler before calling any other methods on
+ * the ProjectConfiguration or its public members. By default, no
+ * files are parsed.
  */
 export class ProjectConfiguration {
 
@@ -612,8 +582,6 @@ export class ProjectConfiguration {
 	program: ts.Program;
 
 	host: InMemoryLanguageServiceHost;
-
-	private promise: Promise<ProjectConfiguration>;
 
 	private fs: InMemoryFileSystem;
 	private configFileName: string;
@@ -636,41 +604,102 @@ export class ProjectConfiguration {
 		return this.fs;
 	}
 
-	prepare(): Promise<ProjectConfiguration> {
-		if (!this.promise) {
-			this.promise = new Promise<ProjectConfiguration>((resolve, reject) => {
-				let configObject;
-				if (!this.configContent) {
-					const jsonConfig = ts.parseConfigFileTextToJson(this.configFileName, this.fs.readFile(this.configFileName));
-					if (jsonConfig.error) {
-						console.error('Cannot parse ' + this.configFileName + ': ' + jsonConfig.error.messageText);
-						return reject(new Error('Cannot parse ' + this.configFileName + ': ' + jsonConfig.error.messageText));
-					}
-					configObject = jsonConfig.config;
-				} else {
-					configObject = this.configContent;
-				}
-				let dir = path_.posix.dirname(this.configFileName);
-				if (dir == '.') {
-					dir = '';
-				}
-				const base = dir || this.fs.path;
-				const configParseResult = ts.parseJsonConfigFileContent(configObject, this.fs, base);
-				const options = configParseResult.options;
-				if (/(^|\/)jsconfig\.json$/.test(this.configFileName)) {
-					options.allowJs = true;
-				}
-				this.host = new InMemoryLanguageServiceHost(this.fs.path,
-					options,
-					this.fs,
-					configParseResult.fileNames,
-					this.versions);
-				this.service = ts.createLanguageService(this.host, ts.createDocumentRegistry());
-				this.program = this.service.getProgram();
-				return resolve(this);
-			});
+	private initialized: Promise<void>;
+
+	private init(): Promise<void> {
+		if (this.initialized) {
+			return this.initialized;
 		}
-		return this.promise;
+		this.initialized = new Promise<void>((resolve, reject) => {
+			let configObject;
+			if (!this.configContent) {
+				const jsonConfig = ts.parseConfigFileTextToJson(this.configFileName, this.fs.readFile(this.configFileName));
+				if (jsonConfig.error) {
+					console.error('Cannot parse ' + this.configFileName + ': ' + jsonConfig.error.messageText);
+					return reject(new Error('Cannot parse ' + this.configFileName + ': ' + jsonConfig.error.messageText));
+				}
+				configObject = jsonConfig.config;
+			} else {
+				configObject = this.configContent;
+			}
+			let dir = path_.posix.dirname(this.configFileName);
+			if (dir == '.') {
+				dir = '';
+			}
+			const base = dir || this.fs.path;
+			const configParseResult = ts.parseJsonConfigFileContent(configObject, this.fs, base);
+			const options = configParseResult.options;
+			if (/(^|\/)jsconfig\.json$/.test(this.configFileName)) {
+				options.allowJs = true;
+			}
+			this.host = new InMemoryLanguageServiceHost(this.fs.path,
+				options,
+				this.fs,
+				configParseResult.fileNames,
+				this.versions);
+			this.service = ts.createLanguageService(this.host, ts.createDocumentRegistry());
+			this.program = this.service.getProgram();
+			return resolve();
+		});
+		return this.initialized;
+	}
+
+	ensureConfigFile(): Promise<void> {
+		return this.init();
+	}
+
+	private ensuredBasicFiles: Promise<void>;
+
+	async ensureBasicFiles(): Promise<void> {
+		if (this.ensuredBasicFiles) {
+			return this.ensuredBasicFiles;
+		}
+
+		this.ensuredBasicFiles = this.init().then(() => {
+			let changed = false;
+			for (const fileName of (this.host.expectedFiles || [])) {
+				if (fileName.startsWith("/typings/") || fileName.startsWith("typings/")) {
+					const sourceFile = this.program.getSourceFile(fileName);
+					if (!sourceFile) {
+						this.host.addFile(fileName);
+						changed = true;
+					}
+				}
+			}
+			if (changed) {
+				// requery program object to synchonize LanguageService's data
+				this.program = this.service.getProgram();
+			}
+		});
+		return this.ensuredBasicFiles;
+	}
+
+	private ensuredAllFiles: Promise<void>;
+
+	async ensureAllFiles(): Promise<void> {
+		if (this.ensuredAllFiles) {
+			return this.ensuredAllFiles;
+		}
+
+		this.ensuredAllFiles = this.init().then(() => {
+			if (this.host.complete) {
+				return;
+			}
+			let changed = false;
+			for (const fileName of (this.host.expectedFiles || [])) {
+				const sourceFile = this.program.getSourceFile(fileName);
+				if (!sourceFile) {
+					this.host.addFile(fileName);
+					changed = true;
+				}
+			}
+			if (changed) {
+				// requery program object to synchonize LanguageService's data
+				this.program = this.service.getProgram();
+			}
+			this.host.complete = true;
+		});
+		return this.ensuredAllFiles;
 	}
 }
 

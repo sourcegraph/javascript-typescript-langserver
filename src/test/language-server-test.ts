@@ -139,6 +139,73 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 				utils.tearDown(done);
 			});
 		});
+		describe('typings directory', function () {
+			before(function (done: () => void) {
+				utils.setUp(newLanguageHandler(), {
+					'a.ts': "import * as m from 'dep';",
+					'typings': {
+						'dep.d.ts': "declare module 'dep' {}",
+					}
+				}, done);
+			});
+			it('definition', async function (done: (err?: Error) => void) {
+				try {
+					await new Promise<void>((resolve, reject) => {
+						utils.definition({
+							textDocument: {
+								uri: 'file:///a.ts'
+							},
+							position: {
+								line: 0,
+								character: 12
+							}
+						}, {
+								uri: 'file:///typings/dep.d.ts',
+								range: {
+									start: {
+										line: 0,
+										character: 0
+									},
+									end: {
+										line: 0,
+										character: 23
+									}
+								}
+							}, err => err ? reject(err) : resolve());
+					});
+					await new Promise<void>((resolve, reject) => {
+						utils.definition({
+							textDocument: {
+								uri: 'file:///a.ts'
+							},
+							position: {
+								line: 0,
+								character: 20
+							}
+						}, {
+								uri: 'file:///typings/dep.d.ts',
+								range: {
+									start: {
+										line: 0,
+										character: 0
+									},
+									end: {
+										line: 0,
+										character: 23
+									}
+								}
+							}, err => err ? reject(err) : resolve());
+					});
+				} catch (e) {
+					done(e);
+					return;
+				}
+				done();
+			})
+			afterEach(function (done: () => void) {
+				utils.tearDown(done);
+			});
+		});
 		describe('js-project-no-config', function () {
 			before(function (done: () => void) {
 				utils.setUp(newLanguageHandler(), {
@@ -707,6 +774,14 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 						character: 23
 					}
 				}, {
+						// Note: technically this list should also
+						// include the 2nd definition of `foo` in
+						// deeprefs/e.ts, but there's no easy way to
+						// discover it through file-level imports and
+						// it is rare enough that we accept this
+						// omission. (It would probably show up in the
+						// definition response if the user has already
+						// navigated to deeprefs/e.ts.)
 						uri: 'file:///foo/c.ts',
 						range: {
 							start: {
