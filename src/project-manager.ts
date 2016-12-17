@@ -1,5 +1,6 @@
 import * as path_ from 'path';
 import * as fs_ from 'fs';
+import * as os from 'os';
 
 import * as ts from 'typescript';
 import { IConnection, PublishDiagnosticsParams } from 'vscode-languageserver';
@@ -20,6 +21,7 @@ export class ProjectManager {
 
 	private root: string;
 	private configs: Map<string, ProjectConfiguration>;
+	private strict: boolean;
 
 	private remoteFs: FileSystem.FileSystem;
 	private localFs: InMemoryFileSystem;
@@ -32,13 +34,14 @@ export class ProjectManager {
      */
 	private fetched: Set<string>;
 
-	constructor(root: string, remoteFs: FileSystem.FileSystem) {
+	constructor(root: string, remoteFs: FileSystem.FileSystem, strict: boolean) {
 		this.root = util.normalizePath(root);
 		this.configs = new Map<string, ProjectConfiguration>();
 		this.localFs = new InMemoryFileSystem(this.root);
 		this.versions = new Map<string, number>();
 		this.fetched = new Set<string>();
 		this.remoteFs = remoteFs;
+		this.strict = strict;
 	}
 
 	getRemoteRoot(): string {
@@ -143,6 +146,13 @@ export class ProjectManager {
 			return null;
 		});
 		await this.ensureFiles(filesToFetch);
+
+		// require re-fetching of dependency files (but not for
+		// workspace/symbol and textDocument/references, because those
+		// should not be affected by new external modules)
+		this.ensuredFilesForHoverAndDefinition.clear();
+
+		// require re-parsing of projects whose file set may have been affected
 		for (let [dir, config] of this.configs) {
 			if (!dir.startsWith('/')) {
 				dir = '/' + dir;
@@ -155,6 +165,149 @@ export class ProjectManager {
 				config.reset();
 			}
 		}
+	}
+
+	private ensuredFilesForHoverAndDefinition = new Map<string, Promise<void>>();
+
+	ensureFilesForHoverAndDefinition(uri: string): Promise<void> {
+		if (this.ensuredFilesForHoverAndDefinition.get(uri)) {
+			return this.ensuredFilesForHoverAndDefinition.get(uri);
+		}
+
+		const promise = this.ensureModuleStructure().then(() => {
+			// include dependencies up to depth 30
+			const deps = new Set<string>();
+			return this.ensureTransitiveFileDependencies([util.uri2path(uri)], 30, deps).then(() => {
+				return this.refreshConfigurations();
+			});
+		});
+		this.ensuredFilesForHoverAndDefinition.set(uri, promise);
+		promise.catch((err) => {
+			console.error("Failed to fetch files for hover/definition for uri ", uri, ", error:", err);
+			this.ensuredFilesForHoverAndDefinition.delete(uri);
+		});
+		return promise;
+	}
+
+	private ensuredFilesForWorkspaceSymbol: Promise<void> = null;
+
+	ensureFilesForWorkspaceSymbol(): Promise<void> {
+		if (this.ensuredFilesForWorkspaceSymbol) {
+			return this.ensuredFilesForWorkspaceSymbol;
+		}
+
+		const self = this;
+		const filesToEnsure = [];
+		const promise = this.walkRemote(this.getRemoteRoot(), function (path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
+			if (err) {
+				return err;
+			} else if (info.dir) {
+				if (util.normalizePath(info.name).indexOf(`${path_.posix.sep}node_modules${path_.posix.sep}`) !== -1) {
+					return skipDir;
+				} else {
+					return null;
+				}
+			}
+			if (util.isJSTSFile(path) || util.isConfigFile(path) || util.isPackageJsonFile(path)) {
+				filesToEnsure.push(path);
+			}
+			return null;
+		}).then(() => {
+			return this.ensureFiles(filesToEnsure)
+		}).then(() => {
+			return this.refreshConfigurations();
+		});
+
+		this.ensuredFilesForWorkspaceSymbol = promise;
+		promise.catch((err) => {
+			console.error("Failed to fetch files for workspace/symbol:", err);
+			this.ensuredFilesForWorkspaceSymbol = null;
+		});
+
+		return promise;
+	}
+
+	private ensuredAllFiles: Promise<void> = null;
+
+	ensureFilesForReferences(uri: string): Promise<void> {
+		const fileName: string = util.uri2path(uri);
+		if (util.normalizePath(fileName).indexOf(`${path_.posix.sep}node_modules${path_.posix.sep}`) !== -1) {
+			return this.ensureFilesForWorkspaceSymbol();
+		}
+
+		if (this.ensuredAllFiles) {
+			return this.ensuredAllFiles;
+		}
+
+		const filesToEnsure = [];
+		const promise = this.walkRemote(this.getRemoteRoot(), function (path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
+			if (err) {
+				return err;
+			} else if (info.dir) {
+				return null;
+			}
+			if (util.isJSTSFile(path)) {
+				filesToEnsure.push(path);
+			}
+			return null;
+		}).then(() => {
+			return this.ensureFiles(filesToEnsure)
+		}).then(() => {
+			return this.refreshConfigurations();
+		});
+
+		this.ensuredAllFiles = promise;
+		promise.catch((err) => {
+			console.error("Failed to fetch files for references:", err);
+			this.ensuredAllFiles = null;
+		});
+
+		return promise;
+	}
+
+	private async ensureTransitiveFileDependencies(fileNames: string[], maxDepth: number, seen: Set<string>): Promise<void> {
+		fileNames = fileNames.filter((f) => !seen.has(f));
+		if (fileNames.length === 0) {
+			return Promise.resolve();
+		}
+		fileNames.forEach((f) => seen.add(f));
+
+		const absFileNames = fileNames.map((f) => util.normalizePath(util.resolve(this.root, f)));
+		await this.ensureFiles(absFileNames);
+
+		if (maxDepth > 0) {
+			const importFiles = new Set<string>();
+			await Promise.all(fileNames.map(async (fileName) => {
+				const config = this.getConfiguration(fileName);
+				await config.ensureBasicFiles();
+				const contents = this.getFs().readFile(fileName) || '';
+				const info = ts.preProcessFile(contents, true, true);
+				const compilerOpt = config.host.getCompilationSettings();
+				for (const imp of info.importedFiles) {
+					const resolved = ts.resolveModuleName(imp.fileName, fileName, compilerOpt, config.moduleResolutionHost());
+					if (!resolved || !resolved.resolvedModule) {
+						// This means we didn't find a file defining
+						// the module. It could still exist as an
+						// ambient module, which is why we fetch
+						// global*.d.ts files.
+						continue;
+					}
+					importFiles.add(resolved.resolvedModule.resolvedFileName);
+				}
+				const resolver = !this.strict && os.platform() == 'win32' ? path_ : path_.posix;
+				for (const ref of info.referencedFiles) {
+					// Resolving triple slash references relative to current file
+					// instead of using module resolution host because it behaves
+					// differently in "nodejs" mode
+					const refFileName = util.normalizePath(path_.relative(this.root,
+						resolver.resolve(this.root,
+							resolver.dirname(fileName),
+							ref.fileName)));
+					importFiles.add(refFileName);
+				}
+			}));
+			await this.ensureTransitiveFileDependencies(Array.from(importFiles), maxDepth - 1, seen);
+		};
 	}
 
     /**

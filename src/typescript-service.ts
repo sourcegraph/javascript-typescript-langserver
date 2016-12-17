@@ -64,9 +64,9 @@ export class TypeScriptService implements LanguageHandler {
 			if (params.rootPath) {
 				this.root = util.uri2path(params.rootPath);
 				this.strict = strict;
-				this.projectManager = new pm.ProjectManager(this.root, remoteFs);
+				this.projectManager = new pm.ProjectManager(this.root, remoteFs, strict);
 
-				this.ensureFilesForWorkspaceSymbol(); // pre-fetching
+				this.projectManager.ensureFilesForWorkspaceSymbol(); // pre-fetching
 
 				resolve({
 					capabilities: {
@@ -85,154 +85,11 @@ export class TypeScriptService implements LanguageHandler {
 
 	shutdown(): Promise<void> { return Promise.resolve(); }
 
-	private ensuredFilesForHoverAndDefinition = new Map<string, Promise<void>>();
-
-	private ensureFilesForHoverAndDefinition(uri: string): Promise<void> {
-		if (this.ensuredFilesForHoverAndDefinition.get(uri)) {
-			return this.ensuredFilesForHoverAndDefinition.get(uri);
-		}
-
-		const promise = this.projectManager.ensureModuleStructure().then(() => {
-			// include dependencies up to depth 30
-			const deps = new Set<string>();
-			return this.ensureTransitiveFileDependencies([util.uri2path(uri)], 30, deps).then(() => {
-				return this.projectManager.refreshConfigurations();
-			});
-		});
-		this.ensuredFilesForHoverAndDefinition.set(uri, promise);
-		promise.catch((err) => {
-			console.error("Failed to fetch files for hover/definition for uri ", uri, ", error:", err);
-			this.ensuredFilesForHoverAndDefinition.delete(uri);
-		});
-		return promise;
-	}
-
-	private async ensureTransitiveFileDependencies(fileNames: string[], maxDepth: number, seen: Set<string>): Promise<void> {
-		fileNames = fileNames.filter((f) => !seen.has(f));
-		if (fileNames.length === 0) {
-			return Promise.resolve();
-		}
-		fileNames.forEach((f) => seen.add(f));
-
-		const absFileNames = fileNames.map((f) => util.normalizePath(util.resolve(this.root, f)));
-		await this.projectManager.ensureFiles(absFileNames);
-
-		if (maxDepth > 0) {
-			const importFiles = new Set<string>();
-			await Promise.all(fileNames.map(async (fileName) => {
-				const config = this.projectManager.getConfiguration(fileName);
-				await config.ensureBasicFiles();
-				const contents = this.projectManager.getFs().readFile(fileName) || '';
-				const info = ts.preProcessFile(contents, true, true);
-				const compilerOpt = config.host.getCompilationSettings();
-				for (const imp of info.importedFiles) {
-					const resolved = ts.resolveModuleName(imp.fileName, fileName, compilerOpt, config.moduleResolutionHost());
-					if (!resolved || !resolved.resolvedModule) {
-						// This means we didn't find a file defining
-						// the module. It could still exist as an
-						// ambient module, which is why we fetch
-						// global*.d.ts files.
-						continue;
-					}
-					importFiles.add(resolved.resolvedModule.resolvedFileName);
-				}
-				const resolver = !this.strict && os.platform() == 'win32' ? path_ : path_.posix;
-				for (const ref of info.referencedFiles) {
-					// Resolving triple slash references relative to current file
-					// instead of using module resolution host because it behaves
-					// differently in "nodejs" mode
-					const refFileName = util.normalizePath(path_.relative(this.root,
-						resolver.resolve(this.root,
-							resolver.dirname(fileName),
-							ref.fileName)));
-					importFiles.add(refFileName);
-				}
-			}));
-			await this.ensureTransitiveFileDependencies(Array.from(importFiles), maxDepth - 1, seen);
-		};
-	}
-
-	private ensuredFilesForWorkspaceSymbol: Promise<void> = null;
-
-	private ensureFilesForWorkspaceSymbol(): Promise<void> {
-		if (this.ensuredFilesForWorkspaceSymbol) {
-			return this.ensuredFilesForWorkspaceSymbol;
-		}
-
-		const self = this;
-		const filesToEnsure = [];
-		const promise = this.projectManager.walkRemote(this.projectManager.getRemoteRoot(), function (path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
-			if (err) {
-				return err;
-			} else if (info.dir) {
-				if (util.normalizePath(info.name).indexOf(`${path_.posix.sep}node_modules${path_.posix.sep}`) !== -1) {
-					return pm.skipDir;
-				} else {
-					return null;
-				}
-			}
-			if (util.isJSTSFile(path) || util.isConfigFile(path) || util.isPackageJsonFile(path)) {
-				filesToEnsure.push(path);
-			}
-			return null;
-		}).then(() => {
-			return this.projectManager.ensureFiles(filesToEnsure)
-		}).then(() => {
-			return this.projectManager.refreshConfigurations();
-		});
-
-		this.ensuredFilesForWorkspaceSymbol = promise;
-		promise.catch((err) => {
-			console.error("Failed to fetch files for workspace/symbol:", err);
-			this.ensuredFilesForWorkspaceSymbol = null;
-		});
-
-		return promise;
-	}
-
-	private ensuredAllFiles: Promise<void> = null;
-
-	private ensureFilesForReferences(uri: string): Promise<void> {
-		const fileName: string = util.uri2path(uri);
-		if (util.normalizePath(fileName).indexOf(`${path_.posix.sep}node_modules${path_.posix.sep}`) !== -1) {
-			return this.ensureFilesForWorkspaceSymbol();
-		}
-
-		if (this.ensuredAllFiles) {
-			return this.ensuredAllFiles;
-		}
-
-		const filesToEnsure = [];
-		const promise = this.projectManager.walkRemote(this.projectManager.getRemoteRoot(), function (path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
-			if (err) {
-				return err;
-			} else if (info.dir) {
-				return null;
-			}
-			if (util.isJSTSFile(path)) {
-				filesToEnsure.push(path);
-			}
-			return null;
-		}).then(() => {
-			return this.projectManager.ensureFiles(filesToEnsure)
-		}).then(() => {
-			return this.projectManager.refreshConfigurations();
-		});
-
-		this.ensuredAllFiles = promise;
-		promise.catch((err) => {
-			console.error("Failed to fetch files for references:", err);
-			this.ensuredAllFiles = null;
-		});
-
-		return promise;
-	}
-
 	async getDefinition(params: TextDocumentPositionParams): Promise<Location[]> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
-		await this.ensureFilesForHoverAndDefinition(uri);
+		await this.projectManager.ensureFilesForHoverAndDefinition(uri);
 
 		const fileName: string = util.uri2path(uri);
 		const configuration = this.projectManager.getConfiguration(fileName);
@@ -264,7 +121,7 @@ export class TypeScriptService implements LanguageHandler {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root)
 		const line = params.position.line;
 		const column = params.position.character;
-		await this.ensureFilesForHoverAndDefinition(uri)
+		await this.projectManager.ensureFilesForHoverAndDefinition(uri)
 
 		const fileName: string = util.uri2path(uri);
 		const configuration = this.projectManager.getConfiguration(fileName);
@@ -301,7 +158,7 @@ export class TypeScriptService implements LanguageHandler {
 		const column = params.position.character;
 		const fileName: string = util.uri2path(uri);
 
-		await this.ensureFilesForReferences(uri);
+		await this.projectManager.ensureFilesForReferences(uri);
 
 		const configuration = this.projectManager.getConfiguration(fileName);
 		await configuration.ensureAllFiles();
@@ -338,7 +195,7 @@ export class TypeScriptService implements LanguageHandler {
 	getWorkspaceSymbols(params: rt.WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]> {
 		const query = params.query;
 		const limit = params.limit;
-		return this.ensureFilesForWorkspaceSymbol().then(() => {
+		return this.projectManager.ensureFilesForWorkspaceSymbol().then(() => {
 			if (!query && this.emptyQueryWorkspaceSymbols) {
 				return this.emptyQueryWorkspaceSymbols;
 			}
@@ -366,7 +223,7 @@ export class TypeScriptService implements LanguageHandler {
 
 	async getDocumentSymbol(params: DocumentSymbolParams): Promise<SymbolInformation[]> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		await this.ensureFilesForHoverAndDefinition(uri);
+		await this.projectManager.ensureFilesForHoverAndDefinition(uri);
 		const fileName = util.uri2path(uri);
 
 		const config = this.projectManager.getConfiguration(uri);
@@ -380,7 +237,7 @@ export class TypeScriptService implements LanguageHandler {
 
 	async getWorkspaceReference(params: rt.WorkspaceReferenceParams): Promise<rt.ReferenceInformation[]> {
 		const refInfo: rt.ReferenceInformation[] = [];
-		return this.ensureFilesForWorkspaceSymbol().then(() => {
+		return this.projectManager.ensureFilesForWorkspaceSymbol().then(() => {
 			return Promise.all(this.projectManager.getConfigurations().map(async (config) => {
 				await config.ensureAllFiles();
 				for (let source of config.service.getProgram().getSourceFiles().sort((a, b) => a.fileName.localeCompare(b.fileName))) {
@@ -1201,7 +1058,7 @@ export class TypeScriptService implements LanguageHandler {
 
 	didOpen(params: DidOpenTextDocumentParams) {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		return this.ensureFilesForHoverAndDefinition(uri).then(() => {
+		return this.projectManager.ensureFilesForHoverAndDefinition(uri).then(() => {
 			this.projectManager.didOpen(util.uri2path(uri), params.textDocument.text);
 		});
 	}
@@ -1223,14 +1080,14 @@ export class TypeScriptService implements LanguageHandler {
 
 	didSave(params: DidSaveTextDocumentParams) {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		return this.ensureFilesForHoverAndDefinition(uri).then(() => {
+		return this.projectManager.ensureFilesForHoverAndDefinition(uri).then(() => {
 			this.projectManager.didSave(util.uri2path(uri));
 		});
 	}
 
 	didClose(params: DidCloseTextDocumentParams) {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		return this.ensureFilesForHoverAndDefinition(uri).then(() => {
+		return this.projectManager.ensureFilesForHoverAndDefinition(uri).then(() => {
 			this.projectManager.didClose(util.uri2path(uri));
 		});
 	}
