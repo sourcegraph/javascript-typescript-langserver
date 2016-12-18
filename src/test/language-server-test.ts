@@ -896,7 +896,30 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 				}, {
 						contents: [{
 							language: 'typescript',
-							value: 'interface Node\nvar Node: {\n    new (): Node;\n    prototype: Node;\n    readonly ATTRIBUTE_NODE: number;\n    readonly CDATA_SECTION_NODE: number;\n    readonly COMMENT_NODE: number;\n    readonly DOCUMENT_FRAGMENT_NODE: number;\n    readonly DOCUMENT_NODE: number;\n    readonly DOCUMENT_POSITION_CONTAINED_BY: number;\n    readonly DOCUMENT_POSITION_CONTAINS: number;\n    readonly DOCUMENT_POSITION_DISCONNECTED: number;\n    readonly DOCUMENT_POSITION_FOLLOWING: number;\n    readonly DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC: number;\n    readonly DOCUMENT_POSITION_PRECEDING: number;\n    readonly DOCUMENT_TYPE_NODE: number;\n    readonly ELEMENT_NODE: number;\n    readonly ENTITY_NODE: number;\n    readonly ENTITY_REFERENCE_NODE: number;\n    readonly NOTATION_NODE: number;\n    readonly PROCESSING_INSTRUCTION_NODE: number;\n    readonly TEXT_NODE: number;\n}'
+							value: '\
+interface Node\n\
+var Node: {\n\
+    new (): Node;\n\
+    prototype: Node;\n\
+    readonly ATTRIBUTE_NODE: number;\n\
+    readonly CDATA_SECTION_NODE: number;\n\
+    readonly COMMENT_NODE: number;\n\
+    readonly DOCUMENT_FRAGMENT_NODE: number;\n\
+    readonly DOCUMENT_NODE: number;\n\
+    readonly DOCUMENT_POSITION_CONTAINED_BY: number;\n\
+    readonly DOCUMENT_POSITION_CONTAINS: number;\n\
+    readonly DOCUMENT_POSITION_DISCONNECTED: number;\n\
+    readonly DOCUMENT_POSITION_FOLLOWING: number;\n\
+    readonly DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC: number;\n\
+    readonly DOCUMENT_POSITION_PRECEDING: number;\n\
+    readonly DOCUMENT_TYPE_NODE: number;\n\
+    readonly ELEMENT_NODE: number;\n\
+    readonly ENTITY_NODE: number;\n\
+    readonly ENTITY_REFERENCE_NODE: number;\n\
+    readonly NOTATION_NODE: number;\n\
+    readonly PROCESSING_INSTRUCTION_NODE: number;\n\
+    readonly TEXT_NODE: number;\n\
+}'
 						}]
 					}, done);
 			});
