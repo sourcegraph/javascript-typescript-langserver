@@ -32,8 +32,11 @@ export class ProjectManager {
 
     /**
      * fetched keeps track of which files in localFs have actually
-     * been fetched from remoteFs. Some might have a placeholder
-     * value.
+     * been fetched from remoteFs. (Some might have a placeholder
+     * value). If a file has already been successfully fetched, we
+     * won't fetch it again. This should be cleared if remoteFs files
+     * have been modified in some way, but does not need to be cleared
+     * if remoteFs files have only been added.
      */
 	private fetched: Set<string>;
 
@@ -323,7 +326,7 @@ export class ProjectManager {
      * fetched should call this.refreshConfigurations().
      */
 	ensureFiles(files: string[]): Promise<void> {
-		const filesToFetch = files.filter((f) => !this.fetched.has(f));
+		const filesToFetch = files;
 		if (filesToFetch.length === 0) {
 			return Promise.resolve();
 		}
@@ -332,7 +335,6 @@ export class ProjectManager {
 				if (err) {
 					return reject(err);
 				}
-				filesToFetch.forEach((f) => this.fetched.add(util.normalizePath(f)));
 				return resolve();
 			});
 		});
@@ -454,7 +456,11 @@ export class ProjectManager {
      * Fetches content of the specified files
      */
 	private fetchContent(files: string[], callback: (err?: Error) => void) {
-		if (!files || files.length === 0) {
+		if (!files) {
+			return callback();
+		}
+		files = files.filter((f) => !this.fetched.has(f));
+		if (files.length === 0) {
 			return callback();
 		}
 
@@ -464,10 +470,13 @@ export class ProjectManager {
 					if (err) {
 						console.error('Unable to fetch content of ' + path, err);
 						// There is a chance that we request not-existent file.
-						result = '';
+						const rel = path_.posix.relative(this.root, path);
+						this.localFs.addFile(rel, '');
+						return callback();
 					}
 					const rel = path_.posix.relative(this.root, path);
 					this.localFs.addFile(rel, result);
+					this.fetched.add(util.normalizePath(path));
 					return callback()
 				})
 			}
