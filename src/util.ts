@@ -214,7 +214,11 @@ export function isPackageJsonFile(filename: string): boolean {
 	return packageJsonPattern.test(filename);
 }
 
-let globalTSPattern = /(^|\/)globals?\.d\.ts$/;
+const globalTSPatterns = [
+	/(^|\/)globals?\.d\.ts$/,
+	/node_modules\/\@types\/node\/.*/,
+	/(^|\/)typings\/.*/,
+];
 
 // isGlobalTSFile returns whether or not the filename contains global
 // variables based on a best practices heuristic
@@ -223,5 +227,10 @@ let globalTSPattern = /(^|\/)globals?\.d\.ts$/;
 // import statement, but to check this, we'd have to read each
 // TypeScript file.
 export function isGlobalTSFile(filename: string): boolean {
-	return globalTSPattern.test(filename);
+	for (const globalTSPattern of globalTSPatterns) {
+		if (globalTSPattern.test(filename)) {
+			return true
+		}
+	}
+	return false;
 }

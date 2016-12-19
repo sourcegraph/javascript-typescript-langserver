@@ -742,6 +742,27 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	}
 }
 
+export function walkInMemoryFs(fs: InMemoryFileSystem, rootdir: string, walkfn: (path: string, isdir: boolean) => Error | void): Error | void {
+	const err = walkfn(rootdir, true);
+	if (err) {
+		return err;
+	}
+	const {files, directories} = fs.getFileSystemEntries(rootdir);
+	for (const file of files) {
+		const err = walkfn(path_.posix.join(rootdir, file), false);
+		if (err) {
+			return err;
+		}
+	}
+	for (const dir of directories) {
+		const err = walkInMemoryFs(fs, path_.posix.join(rootdir, dir), walkfn);
+		if (err) {
+			return err;
+		}
+	}
+	return null;
+}
+
 /**
  * ProjectConfiguration instances track the compiler configuration (as
  * defined by {tj}sconfig.json if it exists) and state for a single
@@ -775,11 +796,11 @@ export class ProjectConfiguration {
 	private versions: Map<string, number>;
 	private traceModuleResolution: boolean;
 
-    /**
-     * @param fs file system to use
-     * @param configFileName configuration file name (relative to workspace root)
-     * @param configContent optional configuration content to use instead of reading configuration file)
-     */
+	/**
+	 * @param fs file system to use
+	 * @param configFileName configuration file name (relative to workspace root)
+	 * @param configContent optional configuration content to use instead of reading configuration file)
+	 */
 	constructor(fs: InMemoryFileSystem, versions: Map<string, number>, configFileName: string, configContent?: any, traceModuleResolution?: boolean) {
 		this.fs = fs;
 		this.configFileName = configFileName;
@@ -832,6 +853,19 @@ export class ProjectConfiguration {
 			}
 			const base = dir || this.fs.path;
 			const configParseResult = ts.parseJsonConfigFileContent(configObject, this.fs, base);
+			const expFiles = configParseResult.fileNames;
+
+			// Add globals that might exist in dependencies
+			const nodeModulesDir = path_.posix.join(base, "node_modules");
+			const err = walkInMemoryFs(this.fs, nodeModulesDir, (path, isdir) => {
+				if (!isdir && util.isGlobalTSFile(path)) {
+					expFiles.push(path);
+				}
+			});
+			if (err) {
+				return reject(err);
+			}
+
 			const options = configParseResult.options;
 			if (/(^|\/)jsconfig\.json$/.test(this.configFileName)) {
 				options.allowJs = true;
@@ -842,7 +876,7 @@ export class ProjectConfiguration {
 			this.host = new InMemoryLanguageServiceHost(this.fs.path,
 				options,
 				this.fs,
-				configParseResult.fileNames,
+				expFiles,
 				this.versions);
 			this.service = ts.createLanguageService(this.host, ts.createDocumentRegistry());
 			this.program = this.service.getProgram();
@@ -865,7 +899,7 @@ export class ProjectConfiguration {
 		this.ensuredBasicFiles = this.init().then(() => {
 			let changed = false;
 			for (const fileName of (this.host.expectedFiles || [])) {
-				if (fileName.startsWith("/typings/") || fileName.startsWith("typings/")) {
+				if (util.isGlobalTSFile(fileName)) {
 					const sourceFile = this.program.getSourceFile(fileName);
 					if (!sourceFile) {
 						this.host.addFile(fileName);

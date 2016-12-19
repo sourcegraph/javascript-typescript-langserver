@@ -206,6 +206,77 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 				utils.tearDown(done);
 			});
 		});
+		describe('global modules in vendored deps', function () {
+			before(function (done: () => void) {
+				utils.setUp(newLanguageHandler(), {
+					'a.ts': "import * as fs from 'fs';",
+					'node_modules': {
+						'@types': {
+							'node': {
+								'index.d.ts': 'declare module "fs" {}',
+							}
+						}
+					}
+				}, done);
+			});
+			it('definition', async function (done: (err?: Error) => void) {
+				try {
+					await new Promise<void>((resolve, reject) => {
+						utils.definition({
+							textDocument: {
+								uri: 'file:///a.ts'
+							},
+							position: {
+								line: 0,
+								character: 12
+							}
+						}, {
+								uri: 'file:///node_modules/@types/node/index.d.ts',
+								range: {
+									start: {
+										line: 0,
+										character: 0
+									},
+									end: {
+										line: 0,
+										character: 22
+									}
+								}
+							}, err => err ? reject(err) : resolve());
+					});
+					await new Promise<void>((resolve, reject) => {
+						utils.definition({
+							textDocument: {
+								uri: 'file:///a.ts'
+							},
+							position: {
+								line: 0,
+								character: 21
+							}
+						}, {
+								uri: 'file:///node_modules/@types/node/index.d.ts',
+								range: {
+									start: {
+										line: 0,
+										character: 0
+									},
+									end: {
+										line: 0,
+										character: 22
+									}
+								}
+							}, err => err ? reject(err) : resolve());
+					});
+				} catch (e) {
+					done(e);
+					return;
+				}
+				done();
+			})
+			afterEach(function (done: () => void) {
+				utils.tearDown(done);
+			});
+		});
 		describe('js-project-no-config', function () {
 			before(function (done: () => void) {
 				utils.setUp(newLanguageHandler(), {
