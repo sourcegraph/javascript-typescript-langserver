@@ -46,7 +46,7 @@ if (cluster.isMaster) {
 	console.error('Listening for incoming LSP connections on', lspPort);
 	var server = net.createServer((socket) => {
 		const connection = newConnection(socket, socket);
-		registerLanguageHandler(connection, program.strict, new TypeScriptService());
+		registerLanguageHandler(connection, program.strict, new TypeScriptService(true));
 		connection.listen();
 	});
 

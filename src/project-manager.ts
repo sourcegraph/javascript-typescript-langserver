@@ -27,6 +27,9 @@ export class ProjectManager {
 	private localFs: InMemoryFileSystem;
 
 	private versions: Map<string, number>;
+
+	private traceModuleResolution: boolean;
+
     /**
      * fetched keeps track of which files in localFs have actually
      * been fetched from remoteFs. Some might have a placeholder
@@ -34,7 +37,7 @@ export class ProjectManager {
      */
 	private fetched: Set<string>;
 
-	constructor(root: string, remoteFs: FileSystem.FileSystem, strict: boolean) {
+	constructor(root: string, remoteFs: FileSystem.FileSystem, strict: boolean, traceModuleResolution?: boolean) {
 		this.root = util.normalizePath(root);
 		this.configs = new Map<string, ProjectConfiguration>();
 		this.localFs = new InMemoryFileSystem(this.root);
@@ -42,6 +45,7 @@ export class ProjectManager {
 		this.fetched = new Set<string>();
 		this.remoteFs = remoteFs;
 		this.strict = strict;
+		this.traceModuleResolution = traceModuleResolution || false;
 	}
 
 	getRemoteRoot(): string {
@@ -494,7 +498,7 @@ export class ProjectManager {
 			if (dir == '.') {
 				dir = '';
 			}
-			this.configs.set(dir, new ProjectConfiguration(this.localFs, this.versions, k));
+			this.configs.set(dir, new ProjectConfiguration(this.localFs, this.versions, k, undefined, this.traceModuleResolution));
 			rootdirs.add(dir);
 		});
 		if (!rootdirs.has('')) {
@@ -505,7 +509,7 @@ export class ProjectManager {
 					allowNonTsExtensions: false,
 					allowJs: true
 				}
-			}));
+			}, this.traceModuleResolution));
 		}
 	}
 }
@@ -760,17 +764,19 @@ export class ProjectConfiguration {
 	private configFileName: string;
 	private configContent: any;
 	private versions: Map<string, number>;
+	private traceModuleResolution: boolean;
 
     /**
      * @param fs file system to use
      * @param configFileName configuration file name (relative to workspace root)
      * @param configContent optional configuration content to use instead of reading configuration file)
      */
-	constructor(fs: InMemoryFileSystem, versions: Map<string, number>, configFileName: string, configContent?: any) {
+	constructor(fs: InMemoryFileSystem, versions: Map<string, number>, configFileName: string, configContent?: any, traceModuleResolution?: boolean) {
 		this.fs = fs;
 		this.configFileName = configFileName;
 		this.configContent = configContent;
 		this.versions = versions;
+		this.traceModuleResolution = traceModuleResolution || false;
 	}
 
 	moduleResolutionHost(): ts.ModuleResolutionHost {
@@ -820,6 +826,9 @@ export class ProjectConfiguration {
 			const options = configParseResult.options;
 			if (/(^|\/)jsconfig\.json$/.test(this.configFileName)) {
 				options.allowJs = true;
+			}
+			if (this.traceModuleResolution) {
+				options.traceResolution = true;
 			}
 			this.host = new InMemoryLanguageServiceHost(this.fs.path,
 				options,

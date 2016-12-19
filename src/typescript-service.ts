@@ -55,6 +55,11 @@ export class TypeScriptService implements LanguageHandler {
 	private strict: boolean;
 	private emptyQueryWorkspaceSymbols: Promise<SymbolInformation[]>; // cached response for empty workspace/symbol query
 	private initialized: Promise<InitializeResult>;
+	private traceModuleResolution: boolean;
+
+	constructor(traceModuleResolution?: boolean) {
+		this.traceModuleResolution = traceModuleResolution || false;
+	}
 
 	initialize(params: InitializeParams, remoteFs: FileSystem.FileSystem, strict: boolean): Promise<InitializeResult> {
 		if (this.initialized) {
@@ -64,7 +69,7 @@ export class TypeScriptService implements LanguageHandler {
 			if (params.rootPath) {
 				this.root = util.uri2path(params.rootPath);
 				this.strict = strict;
-				this.projectManager = new pm.ProjectManager(this.root, remoteFs, strict);
+				this.projectManager = new pm.ProjectManager(this.root, remoteFs, strict, this.traceModuleResolution);
 
 				this.projectManager.ensureFilesForWorkspaceSymbol(); // pre-fetching
 
