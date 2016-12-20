@@ -223,6 +223,8 @@ export class TypeScriptService implements LanguageHandler {
 				this.emptyQueryWorkspaceSymbols = p;
 			}
 			return p;
+		}, (err) => {
+			throw err;
 		});
 	}
 
@@ -283,8 +285,12 @@ export class TypeScriptService implements LanguageHandler {
 					});
 				}
 			}));
+		}, (err) => {
+			throw err;
 		}).then(() => {
 			return refInfo;
+		}, (err) => {
+			throw err;
 		});
 	}
 
@@ -1065,6 +1071,8 @@ export class TypeScriptService implements LanguageHandler {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		return this.projectManager.ensureFilesForHoverAndDefinition(uri).then(() => {
 			this.projectManager.didOpen(util.uri2path(uri), params.textDocument.text);
+		}, (err) => {
+			throw err;
 		});
 	}
 
@@ -1087,6 +1095,8 @@ export class TypeScriptService implements LanguageHandler {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		return this.projectManager.ensureFilesForHoverAndDefinition(uri).then(() => {
 			this.projectManager.didSave(util.uri2path(uri));
+		}, (err) => {
+			throw err;
 		});
 	}
 
@@ -1094,6 +1104,8 @@ export class TypeScriptService implements LanguageHandler {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		return this.projectManager.ensureFilesForHoverAndDefinition(uri).then(() => {
 			this.projectManager.didClose(util.uri2path(uri));
+		}, (err) => {
+			throw err;
 		});
 	}
 
@@ -1195,6 +1207,8 @@ export class TypeScriptService implements LanguageHandler {
 					}
 				});
 			}, callback);
+		}, (err) => {
+			throw err;
 		});
 	}
 

@@ -104,8 +104,7 @@ export class ProjectManager {
 		if (!this.ensuredModuleStructure) {
 			this.ensuredModuleStructure = this.refreshModuleStructureAt(this.root).then(() => {
 				this.refreshConfigurations();
-			});
-			this.ensuredModuleStructure.catch((err) => {
+			}, (err) => {
 				console.error("Failed to fetch module structure:", err);
 				this.ensuredModuleStructure = null;
 			});
@@ -186,13 +185,14 @@ export class ProjectManager {
 			const deps = new Set<string>();
 			return this.ensureTransitiveFileDependencies([util.uri2path(uri)], 30, deps).then(() => {
 				return this.refreshConfigurations();
+			}, (err) => {
+				throw err;
 			});
-		});
-		this.ensuredFilesForHoverAndDefinition.set(uri, promise);
-		promise.catch((err) => {
+		}, (err) => {
 			console.error("Failed to fetch files for hover/definition for uri ", uri, ", error:", err);
 			this.ensuredFilesForHoverAndDefinition.delete(uri);
 		});
+		this.ensuredFilesForHoverAndDefinition.set(uri, promise);
 		return promise;
 	}
 
@@ -221,16 +221,16 @@ export class ProjectManager {
 			return null;
 		}).then(() => {
 			return this.ensureFiles(filesToEnsure)
+		}, (err) => {
+			throw err;
 		}).then(() => {
 			return this.refreshConfigurations();
-		});
-
-		this.ensuredFilesForWorkspaceSymbol = promise;
-		promise.catch((err) => {
+		}, (err) => {
 			console.error("Failed to fetch files for workspace/symbol:", err);
 			this.ensuredFilesForWorkspaceSymbol = null;
 		});
 
+		this.ensuredFilesForWorkspaceSymbol = promise;
 		return promise;
 	}
 
@@ -259,16 +259,16 @@ export class ProjectManager {
 			return null;
 		}).then(() => {
 			return this.ensureFiles(filesToEnsure)
+		}, (err) => {
+			throw err;
 		}).then(() => {
 			return this.refreshConfigurations();
-		});
-
-		this.ensuredAllFiles = promise;
-		promise.catch((err) => {
+		}, (err) => {
 			console.error("Failed to fetch files for references:", err);
 			this.ensuredAllFiles = null;
 		});
 
+		this.ensuredAllFiles = promise;
 		return promise;
 	}
 
@@ -417,6 +417,8 @@ export class ProjectManager {
 		config.ensureConfigFile().then(() => {
 			config.host.incProjectVersion();
 			config.program = config.service.getProgram();
+		}, (err) => {
+			console.error("Failed to rebuild program after closing", err);
 		});
 	}
 
@@ -428,6 +430,8 @@ export class ProjectManager {
 		config.ensureConfigFile().then(() => {
 			config.host.incProjectVersion();
 			config.program = config.service.getProgram();
+		}, (err) => {
+			console.error("Failed to rebuild program after change", err);
 		});
 	}
 
@@ -911,6 +915,8 @@ export class ProjectConfiguration {
 				// requery program object to synchonize LanguageService's data
 				this.program = this.service.getProgram();
 			}
+		}, (err) => {
+			throw err;
 		});
 		return this.ensuredBasicFiles;
 	}
@@ -939,6 +945,8 @@ export class ProjectConfiguration {
 				this.program = this.service.getProgram();
 			}
 			this.host.complete = true;
+		}, (err) => {
+			throw err;
 		});
 		return this.ensuredAllFiles;
 	}
