@@ -218,6 +218,7 @@ const globalTSPatterns = [
 	/(^|\/)globals?\.d\.ts$/,
 	/node_modules\/\@types\/node\/.*/,
 	/(^|\/)typings\/.*/,
+	/(^|\/)tsd\.d\.ts$/,
 ];
 
 // isGlobalTSFile returns whether or not the filename contains global
