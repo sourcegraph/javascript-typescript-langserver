@@ -1191,26 +1191,22 @@ export class TypeScriptService implements LanguageHandler {
 				this.collectWorkspaceSymbols(query, limit, configurations, index + 1, items, callback);
 			};
 
-			setImmediate(() => {
-				const chunkSize = limit ? Math.min(limit, limit - items.length) : undefined;
-				setImmediate(() => {
-					if (query) {
-						const chunk = configuration.getService().getNavigateToItems(query, chunkSize, undefined, true);
-						const tasks: AsyncFunction<SymbolInformation, Error>[] = [];
-						chunk.forEach((item) => {
-							tasks.push(this.transformNavItem(this.root, configuration.getProgram(), item));
-						});
-						async.parallel(tasks, (err: Error, results: SymbolInformation[]) => {
-							Array.prototype.push.apply(items, results);
-							maybeEnough();
-						});
-					} else {
-						const chunk = this.getNavigationTreeItems(configuration, chunkSize);
-						Array.prototype.push.apply(items, chunk);
-						maybeEnough();
-					}
+			const chunkSize = limit ? Math.min(limit, limit - items.length) : undefined;
+			if (query) {
+				const chunk = configuration.getService().getNavigateToItems(query, chunkSize, undefined, true);
+				const tasks: AsyncFunction<SymbolInformation, Error>[] = [];
+				chunk.forEach((item) => {
+					tasks.push(this.transformNavItem(this.root, configuration.getProgram(), item));
 				});
-			}, callback);
+				async.parallel(tasks, (err: Error, results: SymbolInformation[]) => {
+					Array.prototype.push.apply(items, results);
+					maybeEnough();
+				});
+			} else {
+				const chunk = this.getNavigationTreeItems(configuration, chunkSize);
+				Array.prototype.push.apply(items, chunk);
+				maybeEnough();
+			}
 		});
 	}
 
