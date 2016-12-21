@@ -3,7 +3,6 @@ import * as fs_ from 'fs';
 import * as os from 'os';
 
 import * as ts from 'typescript';
-import { IConnection, PublishDiagnosticsParams } from 'vscode-languageserver';
 import * as async from 'async';
 
 import * as FileSystem from './fs';
@@ -71,26 +70,14 @@ export class ProjectManager {
 	 * @return all projects
 	 */
 	getConfigurations(): ProjectConfiguration[] {
-		const ret = [];
+		const ret: ProjectConfiguration[] = [];
 		this.configs.forEach((v, k) => {
 			ret.push(v);
 		});
 		return ret;
 	}
 
-	// TODO: eliminate this method
-	// we should process all subprojects instead
-	getAnyConfiguration(): ProjectConfiguration {
-		let config = null;
-		this.configs.forEach((v) => {
-			if (!config) {
-				config = v;
-			}
-		});
-		return config;
-	}
-
-	private ensuredModuleStructure: Promise<void> = null;
+	private ensuredModuleStructure?: Promise<void>;
 
     /**
      * ensureModuleStructure ensures that the module structure of the
@@ -107,7 +94,7 @@ export class ProjectManager {
 			});
 			this.ensuredModuleStructure.catch((err) => {
 				console.error("Failed to fetch module structure:", err);
-				this.ensuredModuleStructure = null;
+				this.ensuredModuleStructure = undefined;
 			});
 		}
 		return this.ensuredModuleStructure;
@@ -133,21 +120,19 @@ export class ProjectManager {
 		if (root !== '/' && root.endsWith('/')) {
 			root = root.substring(0, root.length - 1);
 		}
-		const start = new Date().getTime();
-		const self = this;
-		const filesToFetch = [];
-		await this.walkRemote(root, function (path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
+		const filesToFetch: string[] = [];
+		await this.walkRemote(root, (path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) => {
 			if (err) {
 				return err;
 			} else if (info.dir) {
 				return null;
 			}
-			const rel = path_.posix.relative(self.root, util.normalizePath(path));
+			const rel = path_.posix.relative(this.root, util.normalizePath(path));
 			if (util.isGlobalTSFile(rel) || util.isConfigFile(rel) || util.isPackageJsonFile(rel)) {
 				filesToFetch.push(path);
 			} else {
-				if (!self.localFs.fileExists(rel)) {
-					self.localFs.addFile(rel, localFSPlaceholder);
+				if (!this.localFs.fileExists(rel)) {
+					this.localFs.addFile(rel, localFSPlaceholder);
 				}
 			}
 			return null;
@@ -177,8 +162,9 @@ export class ProjectManager {
 	private ensuredFilesForHoverAndDefinition = new Map<string, Promise<void>>();
 
 	ensureFilesForHoverAndDefinition(uri: string): Promise<void> {
-		if (this.ensuredFilesForHoverAndDefinition.get(uri)) {
-			return this.ensuredFilesForHoverAndDefinition.get(uri);
+		const existing = this.ensuredFilesForHoverAndDefinition.get(uri);
+		if (existing) {
+			return existing;
 		}
 
 		const promise = this.ensureModuleStructure().then(() => {
@@ -196,15 +182,14 @@ export class ProjectManager {
 		return promise;
 	}
 
-	private ensuredFilesForWorkspaceSymbol: Promise<void> = null;
+	private ensuredFilesForWorkspaceSymbol?: Promise<void>;
 
 	ensureFilesForWorkspaceSymbol(): Promise<void> {
 		if (this.ensuredFilesForWorkspaceSymbol) {
 			return this.ensuredFilesForWorkspaceSymbol;
 		}
 
-		const self = this;
-		const filesToEnsure = [];
+		const filesToEnsure: string[] = [];
 		const promise = this.walkRemote(this.getRemoteRoot(), function (path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
 			if (err) {
 				return err;
@@ -228,13 +213,13 @@ export class ProjectManager {
 		this.ensuredFilesForWorkspaceSymbol = promise;
 		promise.catch((err) => {
 			console.error("Failed to fetch files for workspace/symbol:", err);
-			this.ensuredFilesForWorkspaceSymbol = null;
+			this.ensuredFilesForWorkspaceSymbol = undefined;
 		});
 
 		return promise;
 	}
 
-	private ensuredAllFiles: Promise<void> = null;
+	private ensuredAllFiles?: Promise<void>;
 
 	ensureFilesForReferences(uri: string): Promise<void> {
 		const fileName: string = util.uri2path(uri);
@@ -246,7 +231,7 @@ export class ProjectManager {
 			return this.ensuredAllFiles;
 		}
 
-		const filesToEnsure = [];
+		const filesToEnsure: string[] = [];
 		const promise = this.walkRemote(this.getRemoteRoot(), function (path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
 			if (err) {
 				return err;
@@ -266,7 +251,7 @@ export class ProjectManager {
 		this.ensuredAllFiles = promise;
 		promise.catch((err) => {
 			console.error("Failed to fetch files for references:", err);
-			this.ensuredAllFiles = null;
+			this.ensuredAllFiles = undefined;
 		});
 
 		return promise;
@@ -289,7 +274,7 @@ export class ProjectManager {
 				await config.ensureBasicFiles();
 				const contents = this.getFs().readFile(fileName) || '';
 				const info = ts.preProcessFile(contents, true, true);
-				const compilerOpt = config.host.getCompilationSettings();
+				const compilerOpt = config.getHost().getCompilationSettings();
 				for (const imp of info.importedFiles) {
 					const resolved = ts.resolveModuleName(imp.fileName, fileName, compilerOpt, config.moduleResolutionHost());
 					if (!resolved || !resolved.resolvedModule) {
@@ -375,16 +360,12 @@ export class ProjectManager {
 						return resolve();
 					}
 				}
-
-				Promise.all(result.map((fi) => this.walkRemoter(fi.name, fi, walkfn))).then(() => {
-					return resolve();
-				}, (err) => {
-					return reject(err);
-				});
+				if (result) {
+					Promise.all(result.map((fi) => this.walkRemoter(fi.name, fi, walkfn))).then(() => resolve(), reject);
+				}
 			});
 		});
 	}
-
 
 	/**
 	 * @return project configuration for a given source file. Climbs directory tree up to workspace root if needed 
@@ -402,7 +383,11 @@ export class ProjectManager {
 				dir = '';
 			}
 		}
-		return this.configs.get('');
+		config = this.configs.get('');
+		if (config) {
+			return config;
+		}
+		throw new Error("unreachable");
 	}
 
 	didOpen(fileName: string, text: string) {
@@ -415,8 +400,8 @@ export class ProjectManager {
 		this.versions.set(fileName, ++version);
 		const config = this.getConfiguration(fileName)
 		config.ensureConfigFile().then(() => {
-			config.host.incProjectVersion();
-			config.program = config.service.getProgram();
+			config.getHost().incProjectVersion();
+			config.syncProgram();
 		});
 	}
 
@@ -426,8 +411,8 @@ export class ProjectManager {
 		this.versions.set(fileName, ++version);
 		const config = this.getConfiguration(fileName)
 		config.ensureConfigFile().then(() => {
-			config.host.incProjectVersion();
-			config.program = config.service.getProgram();
+			config.getHost().incProjectVersion();
+			config.syncProgram();
 		});
 	}
 
@@ -475,7 +460,7 @@ export class ProjectManager {
 						return callback();
 					}
 					const rel = path_.posix.relative(this.root, path);
-					this.localFs.addFile(rel, result);
+					this.localFs.addFile(rel, result || '');
 					this.fetched.add(util.normalizePath(path));
 					return callback()
 				})
@@ -491,9 +476,9 @@ export class ProjectManager {
 		});
 	}
 
-    /**
-     * Detects projects and creates projects denoted by tsconfig.json. Previously detected projects are discarded.
-     */
+	/**
+	 * Detects projects and creates projects denoted by tsconfig.json. Previously detected projects are discarded.
+	 */
 	refreshConfigurations() {
 		const rootdirs = new Set<string>();
 		Object.keys(this.localFs.entries).forEach((k) => {
@@ -599,7 +584,7 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	getScriptSnapshot(fileName: string): ts.IScriptSnapshot {
 		let entry = this.fs.readFile(fileName);
 		if (!entry) {
-			fileName = path_.posix.relative(this.root, fileName);
+			fileName = path_.posix.join(this.root, fileName);
 			entry = this.fs.readFile(fileName);
 		}
 		if (!entry) {
@@ -643,7 +628,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	useCaseSensitiveFileNames: boolean;
 	path: string;
 
-	private rootNode: any;
+	rootNode: any;
 
 	constructor(path: string) {
 		this.path = path;
@@ -715,20 +700,20 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 
 	getFileSystemEntries(path: string): match.FileSystemEntries {
 		path = path_.posix.relative(this.path, path);
-		const ret = { files: [], directories: [] };
+		const ret: { files: string[], directories: string[] } = { files: [], directories: [] };
 		let node = this.rootNode;
 		const components = path.split('/');
 		if (components.length != 1 || components[0]) {
-			components.forEach((component) => {
+			for (const component of components) {
 				const n = node[component];
 				if (!n) {
 					return ret;
 				}
 				node = n;
-			});
+			}
 		}
 		Object.keys(node).forEach((name) => {
-			if (typeof node[name] == 'string') {
+			if (typeof node[name] === 'string') {
 				ret.files.push(name);
 			} else {
 				ret.directories.push(name);
@@ -760,7 +745,7 @@ export function walkInMemoryFs(fs: InMemoryFileSystem, rootdir: string, walkfn: 
 			return err;
 		}
 	}
-	return null;
+	return;
 }
 
 /**
@@ -779,16 +764,16 @@ export function walkInMemoryFs(fs: InMemoryFileSystem, rootdir: string, walkfn: 
  */
 export class ProjectConfiguration {
 
-	service: ts.LanguageService;
+	private service?: ts.LanguageService;
 
 	// program is "a collection of SourceFiles and a set of
 	// compilation options that represent a compilation unit. The
 	// program is the main entry point to the type system and code
 	// generation."
 	// (https://github.com/Microsoft/TypeScript-wiki/blob/master/Architectural-Overview.md#data-structures)
-	program: ts.Program;
+	private program?: ts.Program;
 
-	host: InMemoryLanguageServiceHost;
+	private host?: InMemoryLanguageServiceHost;
 
 	private fs: InMemoryFileSystem;
 	private configFileName: string;
@@ -821,15 +806,40 @@ export class ProjectConfiguration {
 	 * that of the underlying files.
 	 */
 	reset(): void {
-		this.initialized = null;
-		this.ensuredBasicFiles = null;
-		this.ensuredAllFiles = null;
-		this.service = null;
-		this.program = null;
-		this.host = null;
+		this.initialized = undefined;
+		this.ensuredBasicFiles = undefined;
+		this.ensuredAllFiles = undefined;
+		this.service = undefined;
+		this.program = undefined;
+		this.host = undefined;
 	}
 
-	private initialized: Promise<void>;
+	getService(): ts.LanguageService {
+		if (!this.service) {
+			throw new Error("project is uninitialized");
+		}
+		return this.service;
+	}
+
+	getProgram(): ts.Program {
+		if (!this.program) {
+			throw new Error("project is uninitialized");
+		}
+		return this.program;
+	}
+
+	getHost(): InMemoryLanguageServiceHost {
+		if (!this.host) {
+			throw new Error("project is uninitialized");
+		}
+		return this.host;
+	}
+
+	syncProgram(): void {
+		this.program = this.getService().getProgram();
+	}
+
+	private initialized?: Promise<void>;
 
 	private init(): Promise<void> {
 		if (this.initialized) {
@@ -889,7 +899,7 @@ export class ProjectConfiguration {
 		return this.init();
 	}
 
-	private ensuredBasicFiles: Promise<void>;
+	private ensuredBasicFiles?: Promise<void>;
 
 	async ensureBasicFiles(): Promise<void> {
 		if (this.ensuredBasicFiles) {
@@ -898,24 +908,24 @@ export class ProjectConfiguration {
 
 		this.ensuredBasicFiles = this.init().then(() => {
 			let changed = false;
-			for (const fileName of (this.host.expectedFiles || [])) {
+			for (const fileName of (this.getHost().expectedFiles || [])) {
 				if (util.isGlobalTSFile(fileName)) {
-					const sourceFile = this.program.getSourceFile(fileName);
+					const sourceFile = this.getProgram().getSourceFile(fileName);
 					if (!sourceFile) {
-						this.host.addFile(fileName);
+						this.getHost().addFile(fileName);
 						changed = true;
 					}
 				}
 			}
 			if (changed) {
 				// requery program object to synchonize LanguageService's data
-				this.program = this.service.getProgram();
+				this.program = this.getService().getProgram();
 			}
 		});
 		return this.ensuredBasicFiles;
 	}
 
-	private ensuredAllFiles: Promise<void>;
+	private ensuredAllFiles?: Promise<void>;
 
 	async ensureAllFiles(): Promise<void> {
 		if (this.ensuredAllFiles) {
@@ -923,22 +933,22 @@ export class ProjectConfiguration {
 		}
 
 		this.ensuredAllFiles = this.init().then(() => {
-			if (this.host.complete) {
+			if (this.getHost().complete) {
 				return;
 			}
 			let changed = false;
-			for (const fileName of (this.host.expectedFiles || [])) {
-				const sourceFile = this.program.getSourceFile(fileName);
+			for (const fileName of (this.getHost().expectedFiles || [])) {
+				const sourceFile = this.getProgram().getSourceFile(fileName);
 				if (!sourceFile) {
-					this.host.addFile(fileName);
+					this.getHost().addFile(fileName);
 					changed = true;
 				}
 			}
 			if (changed) {
 				// requery program object to synchonize LanguageService's data
-				this.program = this.service.getProgram();
+				this.program = this.getService().getProgram();
 			}
-			this.host.complete = true;
+			this.getHost().complete = true;
 		});
 		return this.ensuredAllFiles;
 	}

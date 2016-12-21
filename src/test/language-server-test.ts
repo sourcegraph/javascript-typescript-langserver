@@ -1,16 +1,4 @@
-import * as net from 'net';
-import * as os from 'os';
-import * as fs from 'fs';
-
-import * as mocha from 'mocha';
-import * as chai from 'chai';
-
 import * as ts from 'typescript';
-
-import * as vscode from 'vscode-languageserver';
-
-import { FileInfo } from '../fs';
-import * as rt from '../request-type';
 import * as utils from './test-utils';
 
 import { TypeScriptService } from '../typescript-service';
@@ -123,6 +111,19 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					}, done);
 			});
 			it('hover over keyword (non-null)', function (done: (err?: Error) => void) {
+				utils.hover({
+					textDocument: {
+						uri: 'file:///a.ts'
+					},
+					position: {
+						line: 0,
+						character: 0
+					}
+				}, {
+						contents: []
+					}, done);
+			});
+			it('hover over non-existent file', function (done: (err?: Error) => void) {
 				utils.hover({
 					textDocument: {
 						uri: 'file:///foo/a.ts'

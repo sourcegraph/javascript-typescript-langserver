@@ -1,17 +1,11 @@
 import * as net from 'net';
-import * as os from 'os';
-import * as fs from 'fs';
-
-import * as mocha from 'mocha';
 import * as chai from 'chai';
-
 import * as vscode from 'vscode-languageserver';
 
 import { newConnection, registerLanguageHandler } from '../connection';
 import { LanguageHandler } from '../lang-handler';
 import { FileInfo } from '../fs';
 import * as rt from '../request-type';
-import * as util from '../util';
 import { IConnection } from 'vscode-languageserver';
 
 class Channel {
@@ -40,14 +34,14 @@ export function setUp(langhandler: LanguageHandler, memfs: any, done: (err?: Err
 			channel.clientConnection.listen();
 
 			const params: vscode.InitializeParams = {
-				processId: null,
+				processId: 99, // dummy value
 				rootPath: 'file:///',
-				capabilities: null
+				capabilities: {},
 			}
 
 			channel.clientConnection.sendRequest(rt.InitializeRequest.type, params).then(() => {
 				done();
-			}, (e) => {
+			}, (e: any) => {
 				console.error(e);
 				return done(new Error('initialization failed'));
 			});
@@ -88,7 +82,7 @@ function initFs(connection: IConnection, memfs: any) {
 			i++;
 		}
 		const keys = Object.keys(node);
-		let result = []
+		let result: FileInfo[] = []
 		keys.forEach((k) => {
 			const v = node[k];
 			if (typeof v == 'string') {
@@ -134,7 +128,7 @@ export function tearDown(done: () => void) {
 		channel.client.close();
 		channel.server.close();
 		done();
-	}, (e) => {
+	}, (e: any) => {
 		console.error("error on tearDown:", e);
 	});
 }
@@ -148,7 +142,7 @@ function check(done: (err?: Error) => void, conditions: () => void) {
 	}
 }
 
-export function definition(pos: vscode.TextDocumentPositionParams, expected: vscode.Location | vscode.Location[], done: (err?: Error) => void) {
+export function definition(pos: vscode.TextDocumentPositionParams, expected: vscode.Location | vscode.Location[] | null, done: (err?: Error) => void) {
 	channel.clientConnection.sendRequest(rt.DefinitionRequest.type, {
 		textDocument: {
 			uri: pos.textDocument.uri
@@ -158,7 +152,7 @@ export function definition(pos: vscode.TextDocumentPositionParams, expected: vsc
 			character: pos.position.character
 		}
 	}).then((results: vscode.Location[]) => {
-		expected = expected ? Array.isArray(expected) ? expected : [expected] : null;
+		expected = expected ? (Array.isArray(expected) ? expected : [expected]) : null;
 		check(done, () => {
 			chai.expect(results).to.deep.equal(expected);
 		});
@@ -188,11 +182,14 @@ export function hover(pos: vscode.TextDocumentPositionParams, expected: vscode.H
 export function references(pos: vscode.TextDocumentPositionParams, expected: number, done: (err?: Error) => void) {
 	channel.clientConnection.sendRequest(rt.ReferencesRequest.type, {
 		textDocument: {
-			uri: pos.textDocument.uri
+			uri: pos.textDocument.uri,
 		},
 		position: {
 			line: pos.position.line,
 			character: pos.position.character
+		},
+		context: {
+			includeDeclaration: false,
 		}
 	}).then((result: vscode.Location[]) => {
 		check(done, () => {
@@ -237,6 +234,8 @@ export function open(uri: string, text: string) {
 	channel.clientConnection.sendNotification(rt.TextDocumentDidOpenNotification.type, {
 		textDocument: {
 			uri: uri,
+			languageId: "",
+			version: 0,
 			text: text
 		}
 	});
@@ -245,7 +244,7 @@ export function open(uri: string, text: string) {
 export function close(uri: string) {
 	channel.clientConnection.sendNotification(rt.TextDocumentDidCloseNotification.type, {
 		textDocument: {
-			uri: uri
+			uri: uri,
 		}
 	});
 }
@@ -253,7 +252,8 @@ export function close(uri: string) {
 export function change(uri: string, text: string) {
 	channel.clientConnection.sendNotification(rt.TextDocumentDidChangeNotification.type, {
 		textDocument: {
-			uri: uri
+			uri: uri,
+			version: 0,
 		}, contentChanges: [{
 			text: text
 		}]
