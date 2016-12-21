@@ -309,7 +309,12 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					'a.ts': "class a { foo() { const i = 1;} }",
 					'foo': {
 						'b.ts': "class b { bar: number; baz(): number { return this.bar;}}; function qux() {}"
-					}
+					},
+					'node_modules': {
+						'dep': {
+							'index.ts': 'class DepClass {}',
+						},
+					},
 				}, done);
 			});
 			it('document/symbol:a.ts', function (done: (err?: Error) => void) {
@@ -555,6 +560,61 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					]
 
 					, done);
+			});
+			it('workspace symbols does not return symbols in dependencies', function (done: (err?: Error) => void) {
+				utils.symbols({
+					query: 'DepClass',
+					limit: 100
+				}, [], done);
+			});
+			afterEach(function (done: () => void) {
+				utils.tearDown(done);
+			});
+		});
+		describe('workspace/symbol with dependencies', function () {
+			before(function (done: () => void) {
+				utils.setUp(newLanguageHandler(), {
+					'a.ts': "class MyClass {}",
+					'node_modules': {
+						'dep': {
+							'index.d.ts': 'class TheirClass {}',
+						},
+					},
+				}, done);
+			});
+			it('workspace symbols with empty query', function (done: (err?: Error) => void) {
+				utils.symbols({
+					query: '',
+					limit: 100
+				}, [{
+					"kind": 5,
+					"location": {
+						"range": {
+							"end": {
+								"character": 16,
+								"line": 0
+							},
+							"start": {
+								"character": 0,
+								"line": 0
+							},
+						},
+						"uri": "file:///a.ts",
+					},
+					"name": "MyClass"
+				}], done);
+			});
+			it('workspace symbols with not-empty query', function (done: (err?: Error) => void) {
+				utils.symbols({
+					query: 'TheirClass',
+					limit: 100
+				}, [], done);
+			});
+			it('workspace symbols does not return symbols in dependencies', function (done: (err?: Error) => void) {
+				utils.symbols({
+					query: 'DepClass',
+					limit: 100
+				}, [], done);
 			});
 			afterEach(function (done: () => void) {
 				utils.tearDown(done);
