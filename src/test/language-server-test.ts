@@ -146,8 +146,48 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					'a.ts': "import * as m from 'dep';",
 					'typings': {
 						'dep.d.ts': "declare module 'dep' {}",
+					},
+					'src': {
+						'tsconfig.json': '\
+{\n\
+	"compilerOptions": {\n\
+	"target": "ES5",\n\
+	"module": "commonjs",\n\
+		"sourceMap": true,\n\
+		"noImplicitAny": false,\n\
+		"removeComments": false,\n\
+		"preserveConstEnums": true\n\
+	}\n\
+}',
+						'tsd.d.ts': '/// <reference path="../typings/dep.d.ts" />',
+						'dir': {
+							'index.ts': 'import * as m from "dep";',
+						}
 					}
 				}, done);
+			});
+			it('definition with tsd.d.ts', async function (done: (err?: Error) => void) {
+				utils.definition({
+					textDocument: {
+						uri: 'file:///src/dir/index.ts'
+					},
+					position: {
+						line: 0,
+						character: 20
+					}
+				}, {
+						uri: 'file:///typings/dep.d.ts',
+						range: {
+							start: {
+								line: 0,
+								character: 0
+							},
+							end: {
+								line: 0,
+								character: 23
+							}
+						}
+					}, done);
 			});
 			it('definition', async function (done: (err?: Error) => void) {
 				try {
@@ -202,7 +242,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					return;
 				}
 				done();
-			})
+			});
 			afterEach(function (done: () => void) {
 				utils.tearDown(done);
 			});
