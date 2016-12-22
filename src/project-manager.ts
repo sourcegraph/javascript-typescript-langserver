@@ -699,10 +699,9 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	}
 
 	getFileSystemEntries(path: string): match.FileSystemEntries {
-		path = path_.posix.relative(this.path, path);
 		const ret: { files: string[], directories: string[] } = { files: [], directories: [] };
 		let node = this.rootNode;
-		const components = path.split('/');
+		const components = path.split('/').filter((c) => c);
 		if (components.length != 1 || components[0]) {
 			for (const component of components) {
 				const n = node[component];
