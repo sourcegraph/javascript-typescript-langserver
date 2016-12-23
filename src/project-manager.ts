@@ -908,7 +908,7 @@ export class ProjectConfiguration {
 		this.ensuredBasicFiles = this.init().then(() => {
 			let changed = false;
 			for (const fileName of (this.getHost().expectedFiles || [])) {
-				if (util.isGlobalTSFile(fileName)) {
+				if (util.isGlobalTSFile(fileName) || (!util.isDependencyFile(fileName) && util.isDeclarationFile(fileName))) {
 					const sourceFile = this.getProgram().getSourceFile(fileName);
 					if (!sourceFile) {
 						this.getHost().addFile(fileName);

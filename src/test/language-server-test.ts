@@ -247,6 +247,40 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 				utils.tearDown(done);
 			});
 		});
+		describe('global module', function () {
+			before(function (done: () => void) {
+				utils.setUp(newLanguageHandler(), {
+					'a.ts': "const rt: GQL.Rt;",
+					'interfaces.d.ts': 'declare namespace GQL { interface Rt { } }'
+				}, done);
+			});
+			it('definition', async function (done: (err?: Error) => void) {
+				utils.definition({
+					textDocument: {
+						uri: 'file:///a.ts'
+					},
+					position: {
+						line: 0,
+						character: 14
+					}
+				}, {
+						uri: 'file:///interfaces.d.ts',
+						range: {
+							start: {
+								line: 0,
+								character: 24
+							},
+							end: {
+								line: 0,
+								character: 40
+							}
+						}
+					}, done);
+			});
+			afterEach(function (done: () => void) {
+				utils.tearDown(done);
+			});
+		});
 		describe('global modules in vendored deps', function () {
 			before(function (done: () => void) {
 				utils.setUp(newLanguageHandler(), {
@@ -313,7 +347,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					return;
 				}
 				done();
-			})
+			});
 			afterEach(function (done: () => void) {
 				utils.tearDown(done);
 			});

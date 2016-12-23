@@ -156,3 +156,11 @@ export function isGlobalTSFile(filename: string): boolean {
 	}
 	return false;
 }
+
+export function isDependencyFile(filename: string): boolean {
+	return filename.startsWith("node_modules/") || filename.indexOf("/node_modules/") !== -1;
+}
+
+export function isDeclarationFile(filename: string): boolean {
+	return filename.endsWith(".d.ts");
+}
