@@ -553,12 +553,29 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 							"name": "a"
 						},
 						{
-							"containerName": "a",
-							"kind": 6,
+							"kind": 5,
 							"location": {
 								"range": {
 									"end": {
-										"character": 31,
+										"character": 57,
+										"line": 0
+									},
+									"start": {
+										"character": 0,
+										"line": 0
+									}
+								},
+								"uri": "file:///foo/b.ts"
+							},
+							"name": "b"
+						},
+						{
+							"containerName": "b",
+							"kind": 7,
+							"location": {
+								"range": {
+									"end": {
+										"character": 22,
 										"line": 0
 									},
 									"start": {
@@ -566,27 +583,9 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 										"line": 0
 									}
 								},
-								"uri": "file:///a.ts"
+								"uri": "file:///foo/b.ts"
 							},
-							"name": "foo"
-						},
-						{
-							"containerName": "foo",
-							"kind": 15,
-							"location": {
-								"range": {
-									"end": {
-										"character": 29,
-										"line": 0
-									},
-									"start": {
-										"character": 24,
-										"line": 0
-									}
-								},
-								"uri": "file:///a.ts"
-							},
-							"name": "i"
+							"name": "bar"
 						}
 					], done);
 			});

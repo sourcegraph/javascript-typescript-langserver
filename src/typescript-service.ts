@@ -186,32 +186,24 @@ export class TypeScriptService implements LanguageHandler {
 		});
 	}
 
-	getWorkspaceSymbols(params: rt.WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]> {
+	async getWorkspaceSymbols(params: rt.WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]> {
 		const query = params.query;
 		const limit = params.limit;
-		return this.projectManager.ensureFilesForWorkspaceSymbol().then(() => {
-			if (!query && this.emptyQueryWorkspaceSymbols) {
-				return this.emptyQueryWorkspaceSymbols;
-			}
 
-			const p = new Promise<SymbolInformation[]>((resolve, reject) => {
-				const configurations = this.projectManager.getConfigurations();
-				const index = 0;
-				const items: SymbolInformation[] = [];
-				this.collectWorkspaceSymbols(query, limit, configurations, index, items, () => {
-					if (!query) {
-						const sortedItems = items.sort((a, b) =>
-							a.name.toLocaleLowerCase().localeCompare(b.name.toLocaleLowerCase()));
-						return resolve(sortedItems);
-					}
-					return resolve(items);
-				});
-			});
-			if (!query) {
-				this.emptyQueryWorkspaceSymbols = p;
-			}
-			return p;
-		});
+		await this.projectManager.ensureFilesForWorkspaceSymbol();
+
+		if (!query && this.emptyQueryWorkspaceSymbols) {
+			return this.emptyQueryWorkspaceSymbols;
+		}
+		const configs = this.projectManager.getConfigurations();
+		const itemsPromise = this.collectWorkspaceSymbols(query, configs);
+		if (!query) {
+			this.emptyQueryWorkspaceSymbols = itemsPromise;
+		}
+		let items = await itemsPromise
+		let sortedItems = items.sort((a, b) => a.name.toLocaleLowerCase().localeCompare(b.name.toLocaleLowerCase()));
+		let limitedItems = sortedItems.slice(0, limit);
+		return limitedItems;
 	}
 
 	async getDocumentSymbol(params: DocumentSymbolParams): Promise<SymbolInformation[]> {
@@ -1145,69 +1137,41 @@ export class TypeScriptService implements LanguageHandler {
 	}
 
     /**
-     * Produces async function that converts NavigateToItem object to SymbolInformation
+     * transformNavItem transforms a NavigateToItem instance to a SymbolInformation instance
      */
-	private transformNavItem(root: string, program: ts.Program, item: ts.NavigateToItem): AsyncFunction<SymbolInformation, Error> {
-		return (callback: (err?: Error, result?: SymbolInformation) => void) => {
-			const sourceFile = program.getSourceFile(item.fileName);
-			if (!sourceFile) {
-				return callback(new Error('source file "' + item.fileName + '" does not exist'));
-			}
-			let start = ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start);
-			let end = ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start + item.textSpan.length);
-			callback(undefined, SymbolInformation.create(item.name,
-				util.convertStringtoSymbolKind(item.kind),
-				Range.create(start.line, start.character, end.line, end.character),
-				this.defUri(item.fileName), item.containerName));
+	private transformNavItem(root: string, program: ts.Program, item: ts.NavigateToItem): SymbolInformation {
+		const sourceFile = program.getSourceFile(item.fileName);
+		if (!sourceFile) {
+			throw new Error('source file "' + item.fileName + '" does not exist');
 		}
+		let start = ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start);
+		let end = ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start + item.textSpan.length);
+		return SymbolInformation.create(item.name,
+			util.convertStringtoSymbolKind(item.kind),
+			Range.create(start.line, start.character, end.line, end.character),
+			this.defUri(item.fileName), item.containerName);
 	}
 
-	/**
-     * Collects workspace symbols from all sub-projects until there are no more sub-projects left or we found enough items
-     *
-     * @param query search query
-     * @param limit max number of items to fetch (if greather than zero)
-     * @param configurations array of project configurations
-     * @param index configuration's index to process. Execution stops if there are no more configs to process or we collected enough items
-     * @param items array to fill with the items found
-     * @param callback callback to call when done
-     */
-	private collectWorkspaceSymbols(query: string,
-		limit: number,
-		configurations: pm.ProjectConfiguration[],
-		index: number,
-		items: SymbolInformation[],
-		callback: () => void) {
-		if (index >= configurations.length) {
-			// safety first
-			return callback();
-		}
-		const configuration = configurations[index];
-		configuration.ensureAllFiles().then(() => {
-			const maybeEnough = () => {
-				if (limit && items.length >= limit || index == configurations.length - 1) {
-					return callback();
+	private async collectWorkspaceSymbols(query: string, configs: pm.ProjectConfiguration[]): Promise<SymbolInformation[]> {
+		const symbols: SymbolInformation[] = [];
+		await Promise.all(
+			configs.map(async (config) => {
+				await config.ensureAllFiles();
+				if (query) {
+					const items = config.getService().getNavigateToItems(query, undefined, undefined, true);
+					for (const item of items) {
+						symbols.push(this.transformNavItem(this.root, config.getProgram(), item));
+					}
+				} else {
+					Array.prototype.push.apply(symbols, this.getNavigationTreeItems(config));
 				}
-				this.collectWorkspaceSymbols(query, limit, configurations, index + 1, items, callback);
-			};
+			})
+		);
 
-			const chunkSize = limit ? Math.min(limit, limit - items.length) : undefined;
-			if (query) {
-				const chunk = configuration.getService().getNavigateToItems(query, chunkSize, undefined, true);
-				const tasks: AsyncFunction<SymbolInformation, Error>[] = [];
-				chunk.forEach((item) => {
-					tasks.push(this.transformNavItem(this.root, configuration.getProgram(), item));
-				});
-				async.parallel(tasks, (err: Error, results: SymbolInformation[]) => {
-					Array.prototype.push.apply(items, results);
-					maybeEnough();
-				});
-			} else {
-				const chunk = this.getNavigationTreeItems(configuration, chunkSize);
-				Array.prototype.push.apply(items, chunk);
-				maybeEnough();
-			}
-		});
+		if (!query) {
+			return symbols.sort((a, b) => a.name.toLocaleLowerCase().localeCompare(b.name.toLocaleLowerCase()));
+		}
+		return symbols;
 	}
 
     /**
