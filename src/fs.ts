@@ -16,11 +16,11 @@ export interface FileSystem {
 	readFile(path: string, callback: (err: Error, result?: string) => void): void
 }
 
-namespace ReadDirRequest {
+export namespace ReadDirRequest {
 	export const type: RequestType<string, FileInfo[], any> = { get method() { return 'fs/readDir'; } };
 }
 
-namespace ReadFileRequest {
+export namespace ReadFileRequest {
 	export const type: RequestType<string, string, any> = { get method() { return 'fs/readFile'; } };
 }
 
