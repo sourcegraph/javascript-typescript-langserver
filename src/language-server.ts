@@ -49,9 +49,18 @@ function randomNWorkers(n: number): string[] {
 	return selected;
 }
 
+const consoleErr = console.error;
+console.error = function () {
+	if (cluster.isMaster) {
+		consoleErr(`[mstr]`, ...arguments);
+	} else {
+		consoleErr(`[wkr${cluster.worker.id}]`, ...arguments);
+	}
+}
+
 async function main(): Promise<void> {
 	if (cluster.isMaster) {
-		console.error(`Master node process spawning ${clusterSize} workers`)
+		console.error(`spawning ${clusterSize} workers`)
 		for (let i = 0; i < clusterSize; ++i) {
 			const worker = cluster.fork().on('disconnect', () => {
 				console.error(`worker ${worker.process.pid} disconnect`)
@@ -74,10 +83,10 @@ async function main(): Promise<void> {
 			const workerIds = randomNWorkers(2);
 			await Promise.all(workerIds.map((id) => workersReady.get(id)));
 
-			const workerConns: IConnection[] = [];
-			await Promise.all(workerIds.map((id) => new Promise<void>((resolve, reject) => {
-				const clientSocket = net.createConnection({ port: lspPort + parseInt(id) }, resolve);
-				workerConns.push(newConnection(clientSocket, clientSocket));
+			const workerConns = await Promise.all(workerIds.map((id) => new Promise<IConnection>((resolve, reject) => {
+				const clientSocket = net.createConnection({ port: lspPort + parseInt(id) }, () => {
+					resolve(newConnection(clientSocket, clientSocket));
+				});
 			})));
 			for (const workerConn of workerConns) {
 				workerConn.onRequest(fs.ReadDirRequest.type, async (params: string): Promise<fs.FileInfo[]> => {
@@ -89,19 +98,22 @@ async function main(): Promise<void> {
 				workerConn.listen();
 			}
 
+			console.error(`connected to workers ${workerIds[0]} and ${workerIds[1]}`);
+
 			registerMasterHandler(connection, workerConns[0], workerConns[1]);
 			connection.listen();
+			console.error("established connection to client");
 		});
-		console.error('Master listening for incoming LSP connections on', lspPort);
+		console.error(`listening for incoming LSP connections on ${lspPort} `);
 		server.listen(lspPort);
 
 	} else {
-		console.error('Listening for incoming LSP connections on', lspPort + cluster.worker.id);
+		console.error(`listening for incoming LSP connections on ${lspPort + cluster.worker.id} `);
 		var server = net.createServer((socket) => {
 			const connection = newConnection(socket, socket);
 			registerLanguageHandler(connection, program.strict, new TypeScriptService());
 			connection.listen();
-			console.error("worker", cluster.worker.id, "created connection");
+			console.error("established connection to master");
 		});
 		server.listen(lspPort + parseInt(cluster.worker.id));
 	}
