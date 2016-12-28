@@ -1,4 +1,4 @@
-/// <reference path="../node_modules/vscode/thenable.d.ts" />
+/// <reference types="vscode" />
 
 import { TypeScriptService } from './typescript-service';
 import * as server from './server';

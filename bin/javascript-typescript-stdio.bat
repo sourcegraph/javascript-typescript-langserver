@@ -1,2 +1,2 @@
 @echo off
-node "%~dp0/../build/language-server-stdio.js"
+node "%~dp0/../lib/language-server-stdio.js"

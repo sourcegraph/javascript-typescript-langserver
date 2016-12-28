@@ -1,0 +1,5 @@
+#!/bin/bash
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.." > /dev/null
+node ./node_modules/vscode/bin/install
+./node_modules/.bin/tsc
