@@ -200,7 +200,7 @@ export class TypeScriptService implements LanguageHandler {
 		if (!query) {
 			this.emptyQueryWorkspaceSymbols = itemsPromise;
 		}
-		let items = await itemsPromise
+		let items = await itemsPromise;
 		let sortedItems = items.sort((a, b) => a.name.toLocaleLowerCase().localeCompare(b.name.toLocaleLowerCase()));
 		let limitedItems = sortedItems.slice(0, limit);
 		return limitedItems;
