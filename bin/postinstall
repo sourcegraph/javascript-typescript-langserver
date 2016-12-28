@@ -3,10 +3,10 @@
 cd "$(dirname "${BASH_SOURCE[0]}")/.." > /dev/null
 if [ -f "./node_modules/vscode/bin/install" ]; then
 	node ./node_modules/vscode/bin/install
-elif [ -f "../node_modules/vscode/bin/install" ]; then
-	node ../node_modules/vscode/bin/install
+elif [ -f "../../node_modules/vscode/bin/install" ]; then
+	node ../../node_modules/vscode/bin/install
 else
-	echo "No vscode detected"
+	echo "No vscode directory detected"
 	exit 1
 fi
 ./node_modules/.bin/tsc
