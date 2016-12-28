@@ -200,10 +200,7 @@ export class TypeScriptService implements LanguageHandler {
 		if (!query) {
 			this.emptyQueryWorkspaceSymbols = itemsPromise;
 		}
-		let items = await itemsPromise;
-		let sortedItems = items.sort((a, b) => a.name.toLocaleLowerCase().localeCompare(b.name.toLocaleLowerCase()));
-		let limitedItems = sortedItems.slice(0, limit);
-		return limitedItems;
+		return (await itemsPromise).slice(0, limit);
 	}
 
 	async getDocumentSymbol(params: DocumentSymbolParams): Promise<SymbolInformation[]> {
@@ -1153,9 +1150,9 @@ export class TypeScriptService implements LanguageHandler {
 	}
 
 	private async collectWorkspaceSymbols(query: string, configs: pm.ProjectConfiguration[]): Promise<SymbolInformation[]> {
-		const symbols: SymbolInformation[] = [];
-		await Promise.all(
+		const configSymbols: SymbolInformation[][] = await Promise.all(
 			configs.map(async (config) => {
+				const symbols: SymbolInformation[] = [];
 				await config.ensureAllFiles();
 				if (query) {
 					const items = config.getService().getNavigateToItems(query, undefined, undefined, true);
@@ -1165,8 +1162,13 @@ export class TypeScriptService implements LanguageHandler {
 				} else {
 					Array.prototype.push.apply(symbols, this.getNavigationTreeItems(config));
 				}
+				return symbols;
 			})
 		);
+		const symbols: SymbolInformation[] = [];
+		for (const cs of configSymbols) {
+			Array.prototype.push.apply(symbols, cs);
+		}
 
 		if (!query) {
 			return symbols.sort((a, b) => a.name.toLocaleLowerCase().localeCompare(b.name.toLocaleLowerCase()));
