@@ -1,5 +1,12 @@
 #!/bin/bash
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.." > /dev/null
-node ./node_modules/vscode/bin/install
+if [ -f "./node_modules/vscode/bin/install" ]; then
+	node ./node_modules/vscode/bin/install
+elif [ -f "../node_modules/vscode/bin/install" ]; then
+	node ../node_modules/vscode/bin/install
+else
+	echo "No vscode detected"
+	exit 1
+fi
 ./node_modules/.bin/tsc
