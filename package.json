@@ -33,5 +33,8 @@
         "mocha": "^2.2.32",
         "ts-node": "^1.6.1",
         "typescript-formatter": "^4.0.0"
-    }
+    },
+    "files": [
+	"lib"
+    ]
 }
