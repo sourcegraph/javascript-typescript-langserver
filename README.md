@@ -6,7 +6,7 @@ This is a language server for JavaScript and TypeScript that adheres to the [Lan
 
 1. `yarn install`
 1. `node_modules/.bin/tsc`
-1. `node build/language-server.js`
+1. `node lib/language-server.js`
 
 To try it in [Visual Studio Code](https://code.visualstudio.com), install the [vscode-client](https://github.com/sourcegraph/langserver/tree/master/vscode-client) extension and then open up a `.ts` file.
 

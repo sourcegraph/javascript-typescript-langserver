@@ -1,0 +1,4 @@
+#!/bin/bash
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.." > /dev/null
+./node_modules/.bin/mocha -r ts-node/register src/test/**/*.ts

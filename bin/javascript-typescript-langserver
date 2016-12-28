@@ -1,4 +1,4 @@
 #!/bin/bash
 set -euf -o pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.." > /dev/null # cd to repo root dir
-exec node build/language-server-stdio.js --strict
+exec node lib/language-server-stdio.js --strict

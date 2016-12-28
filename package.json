@@ -2,13 +2,14 @@
     "version": "1.0.0",
     "name": "javascript-typescript-langserver",
     "engines": {
-        "node": ">=5.10.0"
+        "node": ">=6.0.0",
+        "vscode": "1.x.x"
     },
     "scripts": {
-        "lib": "./make_lib.sh",
-        "test": "./node_modules/.bin/mocha -r ts-node/register src/test/**/*.ts",
-        "fmt-check": "./node_modules/.bin/tsfmt --verify",
-        "fmt": "./node_modules/.bin/tsfmt -r"
+        "test": "bash bin/test",
+        "fmt-check": "bash bin/fmt-check",
+        "fmt": "bash bin/fmt",
+        "postinstall": "bash bin/postinstall"
     },
     "dependencies": {
         "@types/async": "^2.0.32",
@@ -34,5 +35,8 @@
         "mocha": "^2.2.32",
         "ts-node": "^1.6.1",
         "typescript-formatter": "^4.0.0"
-    }
+    },
+    "files": [
+	"lib"
+    ]
 }
