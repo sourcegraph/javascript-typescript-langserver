@@ -114,12 +114,7 @@ export class ProjectManager {
 	 * change.
 	 */
 	async refreshModuleStructureAt(root: string): Promise<void> {
-		if (!root.startsWith('/')) {
-			root = '/' + root;
-		}
-		if (root !== '/' && root.endsWith('/')) {
-			root = root.substring(0, root.length - 1);
-		}
+		root = util.normalizeDir(root);
 		const filesToFetch: string[] = [];
 		await this.walkRemote(root, (path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) => {
 			if (err) {
@@ -146,12 +141,7 @@ export class ProjectManager {
 
 		// require re-parsing of projects whose file set may have been affected
 		for (let [dir, config] of this.configs) {
-			if (!dir.startsWith('/')) {
-				dir = '/' + dir;
-			}
-			if (dir !== '/' && dir.endsWith('/')) {
-				dir = dir.substring(0, dir.length - 1);
-			}
+			dir = util.normalizeDir(dir);
 
 			if (dir.startsWith(root + '/') || root.startsWith(dir + '/') || root === dir) {
 				config.reset();
