@@ -164,3 +164,26 @@ export function isDependencyFile(filename: string): boolean {
 export function isDeclarationFile(filename: string): boolean {
 	return filename.endsWith(".d.ts");
 }
+
+/**
+ * Converts filename to POSIX-style absolute one if filename does not denote absolute path already
+ */
+export function absolutize(filename: string) {
+	filename = normalizePath(filename);
+	// If POSIX path does not treats filename as absolute, let's try system-specific one
+	if (!path.posix.isAbsolute(filename) && !path.isAbsolute(filename)) {
+		filename = '/' + filename;
+	}
+	return filename;
+}
+
+/**
+ * Absolutizes directory name and cuts trailing slashes
+ */
+export function normalizeDir(dir: string) {
+	dir = absolutize(dir);
+	if (dir !== '/') {
+		dir = dir.replace(/[\/]+$/, '');
+	}
+	return dir;
+}
