@@ -1,5 +1,3 @@
-/// <reference path="../node_modules/vscode/thenable.d.ts" />
-
 import {
 	IConnection,
 } from 'vscode-languageserver';
