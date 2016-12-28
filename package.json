@@ -2,7 +2,7 @@
     "version": "1.0.0",
     "name": "javascript-typescript-langserver",
     "engines": {
-        "node": ">=5.10.0"
+        "node": ">=6.0.0"
     },
     "scripts": {
         "test": "./node_modules/.bin/mocha -r ts-node/register src/test/**/*.ts",
