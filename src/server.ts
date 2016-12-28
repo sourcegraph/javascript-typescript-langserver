@@ -43,6 +43,10 @@ async function rewriteConsole() {
  * parallelism.
  */
 export async function serve(clusterSize: number, lspPort: number, strict: boolean, newLangHandler: () => LanguageHandler): Promise<void> {
+	if (clusterSize < 2) {
+		throw new Error("clusterSize should be at least 2");
+	}
+
 	rewriteConsole();
 
 	if (cluster.isMaster) {
