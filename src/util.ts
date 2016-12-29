@@ -2,7 +2,7 @@ import * as os from "os";
 import * as path from "path";
 
 import * as ts from "typescript";
-import { SymbolKind, Range, Position, Location } from 'vscode-languageserver';
+import { SymbolKind, Range, Position } from 'vscode-languageserver';
 
 var strict = false;
 
@@ -26,11 +26,6 @@ export function formEmptyKind(): number {
 	return SymbolKind.Namespace
 }
 
-export function formExternalUri(external) {
-	return external.repoName ? external.repoName + "$" + external.repoURL + "$" + external.repoCommit + "$" + external.path
-		: external.path;
-}
-
 /**
  * Makes documentation string from symbol display part array returned by TS
  */
@@ -43,54 +38,6 @@ export function docstring(parts: ts.SymbolDisplayPart[]): string {
  */
 export function normalizePath(file: string): string {
 	return file.replace(new RegExp('\\' + path.sep, 'g'), path.posix.sep);
-}
-
-export function isNamedDeclaration(node): boolean {
-	if (node.name && node.name.kind == ts.SyntaxKind.Identifier) {
-		if (node.kind == ts.SyntaxKind.MethodDeclaration) {
-			return true;
-		}
-		if (node.kind == ts.SyntaxKind.FunctionDeclaration) {
-			return true;
-		}
-		if (node.kind == ts.SyntaxKind.ClassDeclaration) {
-			return true;
-		}
-		if (node.kind == ts.SyntaxKind.VariableDeclaration) {
-			return true;
-		}
-		if (node.kind == ts.SyntaxKind.EnumDeclaration) {
-			return true;
-		}
-		if (node.kind == ts.SyntaxKind.InterfaceDeclaration) {
-			return true;
-		}
-	}
-	return false;
-}
-
-export function getNamedDeclarationKind(node) {
-	if (node.name && node.name.kind == ts.SyntaxKind.Identifier) {
-		if (node.kind == ts.SyntaxKind.MethodDeclaration) {
-			return SymbolKind.Method;
-		}
-		if (node.kind == ts.SyntaxKind.FunctionDeclaration) {
-			return SymbolKind.Function;
-		}
-		if (node.kind == ts.SyntaxKind.ClassDeclaration) {
-			return SymbolKind.Class;
-		}
-		if (node.kind == ts.SyntaxKind.VariableDeclaration) {
-			return SymbolKind.Variable;
-		}
-		if (node.kind == ts.SyntaxKind.EnumDeclaration) {
-			return SymbolKind.Enum;
-		}
-		if (node.kind == ts.SyntaxKind.InterfaceDeclaration) {
-			return SymbolKind.Interface;
-		}
-	}
-	return SymbolKind.String;
 }
 
 export function convertStringtoSymbolKind(kind: string): SymbolKind {
@@ -119,33 +66,7 @@ export function convertStringtoSymbolKind(kind: string): SymbolKind {
 	}
 }
 
-export function collectAllParents(node, parents) {
-	if (node.parent) {
-		parents.push(node.parent);
-		return collectAllParents(node.parent, parents);
-	} else {
-		return parents;
-	}
-}
-
-// function collectAllComments(node) {
-//     node.getChildren().forEach(child => {
-//         let comments1 = (ts as any).getLeadingCommentRanges(child.getSourceFile().getFullText(), child.getFullStart());
-//         let comments2 = (ts as any).getTrailingCommentRanges(child.getSourceFile().getFullText(), child.getEnd());
-//         if (comments1) {
-//             console.error("node kind = ", child.kind);
-//             console.error("node start = ", child.getStart());
-//             console.error('comment = ', child.getSourceFile().getFullText().substring(comments1[0].pos, comments1[0].end));
-//             // console.error("docs1 = ", comments1);
-
-//         }
-
-//         // console.error("docs2 = ", comments2);
-//         this.collectAllComments(child);
-//     });
-// }
-
-export function path2uri(root, file: string): string {
+export function path2uri(root: string, file: string): string {
 	let ret = 'file://';
 	if (!strict && process.platform == 'win32') {
 		ret += '/';
@@ -161,7 +82,7 @@ export function path2uri(root, file: string): string {
 
 export function uri2path(uri: string): string {
 	if (uri.startsWith('file://')) {
-		uri = uri.substring(7);
+		uri = uri.substring('file://'.length);
 		if (process.platform == 'win32') {
 			if (!strict) {
 				uri = uri.substring(1);
@@ -172,11 +93,11 @@ export function uri2path(uri: string): string {
 	return uri;
 }
 
-export function uri2reluri(uri, root: string): string {
+export function uri2reluri(uri: string, root: string): string {
 	return path2uri('', uri2relpath(uri, root));
 }
 
-export function uri2relpath(uri, root: string): string {
+export function uri2relpath(uri: string, root: string): string {
 	uri = uri2path(uri);
 	root = normalizePath(root);
 	if (uri.startsWith(root)) {
@@ -218,6 +139,7 @@ const globalTSPatterns = [
 	/(^|\/)globals?\.d\.ts$/,
 	/node_modules\/\@types\/node\/.*/,
 	/(^|\/)typings\/.*/,
+	/(^|\/)tsd\.d\.ts($|\/)/,
 ];
 
 // isGlobalTSFile returns whether or not the filename contains global
@@ -233,4 +155,35 @@ export function isGlobalTSFile(filename: string): boolean {
 		}
 	}
 	return false;
+}
+
+export function isDependencyFile(filename: string): boolean {
+	return filename.startsWith("node_modules/") || filename.indexOf("/node_modules/") !== -1;
+}
+
+export function isDeclarationFile(filename: string): boolean {
+	return filename.endsWith(".d.ts");
+}
+
+/**
+ * Converts filename to POSIX-style absolute one if filename does not denote absolute path already
+ */
+export function absolutize(filename: string) {
+	filename = normalizePath(filename);
+	// If POSIX path does not treats filename as absolute, let's try system-specific one
+	if (!path.posix.isAbsolute(filename) && !path.isAbsolute(filename)) {
+		filename = '/' + filename;
+	}
+	return filename;
+}
+
+/**
+ * Absolutizes directory name and cuts trailing slashes
+ */
+export function normalizeDir(dir: string) {
+	dir = absolutize(dir);
+	if (dir !== '/') {
+		dir = dir.replace(/[\/]+$/, '');
+	}
+	return dir;
 }

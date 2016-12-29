@@ -152,4 +152,3 @@ export namespace TextDocumentDidChangeNotification {
 		}
 	};
 }
-

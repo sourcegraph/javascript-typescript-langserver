@@ -1,23 +1,15 @@
-/// <reference path="../node_modules/vscode/thenable.d.ts" />
+/// <reference types="vscode" />
 
-import * as net from 'net';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
-import * as cluster from 'cluster';
-
-import { newConnection, registerLanguageHandler } from './connection';
 import { TypeScriptService } from './typescript-service';
+import * as server from './server';
 import * as util from './util';
-
 const program = require('commander');
-
-process.on('uncaughtException', (err) => {
-	console.error(err);
-});
 
 const defaultLspPort = 2089;
 const numCPUs = require('os').cpus().length;
+process.on('uncaughtException', (err: string) => {
+	console.error(err);
+});
 
 program
 	.version('0.0.1')
@@ -30,25 +22,4 @@ util.setStrict(program.strict);
 const lspPort = program.port || defaultLspPort;
 const clusterSize = program.cluster || numCPUs;
 
-if (cluster.isMaster) {
-	console.error(`Master node process spawning ${clusterSize} workers`)
-	for (let i = 0; i < clusterSize; ++i) {
-		const worker = cluster.fork().on('disconnect', () => {
-			console.error(`worker ${worker.process.pid} disconnect`)
-		});
-	}
-
-	cluster.on('exit', (worker, code, signal) => {
-		const reason = code === null ? signal : code;
-		console.error(`worker ${worker.process.pid} exit (${reason})`);
-	});
-} else {
-	console.error('Listening for incoming LSP connections on', lspPort);
-	var server = net.createServer((socket) => {
-		const connection = newConnection(socket, socket);
-		registerLanguageHandler(connection, program.strict, new TypeScriptService());
-		connection.listen();
-	});
-
-	server.listen(lspPort);
-}
+server.serve(clusterSize, lspPort, program.strict, () => new TypeScriptService());

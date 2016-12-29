@@ -1,16 +1,4 @@
-import * as net from 'net';
-import * as os from 'os';
-import * as fs from 'fs';
-
-import * as mocha from 'mocha';
-import * as chai from 'chai';
-
 import * as ts from 'typescript';
-
-import * as vscode from 'vscode-languageserver';
-
-import { FileInfo } from '../fs';
-import * as rt from '../request-type';
 import * as utils from './test-utils';
 
 import { TypeScriptService } from '../typescript-service';
@@ -125,6 +113,19 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 			it('hover over keyword (non-null)', function (done: (err?: Error) => void) {
 				utils.hover({
 					textDocument: {
+						uri: 'file:///a.ts'
+					},
+					position: {
+						line: 0,
+						character: 0
+					}
+				}, {
+						contents: []
+					}, done);
+			});
+			it('hover over non-existent file', function (done: (err?: Error) => void) {
+				utils.hover({
+					textDocument: {
 						uri: 'file:///foo/a.ts'
 					},
 					position: {
@@ -145,8 +146,48 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					'a.ts': "import * as m from 'dep';",
 					'typings': {
 						'dep.d.ts': "declare module 'dep' {}",
+					},
+					'src': {
+						'tsconfig.json': '\
+{\n\
+	"compilerOptions": {\n\
+	"target": "ES5",\n\
+	"module": "commonjs",\n\
+		"sourceMap": true,\n\
+		"noImplicitAny": false,\n\
+		"removeComments": false,\n\
+		"preserveConstEnums": true\n\
+	}\n\
+}',
+						'tsd.d.ts': '/// <reference path="../typings/dep.d.ts" />',
+						'dir': {
+							'index.ts': 'import * as m from "dep";',
+						}
 					}
 				}, done);
+			});
+			it('definition with tsd.d.ts', async function (done: (err?: Error) => void) {
+				utils.definition({
+					textDocument: {
+						uri: 'file:///src/dir/index.ts'
+					},
+					position: {
+						line: 0,
+						character: 20
+					}
+				}, {
+						uri: 'file:///typings/dep.d.ts',
+						range: {
+							start: {
+								line: 0,
+								character: 0
+							},
+							end: {
+								line: 0,
+								character: 23
+							}
+						}
+					}, done);
 			});
 			it('definition', async function (done: (err?: Error) => void) {
 				try {
@@ -201,7 +242,41 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					return;
 				}
 				done();
-			})
+			});
+			afterEach(function (done: () => void) {
+				utils.tearDown(done);
+			});
+		});
+		describe('global module', function () {
+			before(function (done: () => void) {
+				utils.setUp(newLanguageHandler(), {
+					'a.ts': "const rt: GQL.Rt;",
+					'interfaces.d.ts': 'declare namespace GQL { interface Rt { } }'
+				}, done);
+			});
+			it('definition', async function (done: (err?: Error) => void) {
+				utils.definition({
+					textDocument: {
+						uri: 'file:///a.ts'
+					},
+					position: {
+						line: 0,
+						character: 14
+					}
+				}, {
+						uri: 'file:///interfaces.d.ts',
+						range: {
+							start: {
+								line: 0,
+								character: 24
+							},
+							end: {
+								line: 0,
+								character: 40
+							}
+						}
+					}, done);
+			});
 			afterEach(function (done: () => void) {
 				utils.tearDown(done);
 			});
@@ -272,7 +347,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					return;
 				}
 				done();
-			})
+			});
 			afterEach(function (done: () => void) {
 				utils.tearDown(done);
 			});
@@ -308,7 +383,12 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					'a.ts': "class a { foo() { const i = 1;} }",
 					'foo': {
 						'b.ts': "class b { bar: number; baz(): number { return this.bar;}}; function qux() {}"
-					}
+					},
+					'node_modules': {
+						'dep': {
+							'index.ts': 'class DepClass {}',
+						},
+					},
 				}, done);
 			});
 			it('document/symbol:a.ts', function (done: (err?: Error) => void) {
@@ -473,12 +553,29 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 							"name": "a"
 						},
 						{
-							"containerName": "a",
-							"kind": 6,
+							"kind": 5,
 							"location": {
 								"range": {
 									"end": {
-										"character": 31,
+										"character": 57,
+										"line": 0
+									},
+									"start": {
+										"character": 0,
+										"line": 0
+									}
+								},
+								"uri": "file:///foo/b.ts"
+							},
+							"name": "b"
+						},
+						{
+							"containerName": "b",
+							"kind": 7,
+							"location": {
+								"range": {
+									"end": {
+										"character": 22,
 										"line": 0
 									},
 									"start": {
@@ -486,27 +583,9 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 										"line": 0
 									}
 								},
-								"uri": "file:///a.ts"
+								"uri": "file:///foo/b.ts"
 							},
-							"name": "foo"
-						},
-						{
-							"containerName": "foo",
-							"kind": 15,
-							"location": {
-								"range": {
-									"end": {
-										"character": 29,
-										"line": 0
-									},
-									"start": {
-										"character": 24,
-										"line": 0
-									}
-								},
-								"uri": "file:///a.ts"
-							},
-							"name": "i"
+							"name": "bar"
 						}
 					], done);
 			});
@@ -554,6 +633,61 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					]
 
 					, done);
+			});
+			it('workspace symbols does not return symbols in dependencies', function (done: (err?: Error) => void) {
+				utils.symbols({
+					query: 'DepClass',
+					limit: 100
+				}, [], done);
+			});
+			afterEach(function (done: () => void) {
+				utils.tearDown(done);
+			});
+		});
+		describe('workspace/symbol with dependencies', function () {
+			before(function (done: () => void) {
+				utils.setUp(newLanguageHandler(), {
+					'a.ts': "class MyClass {}",
+					'node_modules': {
+						'dep': {
+							'index.d.ts': 'class TheirClass {}',
+						},
+					},
+				}, done);
+			});
+			it('workspace symbols with empty query', function (done: (err?: Error) => void) {
+				utils.symbols({
+					query: '',
+					limit: 100
+				}, [{
+					"kind": 5,
+					"location": {
+						"range": {
+							"end": {
+								"character": 16,
+								"line": 0
+							},
+							"start": {
+								"character": 0,
+								"line": 0
+							},
+						},
+						"uri": "file:///a.ts",
+					},
+					"name": "MyClass"
+				}], done);
+			});
+			it('workspace symbols with not-empty query', function (done: (err?: Error) => void) {
+				utils.symbols({
+					query: 'TheirClass',
+					limit: 100
+				}, [], done);
+			});
+			it('workspace symbols does not return symbols in dependencies', function (done: (err?: Error) => void) {
+				utils.symbols({
+					query: 'DepClass',
+					limit: 100
+				}, [], done);
 			});
 			afterEach(function (done: () => void) {
 				utils.tearDown(done);

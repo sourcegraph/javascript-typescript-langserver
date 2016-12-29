@@ -1,21 +1,12 @@
 import {
-	IConnection,
-	createConnection,
 	InitializeParams,
 	InitializeResult,
-	TextDocuments,
 	TextDocumentPositionParams,
-	TextDocumentSyncKind,
-	Definition,
 	ReferenceParams,
-	Position,
 	Location,
 	Hover,
-	WorkspaceSymbolParams,
 	DocumentSymbolParams,
 	SymbolInformation,
-	RequestType,
-	Range,
 	DidOpenTextDocumentParams,
 	DidCloseTextDocumentParams,
 	DidChangeTextDocumentParams,
@@ -41,10 +32,10 @@ export interface LanguageHandler {
 	getWorkspaceSymbols(params: rt.WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]>;
 	getDocumentSymbol(params: DocumentSymbolParams): Promise<SymbolInformation[]>;
 	getWorkspaceReference(params: rt.WorkspaceReferenceParams): Promise<rt.ReferenceInformation[]>;
-	didOpen(params: DidOpenTextDocumentParams);
-	didChange(params: DidChangeTextDocumentParams);
-	didClose(params: DidCloseTextDocumentParams);
-	didSave(params: DidSaveTextDocumentParams);
+	didOpen(params: DidOpenTextDocumentParams): Promise<void>;
+	didChange(params: DidChangeTextDocumentParams): Promise<void>;
+	didClose(params: DidCloseTextDocumentParams): Promise<void>;
+	didSave(params: DidSaveTextDocumentParams): Promise<void>;
 }
 
 

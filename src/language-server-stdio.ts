@@ -1,14 +1,10 @@
-var fs = require('fs');
-var path = require('path');
-var os = require('os');
-
-var program = require('commander');
-
 import { newConnection, registerLanguageHandler } from './connection';
 import { TypeScriptService } from './typescript-service';
 import * as util from './util';
 
-process.on('uncaughtException', (err) => {
+var program = require('commander');
+
+process.on('uncaughtException', (err: string) => {
 	console.error(err);
 });
 

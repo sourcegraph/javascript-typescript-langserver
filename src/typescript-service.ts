@@ -1,24 +1,15 @@
-import * as fs from 'fs';
-import * as os from 'os';
 import * as path_ from 'path';
 import * as ts from 'typescript';
 import {
-	IConnection,
-	createConnection,
 	InitializeParams,
 	InitializeResult,
-	TextDocuments,
 	TextDocumentPositionParams,
 	TextDocumentSyncKind,
-	Definition,
 	ReferenceParams,
-	Position,
 	Location,
 	Hover,
-	WorkspaceSymbolParams,
 	DocumentSymbolParams,
 	SymbolInformation,
-	RequestType,
 	Range,
 	DidOpenTextDocumentParams,
 	DidCloseTextDocumentParams,
@@ -34,9 +25,6 @@ import * as pm from './project-manager';
 import * as rt from './request-type';
 
 import { LanguageHandler } from './lang-handler';
-
-var sanitizeHtml = require('sanitize-html');
-var JSONPath = require('jsonpath-plus');
 
 /**
  * TypeScriptService handles incoming requests and return
@@ -106,11 +94,14 @@ export class TypeScriptService implements LanguageHandler {
 		}
 
 		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
-		const defs: ts.DefinitionInfo[] = configuration.service.getDefinitionAtPosition(fileName, offset);
+		const defs: ts.DefinitionInfo[] = configuration.getService().getDefinitionAtPosition(fileName, offset);
 		const ret = [];
 		if (defs) {
 			for (let def of defs) {
 				const sourceFile = this.getSourceFile(configuration, def.fileName);
+				if (!sourceFile) {
+					throw new Error('expected source file "' + def.fileName + '" to exist in configuration');
+				}
 				const start = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start);
 				const end = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start + def.textSpan.length);
 				ret.push(Location.create(this.defUri(def.fileName), {
@@ -122,7 +113,7 @@ export class TypeScriptService implements LanguageHandler {
 		return ret;
 	}
 
-	async getHover(params: TextDocumentPositionParams): Promise<Hover> {
+	async getHover(params: TextDocumentPositionParams): Promise<Hover | null> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root)
 		const line = params.position.line;
 		const column = params.position.character;
@@ -132,16 +123,15 @@ export class TypeScriptService implements LanguageHandler {
 		const configuration = this.projectManager.getConfiguration(fileName);
 		await configuration.ensureBasicFiles();
 
-		const sourceFile = this.getSourceFile(configuration, fileName);
+		let sourceFile = this.getSourceFile(configuration, fileName);
 		if (!sourceFile) {
 			return null;
 		}
 		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
-		const info = configuration.service.getQuickInfoAtPosition(fileName, offset);
+		const info = configuration.getService().getQuickInfoAtPosition(fileName, offset);
 		if (!info) {
 			return null;
 		}
-
 		const contents = [];
 		contents.push({
 			language: 'typescript',
@@ -177,15 +167,14 @@ export class TypeScriptService implements LanguageHandler {
 		const prepared = new Date().getTime();
 
 		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
-		const refs = configuration.service.getReferencesAtPosition(fileName, offset);
+		const refs = configuration.getService().getReferencesAtPosition(fileName, offset);
 
 		const fetched = new Date().getTime();
-		const ret = [];
-		const tasks = [];
+		const tasks: AsyncFunction<Location, Error>[] = [];
 
 		if (refs) {
 			for (let ref of refs) {
-				tasks.push(this.transformReference(this.root, configuration.program, ref));
+				tasks.push(this.transformReference(this.root, configuration.getProgram(), ref));
 			}
 		}
 		return new Promise<Location[]>((resolve, reject) => {
@@ -197,35 +186,21 @@ export class TypeScriptService implements LanguageHandler {
 		});
 	}
 
-	getWorkspaceSymbols(params: rt.WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]> {
+	async getWorkspaceSymbols(params: rt.WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]> {
 		const query = params.query;
 		const limit = params.limit;
-		return this.projectManager.ensureFilesForWorkspaceSymbol().then(() => {
-			if (!query && this.emptyQueryWorkspaceSymbols) {
-				return this.emptyQueryWorkspaceSymbols;
-			}
 
-			const p = new Promise<SymbolInformation[]>((resolve, reject) => {
-				const configurations = this.projectManager.getConfigurations();
-				const index = 0;
-				const items = [];
-				this.collectWorkspaceSymbols(query, limit, configurations, index, items, () => {
-					if (!query) {
-						const sortedItems = items.sort((a, b) =>
-							a.matchKind - b.matchKind ||
-							a.name.toLocaleLowerCase().localeCompare(b.name.toLocaleLowerCase()));
-						return resolve(sortedItems);
-					}
-					return resolve(items);
-				});
-			});
-			if (!query) {
-				this.emptyQueryWorkspaceSymbols = p;
-			}
-			return p;
-		}, (err) => {
-			throw err;
-		});
+		await this.projectManager.ensureFilesForWorkspaceSymbol();
+
+		if (!query && this.emptyQueryWorkspaceSymbols) {
+			return this.emptyQueryWorkspaceSymbols;
+		}
+		const configs = this.projectManager.getConfigurations();
+		const itemsPromise = this.collectWorkspaceSymbols(query, configs);
+		if (!query) {
+			this.emptyQueryWorkspaceSymbols = itemsPromise;
+		}
+		return (await itemsPromise).slice(0, limit);
 	}
 
 	async getDocumentSymbol(params: DocumentSymbolParams): Promise<SymbolInformation[]> {
@@ -236,7 +211,10 @@ export class TypeScriptService implements LanguageHandler {
 		const config = this.projectManager.getConfiguration(uri);
 		await config.ensureBasicFiles();
 		const sourceFile = this.getSourceFile(config, fileName);
-		const tree = config.service.getNavigationTree(fileName);
+		if (!sourceFile) {
+			return [];
+		}
+		const tree = config.getService().getNavigationTree(fileName);
 		const result: SymbolInformation[] = [];
 		this.flattenNavigationTreeItem(tree, null, sourceFile, result);
 		return Promise.resolve(result);
@@ -247,15 +225,14 @@ export class TypeScriptService implements LanguageHandler {
 		return this.projectManager.ensureFilesForWorkspaceSymbol().then(() => {
 			return Promise.all(this.projectManager.getConfigurations().map(async (config) => {
 				await config.ensureAllFiles();
-				for (let source of config.service.getProgram().getSourceFiles().sort((a, b) => a.fileName.localeCompare(b.fileName))) {
+				for (let source of config.getService().getProgram().getSourceFiles().sort((a, b) => a.fileName.localeCompare(b.fileName))) {
 					if (util.normalizePath(source.fileName).indexOf(`${path_.posix.sep}node_modules${path_.posix.sep}`) !== -1) {
 						continue;
 					}
 					this.walkMostAST(source, (node) => {
 						switch (node.kind) {
 							case ts.SyntaxKind.Identifier: {
-								const id = node as ts.Identifier;
-								const defs = config.service.getDefinitionAtPosition(source.fileName, node.pos + 1);
+								const defs = config.getService().getDefinitionAtPosition(source.fileName, node.pos + 1);
 
 								if (defs && defs.length > 0) {
 									const def = defs[0];
@@ -313,12 +290,12 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.TypeParameter: {
 				const n = node as ts.TypeParameterDeclaration;
-				children.push(n.name, n.constraint, n.expression);
+				pushall(children, n.name, n.constraint, n.expression);
 				break;
 			}
 			case ts.SyntaxKind.Parameter: {
 				const n = node as ts.ParameterDeclaration;
-				children.push(n.name, n.type, n.initializer);
+				pushall(children, n.name, n.type, n.initializer);
 				break;
 			}
 			case ts.SyntaxKind.Decorator: {
@@ -328,17 +305,17 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.PropertySignature: {
 				const n = node as ts.PropertySignature;
-				children.push(n.name, n.type, n.initializer);
+				pushall(children, n.name, n.type, n.initializer);
 				break;
 			}
 			case ts.SyntaxKind.PropertyDeclaration: {
 				const n = node as ts.PropertyDeclaration;
-				children.push(n.name, n.type, n.initializer);
+				pushall(children, n.name, n.type, n.initializer);
 				break;
 			}
 			case ts.SyntaxKind.MethodSignature: {
 				const n = node as ts.MethodSignature;
-				children.push(n.name, n.type);
+				pushall(children, n.name, n.type);
 				if (n.typeParameters) {
 					children.push(...n.typeParameters);
 				}
@@ -349,12 +326,12 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.MethodDeclaration: {
 				const n = node as ts.MethodDeclaration;
-				children.push(n.name, n.body);
+				pushall(children, n.name, n.body);
 				break;
 			}
 			case ts.SyntaxKind.Constructor: {
 				const n = node as ts.ConstructorDeclaration;
-				children.push(n.name, n.body);
+				pushall(children, n.name, n.body);
 				break;
 			}
 			case ts.SyntaxKind.GetAccessor: {
@@ -369,7 +346,7 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.CallSignature: {
 				const n = node as ts.CallSignatureDeclaration;
-				children.push(n.name, n.type);
+				pushall(children, n.name, n.type);
 				if (n.typeParameters) {
 					children.push(...n.typeParameters);
 				}
@@ -380,7 +357,7 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.ConstructSignature: {
 				const n = node as ts.ConstructSignatureDeclaration;
-				children.push(n.name, n.type);
+				pushall(children, n.name, n.type);
 				if (n.typeParameters) {
 					children.push(...n.typeParameters);
 				}
@@ -391,7 +368,7 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.IndexSignature: {
 				const n = node as ts.IndexSignatureDeclaration;
-				children.push(n.name, n.type);
+				pushall(children, n.name, n.type);
 				if (n.typeParameters) {
 					children.push(...n.typeParameters);
 				}
@@ -416,8 +393,8 @@ export class TypeScriptService implements LanguageHandler {
 			case ts.SyntaxKind.ConstructorType:
 			case ts.SyntaxKind.FunctionType: {
 				const n = node as ts.FunctionOrConstructorTypeNode;
-				children.push(n.name, n.type);
-				children.push(n.name, n.type);
+				pushall(children, n.name, n.type);
+				pushall(children, n.name, n.type);
 				if (n.typeParameters) {
 					children.push(...n.typeParameters);
 				}
@@ -433,7 +410,7 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.TypeLiteral: {
 				const n = node as ts.TypeLiteralNode;
-				children.push(n.name);
+				pushall(children, n.name);
 				children.push(...n.members);
 				break;
 			}
@@ -471,7 +448,7 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.BindingElement: {
 				const n = node as ts.BindingElement;
-				children.push(n.propertyName, n.name, n.initializer);
+				pushall(children, n.propertyName, n.name, n.initializer);
 				break;
 			}
 			case ts.SyntaxKind.ArrayLiteralExpression: {
@@ -491,12 +468,12 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.ElementAccessExpression: {
 				const n = node as ts.ElementAccessExpression;
-				children.push(n.expression, n.argumentExpression);
+				pushall(children, n.expression, n.argumentExpression);
 				break;
 			}
 			case ts.SyntaxKind.CallExpression: {
 				const n = node as ts.CallExpression;
-				children.push(n.name, n.expression, ...n.arguments);
+				pushall(children, n.name, n.expression, ...n.arguments);
 				if (n.typeArguments) {
 					children.push(...n.typeArguments);
 				}
@@ -504,7 +481,7 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.NewExpression: {
 				const n = node as ts.NewExpression;
-				children.push(n.name, n.expression, ...n.arguments);
+				pushall(children, n.name, n.expression, ...n.arguments);
 				if (n.typeArguments) {
 					children.push(...n.typeArguments);
 				}
@@ -527,7 +504,7 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.FunctionExpression: {
 				const n = node as ts.FunctionExpression;
-				children.push(n.name, n.body);
+				pushall(children, n.name, n.body);
 				break;
 			}
 			case ts.SyntaxKind.ArrowFunction: {
@@ -582,7 +559,7 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.YieldExpression: {
 				const n = node as ts.YieldExpression;
-				children.push(n.expression);
+				pushall(children, n.expression);
 				break;
 			}
 			case ts.SyntaxKind.SpreadElementExpression: {
@@ -592,7 +569,7 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.ClassExpression: {
 				const n = node as ts.ClassExpression;
-				children.push(n.name, ...n.members);
+				pushall(children, n.name, ...n.members);
 				if (n.typeParameters) {
 					children.push(...n.typeParameters);
 				}
@@ -626,7 +603,9 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.SemicolonClassElement: {
 				const n = node as ts.SemicolonClassElement;
-				children.push(n.name);
+				if (n.name) {
+					children.push(n.name);
+				}
 				break;
 			}
 			case ts.SyntaxKind.Block: {
@@ -646,7 +625,7 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.IfStatement: {
 				const n = node as ts.IfStatement;
-				children.push(n.expression, n.thenStatement, n.elseStatement);
+				pushall(children, n.expression, n.thenStatement, n.elseStatement);
 				break;
 			}
 			case ts.SyntaxKind.DoStatement: {
@@ -661,7 +640,7 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.ForStatement: {
 				const n = node as ts.ForStatement;
-				children.push(n.initializer, n.condition, n.incrementor, n.statement);
+				pushall(children, n.initializer, n.condition, n.incrementor, n.statement);
 				break;
 			}
 			case ts.SyntaxKind.ForInStatement: {
@@ -676,17 +655,23 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.ContinueStatement: {
 				const n = node as ts.ContinueStatement;
-				children.push(n.label);
+				if (n.label) {
+					children.push(n.label);
+				}
 				break;
 			}
 			case ts.SyntaxKind.BreakStatement: {
 				const n = node as ts.BreakStatement;
-				children.push(n.label);
+				if (n.label) {
+					children.push(n.label);
+				}
 				break;
 			}
 			case ts.SyntaxKind.ReturnStatement: {
 				const n = node as ts.ReturnStatement;
-				children.push(n.expression);
+				if (n.expression) {
+					children.push(n.expression);
+				}
 				break;
 			}
 			case ts.SyntaxKind.WithStatement: {
@@ -711,12 +696,12 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.TryStatement: {
 				const n = node as ts.TryStatement;
-				children.push(n.tryBlock, n.catchClause, n.finallyBlock);
+				pushall(children, n.tryBlock, n.catchClause, n.finallyBlock);
 				break;
 			}
 			case ts.SyntaxKind.VariableDeclaration: {
 				const n = node as ts.VariableDeclaration;
-				children.push(n.name, n.type, n.initializer);
+				pushall(children, n.name, n.type, n.initializer);
 				break;
 			}
 			case ts.SyntaxKind.VariableDeclarationList: {
@@ -726,7 +711,7 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.FunctionDeclaration: {
 				const n = node as ts.FunctionDeclaration;
-				children.push(n.name, n.body, n.type, ...n.parameters);
+				pushall(children, n.name, n.body, n.type, ...n.parameters);
 				if (n.typeParameters) {
 					children.push(...n.typeParameters);
 				}
@@ -734,7 +719,7 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.ClassDeclaration: {
 				const n = node as ts.ClassDeclaration;
-				children.push(n.name, ...n.members);
+				pushall(children, n.name, ...n.members);
 				if (n.typeParameters) {
 					children.push(...n.typeParameters);
 				}
@@ -769,7 +754,7 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.ModuleDeclaration: {
 				const n = node as ts.ModuleDeclaration;
-				children.push(n.name, n.body);
+				pushall(children, n.name, n.body);
 				break;
 			}
 			case ts.SyntaxKind.ModuleBlock: {
@@ -794,12 +779,12 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.ImportDeclaration: {
 				const n = node as ts.ImportDeclaration;
-				children.push(n.importClause, n.moduleSpecifier);
+				pushall(children, n.importClause, n.moduleSpecifier);
 				break;
 			}
 			case ts.SyntaxKind.ImportClause: {
 				const n = node as ts.ImportClause;
-				children.push(n.name, n.namedBindings);
+				pushall(children, n.name, n.namedBindings);
 				break;
 			}
 			case ts.SyntaxKind.NamespaceImport: {
@@ -814,17 +799,17 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.ImportSpecifier: {
 				const n = node as ts.ImportSpecifier;
-				children.push(n.propertyName, n.name);
+				pushall(children, n.propertyName, n.name);
 				break;
 			}
 			case ts.SyntaxKind.ExportAssignment: {
 				const n = node as ts.ExportAssignment;
-				children.push(n.name, n.expression);
+				pushall(children, n.name, n.expression);
 				break;
 			}
 			case ts.SyntaxKind.ExportDeclaration: {
 				const n = node as ts.ExportDeclaration;
-				children.push(n.exportClause, n.moduleSpecifier, n.name);
+				pushall(children, n.exportClause, n.moduleSpecifier, n.name);
 				break;
 			}
 			case ts.SyntaxKind.NamedExports: {
@@ -834,17 +819,19 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.ExportSpecifier: {
 				const n = node as ts.ExportSpecifier;
-				children.push(n.propertyName, n.name);
+				pushall(children, n.propertyName, n.name);
 				break;
 			}
 			case ts.SyntaxKind.MissingDeclaration: {
 				const n = node as ts.MissingDeclaration;
-				children.push(n.name);
+				if (n.name) {
+					children.push(n.name);
+				}
 				break;
 			}
 			case ts.SyntaxKind.ExternalModuleReference: {
 				const n = node as ts.ExternalModuleReference;
-				children.push(n.expression);
+				pushall(children, n.expression);
 				break;
 			}
 			case ts.SyntaxKind.JsxElement: {
@@ -869,7 +856,7 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.JsxAttribute: {
 				const n = node as ts.JsxAttribute;
-				children.push(n.name, n.initializer);
+				pushall(children, n.name, n.initializer);
 				break;
 			}
 			case ts.SyntaxKind.JsxSpreadAttribute: {
@@ -879,7 +866,9 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.JsxExpression: {
 				const n = node as ts.JsxExpression;
-				children.push(n.expression);
+				if (n.expression) {
+					children.push(n.expression);
+				}
 				break;
 			}
 			case ts.SyntaxKind.CaseClause: {
@@ -911,12 +900,12 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.ShorthandPropertyAssignment: {
 				const n = node as ts.ShorthandPropertyAssignment;
-				children.push(n.name, n.objectAssignmentInitializer);
+				pushall(children, n.name, n.objectAssignmentInitializer);
 				break;
 			}
 			case ts.SyntaxKind.EnumMember: {
 				const n = node as ts.EnumMember;
-				children.push(n.name, n.initializer);
+				pushall(children, n.name, n.initializer);
 				break;
 			}
 			case ts.SyntaxKind.SourceFile: {
@@ -961,7 +950,7 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.JSDocRecordMember: {
 				const n = node as ts.JSDocRecordMember;
-				children.push(n.name, n.type, n.initializer);
+				pushall(children, n.name, n.type, n.initializer);
 				break;
 			}
 			case ts.SyntaxKind.JSDocTypeReference: {
@@ -976,7 +965,7 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.JSDocFunctionType: {
 				const n = node as ts.JSDocFunctionType;
-				children.push(n.name, n.type, ...n.parameters);
+				pushall(children, n.name, n.type, ...n.parameters);
 				if (n.typeParameters) {
 					children.push(...n.typeParameters);
 				}
@@ -1011,7 +1000,10 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.JSDocParameterTag: {
 				const n = node as ts.JSDocParameterTag;
-				children.push(n.preParameterName, n.typeExpression, n.postParameterName, n.parameterName);
+				pushall(children, n.typeExpression, n.postParameterName, n.parameterName);
+				if (n.preParameterName) {
+					children.push(n.preParameterName);
+				}
 				break;
 			}
 			case ts.SyntaxKind.JSDocReturnTag: {
@@ -1031,7 +1023,10 @@ export class TypeScriptService implements LanguageHandler {
 			}
 			case ts.SyntaxKind.JSDocTypedefTag: {
 				const n = node as ts.JSDocTypedefTag;
-				children.push(n.fullName, n.name, n.typeExpression, n.jsDocTypeLiteral);
+				pushall(children, n.fullName, n.typeExpression, n.jsDocTypeLiteral);
+				if (n.name) {
+					children.push(n.name);
+				}
 				break;
 			}
 			case ts.SyntaxKind.JSDocPropertyTag: {
@@ -1044,7 +1039,9 @@ export class TypeScriptService implements LanguageHandler {
 				if (n.jsDocPropertyTags) {
 					children.push(...n.jsDocPropertyTags);
 				}
-				children.push(n.jsDocTypeTag);
+				if (n.jsDocTypeTag) {
+					children.push(n.jsDocTypeTag);
+				}
 				break;
 			}
 			case ts.SyntaxKind.JSDocLiteralType: {
@@ -1067,7 +1064,7 @@ export class TypeScriptService implements LanguageHandler {
 		}
 	}
 
-	didOpen(params: DidOpenTextDocumentParams) {
+	didOpen(params: DidOpenTextDocumentParams): Promise<void> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		return this.projectManager.ensureFilesForHoverAndDefinition(uri).then(() => {
 			this.projectManager.didOpen(util.uri2path(uri), params.textDocument.text);
@@ -1076,7 +1073,7 @@ export class TypeScriptService implements LanguageHandler {
 		});
 	}
 
-	didChange(params: DidChangeTextDocumentParams) {
+	async didChange(params: DidChangeTextDocumentParams): Promise<void> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		let text = null;
 		params.contentChanges.forEach((change) => {
@@ -1091,7 +1088,7 @@ export class TypeScriptService implements LanguageHandler {
 		this.projectManager.didChange(util.uri2path(uri), text);
 	}
 
-	didSave(params: DidSaveTextDocumentParams) {
+	didSave(params: DidSaveTextDocumentParams): Promise<void> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		return this.projectManager.ensureFilesForHoverAndDefinition(uri).then(() => {
 			this.projectManager.didSave(util.uri2path(uri));
@@ -1100,7 +1097,7 @@ export class TypeScriptService implements LanguageHandler {
 		});
 	}
 
-	didClose(params: DidCloseTextDocumentParams) {
+	didClose(params: DidCloseTextDocumentParams): Promise<void> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		return this.projectManager.ensureFilesForHoverAndDefinition(uri).then(() => {
 			this.projectManager.didClose(util.uri2path(uri));
@@ -1114,18 +1111,18 @@ export class TypeScriptService implements LanguageHandler {
      * @param configuration project configuration
      * @param fileName file name to fetch source file for or create it
      */
-	private getSourceFile(configuration: pm.ProjectConfiguration, fileName: string): ts.SourceFile {
-		const sourceFile = configuration.program.getSourceFile(fileName);
+	private getSourceFile(configuration: pm.ProjectConfiguration, fileName: string): ts.SourceFile | null {
+		const sourceFile = configuration.getProgram().getSourceFile(fileName);
 		if (sourceFile) {
 			return sourceFile;
 		}
 		if (!this.projectManager.hasFile(fileName)) {
 			return null;
 		}
-		configuration.host.addFile(fileName);
-		// requery program object to synchonize LanguageService's data
-		configuration.program = configuration.service.getProgram();
-		return configuration.program.getSourceFile(fileName);
+		configuration.getHost().addFile(fileName);
+		configuration.syncProgram();
+
+		return configuration.getProgram().getSourceFile(fileName);
 	}
 
     /**
@@ -1134,9 +1131,12 @@ export class TypeScriptService implements LanguageHandler {
 	private transformReference(root: string, program: ts.Program, ref: ts.ReferenceEntry): AsyncFunction<Location, Error> {
 		return (callback: (err?: Error, result?: Location) => void) => {
 			const sourceFile = program.getSourceFile(ref.fileName);
+			if (!sourceFile) {
+				return callback(new Error('source file "' + ref.fileName + '" does not exist'));
+			}
 			let start = ts.getLineAndCharacterOfPosition(sourceFile, ref.textSpan.start);
 			let end = ts.getLineAndCharacterOfPosition(sourceFile, ref.textSpan.start + ref.textSpan.length);
-			callback(null, Location.create(util.path2uri(root, ref.fileName), {
+			callback(undefined, Location.create(util.path2uri(root, ref.fileName), {
 				start: start,
 				end: end
 			}));
@@ -1144,72 +1144,46 @@ export class TypeScriptService implements LanguageHandler {
 	}
 
     /**
-     * Produces async function that converts NavigateToItem object to SymbolInformation
+     * transformNavItem transforms a NavigateToItem instance to a SymbolInformation instance
      */
-	private transformNavItem(root: string, program: ts.Program, item: ts.NavigateToItem): AsyncFunction<SymbolInformation, Error> {
-		return (callback: (err?: Error, result?: SymbolInformation) => void) => {
-			const sourceFile = program.getSourceFile(item.fileName);
-			let start = ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start);
-			let end = ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start + item.textSpan.length);
-			callback(null, SymbolInformation.create(item.name,
-				util.convertStringtoSymbolKind(item.kind),
-				Range.create(start.line, start.character, end.line, end.character),
-				this.defUri(item.fileName), item.containerName));
+	private transformNavItem(root: string, program: ts.Program, item: ts.NavigateToItem): SymbolInformation {
+		const sourceFile = program.getSourceFile(item.fileName);
+		if (!sourceFile) {
+			throw new Error('source file "' + item.fileName + '" does not exist');
 		}
+		let start = ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start);
+		let end = ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start + item.textSpan.length);
+		return SymbolInformation.create(item.name,
+			util.convertStringtoSymbolKind(item.kind),
+			Range.create(start.line, start.character, end.line, end.character),
+			this.defUri(item.fileName), item.containerName);
 	}
 
-	/**
-     * Collects workspace symbols from all sub-projects until there are no more sub-projects left or we found enough items
-     *
-     * @param query search query
-     * @param limit max number of items to fetch (if greather than zero)
-     * @param configurations array of project configurations
-     * @param index configuration's index to process. Execution stops if there are no more configs to process or we collected enough items
-     * @param items array to fill with the items found
-     * @param callback callback to call when done
-     */
-	private collectWorkspaceSymbols(query: string,
-		limit: number,
-		configurations: pm.ProjectConfiguration[],
-		index: number,
-		items: SymbolInformation[],
-		callback: () => void) {
-		if (index >= configurations.length) {
-			// safety first
-			return callback();
-		}
-		const configuration = configurations[index];
-		configuration.ensureAllFiles().then(() => {
-			const maybeEnough = () => {
-				if (limit && items.length >= limit || index == configurations.length - 1) {
-					return callback();
-				}
-				this.collectWorkspaceSymbols(query, limit, configurations, index + 1, items, callback);
-			};
-
-			setImmediate(() => {
-				const chunkSize = limit ? Math.min(limit, limit - items.length) : undefined;
-				setImmediate(() => {
-					if (query) {
-						const chunk = configuration.service.getNavigateToItems(query, chunkSize, undefined, true);
-						const tasks = [];
-						chunk.forEach((item) => {
-							tasks.push(this.transformNavItem(this.root, configuration.program, item));
-						});
-						async.parallel(tasks, (err: Error, results: SymbolInformation[]) => {
-							Array.prototype.push.apply(items, results);
-							maybeEnough();
-						});
-					} else {
-						const chunk = this.getNavigationTreeItems(configuration, chunkSize);
-						Array.prototype.push.apply(items, chunk);
-						maybeEnough();
+	private async collectWorkspaceSymbols(query: string, configs: pm.ProjectConfiguration[]): Promise<SymbolInformation[]> {
+		const configSymbols: SymbolInformation[][] = await Promise.all(
+			configs.map(async (config) => {
+				const symbols: SymbolInformation[] = [];
+				await config.ensureAllFiles();
+				if (query) {
+					const items = config.getService().getNavigateToItems(query, undefined, undefined, true);
+					for (const item of items) {
+						symbols.push(this.transformNavItem(this.root, config.getProgram(), item));
 					}
-				});
-			}, callback);
-		}, (err) => {
-			throw err;
-		});
+				} else {
+					Array.prototype.push.apply(symbols, this.getNavigationTreeItems(config));
+				}
+				return symbols;
+			})
+		);
+		const symbols: SymbolInformation[] = [];
+		for (const cs of configSymbols) {
+			Array.prototype.push.apply(symbols, cs);
+		}
+
+		if (!query) {
+			return symbols.sort((a, b) => a.name.toLocaleLowerCase().localeCompare(b.name.toLocaleLowerCase()));
+		}
+		return symbols;
 	}
 
     /**
@@ -1228,14 +1202,14 @@ export class TypeScriptService implements LanguageHandler {
      * Fetches up to limit navigation bar items from given project, flattens them
      */
 	private getNavigationTreeItems(configuration: pm.ProjectConfiguration, limit?: number): SymbolInformation[] {
-		const result = [];
+		const result: SymbolInformation[] = [];
 		const libraries = pm.getTypeScriptLibraries();
-		for (const sourceFile of configuration.program.getSourceFiles().sort((a, b) => a.fileName.localeCompare(b.fileName))) {
+		for (const sourceFile of configuration.getProgram().getSourceFiles().sort((a, b) => a.fileName.localeCompare(b.fileName))) {
 			// excluding navigation items from TypeScript libraries
 			if (libraries.has(util.normalizePath(sourceFile.fileName))) {
 				continue;
 			}
-			const tree = configuration.service.getNavigationTree(sourceFile.fileName);
+			const tree = configuration.getService().getNavigationTree(sourceFile.fileName);
 			this.flattenNavigationTreeItem(tree, null, sourceFile, result, limit);
 			if (limit && result.length >= limit) {
 				break;
@@ -1248,7 +1222,7 @@ export class TypeScriptService implements LanguageHandler {
      * Flattens navigation tree by transforming it to one-dimensional array.
      * Some items (source files, modules) may be excluded 
      */
-	private flattenNavigationTreeItem(item: ts.NavigationTree, parent: ts.NavigationTree, sourceFile: ts.SourceFile, result: SymbolInformation[], limit?: number) {
+	private flattenNavigationTreeItem(item: ts.NavigationTree, parent: ts.NavigationTree | null, sourceFile: ts.SourceFile, result: SymbolInformation[], limit?: number) {
 		if (!limit || result.length < limit) {
 			const acceptable = TypeScriptService.isAcceptableNavigationTreeItem(item);
 			if (acceptable) {
@@ -1267,7 +1241,7 @@ export class TypeScriptService implements LanguageHandler {
     /**
      * Transforms NavigationTree to SymbolInformation
      */
-	private transformNavigationTreeItem(item: ts.NavigationTree, parent: ts.NavigationTree, sourceFile: ts.SourceFile): SymbolInformation {
+	private transformNavigationTreeItem(item: ts.NavigationTree, parent: ts.NavigationTree | null, sourceFile: ts.SourceFile): SymbolInformation {
 		const span = item.spans[0];
 		let start = ts.getLineAndCharacterOfPosition(sourceFile, span.start);
 		let end = ts.getLineAndCharacterOfPosition(sourceFile, span.start + span.length);
@@ -1295,5 +1269,13 @@ export class TypeScriptService implements LanguageHandler {
 		}
 		return true;
 	}
+}
 
+function pushall<T>(arr: T[], ...elems: (T | null | undefined)[]): number {
+	for (const e of elems) {
+		if (e) {
+			arr.push(e);
+		}
+	}
+	return arr.length;
 }

@@ -12,15 +12,15 @@ export interface FileInfo {
 }
 
 export interface FileSystem {
-	readDir(path: string, callback: (err: Error, result?: FileInfo[]) => void)
-	readFile(path: string, callback: (err: Error, result?: string) => void)
+	readDir(path: string, callback: (err: Error, result?: FileInfo[]) => void): void
+	readFile(path: string, callback: (err: Error, result?: string) => void): void
 }
 
-namespace ReadDirRequest {
+export namespace ReadDirRequest {
 	export const type: RequestType<string, FileInfo[], any> = { get method() { return 'fs/readDir'; } };
 }
 
-namespace ReadFileRequest {
+export namespace ReadFileRequest {
 	export const type: RequestType<string, string, any> = { get method() { return 'fs/readFile'; } };
 }
 
@@ -32,20 +32,16 @@ export class RemoteFileSystem implements FileSystem {
 		this.connection = connection
 	}
 
-	readDir(path: string, callback: (err: Error, result?: FileInfo[]) => void) {
+	readDir(path: string, callback: (err: Error | null, result?: FileInfo[]) => void) {
 		this.connection.sendRequest(ReadDirRequest.type, path).then((f: FileInfo[]) => {
 			return callback(null, f)
-		}, (err: Error) => {
-			return callback(err)
-		})
+		}, callback)
 	}
 
-	readFile(path: string, callback: (err: Error, result?: string) => void) {
+	readFile(path: string, callback: (err: Error | null, result?: string) => void) {
 		this.connection.sendRequest(ReadFileRequest.type, path).then((content: string) => {
 			return callback(null, Buffer.from(content, 'base64').toString())
-		}, (err: Error) => {
-			return callback(err)
-		})
+		}, callback)
 	}
 
 }
@@ -58,7 +54,7 @@ export class LocalFileSystem implements FileSystem {
 		this.root = root
 	}
 
-	readDir(path: string, callback: (err: Error, result?: FileInfo[]) => void) {
+	readDir(path: string, callback: (err: Error | null, result?: FileInfo[]) => void): void {
 		path = path_.resolve(this.root, path);
 		fs.readdir(path, (err: Error, files: string[]) => {
 			if (err) {
@@ -77,7 +73,7 @@ export class LocalFileSystem implements FileSystem {
 		});
 	}
 
-	readFile(path: string, callback: (err: Error, result?: string) => void) {
+	readFile(path: string, callback: (err: Error | null, result?: string) => void): void {
 		path = path_.resolve(this.root, path);
 		fs.readFile(path, (err: Error, buf: Buffer) => {
 			if (err) {

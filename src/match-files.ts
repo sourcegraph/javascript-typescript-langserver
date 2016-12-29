@@ -84,10 +84,10 @@ function getFileMatcherPatterns(path: string, extensions: string[], excludes: st
 	const absolutePath = combinePaths(currentDirectory, path);
 
 	return {
-		includeFilePattern: getRegularExpressionForWildcard(includes, absolutePath, "files"),
-		includeDirectoryPattern: getRegularExpressionForWildcard(includes, absolutePath, "directories"),
-		excludePattern: getRegularExpressionForWildcard(excludes, absolutePath, "exclude"),
-		basePaths: getBasePaths(path, includes, useCaseSensitiveFileNames)
+		includeFilePattern: getRegularExpressionForWildcard(includes, absolutePath, "files") || "",
+		includeDirectoryPattern: getRegularExpressionForWildcard(includes, absolutePath, "directories") || "",
+		excludePattern: getRegularExpressionForWildcard(excludes, absolutePath, "exclude") || "",
+		basePaths: getBasePaths(path, includes, useCaseSensitiveFileNames) || [],
 	};
 }
 
@@ -103,10 +103,6 @@ function fileExtensionIsAny(path: string, extensions: string[]): boolean {
 	}
 
 	return false;
-}
-
-function normalizeSlashes(path: string): string {
-	return path.replace(/\\/g, "/");
 }
 
 function getRegularExpressionForWildcard(specs: string[], basePath: string, usage: "files" | "directories" | "exclude") {
@@ -385,7 +381,7 @@ function removeTrailingDirectorySeparator(path: string) {
 	return path;
 }
 
-function lastOrUndefined<T>(array: T[]): T {
+function lastOrUndefined<T>(array: T[]): T | void {
 	return array && array.length > 0
 		? array[array.length - 1]
 		: undefined;
@@ -572,4 +568,8 @@ function contains<T>(array: T[], value: T): boolean {
 		}
 	}
 	return false;
+}
+
+function normalizeSlashes(path: string): string {
+	return path.replace(/\\/g, "/");
 }

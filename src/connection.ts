@@ -3,33 +3,24 @@ import {
 	createConnection,
 	InitializeParams,
 	InitializeResult,
-	TextDocuments,
 	TextDocumentPositionParams,
-	TextDocumentSyncKind,
 	Definition,
 	ReferenceParams,
 	Location,
 	Hover,
-	WorkspaceSymbolParams,
 	DocumentSymbolParams,
 	SymbolInformation,
-	RequestType,
-	Range,
 	DidOpenTextDocumentParams,
 	DidCloseTextDocumentParams,
 	DidChangeTextDocumentParams,
 	DidSaveTextDocumentParams
 } from 'vscode-languageserver';
 
-import * as ts from 'typescript';
-import * as types from 'vscode-languageserver-types';
-
 import * as util from './util';
-import { TypeScriptService } from './typescript-service';
-import { LanguageHandler } from './lang-handler';
 import * as fs from './fs';
-
 import * as rt from './request-type';
+
+import { LanguageHandler } from './lang-handler';
 
 export function newConnection(input: any, output: any): IConnection {
 	const connection = createConnection(input, output);
@@ -141,7 +132,7 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 			return Promise.resolve(result || { contents: [] });
 		} catch (e) {
 			console.error(params, e);
-			Promise.reject(e);
+			return Promise.reject(e);
 		}
 	});
 
