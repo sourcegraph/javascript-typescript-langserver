@@ -390,7 +390,7 @@ export class ProjectManager {
 		this.versions.set(fileName, ++version);
 		const config = this.getConfiguration(fileName)
 		config.ensureConfigFile().then(() => {
-			config.host.incProjectVersion();
+			config.getHost().incProjectVersion();
 			config.syncProgram();
 		}, (err) => {
 			console.error("Failed to rebuild program after closing", err);
@@ -403,7 +403,7 @@ export class ProjectManager {
 		this.versions.set(fileName, ++version);
 		const config = this.getConfiguration(fileName)
 		config.ensureConfigFile().then(() => {
-			config.host.incProjectVersion();
+			config.getHost().incProjectVersion();
 			config.syncProgram();
 		}, (err) => {
 			console.error("Failed to rebuild program after change", err);
