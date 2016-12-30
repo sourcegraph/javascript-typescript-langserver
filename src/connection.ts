@@ -64,12 +64,35 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 		}
 	});
 
-	connection.onShutdown(() => handler.shutdown());
+	connection.onShutdown(() => {
+		handler.shutdown().catch((e) => {
+			console.error("shutdown failed:", e);
+		});
+	});
 
-	connection.onDidOpenTextDocument((params: DidOpenTextDocumentParams) => handler.didOpen(params));
-	connection.onDidChangeTextDocument((params: DidChangeTextDocumentParams) => handler.didChange(params));
-	connection.onDidSaveTextDocument((params: DidSaveTextDocumentParams) => handler.didSave(params));
-	connection.onDidCloseTextDocument((params: DidCloseTextDocumentParams) => handler.didClose(params));
+	connection.onDidOpenTextDocument((params: DidOpenTextDocumentParams) => {
+		handler.didOpen(params).catch((e) => {
+			console.error("textDocument/didOpen failed:", e);
+		});
+	});
+
+	connection.onDidChangeTextDocument((params: DidChangeTextDocumentParams) => {
+		handler.didChange(params).catch((e) => {
+			console.error("textDocument/didChange failed:", e);
+		});
+	});
+
+	connection.onDidSaveTextDocument((params: DidSaveTextDocumentParams) => {
+		handler.didSave(params).catch((e) => {
+			console.error("textDocument/didSave failed:", e);
+		});
+	});
+
+	connection.onDidCloseTextDocument((params: DidCloseTextDocumentParams) => {
+		handler.didClose(params).catch((e) => {
+			console.error("textDocument/didClose failed:", e);
+		});
+	});
 
 	connection.onRequest(rt.WorkspaceSymbolsRequest.type, async (params: rt.WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]> => {
 		const enter = new Date().getTime();
