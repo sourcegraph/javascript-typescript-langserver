@@ -99,7 +99,7 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 		try {
 			const result = await handler.getWorkspaceSymbols(params);
 			const exit = new Date().getTime();
-			console.error('workspace/symbol', params.query, 'total', (exit - enter) / 1000.0, 'busy', (exit - enter) / 1000.0);
+			console.error('workspace/symbol', params.query, (exit - enter) / 1000.0);
 			return Promise.resolve(result || []);
 		} catch (e) {
 			console.error(params, e);
@@ -112,7 +112,7 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 		try {
 			const result = await handler.getDocumentSymbol(params);
 			const exit = new Date().getTime();
-			console.error('textDocument/documentSymbol', 'total', (exit - enter) / 1000.0, 'busy', (exit - enter) / 1000.0);
+			console.error('textDocument/documentSymbol', params.textDocument.uri, (exit - enter) / 1000.0);
 			return Promise.resolve(result || []);
 		} catch (e) {
 			console.error(params, e);
@@ -125,7 +125,7 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 		try {
 			const result = await handler.getWorkspaceReference(params);
 			const exit = new Date().getTime();
-			console.error('workspace/reference', 'total', (exit - enter) / 1000.0, 'busy', (exit - enter) / 1000.0);
+			console.error('workspace/reference', (exit - enter) / 1000.0);
 			return Promise.resolve(result || []);
 		} catch (e) {
 			console.error(params, e);
@@ -138,7 +138,7 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 		try {
 			const result = await handler.getDefinition(params);
 			const exit = new Date().getTime();
-			console.error('definition', params.textDocument.uri, params.position.line, params.position.character, 'total', (exit - enter) / 1000.0, 'busy', (exit - enter) / 1000.0);
+			console.error('definition', docid(params), (exit - enter) / 1000.0);
 			return Promise.resolve(result || []);
 		} catch (e) {
 			console.error(params, e);
@@ -151,7 +151,7 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 		try {
 			const result = await handler.getHover(params);
 			const exit = new Date().getTime();
-			console.error('hover', params.textDocument.uri, params.position.line, params.position.character, 'total', (exit - enter) / 1000.0, 'busy', (exit - enter) / 1000.0);
+			console.error('hover', docid(params), (exit - enter) / 1000.0);
 			return Promise.resolve(result || { contents: [] });
 		} catch (e) {
 			console.error(params, e);
@@ -164,11 +164,15 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 		try {
 			const result = await handler.getReferences(params);
 			const exit = new Date().getTime();
-			console.error('references', params.textDocument.uri, params.position.line, params.position.character, 'found', result.length, 'total', (exit - enter) / 1000.0, 'busy', (exit - enter) / 1000.0);
+			console.error('references', docid(params), 'found', result.length, (exit - enter) / 1000.0);
 			return Promise.resolve(result || []);
 		} catch (e) {
 			console.error(params, e);
 			return Promise.reject(e);
 		}
 	});
+}
+
+function docid(params: TextDocumentPositionParams): string {
+	return params.textDocument.uri + ':' + params.position.line + ':' + params.position.character;
 }
