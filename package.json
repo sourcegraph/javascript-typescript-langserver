@@ -56,6 +56,11 @@
         "typescript-formatter": "^4.0.0"
     },
     "files": [
-	"lib"
-    ]
+        "lib",
+        "bin"
+    ],
+    "bin": {
+        "javascript-typescript-langserver": "bin/javascript-typescript-langserver",
+        "javascript-typescript-stdio": "bin/javascript-typescript-stdio"
+    }
 }

@@ -1,4 +1,18 @@
-#!/bin/bash
-set -euf -o pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.." > /dev/null # cd to repo root dir
-exec node lib/language-server-stdio.js
+#!/usr/bin/env node
+
+"use strict";
+const connection_1 = require("javascript-typescript-langserver/lib/connection");
+const typescript_service_1 = require("javascript-typescript-langserver/lib/typescript-service");
+const util = require("javascript-typescript-langserver/lib/util");
+var program = require('commander');
+process.on('uncaughtException', (err) => {
+    console.error(err);
+});
+program
+    .version('0.0.1')
+    .option('-s, --strict', 'Strict mode')
+    .parse(process.argv);
+util.setStrict(program.strict);
+const connection = connection_1.newConnection(process.stdin, process.stdout);
+connection_1.registerLanguageHandler(connection, program.strict, new typescript_service_1.TypeScriptService());
+connection.listen();
