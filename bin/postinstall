@@ -1,14 +1,18 @@
-#!/bin/bash
+#!/usr/bin/env node
 
-cd "$(dirname "${BASH_SOURCE[0]}")/.." > /dev/null
+let fs = require('fs');
+let child_process = require('child_process');
+let path = require('path');
 
-if [ -f "./node_modules/vscode/bin/install" ]; then
-	node ./node_modules/vscode/bin/install
-elif [ -f "../../node_modules/vscode/bin/install" ]; then
-	node ../../node_modules/vscode/bin/install
-else
-	echo "No vscode directory detected"
-	exit 1
-fi
+process.chdir(path.dirname(__dirname));
 
-./node_modules/.bin/tsc || ../../node_modules/.bin/tsc;
+if (fs.existsSync('./node_modules/vscode/bin/install')) {
+	child_process.execSync('node ./node_modules/vscode/bin/install');
+} else if (fs.existsSync('../../node_modules/vscode/bin/install')) {
+	child_process.execSync('node ../../node_modules/vscode/bin/install');
+} else {
+	console.log('No vscode directory detected');
+	process.exit(1);
+}
+
+child_process.exec('./node_modules/.bin/tsc || ../../node_modules/.bin/tsc');

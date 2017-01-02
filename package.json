@@ -28,7 +28,7 @@
         "test": "bash bin/test",
         "fmt-check": "bash bin/fmt-check",
         "fmt": "bash bin/fmt",
-        "postinstall": "bash bin/postinstall"
+        "postinstall": "bin/postinstall"
     },
     "dependencies": {
         "@types/async": "^2.0.32",
