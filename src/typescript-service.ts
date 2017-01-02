@@ -68,6 +68,7 @@ export class TypeScriptService implements LanguageHandler {
 						hoverProvider: true,
 						definitionProvider: true,
 						referencesProvider: true,
+						documentSymbolProvider: true,
 						workspaceSymbolProvider: true
 					}
 				})
