@@ -3,3 +3,6 @@ lib
 .idea
 .vscode
 *.iml
+
+!lib/language-server.js
+!lib/language-server-stdio.js

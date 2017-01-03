@@ -2,7 +2,7 @@
     "name": "javascript-typescript-langserver",
     "homepage": "https://github.com/sourcegraph/javascript-typescript-langserver",
     "author": "Sourcegraph",
-    "version": "1.0.1-b",
+    "version": "1.0.1-c",
     "license": "Apache-2.0",
     "description": "A JavaScript/TypeScript analysis library that supports intelligent editor plugin operations like jump-to-def and find-refs. Implements the Language Server Protocol.",
     "keywords": [
@@ -25,10 +25,11 @@
         "vscode": "1.x.x"
     },
     "scripts": {
-        "test": "bash bin/test",
-        "fmt-check": "bash bin/fmt-check",
-        "fmt": "bash bin/fmt",
-        "postinstall": "bin/postinstall"
+        "test": "node bin/test",
+        "fmt-check": "node bin/fmt-check",
+        "fmt": "node bin/fmt",
+        "prepublish": "node bin/build",
+        "postinstall": "node bin/build"
     },
     "dependencies": {
         "@types/async": "^2.0.32",
@@ -57,10 +58,10 @@
     },
     "files": [
         "lib",
-        "bin"
+        "bin/build"
     ],
     "bin": {
-        "javascript-typescript-langserver": "bin/javascript-typescript-langserver",
-        "javascript-typescript-stdio": "bin/javascript-typescript-stdio"
+        "javascript-typescript-langserver": "./lib/language-server.js",
+        "javascript-typescript-stdio": "./lib/language-server-stdio.js"
     }
 }
