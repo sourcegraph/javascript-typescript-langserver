@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { newConnection, registerLanguageHandler } from './connection';
 import { TypeScriptService } from './typescript-service';
 import * as util from './util';

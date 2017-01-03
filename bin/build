@@ -1,0 +1,33 @@
+#!/usr/bin/env node
+
+let fs = require('fs');
+let child_process = require('child_process');
+let path = require('path');
+
+process.chdir(path.dirname(__dirname));
+
+if (fs.existsSync('./node_modules/vscode/bin/install')) {
+	child_process.execSync('node ./node_modules/vscode/bin/install');
+} else if (fs.existsSync('../../node_modules/vscode/bin/install')) {
+	child_process.execSync('node ../../node_modules/vscode/bin/install');
+} else {
+	console.error('No vscode directory detected');
+	process.exit(1);
+}
+
+if (!fs.existsSync('./src')) {
+	process.exit(0);
+}
+
+try {
+	if (fs.existsSync('./node_modules/.bin/tsc')) {
+		child_process.execSync(path.normalize('./node_modules/.bin/tsc'), {stdio: 'inherit'});
+	} else if (fs.existsSync('../../node_modules/.bin/tsc')) {
+		child_process.execSync(path.normalize('../../node_modules/.bin/tsc'), {stdio: 'inherit'});
+	} else {
+		console.error('No tsc compiler detected');
+		process.exit(1);
+	}
+} catch (e) {
+	process.exit(1);
+}

@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 /// <reference types="vscode" />
 
 import { TypeScriptService } from './typescript-service';

@@ -1,4 +1,13 @@
-#!/bin/bash
+#!/usr/bin/env node
 
-cd "$(dirname "${BASH_SOURCE[0]}")/.." > /dev/null
-./node_modules/.bin/mocha -r ts-node/register src/test/**/*.ts
+let fs = require('fs');
+let child_process = require('child_process');
+let path = require('path');
+
+process.chdir(path.dirname(__dirname));
+
+try {
+	child_process.execSync(path.normalize('./node_modules/.bin/mocha') + ' -r ts-node/register src/test/**/*.ts', {stdio: 'inherit'});
+} catch (e) {
+	process.exit(1);
+}
