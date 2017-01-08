@@ -693,7 +693,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 				utils.tearDown(done);
 			});
 		});
-		describe('workspace/reference', function () {
+		describe.only('workspace/reference', function () {
 			before(function (done: () => void) {
 				utils.setUp(newLanguageHandler(), {
 					'a.ts': "class a { foo() { const i = 1;} }",
@@ -702,28 +702,14 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					}
 				}, done);
 			});
-			it('references', function (done: (err?: Error) => void) {
-				utils.workspaceReferences({}, [
+			it('foo references', function (done: (err?: Error) => void) {
+				utils.workspaceReferences({ query: { "name": "foo", "kind": "method", "containerName": "a" } }, [
 					{
-						"containerName": "",
-						"location": {
-							"range": {
-								"end": {
-									"character": 7,
-									"line": 0
-								},
-								"start": {
-									"character": 5,
-									"line": 0
-								},
-							},
-							"uri": "file:///a.ts",
+						"symbol": {
+							"containerName": "a",
+							"name": "foo",
+							"kind": "method",
 						},
-						"name": "a",
-						"uri": "file:///a.ts"
-					},
-					{
-						"containerName": "a",
 						"location": {
 							"range": {
 								"end": {
@@ -737,11 +723,57 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 							},
 							"uri": "file:///a.ts",
 						},
-						"name": "foo",
-						"uri": "file:///a.ts"
+					}
+				], done);
+			});
+			it('all references', function (done: (err?: Error) => void) {
+				utils.workspaceReferences({ query: {} }, [
+					{
+						"symbol": {
+							"containerName": "",
+							"kind": "class",
+							"name": "a",
+						},
+						"location": {
+							"range": {
+								"end": {
+									"character": 7,
+									"line": 0
+								},
+								"start": {
+									"character": 5,
+									"line": 0
+								},
+							},
+							"uri": "file:///a.ts",
+						},
 					},
 					{
-						"containerName": "",
+						"symbol": {
+							"containerName": "a",
+							"name": "foo",
+							"kind": "method",
+						},
+						"location": {
+							"range": {
+								"end": {
+									"character": 13,
+									"line": 0
+								},
+								"start": {
+									"character": 9,
+									"line": 0
+								},
+							},
+							"uri": "file:///a.ts",
+						},
+					},
+					{
+						"symbol": {
+							"containerName": "",
+							"name": "i",
+							"kind": "const",
+						},
 						"location": {
 							"range": {
 								"end": {
@@ -755,11 +787,13 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 							},
 							"uri": "file:///a.ts",
 						},
-						"name": "i",
-						"uri": "file:///a.ts"
 					},
 					{
-						"containerName": "",
+						"symbol": {
+							"containerName": "",
+							"name": "b",
+							"kind": "class",
+						},
 						"location": {
 							"range": {
 								"end": {
@@ -773,11 +807,13 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 							},
 							"uri": "file:///foo/b.ts",
 						},
-						"name": "b",
-						"uri": "file:///foo/b.ts"
 					},
 					{
-						"containerName": "b",
+						"symbol": {
+							"containerName": "b",
+							"name": "bar",
+							"kind": "property",
+						},
 						"location": {
 							"range": {
 								"end": {
@@ -791,11 +827,13 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 							},
 							"uri": "file:///foo/b.ts",
 						},
-						"name": "bar",
-						"uri": "file:///foo/b.ts"
 					},
 					{
-						"containerName": "b",
+						"symbol": {
+							"containerName": "b",
+							"name": "baz",
+							"kind": "method",
+						},
 						"location": {
 							"range": {
 								"end": {
@@ -809,11 +847,13 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 							},
 							"uri": "file:///foo/b.ts",
 						},
-						"name": "baz",
-						"uri": "file:///foo/b.ts"
 					},
 					{
-						"containerName": "b",
+						"symbol": {
+							"containerName": "b",
+							"name": "bar",
+							"kind": "property",
+						},
 						"location": {
 							"range": {
 								"end": {
@@ -827,11 +867,13 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 							},
 							"uri": "file:///foo/b.ts",
 						},
-						"name": "bar",
-						"uri": "file:///foo/b.ts"
 					},
 					{
-						"containerName": "",
+						"symbol": {
+							"containerName": "",
+							"name": "qux",
+							"kind": "function",
+						},
 						"location": {
 							"range": {
 								"end": {
@@ -845,8 +887,6 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 							},
 							"uri": "file:///foo/b.ts",
 						},
-						"name": "qux",
-						"uri": "file:///foo/b.ts"
 					},
 				], done);
 			});

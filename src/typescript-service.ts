@@ -69,7 +69,10 @@ export class TypeScriptService implements LanguageHandler {
 						definitionProvider: true,
 						referencesProvider: true,
 						documentSymbolProvider: true,
-						workspaceSymbolProvider: true
+						workspaceSymbolProvider: true,
+						xworkspaceReferencesProvider: true,
+						xdefinitionProvider: true,
+						xdependenciesProvider: true,
 					}
 				})
 			}
@@ -223,49 +226,59 @@ export class TypeScriptService implements LanguageHandler {
 
 	async getWorkspaceReference(params: rt.WorkspaceReferenceParams): Promise<rt.ReferenceInformation[]> {
 		const refInfo: rt.ReferenceInformation[] = [];
-		return this.projectManager.ensureFilesForWorkspaceSymbol().then(() => {
-			return Promise.all(this.projectManager.getConfigurations().map(async (config) => {
-				await config.ensureAllFiles();
-				for (let source of config.getService().getProgram().getSourceFiles().sort((a, b) => a.fileName.localeCompare(b.fileName))) {
-					if (util.normalizePath(source.fileName).indexOf(`${path_.posix.sep}node_modules${path_.posix.sep}`) !== -1) {
-						continue;
-					}
-					this.walkMostAST(source, (node) => {
-						switch (node.kind) {
-							case ts.SyntaxKind.Identifier: {
-								const defs = config.getService().getDefinitionAtPosition(source.fileName, node.pos + 1);
 
-								if (defs && defs.length > 0) {
-									const def = defs[0];
-									const start = ts.getLineAndCharacterOfPosition(source, node.pos);
-									const end = ts.getLineAndCharacterOfPosition(source, node.end);
-									const ref = {
-										location: {
-											uri: this.defUri(source.fileName),
-											range: {
-												start: start,
-												end: end,
-											},
-										},
-										name: def.name,
-										containerName: def.containerName,
-										uri: this.defUri(def.fileName),
-									};
-									refInfo.push(ref);
-								}
-								break;
-							}
-							case ts.SyntaxKind.StringLiteral: {
-								// TODO
-								break;
-							}
-						}
-					});
+		await this.projectManager.ensureFilesForWorkspaceSymbol();
+
+		const configs = this.projectManager.getConfigurations();
+		await Promise.all(configs.map(async (config) => {
+			await config.ensureAllFiles();
+
+			const files = config.getService().getProgram().getSourceFiles().sort((a, b) => a.fileName.localeCompare(b.fileName));
+			for (const source of files) {
+				// ignore dependency files
+				if (util.normalizePath(source.fileName).indexOf(`${path_.posix.sep}node_modules${path_.posix.sep}`) !== -1) {
+					continue;
 				}
-			}));
-		}).then(() => {
-			return refInfo;
-		});
+
+				this.walkMostAST(source, (node) => {
+					switch (node.kind) {
+						case ts.SyntaxKind.Identifier: { // include all matching refs at the node
+							const defs = config.getService().getDefinitionAtPosition(source.fileName, node.pos + 1);
+							if (!defs) {
+								break;
+							}
+							for (const def of defs) {
+								const sd = util.defInfoToSymbolDescriptor(def);
+								if (!util.symbolDescriptorMatch(params.query, sd)) {
+									continue;
+								}
+								const start = ts.getLineAndCharacterOfPosition(source, node.pos);
+								const end = ts.getLineAndCharacterOfPosition(source, node.end);
+								const loc = {
+									uri: this.defUri(source.fileName),
+									range: {
+										start: start,
+										end: end,
+									},
+								};
+								refInfo.push({
+									symbol: sd,
+									location: loc,
+								});
+							}
+							break;
+						}
+						case ts.SyntaxKind.StringLiteral: {
+							// TODO: include string-interpolated references
+							break;
+						}
+					}
+				});
+			}
+
+		}));
+
+		return refInfo;
 	}
 
 	/*

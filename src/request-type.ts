@@ -95,12 +95,24 @@ export namespace WorkspaceReferenceRequest {
 	};
 }
 
+export interface SymbolDescriptor {
+	[attr: string]: any;
+}
+
 /*
  * WorkspaceReferenceParams holds parameters for the
  * workspace/reference endpoint (an extension of the original LSP
  * spec).
  */
-export interface WorkspaceReferenceParams { }
+export interface WorkspaceReferenceParams {
+	query: SymbolDescriptor;
+	files?: string[];
+}
+
+export interface SymbolLocationInformation {
+	location?: vscode.Location;
+	symbol: SymbolDescriptor;
+}
 
 /*
  * ReferenceInformation enapsulates the metadata for a symbol
@@ -108,9 +120,7 @@ export interface WorkspaceReferenceParams { }
  */
 export interface ReferenceInformation {
 	location: vscode.Location;
-	name: string;
-	containerName: string;
-	uri: string;
+	symbol: SymbolDescriptor;
 }
 
 export namespace DocumentSymbolRequest {

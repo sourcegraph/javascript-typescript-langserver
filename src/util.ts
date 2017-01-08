@@ -3,6 +3,7 @@ import * as path from "path";
 
 import * as ts from "typescript";
 import { SymbolKind, Range, Position } from 'vscode-languageserver';
+import * as rt from "./request-type";
 
 var strict = false;
 
@@ -186,4 +187,26 @@ export function normalizeDir(dir: string) {
 		dir = dir.replace(/[\/]+$/, '');
 	}
 	return dir;
+}
+
+/**
+ * defInfoToSymbolDescriptor converts from an instance of
+ * ts.DefinitionInfo to an instance of rt.SymbolDescriptor
+ */
+export function defInfoToSymbolDescriptor(d: ts.DefinitionInfo): rt.SymbolDescriptor {
+	return {
+		kind: d.kind,
+		name: d.name,
+		containerKind: d.containerKind,
+		containerName: d.containerName,
+	};
+}
+
+export function symbolDescriptorMatch(query: rt.SymbolDescriptor, sym: rt.SymbolDescriptor): boolean {
+	for (const key of Object.keys(query)) {
+		if (query[key] !== sym[key]) {
+			return false;
+		}
+	}
+	return true;
 }
