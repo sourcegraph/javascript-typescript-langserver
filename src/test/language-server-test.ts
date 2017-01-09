@@ -924,6 +924,58 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 				utils.tearDown(done);
 			});
 		});
+		describe('workspace/xdependencies', function () {
+			before(function (done: () => void) {
+				utils.setUp(newLanguageHandler(), {
+					'package.json': '\
+{\
+  "name": "tslint",\
+  "version": "4.0.2",\
+  "dependencies": {\
+    "babel-code-frame": "^6.16.0",\
+    "findup-sync": "~0.3.0"\
+  },\
+  "devDependencies": {\
+    "@types/babel-code-frame": "^6.16.0",\
+    "@types/optimist": "0.0.29",\
+    "chai": "^3.0.0",\
+    "tslint": "latest",\
+    "tslint-test-config-non-relative": "file:test/external/tslint-test-config-non-relative",\
+    "typescript": "2.0.10"\
+  },\
+  "peerDependencies": {\
+    "typescript": ">=2.0.0"\
+  }\
+}',
+					'node_modules': {
+						'dep': {
+							'package.json': '{ "name": "foo", "dependencies": { "shouldnotinclude": "0.0.0" } }',
+						},
+					},
+					'subproject': {
+						'package.json': '{ "name": "subproject", "dependencies": { "subproject-dep": "0.0.0" } }',
+					},
+				}, done);
+			});
+			it('all dependencies accounted for', function (done: (err?: Error) => void) {
+				utils.dependencies([
+					{ attributes: { 'name': 'babel-code-frame', 'version': '^6.16.0' }, hints: {} },
+					{ attributes: { 'name': 'findup-sync', 'version': '~0.3.0' }, hints: {} },
+					{ attributes: { 'name': "@types/babel-code-frame", 'version': "^6.16.0" }, hints: {} },
+					{ attributes: { 'name': "@types/optimist", 'version': "0.0.29" }, hints: {} },
+					{ attributes: { 'name': "chai", 'version': "^3.0.0" }, hints: {} },
+					{ attributes: { 'name': "tslint", 'version': "latest" }, hints: {} },
+					{ attributes: { 'name': "tslint-test-config-non-relative", 'version': "file:test/external/tslint-test-config-non-relative" }, hints: {} },
+					{ attributes: { 'name': "typescript", 'version': "2.0.10" }, hints: {} },
+					{ attributes: { 'name': "typescript", 'version': ">=2.0.0" }, hints: {} },
+					{ attributes: { 'name': "subproject-dep", 'version': "0.0.0" }, hints: {} },
+				]
+					, done);
+			});
+			afterEach(function (done: () => void) {
+				utils.tearDown(done);
+			});
+		});
 		describe('sourcegraph/sourcegraph#2052', function () {
 			before(function (done: () => void) {
 				utils.setUp(newLanguageHandler(), {

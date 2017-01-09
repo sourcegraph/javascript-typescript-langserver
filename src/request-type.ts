@@ -82,6 +82,14 @@ export namespace ReferencesRequest {
 	};
 }
 
+export namespace DependenciesRequest {
+	export const type: vscode.RequestType<void, DependencyReference[], any> = {
+		get method() {
+			return 'workspace/xdependencies';
+		}
+	};
+}
+
 export interface WorkspaceSymbolParamsWithLimit {
 	query: string;
 	limit: number;
@@ -129,6 +137,15 @@ export interface SymbolLocationInformation {
 export interface ReferenceInformation {
 	location: vscode.Location;
 	symbol: SymbolDescriptor;
+}
+
+export interface DependencyReference {
+	attributes: {
+		[attr: string]: any;
+	};
+	hints: {
+		[attr: string]: any;
+	}
 }
 
 export namespace DocumentSymbolRequest {

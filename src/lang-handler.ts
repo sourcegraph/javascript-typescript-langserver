@@ -33,10 +33,9 @@ export interface LanguageHandler {
 	getWorkspaceSymbols(params: rt.WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]>;
 	getDocumentSymbol(params: DocumentSymbolParams): Promise<SymbolInformation[]>;
 	getWorkspaceReference(params: rt.WorkspaceReferenceParams): Promise<rt.ReferenceInformation[]>;
+	getDependencies(): Promise<rt.DependencyReference[]>;
 	didOpen(params: DidOpenTextDocumentParams): Promise<void>;
 	didChange(params: DidChangeTextDocumentParams): Promise<void>;
 	didClose(params: DidCloseTextDocumentParams): Promise<void>;
 	didSave(params: DidSaveTextDocumentParams): Promise<void>;
 }
-
-

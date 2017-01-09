@@ -184,6 +184,19 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 			return Promise.reject(e);
 		}
 	});
+
+	connection.onRequest(rt.DependenciesRequest.type, async (): Promise<rt.DependencyReference[]> => {
+		const enter = new Date().getTime();
+		try {
+			const result = await handler.getDependencies();
+			const exit = new Date().getTime();
+			console.error('dependencies found', result.length, (exit - enter) / 1000.0);
+			return Promise.resolve(result || []);
+		} catch (e) {
+			console.error(e);
+			return Promise.reject(e);
+		}
+	});
 }
 
 function docid(params: TextDocumentPositionParams): string {

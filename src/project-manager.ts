@@ -719,6 +719,9 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 export function walkInMemoryFs(fs: InMemoryFileSystem, rootdir: string, walkfn: (path: string, isdir: boolean) => Error | void): Error | void {
 	const err = walkfn(rootdir, true);
 	if (err) {
+		if (err === skipDir) {
+			return;
+		}
 		return err;
 	}
 	const {files, directories} = fs.getFileSystemEntries(rootdir);

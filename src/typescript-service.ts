@@ -320,6 +320,37 @@ export class TypeScriptService implements LanguageHandler {
 		return refInfo;
 	}
 
+	async getDependencies(): Promise<rt.DependencyReference[]> {
+		await this.projectManager.ensureModuleStructure();
+
+		const pkgFiles: string[] = [];
+		pm.walkInMemoryFs(this.projectManager.getFs(), "/", (path: string, isdir: boolean): Error | void => {
+			if (isdir && path_.basename(path) === "node_modules") {
+				return pm.skipDir;
+			}
+			if (isdir) {
+				return;
+			}
+			if (path_.basename(path) !== "package.json") {
+				return;
+			}
+			pkgFiles.push(path);
+		});
+
+		const deps: rt.DependencyReference[] = [];
+		const pkgJsons = pkgFiles.map((p) => JSON.parse(this.projectManager.getFs().readFile(p)));
+		for (const pkgJson of pkgJsons) {
+			for (const k of ['dependencies', 'devDependencies', 'peerDependencies']) {
+				if (pkgJson[k]) {
+					for (const name in pkgJson[k]) {
+						deps.push({ attributes: { 'name': name, 'version': pkgJson[k][name] }, hints: {} });
+					}
+				}
+			}
+		}
+		return deps;
+	}
+
 	/*
 	 * walkMostAST walks most of the AST (the part that matters for gathering all references)
 	 */

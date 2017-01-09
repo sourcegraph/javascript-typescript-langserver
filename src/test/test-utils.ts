@@ -229,6 +229,16 @@ export function workspaceReferences(params: rt.WorkspaceReferenceParams, expecte
 	})
 }
 
+export function dependencies(expected: rt.DependencyReference[], done: (err?: Error) => void) {
+	channel.clientConnection.sendRequest(rt.DependenciesRequest.type).then((result: rt.DependencyReference[]) => {
+		check(done, () => {
+			chai.expect(result).to.deep.equal(expected);
+		});
+	}, (err?: Error) => {
+		return done(err || new Error('references request failed'))
+	})
+}
+
 export function symbols(params: rt.WorkspaceSymbolParamsWithLimit, expected: vscode.SymbolInformation[], done: (err?: Error) => void) {
 	channel.clientConnection.sendRequest(rt.WorkspaceSymbolsRequest.type, params).then((result: vscode.SymbolInformation[]) => {
 		check(done, () => {
