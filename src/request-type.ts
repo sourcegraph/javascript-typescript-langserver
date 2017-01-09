@@ -106,7 +106,7 @@ export namespace WorkspaceSymbolsRequest {
 export namespace WorkspaceReferenceRequest {
 	export const type: vscode.RequestType<WorkspaceReferenceParams, ReferenceInformation[], any> = {
 		get method() {
-			return 'workspace/reference';
+			return 'workspaces/xreferences';
 		}
 	};
 }
@@ -117,7 +117,7 @@ export interface SymbolDescriptor {
 
 /*
  * WorkspaceReferenceParams holds parameters for the
- * workspace/reference endpoint (an extension of the original LSP
+ * workspace/xreferences endpoint (an extension of the original LSP
  * spec).
  */
 export interface WorkspaceReferenceParams {

@@ -723,7 +723,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 				utils.tearDown(done);
 			});
 		});
-		describe('workspace/reference', function () {
+		describe('workspace/xreferences', function () {
 			before(function (done: () => void) {
 				utils.setUp(newLanguageHandler(), {
 					'a.ts': "class a { foo() { const i = 1;} }",

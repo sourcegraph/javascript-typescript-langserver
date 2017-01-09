@@ -125,7 +125,7 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 		try {
 			const result = await handler.getWorkspaceReference(params);
 			const exit = new Date().getTime();
-			console.error('workspace/reference', (exit - enter) / 1000.0);
+			console.error('workspace/xreferences', (exit - enter) / 1000.0);
 			return Promise.resolve(result || []);
 		} catch (e) {
 			console.error(params, e);
