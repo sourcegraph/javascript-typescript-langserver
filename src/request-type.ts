@@ -58,6 +58,14 @@ export namespace DefinitionRequest {
 	};
 }
 
+export namespace XdefinitionRequest {
+	export const type: vscode.RequestType<vscode.TextDocumentPositionParams, SymbolLocationInformation[], any> = {
+		get method() {
+			return 'textDocument/xdefinition';
+		}
+	};
+}
+
 export namespace HoverRequest {
 	export const type: vscode.RequestType<vscode.TextDocumentPositionParams, vscode.Hover, any> = {
 		get method() {

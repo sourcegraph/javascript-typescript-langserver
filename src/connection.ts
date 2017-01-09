@@ -146,6 +146,19 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 		}
 	});
 
+	connection.onRequest(rt.XdefinitionRequest.type, async (params: TextDocumentPositionParams): Promise<rt.SymbolLocationInformation[]> => {
+		const enter = new Date().getTime();
+		try {
+			const result = await handler.getXdefinition(params);
+			const exit = new Date().getTime();
+			console.error('xdefinition', docid(params), (exit - enter) / 1000.0);
+			return Promise.resolve(result || []);
+		} catch (e) {
+			console.error(params, e);
+			return Promise.reject(e);
+		}
+	});
+
 	connection.onHover(async (params: TextDocumentPositionParams): Promise<Hover> => {
 		const enter = new Date().getTime();
 		try {

@@ -161,6 +161,25 @@ export function definition(pos: vscode.TextDocumentPositionParams, expected: vsc
 	})
 }
 
+export function xdefinition(pos: vscode.TextDocumentPositionParams, expected: rt.SymbolLocationInformation | rt.SymbolLocationInformation[] | null, done: (err?: Error) => void) {
+	channel.clientConnection.sendRequest(rt.XdefinitionRequest.type, {
+		textDocument: {
+			uri: pos.textDocument.uri
+		},
+		position: {
+			line: pos.position.line,
+			character: pos.position.character
+		}
+	}).then((results: rt.SymbolLocationInformation[]) => {
+		expected = expected ? (Array.isArray(expected) ? expected : [expected]) : null;
+		check(done, () => {
+			chai.expect(results).to.deep.equal(expected);
+		});
+	}, (err?: Error) => {
+		return done(err || new Error('definition request failed'))
+	})
+}
+
 export function hover(pos: vscode.TextDocumentPositionParams, expected: vscode.Hover, done: (err?: Error) => void) {
 	channel.clientConnection.sendRequest(rt.HoverRequest.type, {
 		textDocument: {

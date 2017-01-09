@@ -44,6 +44,36 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 						}
 					}, done);
 			});
+			it('xdefinition in same file', function (done: (err?: Error) => void) {
+				utils.xdefinition({
+					textDocument: {
+						uri: 'file:///a.ts'
+					},
+					position: {
+						line: 0,
+						character: 29
+					}
+				}, {
+						location: {
+							uri: 'file:///a.ts',
+							range: {
+								start: {
+									line: 0,
+									character: 6
+								},
+								end: {
+									line: 0,
+									character: 13
+								}
+							}
+						},
+						symbol: {
+							containerName: "",
+							kind: "const",
+							name: "abc",
+						},
+					}, done);
+			});
 			it('definition on keyword (non-null)', function (done: (err?: Error) => void) {
 				utils.definition({
 					textDocument: {

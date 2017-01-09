@@ -117,6 +117,45 @@ export class TypeScriptService implements LanguageHandler {
 		return ret;
 	}
 
+	async getXdefinition(params: TextDocumentPositionParams): Promise<rt.SymbolLocationInformation[]> {
+		const uri = util.uri2reluri(params.textDocument.uri, this.root);
+		const line = params.position.line;
+		const column = params.position.character;
+		await this.projectManager.ensureFilesForHoverAndDefinition(uri);
+
+		const fileName: string = util.uri2path(uri);
+		const configuration = this.projectManager.getConfiguration(fileName);
+		await configuration.ensureBasicFiles();
+
+		const sourceFile = this.getSourceFile(configuration, fileName);
+		if (!sourceFile) {
+			return [];
+		}
+
+		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
+		const defs: ts.DefinitionInfo[] = configuration.getService().getDefinitionAtPosition(fileName, offset);
+		const ret = [];
+		if (defs) {
+			for (let def of defs) {
+				const sourceFile = this.getSourceFile(configuration, def.fileName);
+				if (!sourceFile) {
+					throw new Error('expected source file "' + def.fileName + '" to exist in configuration');
+				}
+				const start = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start);
+				const end = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start + def.textSpan.length);
+				const loc = Location.create(this.defUri(def.fileName), {
+					start: start,
+					end: end
+				});
+				ret.push({
+					symbol: util.defInfoToSymbolDescriptor(def),
+					location: loc,
+				});
+			}
+		}
+		return ret;
+	}
+
 	async getHover(params: TextDocumentPositionParams): Promise<Hover | null> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root)
 		const line = params.position.line;
