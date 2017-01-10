@@ -116,7 +116,7 @@ export interface SymbolDescriptor {
 	name: string;
 	containerKind: string;
 	containerName: string;
-	package?: DependencyReference;
+	package?: DependencyAttributes;
 }
 
 export interface PartialSymbolDescriptor {
@@ -124,7 +124,7 @@ export interface PartialSymbolDescriptor {
 	name?: string;
 	containerKind?: string;
 	containerName?: string;
-	package?: DependencyReference;
+	package?: DependencyAttributes;
 }
 
 /*
@@ -151,11 +151,13 @@ export interface ReferenceInformation {
 	symbol: SymbolDescriptor;
 }
 
+export interface DependencyAttributes {
+	name: string;
+	version?: string;
+}
+
 export interface DependencyReference {
-	attributes: {
-		name: string;
-		version?: string;
-	};
+	attributes: DependencyAttributes;
 	hints: {
 		[attr: string]: any;
 	}
