@@ -118,6 +118,7 @@ export class TypeScriptService implements LanguageHandler {
 	}
 
 	async getXdefinition(params: TextDocumentPositionParams): Promise<rt.SymbolLocationInformation[]> {
+		console.error("# xdefinition");
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
