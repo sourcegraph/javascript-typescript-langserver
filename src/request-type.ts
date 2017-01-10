@@ -112,7 +112,19 @@ export namespace WorkspaceReferenceRequest {
 }
 
 export interface SymbolDescriptor {
-	[attr: string]: any;
+	kind: string;
+	name: string;
+	containerKind: string;
+	containerName: string;
+	package?: DependencyReference;
+}
+
+export interface PartialSymbolDescriptor {
+	kind?: string;
+	name?: string;
+	containerKind?: string;
+	containerName?: string;
+	package?: DependencyReference;
 }
 
 /*
@@ -121,7 +133,7 @@ export interface SymbolDescriptor {
  * spec).
  */
 export interface WorkspaceReferenceParams {
-	query: SymbolDescriptor;
+	query: PartialSymbolDescriptor;
 	files?: string[];
 }
 
@@ -141,7 +153,8 @@ export interface ReferenceInformation {
 
 export interface DependencyReference {
 	attributes: {
-		[attr: string]: any;
+		name: string;
+		version?: string;
 	};
 	hints: {
 		[attr: string]: any;

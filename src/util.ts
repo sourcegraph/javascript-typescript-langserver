@@ -195,16 +195,16 @@ export function normalizeDir(dir: string) {
  */
 export function defInfoToSymbolDescriptor(d: ts.DefinitionInfo): rt.SymbolDescriptor {
 	return {
-		kind: d.kind,
-		name: d.name,
-		containerKind: d.containerKind,
-		containerName: d.containerName,
+		kind: d.kind || "",
+		name: d.name || "",
+		containerKind: d.containerKind || "",
+		containerName: d.containerName || "",
 	};
 }
 
-export function symbolDescriptorMatch(query: rt.SymbolDescriptor, sym: rt.SymbolDescriptor): boolean {
+export function symbolDescriptorMatch(query: rt.PartialSymbolDescriptor, sym: rt.SymbolDescriptor): boolean {
 	for (const key of Object.keys(query)) {
-		if (query[key] !== sym[key]) {
+		if ((<any>query)[key] !== (<any>sym)[key]) {
 			return false;
 		}
 	}

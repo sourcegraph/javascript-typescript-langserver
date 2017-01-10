@@ -69,6 +69,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 						},
 						symbol: {
 							containerName: "",
+							containerKind: "",
 							kind: "const",
 							name: "abc",
 						},
@@ -736,6 +737,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 				utils.workspaceReferences({ query: { "name": "foo", "kind": "method", "containerName": "a" } }, [
 					{
 						"symbol": {
+							"containerKind": "",
 							"containerName": "a",
 							"name": "foo",
 							"kind": "method",
@@ -761,6 +763,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					{
 						"symbol": {
 							"containerName": "",
+							"containerKind": "",
 							"kind": "class",
 							"name": "a",
 						},
@@ -781,6 +784,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					{
 						"symbol": {
 							"containerName": "a",
+							"containerKind": "",
 							"name": "foo",
 							"kind": "method",
 						},
@@ -801,6 +805,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					{
 						"symbol": {
 							"containerName": "",
+							"containerKind": "",
 							"name": "i",
 							"kind": "const",
 						},
@@ -821,6 +826,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					{
 						"symbol": {
 							"containerName": "",
+							"containerKind": "",
 							"name": "b",
 							"kind": "class",
 						},
@@ -841,6 +847,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					{
 						"symbol": {
 							"containerName": "b",
+							"containerKind": "",
 							"name": "bar",
 							"kind": "property",
 						},
@@ -861,6 +868,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					{
 						"symbol": {
 							"containerName": "b",
+							"containerKind": "",
 							"name": "baz",
 							"kind": "method",
 						},
@@ -881,6 +889,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					{
 						"symbol": {
 							"containerName": "b",
+							"containerKind": "",
 							"name": "bar",
 							"kind": "property",
 						},
@@ -901,6 +910,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					{
 						"symbol": {
 							"containerName": "",
+							"containerKind": "",
 							"name": "qux",
 							"kind": "function",
 						},
