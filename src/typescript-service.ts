@@ -302,7 +302,7 @@ export class TypeScriptService implements LanguageHandler {
 								};
 								refInfo.push({
 									symbol: sd,
-									location: loc,
+									reference: loc,
 								});
 							}
 							break;

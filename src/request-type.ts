@@ -135,7 +135,7 @@ export interface SymbolLocationInformation {
  * reference in code.
  */
 export interface ReferenceInformation {
-	location: vscode.Location;
+	reference: vscode.Location;
 	symbol: SymbolDescriptor;
 }
 

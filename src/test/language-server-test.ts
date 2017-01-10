@@ -740,7 +740,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 							"name": "foo",
 							"kind": "method",
 						},
-						"location": {
+						"reference": {
 							"range": {
 								"end": {
 									"character": 13,
@@ -764,7 +764,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 							"kind": "class",
 							"name": "a",
 						},
-						"location": {
+						"reference": {
 							"range": {
 								"end": {
 									"character": 7,
@@ -784,7 +784,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 							"name": "foo",
 							"kind": "method",
 						},
-						"location": {
+						"reference": {
 							"range": {
 								"end": {
 									"character": 13,
@@ -804,7 +804,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 							"name": "i",
 							"kind": "const",
 						},
-						"location": {
+						"reference": {
 							"range": {
 								"end": {
 									"character": 25,
@@ -824,7 +824,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 							"name": "b",
 							"kind": "class",
 						},
-						"location": {
+						"reference": {
 							"range": {
 								"end": {
 									"character": 7,
@@ -844,7 +844,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 							"name": "bar",
 							"kind": "property",
 						},
-						"location": {
+						"reference": {
 							"range": {
 								"end": {
 									"character": 13,
@@ -864,7 +864,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 							"name": "baz",
 							"kind": "method",
 						},
-						"location": {
+						"reference": {
 							"range": {
 								"end": {
 									"character": 26,
@@ -884,7 +884,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 							"name": "bar",
 							"kind": "property",
 						},
-						"location": {
+						"reference": {
 							"range": {
 								"end": {
 									"character": 54,
@@ -904,7 +904,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 							"name": "qux",
 							"kind": "function",
 						},
-						"location": {
+						"reference": {
 							"range": {
 								"end": {
 									"character": 71,
