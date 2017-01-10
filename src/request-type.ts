@@ -106,7 +106,7 @@ export namespace WorkspaceSymbolsRequest {
 export namespace WorkspaceReferenceRequest {
 	export const type: vscode.RequestType<WorkspaceReferenceParams, ReferenceInformation[], any> = {
 		get method() {
-			return 'workspaces/xreferences';
+			return 'workspace/xreferences';
 		}
 	};
 }
