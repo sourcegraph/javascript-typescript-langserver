@@ -21,6 +21,9 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					}
 				}, done);
 			});
+			after(function (done: () => void) {
+				utils.tearDown(done);
+			});
 			it('definition in same file', function (done: (err?: Error) => void) {
 				utils.definition({
 					textDocument: {
@@ -167,9 +170,6 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 						contents: []
 					}, done);
 			});
-			afterEach(function (done: () => void) {
-				utils.tearDown(done);
-			});
 		});
 		describe('typings directory', function () {
 			before(function (done: () => void) {
@@ -196,6 +196,9 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 						}
 					}
 				}, done);
+			});
+			after(function (done: () => void) {
+				utils.tearDown(done);
 			});
 			it('definition with tsd.d.ts', async function (done: (err?: Error) => void) {
 				utils.definition({
@@ -274,9 +277,6 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 				}
 				done();
 			});
-			after(function (done: () => void) {
-				utils.tearDown(done);
-			});
 		});
 		describe('global module', function () {
 			before(function (done: () => void) {
@@ -284,6 +284,9 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					'a.ts': "const rt: GQL.Rt;",
 					'interfaces.d.ts': 'declare namespace GQL { interface Rt { } }'
 				}, done);
+			});
+			after(function (done: () => void) {
+				utils.tearDown(done);
 			});
 			it('definition', async function (done: (err?: Error) => void) {
 				utils.definition({
@@ -308,9 +311,6 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 						}
 					}, done);
 			});
-			afterEach(function (done: () => void) {
-				utils.tearDown(done);
-			});
 		});
 		describe('global modules in vendored deps', function () {
 			before(function (done: () => void) {
@@ -324,6 +324,9 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 						}
 					}
 				}, done);
+			});
+			after(function (done: () => void) {
+				utils.tearDown(done);
 			});
 			it('definition', async function (done: (err?: Error) => void) {
 				try {
@@ -379,9 +382,6 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 				}
 				done();
 			});
-			afterEach(function (done: () => void) {
-				utils.tearDown(done);
-			});
 		});
 		describe('js-project-no-config', function () {
 			before(function (done: () => void) {
@@ -393,6 +393,9 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					}
 				}, done);
 			});
+			after(function (done: () => void) {
+				utils.tearDown(done);
+			});
 			it('references', function (done: (err?: Error) => void) {
 				utils.references({
 					textDocument: {
@@ -403,9 +406,6 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 						character: 20
 					}
 				}, 3, done);
-			});
-			afterEach(function (done: () => void) {
-				utils.tearDown(done);
 			});
 		});
 		describe('workspace/symbol and textDocument/documentSymbol', function () {
@@ -421,6 +421,9 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 						},
 					},
 				}, done);
+			});
+			after(function (done: () => void) {
+				utils.tearDown(done);
 			});
 			it('document/symbol:a.ts', function (done: (err?: Error) => void) {
 				utils.documentSymbols({
@@ -671,9 +674,6 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					limit: 100
 				}, [], done);
 			});
-			afterEach(function (done: () => void) {
-				utils.tearDown(done);
-			});
 		});
 		describe('workspace/symbol with dependencies', function () {
 			before(function (done: () => void) {
@@ -685,6 +685,9 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 						},
 					},
 				}, done);
+			});
+			after(function (done: () => void) {
+				utils.tearDown(done);
 			});
 			it('workspace symbols with empty query', function (done: (err?: Error) => void) {
 				utils.symbols({
@@ -720,9 +723,6 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					limit: 100
 				}, [], done);
 			});
-			afterEach(function (done: () => void) {
-				utils.tearDown(done);
-			});
 		});
 		describe('workspace/xreferences', function () {
 			before(function (done: () => void) {
@@ -732,6 +732,9 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 						'b.ts': "class b { bar: number; baz(): number { return this.bar;}}; function qux() {}"
 					}
 				}, done);
+			});
+			after(function (done: () => void) {
+				utils.tearDown(done);
 			});
 			it('foo references', function (done: (err?: Error) => void) {
 				utils.workspaceReferences({ query: { "name": "foo", "kind": "method", "containerName": "a" } }, [
@@ -930,9 +933,6 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					},
 				], done);
 			});
-			afterEach(function (done: () => void) {
-				utils.tearDown(done);
-			});
 		});
 		describe('workspace/xdependencies', function () {
 			before(function (done: () => void) {
@@ -967,6 +967,9 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					},
 				}, done);
 			});
+			after(function (done: () => void) {
+				utils.tearDown(done);
+			});
 			it('all dependencies accounted for', function (done: (err?: Error) => void) {
 				utils.dependencies([
 					{ attributes: { 'name': 'babel-code-frame', 'version': '^6.16.0' }, hints: {} },
@@ -982,15 +985,15 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 				]
 					, done);
 			});
-			afterEach(function (done: () => void) {
-				utils.tearDown(done);
-			});
 		});
 		describe('sourcegraph/sourcegraph#2052', function () {
 			before(function (done: () => void) {
 				utils.setUp(newLanguageHandler(), {
 					'a.ts': "let parameters = [];"
 				}, done);
+			});
+			after(function (done: () => void) {
+				utils.tearDown(done);
 			});
 			it('type of parameters should be "any[]"', function (done: (err?: Error) => void) {
 				utils.hover({
@@ -1009,9 +1012,6 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					}
 					, done);
 			});
-			afterEach(function (done: () => void) {
-				utils.tearDown(done);
-			});
 		});
 		describe('live updates', function () {
 			this.timeout(10000);
@@ -1019,6 +1019,9 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 				utils.setUp(newLanguageHandler(), {
 					'a.ts': 'let parameters = [];'
 				}, done);
+			});
+			after(function (done: () => void) {
+				utils.tearDown(done);
 			});
 			it('hover updates', function (done: (err?: Error) => void) {
 
@@ -1072,9 +1075,6 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 							utils.hover(input, expected[3], done);
 						});
 					});
-					afterEach(function (done: () => void) {
-						utils.tearDown(done);
-					});
 				});
 			});
 		});
@@ -1100,6 +1100,9 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 						'b.ts': 'namespace t {\n    export interface Bar {\n        id?: number;\n    }}'
 					}
 				}, done);
+			});
+			after(function (done: () => void) {
+				utils.tearDown(done);
 			});
 			it('definition', function (done: (err?: Error) => void) {
 				utils.definition({
@@ -1206,9 +1209,6 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 						}
 					}, done);
 			});
-			afterEach(function (done: () => void) {
-				utils.tearDown(done);
-			});
 		});
 		describe('typescript libs', function () {
 			before(function (done: () => void) {
@@ -1220,6 +1220,9 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					}),
 					'a.ts': "function foo(n: Node): {console.log(n.parentNode, NaN})}"
 				}, done);
+			});
+			after(function (done: () => void) {
+				utils.tearDown(done);
 			});
 			it('should load local library file', function (done: (err?: Error) => void) {
 				utils.hover({
@@ -1319,9 +1322,6 @@ var Node: {\n\
 							}
 						}, done);
 				});
-			});
-			afterEach(function (done: () => void) {
-				utils.tearDown(done);
 			});
 		});
 	});

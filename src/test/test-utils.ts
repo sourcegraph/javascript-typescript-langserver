@@ -23,6 +23,9 @@ class Channel {
 let channel: Channel;
 
 export function setUp(langhandler: LanguageHandler, memfs: any, done: (err?: Error) => void) {
+	if (channel) {
+		throw new Error("channel wasn't torn down properly after previous test suite");
+	}
 	channel = new Channel();
 
 	let counter = 2;
@@ -127,6 +130,7 @@ export function tearDown(done: () => void) {
 		channel.clientConnection.sendNotification(rt.ExitRequest.type);
 		channel.client.close();
 		channel.server.close();
+		channel = undefined;
 		done();
 	}, (e: any) => {
 		console.error("error on tearDown:", e);
