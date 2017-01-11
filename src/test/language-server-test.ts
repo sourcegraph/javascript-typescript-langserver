@@ -274,7 +274,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 				}
 				done();
 			});
-			afterEach(function (done: () => void) {
+			after(function (done: () => void) {
 				utils.tearDown(done);
 			});
 		});
