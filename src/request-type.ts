@@ -134,7 +134,9 @@ export interface PartialSymbolDescriptor {
  */
 export interface WorkspaceReferenceParams {
 	query: PartialSymbolDescriptor;
-	files?: string[];
+	hints?: {
+		[attr: string]: any;
+	}
 }
 
 export interface SymbolLocationInformation {
