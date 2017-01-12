@@ -727,9 +727,15 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 		describe('workspace/xreferences', function () {
 			before(function (done: () => void) {
 				utils.setUp(newLanguageHandler(), {
-					'a.ts': "class a { foo() { const i = 1;} }",
+					'a.ts': 'class a { foo() { const i = 1;} }',
 					'foo': {
 						'b.ts': "class b { bar: number; baz(): number { return this.bar;}}; function qux() {}"
+					},
+					'c.ts': 'import { x } from "dep/dep";',
+					'node_modules': {
+						'dep': {
+							'dep.ts': 'export var x = 1;',
+						}
 					}
 				}, done);
 			});
@@ -737,29 +743,50 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 				utils.tearDown(done);
 			});
 			it('foo references', function (done: (err?: Error) => void) {
-				utils.workspaceReferences({ query: { "name": "foo", "kind": "method", "containerName": "a" } }, [
-					{
-						"symbol": {
-							"containerKind": "",
-							"containerName": "a",
-							"name": "foo",
-							"kind": "method",
-						},
-						"reference": {
-							"range": {
-								"end": {
-									"character": 13,
-									"line": 0
-								},
-								"start": {
-									"character": 9,
-									"line": 0
-								},
+				utils.workspaceReferences({ query: { "name": "foo", "kind": "method", "containerName": "a" } }, [{
+					"symbol": {
+						"containerKind": "",
+						"containerName": "a",
+						"name": "foo",
+						"kind": "method",
+					},
+					"reference": {
+						"range": {
+							"end": {
+								"character": 13,
+								"line": 0
 							},
-							"uri": "file:///a.ts",
+							"start": {
+								"character": 9,
+								"line": 0
+							},
 						},
-					}
-				], done);
+						"uri": "file:///a.ts",
+					},
+				}], done);
+			});
+			it('dep reference', function (done: (err?: Error) => void) {
+				utils.workspaceReferences({ query: { "name": "x", "containerName": "\"/node_modules/dep/dep\"" } }, [{
+					"reference": {
+						"range": {
+							"end": {
+								"character": 10,
+								"line": 0,
+							},
+							"start": {
+								"character": 8,
+								"line": 0,
+							}
+						},
+						"uri": "file:///c.ts",
+					},
+					"symbol": {
+						"containerKind": "",
+						"containerName": "\"/node_modules/dep/dep\"",
+						"kind": "var",
+						"name": "x",
+					},
+				}], done);
 			});
 			it('all references', function (done: (err?: Error) => void) {
 				utils.workspaceReferences({ query: {} }, [
@@ -824,6 +851,27 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 								},
 							},
 							"uri": "file:///a.ts",
+						},
+					},
+					{
+						"reference": {
+							"range": {
+								"end": {
+									"character": 10,
+									"line": 0,
+								},
+								"start": {
+									"character": 8,
+									"line": 0,
+								}
+							},
+							"uri": "file:///c.ts",
+						},
+						"symbol": {
+							"containerKind": "",
+							"containerName": "\"/node_modules/dep/dep\"",
+							"kind": "var",
+							"name": "x",
 						},
 					},
 					{

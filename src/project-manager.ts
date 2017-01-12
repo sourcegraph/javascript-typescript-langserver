@@ -211,12 +211,7 @@ export class ProjectManager {
 
 	private ensuredAllFiles?: Promise<void>;
 
-	ensureFilesForReferences(uri: string): Promise<void> {
-		const fileName: string = util.uri2path(uri);
-		if (util.normalizePath(fileName).indexOf(`${path_.posix.sep}node_modules${path_.posix.sep}`) !== -1) {
-			return this.ensureFilesForWorkspaceSymbol();
-		}
-
+	ensureAllFiles(): Promise<void> {
 		if (this.ensuredAllFiles) {
 			return this.ensuredAllFiles;
 		}
@@ -245,6 +240,15 @@ export class ProjectManager {
 		});
 
 		return promise;
+	}
+
+	ensureFilesForReferences(uri: string): Promise<void> {
+		const fileName: string = util.uri2path(uri);
+		if (util.normalizePath(fileName).indexOf(`${path_.posix.sep}node_modules${path_.posix.sep}`) !== -1) {
+			return this.ensureFilesForWorkspaceSymbol();
+		}
+
+		return this.ensureAllFiles();
 	}
 
 	private async ensureTransitiveFileDependencies(fileNames: string[], maxDepth: number, seen: Set<string>): Promise<void> {

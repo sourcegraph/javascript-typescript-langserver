@@ -266,7 +266,7 @@ export class TypeScriptService implements LanguageHandler {
 	async getWorkspaceReference(params: rt.WorkspaceReferenceParams): Promise<rt.ReferenceInformation[]> {
 		const refInfo: rt.ReferenceInformation[] = [];
 
-		await this.projectManager.ensureFilesForWorkspaceSymbol();
+		await this.projectManager.ensureAllFiles();
 
 		const configs = this.projectManager.getConfigurations();
 		await Promise.all(configs.map(async (config) => {
