@@ -53,13 +53,13 @@ export function setUp(langhandler: LanguageHandler, memfs: any, done: (err?: Err
 
 	channel.server = net.createServer((stream) => {
 		channel.serverIn = stream;
-		channel.serverConnection = newConnection(channel.serverIn, channel.serverOut);
+		channel.serverConnection = newConnection(channel.serverIn, channel.serverOut, { trace: true });
 		registerLanguageHandler(channel.serverConnection, true, langhandler);
 		maybeDone();
 	});
 	channel.client = net.createServer((stream) => {
 		channel.clientIn = stream;
-		channel.clientConnection = newConnection(channel.clientIn, channel.clientOut);
+		channel.clientConnection = newConnection(channel.clientIn, channel.clientOut, { trace: false });
 		initFs(channel.clientConnection, memfs);
 		maybeDone();
 	});

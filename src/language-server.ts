@@ -18,10 +18,19 @@ program
 	.option('-s, --strict', 'Strict mode')
 	.option('-p, --port [port]', 'LSP port (' + defaultLspPort + ')', parseInt)
 	.option('-c, --cluster [num]', 'Number of concurrent cluster workers (defaults to number of CPUs, ' + numCPUs + ')', parseInt)
+	.option('-t, --trace', 'Print all requests and responses')
+	.option('-l, --logfile [file]', 'Also log to this file (in addition to stderr')
 	.parse(process.argv);
 
 util.setStrict(program.strict);
 const lspPort = program.port || defaultLspPort;
 const clusterSize = program.cluster || numCPUs;
 
-server.serve(clusterSize, lspPort, program.strict, () => new TypeScriptService());
+const options: server.ServeOptions = {
+	clusterSize: clusterSize,
+	lspPort: lspPort,
+	strict: program.strict,
+	trace: program.trace,
+	logfile: program.logfile
+};
+server.serve(options, () => new TypeScriptService());

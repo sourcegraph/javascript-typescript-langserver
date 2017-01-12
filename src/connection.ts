@@ -15,6 +15,10 @@ import {
 	DidChangeTextDocumentParams,
 	DidSaveTextDocumentParams
 } from 'vscode-languageserver';
+import { Message, StreamMessageReader, StreamMessageWriter, DataCallback } from 'vscode-jsonrpc';
+
+import * as fs_ from 'fs';
+import { EOL } from 'os';
 
 import * as util from './util';
 import * as fs from './fs';
@@ -22,8 +26,44 @@ import * as rt from './request-type';
 
 import { LanguageHandler } from './lang-handler';
 
-export function newConnection(input: any, output: any): IConnection {
-	const connection = createConnection(input, output);
+/**
+ * Tracing options control dumping request/responses to stderr and optional file
+ */
+export interface TraceOptions {
+	trace?: boolean;
+	logfile?: string;
+}
+
+export function newConnection(input: any, output: any, trace: TraceOptions): IConnection {
+
+	const reader = new StreamMessageReader(input);
+
+	var logger: fs_.WriteStream = null;
+	if (trace.trace && trace.logfile) {
+		try {
+			logger = fs_.createWriteStream(trace.logfile, { 'flags': 'a', encoding: 'utf-8' });
+		} catch (e) {
+			console.error('Unable to initialize logger', e);
+		}
+	}
+
+	const _listen = reader.listen.bind(reader);
+	reader.listen = function (callback: DataCallback): void {
+		const tracer = (message: Message): void => {
+			doTrace(message, trace, logger, '-->');
+			callback(message);
+		};
+		_listen(tracer);
+	};
+
+	const writer = new StreamMessageWriter(output);
+	const _write = writer.write.bind(writer);
+	writer.write = function (message: Message) {
+		doTrace(message, trace, logger, '<--');
+		_write(message);
+	}
+
+	const connection = createConnection(reader, writer);
 	input.removeAllListeners('end');
 	input.removeAllListeners('close');
 	output.removeAllListeners('end');
@@ -32,8 +72,12 @@ export function newConnection(input: any, output: any): IConnection {
 	let closed = false;
 	function close() {
 		if (!closed) {
-			input.close();
-			output.close();
+			if ((<fs_.ReadStream>input).close) {
+				(<fs_.ReadStream>input).close();
+			}
+			if ((<fs_.WriteStream>output).close) {
+				(<fs_.WriteStream>output).close();
+			}
 			closed = true;
 		}
 	}
@@ -201,4 +245,23 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 
 function docid(params: TextDocumentPositionParams): string {
 	return params.textDocument.uri + ':' + params.position.line + ':' + params.position.character;
+}
+
+function dump(message: Message): string {
+	return JSON.stringify(message);
+}
+
+function doTrace(message: Message, options: TraceOptions, stream: fs_.WriteStream, prefix: string) {
+	if (options.trace) {
+		const text = prefix + ' ' + dump(message);
+		console.error(text);
+		if (stream) {
+			try {
+				stream.write(text + EOL);
+			} catch (e) {
+				// ignore
+			}
+		}
+	}
+
 }

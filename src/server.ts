@@ -1,7 +1,7 @@
 import * as net from 'net';
 import * as cluster from 'cluster';
 
-import { newConnection, registerLanguageHandler } from './connection';
+import { newConnection, registerLanguageHandler, TraceOptions } from './connection';
 import { LanguageHandler } from './lang-handler';
 
 async function rewriteConsole() {
@@ -15,17 +15,25 @@ async function rewriteConsole() {
 	}
 }
 
+export interface ServeOptions extends TraceOptions {
+	clusterSize: number;
+	lspPort: number;
+	strict?: boolean;
+	trace?: boolean;
+	logfile?: string;
+}
+
 /**
  * serve starts a singleton language server instance that uses a
  * cluster of worker processes to achieve some semblance of
  * parallelism.
  */
-export async function serve(clusterSize: number, lspPort: number, strict: boolean, newLangHandler: () => LanguageHandler): Promise<void> {
+export async function serve(options: ServeOptions, newLangHandler: () => LanguageHandler): Promise<void> {
 	rewriteConsole();
 
 	if (cluster.isMaster) {
-		console.error(`Master node process spawning ${clusterSize} workers`)
-		for (let i = 0; i < clusterSize; ++i) {
+		console.error(`Master node process spawning ${options.clusterSize} workers`)
+		for (let i = 0; i < options.clusterSize; ++i) {
 			const worker = cluster.fork().on('disconnect', () => {
 				console.error(`worker ${worker.process.pid} disconnect`)
 			});
@@ -36,13 +44,13 @@ export async function serve(clusterSize: number, lspPort: number, strict: boolea
 			console.error(`worker ${worker.process.pid} exit (${reason})`);
 		});
 	} else {
-		console.error('Listening for incoming LSP connections on', lspPort);
+		console.error('Listening for incoming LSP connections on', options.lspPort);
 		var server = net.createServer((socket) => {
-			const connection = newConnection(socket, socket);
-			registerLanguageHandler(connection, strict, newLangHandler());
+			const connection = newConnection(socket, socket, options);
+			registerLanguageHandler(connection, options.strict, newLangHandler());
 			connection.listen();
 		});
 
-		server.listen(lspPort);
+		server.listen(options.lspPort);
 	}
 }
