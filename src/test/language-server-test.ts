@@ -732,6 +732,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 						'b.ts': "class b { bar: number; baz(): number { return this.bar;}}; function qux() {}"
 					},
 					'c.ts': 'import { x } from "dep/dep";',
+					'package.json': '{ "name": "mypkg" }',
 					'node_modules': {
 						'dep': {
 							'dep.ts': 'export var x = 1;',
@@ -764,6 +765,32 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 						"uri": "file:///a.ts",
 					},
 				}], done);
+			});
+			it('foo references, with hint', function (done: (err?: Error) => void) {
+				utils.workspaceReferences({ query: { "name": "foo", "kind": "method", "containerName": "a" }, hints: { dependeePackageName: "mypkg" } }, [{
+					"symbol": {
+						"containerKind": "",
+						"containerName": "a",
+						"name": "foo",
+						"kind": "method",
+					},
+					"reference": {
+						"range": {
+							"end": {
+								"character": 13,
+								"line": 0
+							},
+							"start": {
+								"character": 9,
+								"line": 0
+							},
+						},
+						"uri": "file:///a.ts",
+					},
+				}], done);
+			});
+			it('foo references, with hint, not found', function (done: (err?: Error) => void) {
+				utils.workspaceReferences({ query: { "name": "foo", "kind": "method", "containerName": "a" }, hints: { dependeePackageName: "NOT-mypkg" } }, [], done);
 			});
 			it('dep reference', function (done: (err?: Error) => void) {
 				utils.workspaceReferences({ query: { "name": "x", "containerName": "\"/node_modules/dep/dep\"" } }, [{
@@ -1020,16 +1047,16 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 			});
 			it('all dependencies accounted for', function (done: (err?: Error) => void) {
 				utils.dependencies([
-					{ attributes: { 'name': 'babel-code-frame', 'version': '^6.16.0' }, hints: {} },
-					{ attributes: { 'name': 'findup-sync', 'version': '~0.3.0' }, hints: {} },
-					{ attributes: { 'name': "@types/babel-code-frame", 'version': "^6.16.0" }, hints: {} },
-					{ attributes: { 'name': "@types/optimist", 'version': "0.0.29" }, hints: {} },
-					{ attributes: { 'name': "chai", 'version': "^3.0.0" }, hints: {} },
-					{ attributes: { 'name': "tslint", 'version': "latest" }, hints: {} },
-					{ attributes: { 'name': "tslint-test-config-non-relative", 'version': "file:test/external/tslint-test-config-non-relative" }, hints: {} },
-					{ attributes: { 'name': "typescript", 'version': "2.0.10" }, hints: {} },
-					{ attributes: { 'name': "typescript", 'version': ">=2.0.0" }, hints: {} },
-					{ attributes: { 'name': "subproject-dep", 'version': "0.0.0" }, hints: {} },
+					{ attributes: { 'name': 'babel-code-frame', 'version': '^6.16.0' }, hints: { 'dependeePackageName': 'tslint' } },
+					{ attributes: { 'name': 'findup-sync', 'version': '~0.3.0' }, hints: { 'dependeePackageName': 'tslint' } },
+					{ attributes: { 'name': "@types/babel-code-frame", 'version': "^6.16.0" }, hints: { 'dependeePackageName': 'tslint' } },
+					{ attributes: { 'name': "@types/optimist", 'version': "0.0.29" }, hints: { 'dependeePackageName': 'tslint' } },
+					{ attributes: { 'name': "chai", 'version': "^3.0.0" }, hints: { 'dependeePackageName': 'tslint' } },
+					{ attributes: { 'name': "tslint", 'version': "latest" }, hints: { 'dependeePackageName': 'tslint' } },
+					{ attributes: { 'name': "tslint-test-config-non-relative", 'version': "file:test/external/tslint-test-config-non-relative" }, hints: { 'dependeePackageName': 'tslint' } },
+					{ attributes: { 'name': "typescript", 'version': "2.0.10" }, hints: { 'dependeePackageName': 'tslint' } },
+					{ attributes: { 'name': "typescript", 'version': ">=2.0.0" }, hints: { 'dependeePackageName': 'tslint' } },
+					{ attributes: { 'name': "subproject-dep", 'version': "0.0.0" }, hints: { 'dependeePackageName': 'subproject' } },
 				]
 					, done);
 			});

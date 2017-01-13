@@ -270,6 +270,10 @@ export class TypeScriptService implements LanguageHandler {
 
 		const configs = this.projectManager.getConfigurations();
 		await Promise.all(configs.map(async (config) => {
+			if (params.hints && params.hints.dependeePackageName && params.hints.dependeePackageName !== config.getPackageName()) {
+				return;
+			}
+
 			await config.ensureAllFiles();
 
 			const files = config.getService().getProgram().getSourceFiles().sort((a, b) => a.fileName.localeCompare(b.fileName));
@@ -340,10 +344,11 @@ export class TypeScriptService implements LanguageHandler {
 		const deps: rt.DependencyReference[] = [];
 		const pkgJsons = pkgFiles.map((p) => JSON.parse(this.projectManager.getFs().readFile(p)));
 		for (const pkgJson of pkgJsons) {
+			const pkgName = pkgJson['name'];
 			for (const k of ['dependencies', 'devDependencies', 'peerDependencies']) {
 				if (pkgJson[k]) {
 					for (const name in pkgJson[k]) {
-						deps.push({ attributes: { 'name': name, 'version': pkgJson[k][name] }, hints: {} });
+						deps.push({ attributes: { 'name': name, 'version': pkgJson[k][name] }, hints: { dependeePackageName: pkgName } });
 					}
 				}
 			}

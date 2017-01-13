@@ -134,9 +134,7 @@ export interface PartialSymbolDescriptor {
  */
 export interface WorkspaceReferenceParams {
 	query: PartialSymbolDescriptor;
-	hints?: {
-		[attr: string]: any;
-	}
+	hints?: DependencyHints;
 }
 
 export interface SymbolLocationInformation {
@@ -158,11 +156,13 @@ export interface DependencyAttributes {
 	version?: string;
 }
 
+export interface DependencyHints {
+	dependeePackageName?: string;
+}
+
 export interface DependencyReference {
 	attributes: DependencyAttributes;
-	hints: {
-		[attr: string]: any;
-	}
+	hints: DependencyHints;
 }
 
 export namespace DocumentSymbolRequest {

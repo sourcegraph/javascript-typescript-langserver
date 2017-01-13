@@ -486,12 +486,12 @@ export class ProjectManager {
 			if (dir == '.') {
 				dir = '';
 			}
-			this.configs.set(dir, new ProjectConfiguration(this.localFs, this.versions, k, undefined, this.traceModuleResolution));
+			this.configs.set(dir, new ProjectConfiguration(this.localFs, path_.posix.join('/', dir), this.versions, k, undefined, this.traceModuleResolution));
 			rootdirs.add(dir);
 		});
 		if (!rootdirs.has('')) {
 			// collecting all the files in workspace by making fake configuration object
-			this.configs.set('', new ProjectConfiguration(this.localFs, this.versions, '', {
+			this.configs.set('', new ProjectConfiguration(this.localFs, '/', this.versions, '', {
 				compilerOptions: {
 					module: ts.ModuleKind.CommonJS,
 					allowNonTsExtensions: false,
@@ -772,22 +772,24 @@ export class ProjectConfiguration {
 	private host?: InMemoryLanguageServiceHost;
 
 	private fs: InMemoryFileSystem;
-	private configFileName: string;
+	private configFileName: string; // path to [tj]sconfig.json, if exists
 	private configContent: any;
 	private versions: Map<string, number>;
 	private traceModuleResolution: boolean;
+	private dir: string;
 
 	/**
 	 * @param fs file system to use
 	 * @param configFileName configuration file name (relative to workspace root)
 	 * @param configContent optional configuration content to use instead of reading configuration file)
 	 */
-	constructor(fs: InMemoryFileSystem, versions: Map<string, number>, configFileName: string, configContent?: any, traceModuleResolution?: boolean) {
+	constructor(fs: InMemoryFileSystem, dir: string, versions: Map<string, number>, configFileName: string, configContent?: any, traceModuleResolution?: boolean) {
 		this.fs = fs;
 		this.configFileName = configFileName;
 		this.configContent = configContent;
 		this.versions = versions;
 		this.traceModuleResolution = traceModuleResolution || false;
+		this.dir = dir;
 	}
 
 	moduleResolutionHost(): ts.ModuleResolutionHost {
@@ -808,6 +810,14 @@ export class ProjectConfiguration {
 		this.service = undefined;
 		this.program = undefined;
 		this.host = undefined;
+	}
+
+	getPackageName(): string | null {
+		const pkgJsonFile = path_.posix.join(this.dir, 'package.json');
+		if (this.fs.fileExists(pkgJsonFile)) {
+			return JSON.parse(this.fs.readFile(pkgJsonFile))['name'];
+		}
+		return null;
 	}
 
 	getService(): ts.LanguageService {
