@@ -386,11 +386,14 @@ export class TypeScriptService implements LanguageHandler {
 			return null;
 		}
 
-		return CompletionList.create(completions.entries.map((item) => {
+		return CompletionList.create(completions.entries.map(item => {
 			const ret = CompletionItem.create(item.name);
-			const kind = completionKinds.get(item.kind);
+			const kind = completionKinds[item.kind];
 			if (kind) {
 				ret.kind = kind;
+			}
+			if (item.sortText) {
+				ret.sortText = item.sortText;
 			}
 			return ret;
 		}));
@@ -1399,21 +1402,25 @@ function pushall<T>(arr: T[], ...elems: (T | null | undefined)[]): number {
 	return arr.length;
 }
 
-const completionKinds = new Map<string, CompletionItemKind>();
-completionKinds.set("class", CompletionItemKind.Class);
-completionKinds.set("constructor", CompletionItemKind.Constructor);
-completionKinds.set("enum", CompletionItemKind.Enum);
-completionKinds.set("field", CompletionItemKind.Field);
-completionKinds.set("file", CompletionItemKind.File);
-completionKinds.set("function", CompletionItemKind.Function);
-completionKinds.set("interface", CompletionItemKind.Interface);
-completionKinds.set("keyword", CompletionItemKind.Keyword);
-completionKinds.set("method", CompletionItemKind.Method);
-completionKinds.set("module", CompletionItemKind.Module);
-completionKinds.set("property", CompletionItemKind.Property);
-completionKinds.set("reference", CompletionItemKind.Reference);
-completionKinds.set("snippet", CompletionItemKind.Snippet);
-completionKinds.set("text", CompletionItemKind.Text);
-completionKinds.set("text", CompletionItemKind.Unit);
-completionKinds.set("value", CompletionItemKind.Value);
-completionKinds.set("variable", CompletionItemKind.Variable);
+/**
+ * Maps string-based CompletionEntry::kind to enum-based CompletionItemKind
+ */
+const completionKinds : {[name: string]: CompletionItemKind} = {
+	"class": CompletionItemKind.Class,
+	"constructor": CompletionItemKind.Constructor,
+	"enum": CompletionItemKind.Enum,
+	"field": CompletionItemKind.Field,
+	"file": CompletionItemKind.File,
+	"function": CompletionItemKind.Function,
+	"interface": CompletionItemKind.Interface,
+	"keyword": CompletionItemKind.Keyword,
+	"method": CompletionItemKind.Method,
+	"module": CompletionItemKind.Module,
+	"property": CompletionItemKind.Property,
+	"reference": CompletionItemKind.Reference,
+	"snippet": CompletionItemKind.Snippet,
+	"text": CompletionItemKind.Text,
+	"unit": CompletionItemKind.Unit,
+	"value": CompletionItemKind.Value,
+	"variable": CompletionItemKind.Variable
+};
