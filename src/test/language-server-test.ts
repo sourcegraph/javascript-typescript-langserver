@@ -1399,6 +1399,34 @@ var Node: {\n\
 				});
 			});
 		});
+		describe('completions', function () {
+			before(function (done: () => void) {
+				utils.setUp(newLanguageHandler(), {
+					'a.ts': `class A {
+    foo() {}
+    bar() {}
+    baz() {}
+    qux: number;
+}
+const a = new A();
+a.`
+				}, done);
+			});
+			after(function (done: () => void) {
+				utils.tearDown(done);
+			});
+			it('produces', function (done: (err?: Error) => void) {
+				utils.completions({
+					textDocument: {
+						uri: 'file:///a.ts'
+					},
+					position: {
+						line: 7,
+						character: 2
+					}
+				}, ["bar", "baz", "foo", "qux"], done);
+			});
+		});
 	});
 }
 

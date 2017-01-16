@@ -13,7 +13,8 @@ import {
 	DidOpenTextDocumentParams,
 	DidCloseTextDocumentParams,
 	DidChangeTextDocumentParams,
-	DidSaveTextDocumentParams
+	DidSaveTextDocumentParams,
+	CompletionList
 } from 'vscode-languageserver';
 import { Message, StreamMessageReader, StreamMessageWriter, DataCallback } from 'vscode-jsonrpc';
 
@@ -236,6 +237,19 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 			const exit = new Date().getTime();
 			console.error('dependencies found', result.length, (exit - enter) / 1000.0);
 			return Promise.resolve(result || []);
+		} catch (e) {
+			console.error(e);
+			return Promise.reject(e);
+		}
+	});
+
+	connection.onRequest(rt.TextDocumentCompletionRequest.type, async (params: TextDocumentPositionParams): Promise<CompletionList> => {
+		const enter = new Date().getTime();
+		try {
+			const result = await handler.getCompletions(params);
+			const exit = new Date().getTime();
+			console.error('completion items found', result && result.items ? result.items.length : 0, (exit - enter) / 1000.0);
+			return Promise.resolve(result);
 		} catch (e) {
 			console.error(e);
 			return Promise.reject(e);

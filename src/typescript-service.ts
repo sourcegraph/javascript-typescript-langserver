@@ -14,7 +14,9 @@ import {
 	DidOpenTextDocumentParams,
 	DidCloseTextDocumentParams,
 	DidChangeTextDocumentParams,
-	DidSaveTextDocumentParams
+	DidSaveTextDocumentParams,
+	CompletionList,
+	CompletionItem
 } from 'vscode-languageserver';
 
 import * as async from 'async';
@@ -73,6 +75,10 @@ export class TypeScriptService implements LanguageHandler {
 						xworkspaceReferencesProvider: true,
 						xdefinitionProvider: true,
 						xdependenciesProvider: true,
+						completionProvider: {
+							resolveProvider: false,
+							triggerCharacters: ['.']
+						}
 					}
 				})
 			}
@@ -354,6 +360,38 @@ export class TypeScriptService implements LanguageHandler {
 			}
 		}
 		return deps;
+	}
+
+	async getCompletions(params: TextDocumentPositionParams): Promise<CompletionList> {
+		const uri = util.uri2reluri(params.textDocument.uri, this.root)
+		const line = params.position.line;
+		const column = params.position.character;
+		const fileName: string = util.uri2path(uri);
+
+		await this.projectManager.ensureFilesForReferences(uri);
+
+		const configuration = this.projectManager.getConfiguration(fileName);
+		await configuration.ensureAllFiles();
+
+		const sourceFile = this.getSourceFile(configuration, fileName);
+		if (!sourceFile) {
+			return null;
+		}
+
+		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
+		const completions = configuration.getService().getCompletionsAtPosition(fileName, offset);
+
+		if (completions == null) {
+			return null;
+		}
+
+		let items = [];
+		for (const completion of completions.entries) {
+			const item = CompletionItem.create(completion.name);
+			items.push(item);
+		}
+
+		return CompletionList.create(items);
 	}
 
 	/*

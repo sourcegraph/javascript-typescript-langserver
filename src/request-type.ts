@@ -204,3 +204,11 @@ export namespace TextDocumentDidChangeNotification {
 		}
 	};
 }
+
+export namespace TextDocumentCompletionRequest {
+	export const type: vscode.RequestType<vscode.TextDocumentPositionParams, vscode.CompletionList, void> = {
+		get method() {
+			return 'textDocument/completion';
+		}
+	};
+}

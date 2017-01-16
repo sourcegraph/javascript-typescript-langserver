@@ -292,3 +292,15 @@ export function change(uri: string, text: string) {
 		}]
 	});
 }
+
+export function completions(params: vscode.TextDocumentPositionParams, expected: string[], done: (err?: Error) => void) {
+	channel.clientConnection.sendRequest(rt.TextDocumentCompletionRequest.type, params).then((result: vscode.CompletionList) => {
+		check(done, () => {
+			chai.assert(result);
+			const names = result.items.map((item) => item.label).sort();
+			chai.expect(names).to.deep.equal(expected.sort());
+		});
+	}, (err?: Error) => {
+		return done(err || new Error('textDocument/completion request failed'))
+	})
+}
