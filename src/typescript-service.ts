@@ -16,7 +16,8 @@ import {
 	DidChangeTextDocumentParams,
 	DidSaveTextDocumentParams,
 	CompletionList,
-	CompletionItem
+	CompletionItem,
+	CompletionItemKind
 } from 'vscode-languageserver';
 
 import * as async from 'async';
@@ -385,13 +386,14 @@ export class TypeScriptService implements LanguageHandler {
 			return null;
 		}
 
-		let items = [];
-		for (const completion of completions.entries) {
-			const item = CompletionItem.create(completion.name);
-			items.push(item);
-		}
-
-		return CompletionList.create(items);
+		return CompletionList.create(completions.entries.map((item) => {
+			const ret = CompletionItem.create(item.name);
+			const kind = completionKinds.get(item.kind);
+			if (kind) {
+				ret.kind = kind;
+			}
+			return ret;
+		}));
 	}
 
 	/*
@@ -1396,3 +1398,22 @@ function pushall<T>(arr: T[], ...elems: (T | null | undefined)[]): number {
 	}
 	return arr.length;
 }
+
+const completionKinds = new Map<string, CompletionItemKind>();
+completionKinds.set("class", CompletionItemKind.Class);
+completionKinds.set("constructor", CompletionItemKind.Constructor);
+completionKinds.set("enum", CompletionItemKind.Enum);
+completionKinds.set("field", CompletionItemKind.Field);
+completionKinds.set("file", CompletionItemKind.File);
+completionKinds.set("function", CompletionItemKind.Function);
+completionKinds.set("interface", CompletionItemKind.Interface);
+completionKinds.set("keyword", CompletionItemKind.Keyword);
+completionKinds.set("method", CompletionItemKind.Method);
+completionKinds.set("module", CompletionItemKind.Module);
+completionKinds.set("property", CompletionItemKind.Property);
+completionKinds.set("reference", CompletionItemKind.Reference);
+completionKinds.set("snippet", CompletionItemKind.Snippet);
+completionKinds.set("text", CompletionItemKind.Text);
+completionKinds.set("text", CompletionItemKind.Unit);
+completionKinds.set("value", CompletionItemKind.Value);
+completionKinds.set("variable", CompletionItemKind.Variable);

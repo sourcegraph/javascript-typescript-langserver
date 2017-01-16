@@ -249,10 +249,10 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 			const result = await handler.getCompletions(params);
 			const exit = new Date().getTime();
 			console.error('completion items found', result && result.items ? result.items.length : 0, (exit - enter) / 1000.0);
-			return Promise.resolve(result);
+			return result;
 		} catch (e) {
 			console.error(e);
-			return Promise.reject(e);
+			throw e;
 		}
 	});
 }
