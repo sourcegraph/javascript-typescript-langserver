@@ -4,6 +4,7 @@ import { newConnection, registerLanguageHandler } from './connection';
 import { TypeScriptService } from './typescript-service';
 import * as util from './util';
 
+const packageJson = require('../package.json');
 var program = require('commander');
 
 process.on('uncaughtException', (err: string) => {
@@ -11,10 +12,10 @@ process.on('uncaughtException', (err: string) => {
 });
 
 program
-	.version('0.0.1')
-	.option('-s, --strict', 'Strict mode')
-	.option('-t, --trace', 'Print all requests and responses')
-	.option('-l, --logfile [file]', 'Also log to this file (in addition to stderr')
+	.version(packageJson.version)
+	.option('-s, --strict', 'enables strict mode')
+	.option('-t, --trace', 'print all requests and responses')
+	.option('-l, --logfile [file]', 'also log to this file (in addition to stderr)')
 	.parse(process.argv);
 
 util.setStrict(program.strict);
