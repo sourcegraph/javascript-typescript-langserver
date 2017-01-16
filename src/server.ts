@@ -1,8 +1,30 @@
+import {
+	IConnection,
+} from 'vscode-languageserver';
+
 import * as net from 'net';
 import * as cluster from 'cluster';
 
 import { newConnection, registerLanguageHandler, TraceOptions } from './connection';
+import { registerMasterHandler } from './master-connection';
 import { LanguageHandler } from './lang-handler';
+import * as fs from './fs';
+
+const workersReady = new Map<string, Promise<void>>();
+
+function randomNWorkers(n: number): string[] {
+	const unselected = Array.from(workersReady.keys());
+	let numUnselected = unselected.length;
+	const selected: string[] = [];
+	for (let i = 0; i < n; i++) {
+		const s = Math.floor(Math.random() * numUnselected);
+		selected.push(unselected[s]);
+		const a = unselected[numUnselected - 1], b = unselected[s];
+		unselected[numUnselected - 1] = b, unselected[s] = a;
+		numUnselected--;
+	}
+	return selected;
+}
 
 async function rewriteConsole() {
 	const consoleErr = console.error;
@@ -29,28 +51,68 @@ export interface ServeOptions extends TraceOptions {
  * parallelism.
  */
 export async function serve(options: ServeOptions, newLangHandler: () => LanguageHandler): Promise<void> {
+	if (options.clusterSize < 2) {
+		throw new Error("clusterSize should be at least 2");
+	}
+
 	rewriteConsole();
 
 	if (cluster.isMaster) {
-		console.error(`Master node process spawning ${options.clusterSize} workers`)
+		console.error(`spawning ${options.clusterSize} workers`)
 		for (let i = 0; i < options.clusterSize; ++i) {
 			const worker = cluster.fork().on('disconnect', () => {
 				console.error(`worker ${worker.process.pid} disconnect`)
 			});
+
+			workersReady.set(worker.id, new Promise<void>((resolve, reject) => {
+				worker.on('listening', resolve);
+			}));
 		}
 
 		cluster.on('exit', (worker, code, signal) => {
 			const reason = code === null ? signal : code;
 			console.error(`worker ${worker.process.pid} exit (${reason})`);
 		});
+
+		var server = net.createServer(async (socket) => {
+			const connection = newConnection(socket, socket, options);
+
+			// Create connections to two worker servers
+			const workerIds = randomNWorkers(2);
+			await Promise.all(workerIds.map((id) => workersReady.get(id)));
+
+			const workerConns = await Promise.all(workerIds.map((id) => new Promise<IConnection>((resolve, reject) => {
+				const clientSocket = net.createConnection({ port: options.lspPort + parseInt(id) }, () => {
+					resolve(newConnection(clientSocket, clientSocket, options));
+				});
+			})));
+			for (const workerConn of workerConns) {
+				workerConn.onRequest(fs.ReadDirRequest.type, async (params: string): Promise<fs.FileInfo[]> => {
+					return connection.sendRequest(fs.ReadDirRequest.type, params);
+				});
+				workerConn.onRequest(fs.ReadFileRequest.type, async (params: string): Promise<string> => {
+					return connection.sendRequest(fs.ReadFileRequest.type, params);
+				});
+				workerConn.listen();
+			}
+
+			console.error(`connected to workers ${workerIds[0]} and ${workerIds[1]}`);
+
+			registerMasterHandler(connection, workerConns[0], workerConns[1]);
+			connection.listen();
+			console.error("established connection to client");
+		});
+		console.error(`listening for incoming LSP connections on ${options.lspPort} `);
+		server.listen(options.lspPort);
+
 	} else {
-		console.error('Listening for incoming LSP connections on', options.lspPort);
+		console.error(`listening for incoming LSP connections on ${options.lspPort + cluster.worker.id} `);
 		var server = net.createServer((socket) => {
 			const connection = newConnection(socket, socket, options);
 			registerLanguageHandler(connection, options.strict, newLangHandler());
 			connection.listen();
+			console.error("established connection to master");
 		});
-
-		server.listen(options.lspPort);
+		server.listen(options.lspPort + parseInt(cluster.worker.id));
 	}
 }
