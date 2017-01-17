@@ -79,7 +79,8 @@ export class TypeScriptService implements LanguageHandler {
 						completionProvider: {
 							resolveProvider: false,
 							triggerCharacters: ['.']
-						}
+						},
+						packagesProvider: true,
 					}
 				})
 			}
@@ -332,6 +333,47 @@ export class TypeScriptService implements LanguageHandler {
 		}));
 
 		return refInfo;
+	}
+
+	async getPackages(): Promise<rt.PackageInformation[]> {
+		await this.projectManager.ensureModuleStructure();
+
+		const pkgFiles: string[] = [];
+		pm.walkInMemoryFs(this.projectManager.getFs(), "/", (path: string, isdir: boolean): Error | void => {
+			if (isdir && path_.basename(path) === "node_modules") {
+				return pm.skipDir;
+			}
+			if (isdir) {
+				return;
+			}
+			if (path_.basename(path) !== "package.json") {
+				return;
+			}
+			pkgFiles.push(path);
+		});
+
+		const pkgs: rt.PackageInformation[] = [];
+		const pkgJsons = pkgFiles.map((p) => JSON.parse(this.projectManager.getFs().readFile(p)));
+		for (const pkgJson of pkgJsons) {
+			const deps: rt.DependencyReference[] = [];
+			const pkgName = pkgJson['name'];
+			const pkgVersion = pkgJson['version'];
+			for (const k of ['dependencies', 'devDependencies', 'peerDependencies']) {
+				if (pkgJson[k]) {
+					for (const name in pkgJson[k]) {
+						deps.push({ attributes: { 'name': name, 'version': pkgJson[k][name] }, hints: { dependeePackageName: pkgName } });
+					}
+				}
+			}
+			pkgs.push({
+				package: {
+					name: pkgName,
+					version: pkgVersion,
+				},
+				dependencies: deps,
+			})
+		}
+		return pkgs;
 	}
 
 	async getDependencies(): Promise<rt.DependencyReference[]> {

@@ -90,6 +90,14 @@ export namespace DependenciesRequest {
 	};
 }
 
+export namespace PackagesRequest {
+	export const type: vscode.RequestType<void, PackageInformation[], any> = {
+		get method() {
+			return 'workspace/packages';
+		}
+	};
+}
+
 export interface WorkspaceSymbolParamsWithLimit {
 	query: string;
 	limit: number;
@@ -116,7 +124,7 @@ export interface SymbolDescriptor {
 	name: string;
 	containerKind: string;
 	containerName: string;
-	package?: DependencyAttributes;
+	package?: PackageDescriptor;
 }
 
 export interface PartialSymbolDescriptor {
@@ -124,7 +132,7 @@ export interface PartialSymbolDescriptor {
 	name?: string;
 	containerKind?: string;
 	containerName?: string;
-	package?: DependencyAttributes;
+	package?: PackageDescriptor;
 }
 
 /*
@@ -151,7 +159,12 @@ export interface ReferenceInformation {
 	symbol: SymbolDescriptor;
 }
 
-export interface DependencyAttributes {
+export interface PackageInformation {
+	package: PackageDescriptor;
+	dependencies: DependencyReference[];
+}
+
+export interface PackageDescriptor {
 	name: string;
 	version?: string;
 }
@@ -161,7 +174,7 @@ export interface DependencyHints {
 }
 
 export interface DependencyReference {
-	attributes: DependencyAttributes;
+	attributes: PackageDescriptor;
 	hints: DependencyHints;
 }
 

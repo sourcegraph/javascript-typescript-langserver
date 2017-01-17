@@ -230,6 +230,19 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 		}
 	});
 
+	connection.onRequest(rt.PackagesRequest.type, async (): Promise<rt.PackageInformation[]> => {
+		const enter = new Date().getTime();
+		try {
+			const result = await handler.getPackages();
+			const exit = new Date().getTime();
+			console.error('packages found', result.length, (exit - enter) / 1000.0);
+			return Promise.resolve(result || []);
+		} catch (e) {
+			console.error(e);
+			return Promise.reject(e);
+		}
+	});
+
 	connection.onRequest(rt.DependenciesRequest.type, async (): Promise<rt.DependencyReference[]> => {
 		const enter = new Date().getTime();
 		try {

@@ -208,7 +208,7 @@ export function references(params: vscode.ReferenceParams, expected: number, don
 			chai.expect(result.length).to.equal(expected);
 		});
 	}, (err?: Error) => {
-		return done(err || new Error('references request failed'))
+		return done(err || new Error('textDocument/references request failed'))
 	})
 }
 
@@ -218,7 +218,17 @@ export function workspaceReferences(params: rt.WorkspaceReferenceParams, expecte
 			chai.expect(result).to.deep.equal(expected);
 		});
 	}, (err?: Error) => {
-		return done(err || new Error('references request failed'))
+		return done(err || new Error('workspace/xreferences request failed'))
+	})
+}
+
+export function packages(expected: rt.PackageInformation[], done: (err?: Error) => void) {
+	channel.clientConnection.sendRequest(rt.PackagesRequest.type).then((result: rt.PackageInformation[]) => {
+		check(done, () => {
+			chai.expect(result).to.deep.equal(expected);
+		});
+	}, (err?: Error) => {
+		return done(err || new Error('packages request failed'))
 	})
 }
 
@@ -228,7 +238,7 @@ export function dependencies(expected: rt.DependencyReference[], done: (err?: Er
 			chai.expect(result).to.deep.equal(expected);
 		});
 	}, (err?: Error) => {
-		return done(err || new Error('references request failed'))
+		return done(err || new Error('dependencies request failed'))
 	})
 }
 

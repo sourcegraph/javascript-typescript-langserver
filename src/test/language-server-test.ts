@@ -1028,7 +1028,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 				], done);
 			});
 		});
-		describe('workspace/xdependencies', function () {
+		describe('workspace/xdependencies and workspace/packages', function () {
 			before(function (done: () => void) {
 				utils.setUp(newLanguageHandler(), {
 					'package.json': '\
@@ -1077,6 +1077,33 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					{ attributes: { 'name': "typescript", 'version': ">=2.0.0" }, hints: { 'dependeePackageName': 'tslint' } },
 					{ attributes: { 'name': "subproject-dep", 'version': "0.0.0" }, hints: { 'dependeePackageName': 'subproject' } },
 				]
+					, done);
+			});
+			it('all packages accounted for', function (done: (err?: Error) => void) {
+				utils.packages([{
+					package: {
+						name: 'tslint',
+						version: '4.0.2',
+					},
+					dependencies: [
+						{ attributes: { 'name': 'babel-code-frame', 'version': '^6.16.0' }, hints: { 'dependeePackageName': 'tslint' } },
+						{ attributes: { 'name': 'findup-sync', 'version': '~0.3.0' }, hints: { 'dependeePackageName': 'tslint' } },
+						{ attributes: { 'name': "@types/babel-code-frame", 'version': "^6.16.0" }, hints: { 'dependeePackageName': 'tslint' } },
+						{ attributes: { 'name': "@types/optimist", 'version': "0.0.29" }, hints: { 'dependeePackageName': 'tslint' } },
+						{ attributes: { 'name': "chai", 'version': "^3.0.0" }, hints: { 'dependeePackageName': 'tslint' } },
+						{ attributes: { 'name': "tslint", 'version': "latest" }, hints: { 'dependeePackageName': 'tslint' } },
+						{ attributes: { 'name': "tslint-test-config-non-relative", 'version': "file:test/external/tslint-test-config-non-relative" }, hints: { 'dependeePackageName': 'tslint' } },
+						{ attributes: { 'name': "typescript", 'version': "2.0.10" }, hints: { 'dependeePackageName': 'tslint' } },
+						{ attributes: { 'name': "typescript", 'version': ">=2.0.0" }, hints: { 'dependeePackageName': 'tslint' } },
+					],
+				}, {
+					package: {
+						name: 'subproject',
+					},
+					dependencies: [
+						{ attributes: { 'name': "subproject-dep", 'version': "0.0.0" }, hints: { 'dependeePackageName': 'subproject' } },
+					],
+				}]
 					, done);
 			});
 		});
