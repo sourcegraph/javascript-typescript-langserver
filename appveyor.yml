@@ -1,0 +1,22 @@
+# Test against this version of Node.js
+environment:
+  nodejs_version: "6.9.4"
+
+# Install scripts. (runs after repo cloning)
+install:
+  # Get the latest stable version of Node.js or io.js
+  - ps: Install-Product node $env:nodejs_version
+  # install modules
+  - yarn
+
+# Post-install test scripts.
+test_script:
+  # Output useful info for debugging.
+  - node --version
+  - npm --version
+  # run tests
+  - yarn test
+  - yarn fmt-check
+
+# Don't actually build.
+build: off
