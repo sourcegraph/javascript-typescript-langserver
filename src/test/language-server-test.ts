@@ -1409,13 +1409,19 @@ var Node: {\n\
     qux: number;
 }
 const a = new A();
-a.`
+a.`,
+					'uses-import.ts': `import * as i from "./import"
+i.`,
+					'import.ts': `export function d() {}`,
+					'uses-reference.ts': `/// <reference path="reference.ts" />
+let z : foo.`,
+					'reference.ts': `namespace foo {export interface bar {}}`
 				}, done);
 			});
 			after(function (done: () => void) {
 				utils.tearDown(done);
 			});
-			it('produces', function (done: (err?: Error) => void) {
+			it('produces completions in the same file', function (done: (err?: Error) => void) {
 				utils.completions({
 					textDocument: {
 						uri: 'file:///a.ts'
@@ -1425,6 +1431,28 @@ a.`
 						character: 2
 					}
 				}, ["bar", "baz", "foo", "qux"], done);
+			});
+			it('produces completions for imported symbols', function (done: (err?: Error) => void) {
+				utils.completions({
+					textDocument: {
+						uri: 'file:///uses-import.ts'
+					},
+					position: {
+						line: 1,
+						character: 2
+					}
+				}, ["d"], done);
+			});
+			it('produces completions for referenced symbols', function (done: (err?: Error) => void) {
+				utils.completions({
+					textDocument: {
+						uri: 'file:///uses-reference.ts'
+					},
+					position: {
+						line: 1,
+						character: 13
+					}
+				}, ["bar"], done);
 			});
 		});
 	});

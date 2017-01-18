@@ -369,10 +369,10 @@ export class TypeScriptService implements LanguageHandler {
 		const column = params.position.character;
 		const fileName: string = util.uri2path(uri);
 
-		await this.projectManager.ensureFilesForReferences(uri);
+		await this.projectManager.ensureFilesForHoverAndDefinition(uri);
 
 		const configuration = this.projectManager.getConfiguration(fileName);
-		await configuration.ensureAllFiles();
+		await configuration.ensureBasicFiles();
 
 		const sourceFile = this.getSourceFile(configuration, fileName);
 		if (!sourceFile) {
@@ -1405,7 +1405,7 @@ function pushall<T>(arr: T[], ...elems: (T | null | undefined)[]): number {
 /**
  * Maps string-based CompletionEntry::kind to enum-based CompletionItemKind
  */
-const completionKinds : {[name: string]: CompletionItemKind} = {
+const completionKinds: { [name: string]: CompletionItemKind } = {
 	"class": CompletionItemKind.Class,
 	"constructor": CompletionItemKind.Constructor,
 	"enum": CompletionItemKind.Enum,
