@@ -202,19 +202,8 @@ export function hover(pos: vscode.TextDocumentPositionParams, expected: vscode.H
 	})
 }
 
-export function references(pos: vscode.TextDocumentPositionParams, expected: number, done: (err?: Error) => void) {
-	channel.clientConnection.sendRequest(rt.ReferencesRequest.type, {
-		textDocument: {
-			uri: pos.textDocument.uri,
-		},
-		position: {
-			line: pos.position.line,
-			character: pos.position.character
-		},
-		context: {
-			includeDeclaration: false,
-		}
-	}).then((result: vscode.Location[]) => {
+export function references(params: vscode.ReferenceParams, expected: number, done: (err?: Error) => void) {
+	channel.clientConnection.sendRequest(rt.ReferencesRequest.type, params).then((result: vscode.Location[]) => {
 		check(done, () => {
 			chai.expect(result.length).to.equal(expected);
 		});

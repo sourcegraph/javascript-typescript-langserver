@@ -396,7 +396,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 			after(function (done: () => void) {
 				utils.tearDown(done);
 			});
-			it('references', function (done: (err?: Error) => void) {
+			it('produces references with declaration', function (done: (err?: Error) => void) {
 				utils.references({
 					textDocument: {
 						uri: 'file:///a.js'
@@ -404,8 +404,25 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					position: {
 						line: 0,
 						character: 20
+					},
+					context: {
+						includeDeclaration: true
 					}
 				}, 3, done);
+			});
+			it('produces references without declaration', function (done: (err?: Error) => void) {
+				utils.references({
+					textDocument: {
+						uri: 'file:///a.js'
+					},
+					position: {
+						line: 0,
+						character: 20
+					},
+					context: {
+						includeDeclaration: false
+					}
+				}, 2, done);
 			});
 		});
 		describe('workspace/symbol and textDocument/documentSymbol', function () {
