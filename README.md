@@ -21,7 +21,10 @@ Run `yarn test`.
 ## Command line arguments 
 
 * `-p, --port` specifies port to use, default one is `2089`
-* `-s, --strict` enables strict mode where server expects all files to be receives in `didOpen` notification requests.
+* `-s, --strict` enables strict mode where server expects all files to be receives in `didOpen` notification requests
+* `-c, --cluster` specifies number of concurrent cluster workers (defaults to number of CPUs)
+* `-t, --trace` enables printing of all incoming and outgoing messages
+* `-l, --logfile` specifies additional log file to print all messages to
 
 ## Supported LSP requests
 
