@@ -217,14 +217,17 @@ export class TypeScriptService implements LanguageHandler {
 
 		if (refs) {
 			for (let ref of refs) {
-				tasks.push(this.transformReference(this.root, configuration.getProgram(), ref));
+				tasks.push(this.transformReference(this.root,
+					configuration.getProgram(),
+					params.context && params.context.includeDeclaration,
+					ref));
 			}
 		}
 		return new Promise<Location[]>((resolve, reject) => {
 			async.parallel(tasks, (err: Error, results: Location[]) => {
 				const finished = new Date().getTime();
 				console.error('references', 'transform', (finished - fetched) / 1000.0, 'fetch', (fetched - prepared) / 1000.0, 'prepare', (prepared - started) / 1000.0);
-				return resolve(results);
+				return resolve(results.filter(item => item));
 			});
 		});
 	}
@@ -1207,8 +1210,14 @@ export class TypeScriptService implements LanguageHandler {
     /**
      * Produces async function that converts ReferenceEntry object to Location
      */
-	private transformReference(root: string, program: ts.Program, ref: ts.ReferenceEntry): AsyncFunction<Location, Error> {
+	private transformReference(root: string,
+		program: ts.Program,
+		includeDeclaration: boolean,
+		ref: ts.ReferenceEntry): AsyncFunction<Location, Error> {
 		return (callback: (err?: Error, result?: Location) => void) => {
+			if (!includeDeclaration && ref.isDefinition) {
+				return callback(null);
+			}
 			const sourceFile = program.getSourceFile(ref.fileName);
 			if (!sourceFile) {
 				return callback(new Error('source file "' + ref.fileName + '" does not exist'));
