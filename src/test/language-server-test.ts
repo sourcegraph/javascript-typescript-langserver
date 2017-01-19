@@ -693,6 +693,73 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					limit: 100
 				}, [], done);
 			});
+			it('workspace/symbols with partial SymbolDescriptor query', function (done: (err?: Error) => void) {
+				utils.symbols({
+					symbol: { name: 'a' },
+					limit: 10,
+				}, [{
+					"kind": 5,
+					"location": {
+						"range": {
+							"end": {
+								"character": 33,
+								"line": 0,
+							},
+							"start": {
+								"character": 0,
+								"line": 0,
+							}
+						},
+						"uri": "file:///a.ts",
+					},
+					"name": "a",
+				}], done);
+			});
+			it('workspace/symbols with full SymbolDescriptor query 1', function (done: (err?: Error) => void) {
+				utils.symbols({
+					symbol: { name: 'a', kind: 'class', containerName: '', containerKind: '' },
+					limit: 10,
+				}, [{
+					"kind": 5,
+					"location": {
+						"range": {
+							"end": {
+								"character": 33,
+								"line": 0,
+							},
+							"start": {
+								"character": 0,
+								"line": 0,
+							}
+						},
+						"uri": "file:///a.ts",
+					},
+					"name": "a",
+				}], done);
+			});
+			it('workspace/symbols with full SymbolDescriptor query 2', function (done: (err?: Error) => void) {
+				utils.symbols({
+					symbol: { name: 'baz', kind: 'method', containerName: 'b', containerKind: 'class' },
+					limit: 10,
+				}, [{
+					"containerName": "b",
+					"kind": 6,
+					"location": {
+						"range": {
+							"end": {
+								"character": 56,
+								"line": 0,
+							},
+							"start": {
+								"character": 23,
+								"line": 0,
+							},
+						},
+						"uri": "file:///foo/b.ts",
+					},
+					"name": "baz",
+				}], done);
+			});
 		});
 		describe('workspace/symbol with dependencies', function () {
 			before(function (done: () => void) {

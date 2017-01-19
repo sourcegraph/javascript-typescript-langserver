@@ -242,15 +242,16 @@ export class TypeScriptService implements LanguageHandler {
 
 	async getWorkspaceSymbols(params: rt.WorkspaceSymbolParams): Promise<SymbolInformation[]> {
 		const query = params.query;
+		const symQuery = params.symbol;
 		const limit = params.limit;
 
 		await this.projectManager.ensureFilesForWorkspaceSymbol();
 
-		if (!query && this.emptyQueryWorkspaceSymbols) {
+		if (!query && !symQuery && this.emptyQueryWorkspaceSymbols) {
 			return this.emptyQueryWorkspaceSymbols;
 		}
 		const configs = this.projectManager.getConfigurations();
-		const itemsPromise = this.collectWorkspaceSymbols(query, configs);
+		const itemsPromise = this.collectWorkspaceSymbols(configs, query, symQuery);
 		if (!query) {
 			this.emptyQueryWorkspaceSymbols = itemsPromise;
 		}
@@ -1337,7 +1338,7 @@ export class TypeScriptService implements LanguageHandler {
 			this.defUri(item.fileName), item.containerName);
 	}
 
-	private async collectWorkspaceSymbols(query: string, configs: pm.ProjectConfiguration[]): Promise<SymbolInformation[]> {
+	private async collectWorkspaceSymbols(configs: pm.ProjectConfiguration[], query?: string, symQuery?: rt.PartialSymbolDescriptor): Promise<SymbolInformation[]> {
 		const configSymbols: SymbolInformation[][] = await Promise.all(
 			configs.map(async (config) => {
 				const symbols: SymbolInformation[] = [];
@@ -1346,6 +1347,16 @@ export class TypeScriptService implements LanguageHandler {
 					const items = config.getService().getNavigateToItems(query, undefined, undefined, true);
 					for (const item of items) {
 						symbols.push(this.transformNavItem(this.root, config.getProgram(), item));
+					}
+				} else if (symQuery) {
+					// TODO(beyang): this is kludgy and could be made better by commiting a patch to
+					// TypeScript that adds a symQuery parameter to transformNavItem
+					const items = config.getService().getNavigateToItems(symQuery.name || "", undefined, undefined, true);
+					for (const item of items) {
+						const sd = rt.SymbolDescriptor.create(item.kind, item.name, item.containerKind, item.containerName);
+						if (util.symbolDescriptorMatch(symQuery, sd)) {
+							symbols.push(this.transformNavItem(this.root, config.getProgram(), item));
+						}
 					}
 				} else {
 					Array.prototype.push.apply(symbols, this.getNavigationTreeItems(config));

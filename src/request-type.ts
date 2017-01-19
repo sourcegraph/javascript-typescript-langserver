@@ -130,6 +130,11 @@ export interface PartialSymbolDescriptor {
 	package?: PackageDescriptor;
 }
 
+export namespace SymbolDescriptor {
+	export function create(kind: string, name: string, containerKind: string, containerName: string, pkg?: PackageDescriptor): SymbolDescriptor {
+		return { kind, name, containerKind, containerName, package: pkg };
+	}
+}
 
 /*
  * WorkspaceReferenceParams holds parameters for the extended
