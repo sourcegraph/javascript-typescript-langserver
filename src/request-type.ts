@@ -98,13 +98,8 @@ export namespace PackagesRequest {
 	};
 }
 
-export interface WorkspaceSymbolParamsWithLimit {
-	query: string;
-	limit: number;
-}
-
 export namespace WorkspaceSymbolsRequest {
-	export const type: vscode.RequestType<WorkspaceSymbolParamsWithLimit, vscode.SymbolInformation[], any> = {
+	export const type: vscode.RequestType<WorkspaceSymbolParams, vscode.SymbolInformation[], any> = {
 		get method() {
 			return 'workspace/symbol';
 		}
@@ -133,6 +128,29 @@ export interface PartialSymbolDescriptor {
 	containerKind?: string;
 	containerName?: string;
 	package?: PackageDescriptor;
+}
+
+
+/*
+ * WorkspaceReferenceParams holds parameters for the extended
+ * workspace/symbols endpoint (an extension of the original LSP spec).
+ * If both properties are set, the requirements are AND'd.
+ */
+export interface WorkspaceSymbolParams {
+    /**
+     * A non-empty query string.
+     */
+	query?: string;
+
+	/**
+	 * A set of properties that describe the symbol to look up.
+	 */
+	symbol?: PartialSymbolDescriptor;
+
+	/**
+	 * The number of items to which to restrict the results set size.
+	 */
+	limit: number;
 }
 
 /*

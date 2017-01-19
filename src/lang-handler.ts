@@ -31,7 +31,7 @@ export interface LanguageHandler {
 	getXdefinition(params: TextDocumentPositionParams): Promise<rt.SymbolLocationInformation[]>;
 	getHover(params: TextDocumentPositionParams): Promise<Hover>;
 	getReferences(params: ReferenceParams): Promise<Location[]>;
-	getWorkspaceSymbols(params: rt.WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]>;
+	getWorkspaceSymbols(params: rt.WorkspaceSymbolParams): Promise<SymbolInformation[]>;
 	getDocumentSymbol(params: DocumentSymbolParams): Promise<SymbolInformation[]>;
 	getWorkspaceReference(params: rt.WorkspaceReferenceParams): Promise<rt.ReferenceInformation[]>;
 	getPackages(): Promise<rt.PackageInformation[]>;

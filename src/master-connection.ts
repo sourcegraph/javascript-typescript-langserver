@@ -88,7 +88,7 @@ export function registerMasterHandler(connection: IConnection, one: IConnection,
 		return promiseFirstSuccess(resps);
 	});
 
-	connection.onRequest(rt.WorkspaceSymbolsRequest.type, async (params: rt.WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]> => {
+	connection.onRequest(rt.WorkspaceSymbolsRequest.type, async (params: rt.WorkspaceSymbolParams): Promise<SymbolInformation[]> => {
 		return one.sendRequest(rt.WorkspaceSymbolsRequest.type, params);
 	});
 

@@ -139,7 +139,7 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 		});
 	});
 
-	connection.onRequest(rt.WorkspaceSymbolsRequest.type, async (params: rt.WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]> => {
+	connection.onRequest(rt.WorkspaceSymbolsRequest.type, async (params: rt.WorkspaceSymbolParams): Promise<SymbolInformation[]> => {
 		const enter = new Date().getTime();
 		try {
 			const result = await handler.getWorkspaceSymbols(params);
