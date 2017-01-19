@@ -1,4 +1,6 @@
 import * as ts from 'typescript';
+import { CompletionItemKind } from 'vscode-languageserver';
+
 import * as utils from './test-utils';
 
 import { TypeScriptService } from '../typescript-service';
@@ -1403,19 +1405,26 @@ var Node: {\n\
 			before(function (done: () => void) {
 				utils.setUp(newLanguageHandler(), {
 					'a.ts': `class A {
+	/** foo doc*/
     foo() {}
-    bar() {}
-    baz() {}
+	/** bar doc*/
+    bar(): number { return 1; }
+	/** baz doc*/
+    baz(): string { return ''; }
+	/** qux doc*/
     qux: number;
 }
 const a = new A();
 a.`,
 					'uses-import.ts': `import * as i from "./import"
 i.`,
-					'import.ts': `export function d() {}`,
+					'import.ts': `/** d doc*/ export function d() {}`,
 					'uses-reference.ts': `/// <reference path="reference.ts" />
 let z : foo.`,
-					'reference.ts': `namespace foo {export interface bar {}}`
+					'reference.ts': `namespace foo { 
+	/** bar doc*/
+	export interface bar {}
+}`
 				}, done);
 			});
 			after(function (done: () => void) {
@@ -1427,10 +1436,38 @@ let z : foo.`,
 						uri: 'file:///a.ts'
 					},
 					position: {
-						line: 7,
+						line: 11,
 						character: 2
 					}
-				}, ["bar", "baz", "foo", "qux"], done);
+				}, [
+						{
+							label: 'bar',
+							kind: CompletionItemKind.Method,
+							documentation: 'bar doc',
+							sortText: '0',
+							detail: '(method) A.bar(): number'
+						},
+						{
+							label: 'baz',
+							kind: CompletionItemKind.Method,
+							documentation: 'baz doc',
+							sortText: '0',
+							detail: '(method) A.baz(): string'
+						},
+						{
+							label: 'foo',
+							kind: CompletionItemKind.Method,
+							documentation: 'foo doc',
+							sortText: '0',
+							detail: '(method) A.foo(): void'
+						},
+						{
+							label: 'qux',
+							kind: CompletionItemKind.Property,
+							documentation: 'qux doc',
+							sortText: '0',
+							detail: '(property) A.qux: number'
+						}], done);
 			});
 			it('produces completions for imported symbols', function (done: (err?: Error) => void) {
 				utils.completions({
@@ -1441,7 +1478,13 @@ let z : foo.`,
 						line: 1,
 						character: 2
 					}
-				}, ["d"], done);
+				}, [{
+					label: 'd',
+					kind: CompletionItemKind.Function,
+					documentation: 'd doc',
+					detail: 'function d(): void',
+					sortText: '0'
+				}], done);
 			});
 			it('produces completions for referenced symbols', function (done: (err?: Error) => void) {
 				utils.completions({
@@ -1452,7 +1495,13 @@ let z : foo.`,
 						line: 1,
 						character: 13
 					}
-				}, ["bar"], done);
+				}, [{
+					label: 'bar',
+					kind: CompletionItemKind.Interface,
+					documentation: 'bar doc',
+					sortText: '0',
+					detail: 'interface foo.bar'
+				}], done);
 			});
 		});
 	});

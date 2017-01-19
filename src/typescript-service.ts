@@ -395,6 +395,11 @@ export class TypeScriptService implements LanguageHandler {
 			if (item.sortText) {
 				ret.sortText = item.sortText;
 			}
+			const details = configuration.getService().getCompletionEntryDetails(fileName, offset, item.name);
+			if (details) {
+				ret.documentation = ts.displayPartsToString(details.documentation);
+				ret.detail = ts.displayPartsToString(details.displayParts);
+			}
 			return ret;
 		}));
 	}

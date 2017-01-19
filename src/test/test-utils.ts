@@ -293,12 +293,13 @@ export function change(uri: string, text: string) {
 	});
 }
 
-export function completions(params: vscode.TextDocumentPositionParams, expected: string[], done: (err?: Error) => void) {
+export function completions(params: vscode.TextDocumentPositionParams, expected: vscode.CompletionItem[], done: (err?: Error) => void) {
+	const cmp = (a: vscode.CompletionItem, b: vscode.CompletionItem) => a.label.localeCompare(b.label);
 	channel.clientConnection.sendRequest(rt.TextDocumentCompletionRequest.type, params).then((result: vscode.CompletionList) => {
 		check(done, () => {
 			chai.assert(result);
-			const names = result.items.map((item) => item.label).sort();
-			chai.expect(names).to.deep.equal(expected.sort());
+			result.items.sort(cmp);
+			chai.expect(result.items).to.deep.equal(expected.sort(cmp));
 		});
 	}, (err?: Error) => {
 		return done(err || new Error('textDocument/completion request failed'))
