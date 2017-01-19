@@ -10,7 +10,8 @@ import {
 	DidOpenTextDocumentParams,
 	DidCloseTextDocumentParams,
 	DidChangeTextDocumentParams,
-	DidSaveTextDocumentParams
+	DidSaveTextDocumentParams,
+	CompletionList
 } from 'vscode-languageserver';
 
 import { FileSystem } from './fs';
@@ -38,4 +39,5 @@ export interface LanguageHandler {
 	didChange(params: DidChangeTextDocumentParams): Promise<void>;
 	didClose(params: DidCloseTextDocumentParams): Promise<void>;
 	didSave(params: DidSaveTextDocumentParams): Promise<void>;
+	getCompletions(params: TextDocumentPositionParams): Promise<CompletionList>;
 }

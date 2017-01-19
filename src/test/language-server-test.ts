@@ -1,4 +1,6 @@
 import * as ts from 'typescript';
+import { CompletionItemKind } from 'vscode-languageserver';
+
 import * as utils from './test-utils';
 
 import { TypeScriptService } from '../typescript-service';
@@ -1414,6 +1416,109 @@ var Node: {\n\
 							}
 						}, done);
 				});
+			});
+		});
+		describe('completions', function () {
+			before(function (done: () => void) {
+				utils.setUp(newLanguageHandler(), {
+					'a.ts': `class A {
+	/** foo doc*/
+    foo() {}
+	/** bar doc*/
+    bar(): number { return 1; }
+	/** baz doc*/
+    baz(): string { return ''; }
+	/** qux doc*/
+    qux: number;
+}
+const a = new A();
+a.`,
+					'uses-import.ts': `import * as i from "./import"
+i.`,
+					'import.ts': `/** d doc*/ export function d() {}`,
+					'uses-reference.ts': `/// <reference path="reference.ts" />
+let z : foo.`,
+					'reference.ts': `namespace foo { 
+	/** bar doc*/
+	export interface bar {}
+}`
+				}, done);
+			});
+			after(function (done: () => void) {
+				utils.tearDown(done);
+			});
+			it('produces completions in the same file', function (done: (err?: Error) => void) {
+				utils.completions({
+					textDocument: {
+						uri: 'file:///a.ts'
+					},
+					position: {
+						line: 11,
+						character: 2
+					}
+				}, [
+						{
+							label: 'bar',
+							kind: CompletionItemKind.Method,
+							documentation: 'bar doc',
+							sortText: '0',
+							detail: '(method) A.bar(): number'
+						},
+						{
+							label: 'baz',
+							kind: CompletionItemKind.Method,
+							documentation: 'baz doc',
+							sortText: '0',
+							detail: '(method) A.baz(): string'
+						},
+						{
+							label: 'foo',
+							kind: CompletionItemKind.Method,
+							documentation: 'foo doc',
+							sortText: '0',
+							detail: '(method) A.foo(): void'
+						},
+						{
+							label: 'qux',
+							kind: CompletionItemKind.Property,
+							documentation: 'qux doc',
+							sortText: '0',
+							detail: '(property) A.qux: number'
+						}], done);
+			});
+			it('produces completions for imported symbols', function (done: (err?: Error) => void) {
+				utils.completions({
+					textDocument: {
+						uri: 'file:///uses-import.ts'
+					},
+					position: {
+						line: 1,
+						character: 2
+					}
+				}, [{
+					label: 'd',
+					kind: CompletionItemKind.Function,
+					documentation: 'd doc',
+					detail: 'function d(): void',
+					sortText: '0'
+				}], done);
+			});
+			it('produces completions for referenced symbols', function (done: (err?: Error) => void) {
+				utils.completions({
+					textDocument: {
+						uri: 'file:///uses-reference.ts'
+					},
+					position: {
+						line: 1,
+						character: 13
+					}
+				}, [{
+					label: 'bar',
+					kind: CompletionItemKind.Interface,
+					documentation: 'bar doc',
+					sortText: '0',
+					detail: 'interface foo.bar'
+				}], done);
 			});
 		});
 	});

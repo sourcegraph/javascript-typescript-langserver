@@ -14,7 +14,10 @@ import {
 	DidOpenTextDocumentParams,
 	DidCloseTextDocumentParams,
 	DidChangeTextDocumentParams,
-	DidSaveTextDocumentParams
+	DidSaveTextDocumentParams,
+	CompletionList,
+	CompletionItem,
+	CompletionItemKind
 } from 'vscode-languageserver';
 
 import * as async from 'async';
@@ -73,6 +76,10 @@ export class TypeScriptService implements LanguageHandler {
 						xworkspaceReferencesProvider: true,
 						xdefinitionProvider: true,
 						xdependenciesProvider: true,
+						completionProvider: {
+							resolveProvider: false,
+							triggerCharacters: ['.']
+						}
 					}
 				})
 			}
@@ -357,6 +364,47 @@ export class TypeScriptService implements LanguageHandler {
 			}
 		}
 		return deps;
+	}
+
+	async getCompletions(params: TextDocumentPositionParams): Promise<CompletionList> {
+		const uri = util.uri2reluri(params.textDocument.uri, this.root)
+		const line = params.position.line;
+		const column = params.position.character;
+		const fileName: string = util.uri2path(uri);
+
+		await this.projectManager.ensureFilesForHoverAndDefinition(uri);
+
+		const configuration = this.projectManager.getConfiguration(fileName);
+		await configuration.ensureBasicFiles();
+
+		const sourceFile = this.getSourceFile(configuration, fileName);
+		if (!sourceFile) {
+			return null;
+		}
+
+		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
+		const completions = configuration.getService().getCompletionsAtPosition(fileName, offset);
+
+		if (completions == null) {
+			return null;
+		}
+
+		return CompletionList.create(completions.entries.map(item => {
+			const ret = CompletionItem.create(item.name);
+			const kind = completionKinds[item.kind];
+			if (kind) {
+				ret.kind = kind;
+			}
+			if (item.sortText) {
+				ret.sortText = item.sortText;
+			}
+			const details = configuration.getService().getCompletionEntryDetails(fileName, offset, item.name);
+			if (details) {
+				ret.documentation = ts.displayPartsToString(details.documentation);
+				ret.detail = ts.displayPartsToString(details.displayParts);
+			}
+			return ret;
+		}));
 	}
 
 	/*
@@ -1367,3 +1415,26 @@ function pushall<T>(arr: T[], ...elems: (T | null | undefined)[]): number {
 	}
 	return arr.length;
 }
+
+/**
+ * Maps string-based CompletionEntry::kind to enum-based CompletionItemKind
+ */
+const completionKinds: { [name: string]: CompletionItemKind } = {
+	"class": CompletionItemKind.Class,
+	"constructor": CompletionItemKind.Constructor,
+	"enum": CompletionItemKind.Enum,
+	"field": CompletionItemKind.Field,
+	"file": CompletionItemKind.File,
+	"function": CompletionItemKind.Function,
+	"interface": CompletionItemKind.Interface,
+	"keyword": CompletionItemKind.Keyword,
+	"method": CompletionItemKind.Method,
+	"module": CompletionItemKind.Module,
+	"property": CompletionItemKind.Property,
+	"reference": CompletionItemKind.Reference,
+	"snippet": CompletionItemKind.Snippet,
+	"text": CompletionItemKind.Text,
+	"unit": CompletionItemKind.Unit,
+	"value": CompletionItemKind.Value,
+	"variable": CompletionItemKind.Variable
+};
