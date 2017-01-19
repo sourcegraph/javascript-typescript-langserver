@@ -1124,7 +1124,14 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 						},
 					},
 					'subproject': {
-						'package.json': '{ "name": "subproject", "dependencies": { "subproject-dep": "0.0.0" } }',
+						'package.json': '\
+{\
+  "name": "subproject", \
+  "repository": {\
+    "url": "https://github.com/my/subproject"\
+  },\
+  "dependencies": { "subproject-dep": "0.0.0" }\
+}',
 					},
 				}, done);
 			});
@@ -1166,6 +1173,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 				}, {
 					package: {
 						name: 'subproject',
+						repoURL: "https://github.com/my/subproject",
 					},
 					dependencies: [
 						{ attributes: { 'name': "subproject-dep", 'version': "0.0.0" }, hints: { 'dependeePackageName': 'subproject' } },

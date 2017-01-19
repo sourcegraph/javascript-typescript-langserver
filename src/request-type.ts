@@ -190,6 +190,7 @@ export interface PackageInformation {
 export interface PackageDescriptor {
 	name: string;
 	version?: string;
+	repoURL?: string;
 }
 
 export interface DependencyHints {

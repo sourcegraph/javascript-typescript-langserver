@@ -359,6 +359,7 @@ export class TypeScriptService implements LanguageHandler {
 			const deps: rt.DependencyReference[] = [];
 			const pkgName = pkgJson['name'];
 			const pkgVersion = pkgJson['version'];
+			const pkgRepoURL = pkgJson['repository'] ? pkgJson['repository']['url'] : undefined;
 			for (const k of ['dependencies', 'devDependencies', 'peerDependencies']) {
 				if (pkgJson[k]) {
 					for (const name in pkgJson[k]) {
@@ -370,6 +371,7 @@ export class TypeScriptService implements LanguageHandler {
 				package: {
 					name: pkgName,
 					version: pkgVersion,
+					repoURL: pkgRepoURL,
 				},
 				dependencies: deps,
 			})
