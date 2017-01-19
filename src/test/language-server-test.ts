@@ -810,6 +810,236 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 				}, [], done);
 			});
 		});
+		describe('DefinitelyTyped', function () {
+			before(function (done: () => void) {
+				utils.setUp(newLanguageHandler(), {
+					'package.json': `\
+{\n\
+  "private": true,\n\
+  "name": "definitely-typed",\n\
+  "version": "0.0.1",\n\
+  "homepage": "https://github.com/DefinitelyTyped/DefinitelyTyped",\n\
+  "repository": {\n\
+	"type": "git",\n\
+	"url": "git+https://github.com/DefinitelyTyped/DefinitelyTyped.git"\n\
+  },\n\
+  "license": "MIT",\n\
+  "bugs": {\n\
+	"url": "https://github.com/DefinitelyTyped/DefinitelyTyped/issues"\n\
+  },\n\
+  "engines": {\n\
+	"node": ">= 6.9.1"\n\
+  },\n\
+  "scripts": {\n\
+	"compile-scripts": "tsc -p scripts",\n\
+	"new-package": "node scripts/new-package.js",\n\
+	"not-needed": "node scripts/not-needed.js",\n\
+	"lint": "node scripts/lint.js",\n\
+	"test": "node node_modules/types-publisher/bin/tester/test.js --run-from-definitely-typed --nProcesses 1"\n\
+  },\n\
+  "devDependencies": {\n\
+	"types-publisher": "Microsoft/types-publisher#production"\n\
+  }\n\
+}\
+					`,
+					'resolve': {
+						'index.d.ts': '\
+/// <reference types="node" />\n\
+\n\
+type resolveCallback = (err: Error, resolved?: string) => void;\n\
+declare function resolve(id: string, cb: resolveCallback): void;\n\
+',
+						'tsconfig.json': '\
+{\n\
+    "compilerOptions": {\n\
+        "module": "commonjs",\n\
+        "lib": [\n\
+            "es6"\n\
+        ],\n\
+        "noImplicitAny": true,\n\
+        "noImplicitThis": true,\n\
+        "strictNullChecks": false,\n\
+        "baseUrl": "../",\n\
+        "typeRoots": [\n\
+            "../"\n\
+        ],\n\
+        "types": [],\n\
+        "noEmit": true,\n\
+        "forceConsistentCasingInFileNames": true\n\
+    },\n\
+    "files": [\n\
+        "index.d.ts"\n\
+    ]\n\
+}',
+					},
+					'notResolve': {
+						'index.d.ts': '\
+/// <reference types="node" />\n\
+\n\
+type resolveCallback = (err: Error, resolved?: string) => void;\n\
+declare function resolve(id: string, cb: resolveCallback): void;\n\
+',
+						'tsconfig.json': '\
+{\n\
+    "compilerOptions": {\n\
+        "module": "commonjs",\n\
+        "lib": [\n\
+            "es6"\n\
+        ],\n\
+        "noImplicitAny": true,\n\
+        "noImplicitThis": true,\n\
+        "strictNullChecks": false,\n\
+        "baseUrl": "../",\n\
+        "typeRoots": [\n\
+            "../"\n\
+        ],\n\
+        "types": [],\n\
+        "noEmit": true,\n\
+        "forceConsistentCasingInFileNames": true\n\
+    },\n\
+    "files": [\n\
+        "index.d.ts"\n\
+    ]\n\
+}',
+					},
+				}, done);
+			});
+			after(function (done: () => void) {
+				utils.tearDown(done);
+			});
+			it('workspace/symbol text query: resolve', function (done: (err?: Error) => void) {
+				utils.symbols({
+					query: 'resolve',
+					limit: 10,
+				}, [{
+					"kind": 12,
+					"location": {
+						"range": {
+							"end": {
+								"character": 64,
+								"line": 3,
+							},
+							"start": {
+								"character": 0,
+								"line": 3,
+							},
+						},
+						"uri": "file:///resolve/index.d.ts",
+					},
+					"name": "resolve",
+				}, {
+					"kind": 12,
+					"location": {
+						"range": {
+							"end": {
+								"character": 64,
+								"line": 3,
+							},
+							"start": {
+								"character": 0,
+								"line": 3,
+							},
+						},
+						"uri": "file:///notResolve/index.d.ts",
+					},
+					"name": "resolve",
+				},
+				{
+					"kind": 15,
+					"location": {
+						"range": {
+							"end": {
+								"character": 63,
+								"line": 2,
+							},
+							"start": {
+								"character": 0,
+								"line": 2,
+							},
+						},
+						"uri": "file:///resolve/index.d.ts",
+					},
+					"name": "resolveCallback",
+				},
+				{
+					"kind": 15,
+					"location": {
+						"range": {
+							"end": {
+								"character": 63,
+								"line": 2,
+							},
+							"start": {
+								"character": 0,
+								"line": 2,
+							},
+						},
+						"uri": "file:///notResolve/index.d.ts",
+					},
+					"name": "resolveCallback",
+				}], done);
+			});
+			it('workspace/symbol symbol query: resolve', function (done: (err?: Error) => void) {
+				utils.symbols({
+					symbol: { 'name': 'resolve' },
+					limit: 10,
+				}, [{
+					"kind": 12,
+					"location": {
+						"range": {
+							"end": {
+								"character": 64,
+								"line": 3,
+							},
+							"start": {
+								"character": 0,
+								"line": 3,
+							},
+						},
+						"uri": "file:///resolve/index.d.ts",
+					},
+					"name": "resolve",
+				}, {
+					"kind": 12,
+					"location": {
+						"range": {
+							"end": {
+								"character": 64,
+								"line": 3,
+							},
+							"start": {
+								"character": 0,
+								"line": 3,
+							},
+						},
+						"uri": "file:///notResolve/index.d.ts",
+					},
+					"name": "resolve",
+				}], done);
+			});
+			it('workspace/symbol symbol query: resolve, with package', function (done: (err?: Error) => void) {
+				utils.symbols({
+					symbol: { 'name': 'resolveCallback', 'package': { 'name': '@types/resolve' } },
+					limit: 10,
+				}, [{
+					"kind": 15,
+					"location": {
+						"range": {
+							"end": {
+								"character": 63,
+								"line": 2,
+							},
+							"start": {
+								"character": 0,
+								"line": 2,
+							},
+						},
+						"uri": "file:///resolve/index.d.ts",
+					},
+					"name": "resolveCallback",
+				}], done);
+			});
+		});
 		describe('workspace/xreferences', function () {
 			before(function (done: () => void) {
 				utils.setUp(newLanguageHandler(), {
@@ -879,7 +1109,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 				utils.workspaceReferences({ query: { "name": "foo", "kind": "method", "containerName": "a" }, hints: { dependeePackageName: "NOT-mypkg" } }, [], done);
 			});
 			it('dep reference', function (done: (err?: Error) => void) {
-				utils.workspaceReferences({ query: { "name": "x", "containerName": "\"/node_modules/dep/dep\"" } }, [{
+				utils.workspaceReferences({ query: { "name": "x", "containerName": "/node_modules/dep/dep" } }, [{
 					"reference": {
 						"range": {
 							"end": {
@@ -895,7 +1125,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					},
 					"symbol": {
 						"containerKind": "",
-						"containerName": "\"/node_modules/dep/dep\"",
+						"containerName": "/node_modules/dep/dep",
 						"kind": "var",
 						"name": "x",
 					},
@@ -982,7 +1212,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 						},
 						"symbol": {
 							"containerKind": "",
-							"containerName": "\"/node_modules/dep/dep\"",
+							"containerName": "/node_modules/dep/dep",
 							"kind": "var",
 							"name": "x",
 						},

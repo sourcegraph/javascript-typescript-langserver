@@ -110,6 +110,10 @@ export function uri2relpath(uri: string, root: string): string {
 	return uri;
 }
 
+export function isLocalUri(uri: string): boolean {
+	return uri.startsWith('file://');
+}
+
 export function resolve(root: string, file: string): string {
 	if (!strict || os.platform() != 'win32') {
 		return path.resolve(root, file);
@@ -196,9 +200,9 @@ export function normalizeDir(dir: string) {
 export function defInfoToSymbolDescriptor(d: ts.DefinitionInfo): rt.SymbolDescriptor {
 	return {
 		kind: d.kind || "",
-		name: d.name || "",
+		name: stripQuotes(d.name) || "",
 		containerKind: d.containerKind || "",
-		containerName: d.containerName || "",
+		containerName: stripQuotes(d.containerName) || "",
 	};
 }
 
@@ -209,4 +213,11 @@ export function symbolDescriptorMatch(query: rt.PartialSymbolDescriptor, sym: rt
 		}
 	}
 	return true;
+}
+
+function stripQuotes(s: string): string {
+	if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+		return s.substring(1, s.length - 1);
+	}
+	return s;
 }

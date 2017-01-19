@@ -245,17 +245,63 @@ export class TypeScriptService implements LanguageHandler {
 		const symQuery = params.symbol;
 		const limit = params.limit;
 
+		if (symQuery) {
+			const dtRes = await this.getWorkspaceSymbolsDefinitelyTyped(params);
+			if (dtRes) {
+				return dtRes;
+			}
+		}
+
 		await this.projectManager.ensureFilesForWorkspaceSymbol();
 
 		if (!query && !symQuery && this.emptyQueryWorkspaceSymbols) {
 			return this.emptyQueryWorkspaceSymbols;
 		}
-		const configs = this.projectManager.getConfigurations();
+		let configs;
+		const rootConfig = this.projectManager.getConfiguration('');
+		if (rootConfig) {
+			configs = [rootConfig];
+		} else {
+			configs = this.projectManager.getConfigurations();
+		}
 		const itemsPromise = this.collectWorkspaceSymbols(configs, query, symQuery);
-		if (!query) {
+		if (!query && !symQuery) {
 			this.emptyQueryWorkspaceSymbols = itemsPromise;
 		}
 		return (await itemsPromise).slice(0, limit);
+	}
+
+	async getWorkspaceSymbolsDefinitelyTyped(params: rt.WorkspaceSymbolParams): Promise<SymbolInformation[] | null> {
+		try {
+			await this.projectManager.ensureFiles(['/package.json']);
+		} catch (e) {
+			return null;
+		}
+		if (!this.projectManager.getFs().fileExists('/package.json')) {
+			return null;
+		}
+		const rootConfig = JSON.parse(this.projectManager.getFs().readFile('/package.json'));
+		if (rootConfig['name'] !== 'definitely-typed') {
+			return null;
+		}
+		if (!params.symbol || !params.symbol.package) {
+			return null;
+		}
+		const pkg = params.symbol.package;
+		if (!pkg.name || !pkg.name.startsWith('@types/')) {
+			return null;
+		}
+		const relPkgRoot = pkg.name.slice('@types/'.length);
+		await this.projectManager.refreshFileTree(relPkgRoot, false);
+
+		this.projectManager.refreshConfigurations();
+
+		const symQuery = Object.assign({}, params.symbol);
+		symQuery.package = undefined;
+
+		const config = this.projectManager.getConfiguration(relPkgRoot);
+		const itemsPromise = this.collectWorkspaceSymbols([config], params.query, symQuery);
+		return (await itemsPromise).slice(0, params.limit);
 	}
 
 	async getDocumentSymbol(params: DocumentSymbolParams): Promise<SymbolInformation[]> {
@@ -1341,31 +1387,37 @@ export class TypeScriptService implements LanguageHandler {
 	}
 
 	private async collectWorkspaceSymbols(configs: pm.ProjectConfiguration[], query?: string, symQuery?: rt.PartialSymbolDescriptor): Promise<SymbolInformation[]> {
-		const configSymbols: SymbolInformation[][] = await Promise.all(
-			configs.map(async (config) => {
-				const symbols: SymbolInformation[] = [];
-				await config.ensureAllFiles();
-				if (query) {
-					const items = config.getService().getNavigateToItems(query, undefined, undefined, true);
-					for (const item of items) {
-						symbols.push(this.transformNavItem(this.root, config.getProgram(), item));
+		const configSymbols: SymbolInformation[][] = await Promise.all(configs.map(async (config) => {
+			const symbols: SymbolInformation[] = [];
+			await config.ensureAllFiles();
+			if (query) {
+				const items = config.getService().getNavigateToItems(query, undefined, undefined, false);
+				for (const item of items) {
+					const si = this.transformNavItem(this.root, config.getProgram(), item);
+					if (!util.isLocalUri(si.location.uri)) {
+						continue;
 					}
-				} else if (symQuery) {
-					// TODO(beyang): this is kludgy and could be made better by commiting a patch to
-					// TypeScript that adds a symQuery parameter to transformNavItem
-					const items = config.getService().getNavigateToItems(symQuery.name || "", undefined, undefined, true);
-					for (const item of items) {
-						const sd = rt.SymbolDescriptor.create(item.kind, item.name, item.containerKind, item.containerName);
-						if (util.symbolDescriptorMatch(symQuery, sd)) {
-							symbols.push(this.transformNavItem(this.root, config.getProgram(), item));
-						}
-					}
-				} else {
-					Array.prototype.push.apply(symbols, this.getNavigationTreeItems(config));
+					symbols.push(si);
 				}
-				return symbols;
-			})
-		);
+			} else if (symQuery) {
+				// TODO(beyang): after workspace/symbol extension is accepted into LSP, push this logic upstream to getNavigateToItems
+				const items = config.getService().getNavigateToItems(symQuery.name || "", undefined, undefined, false);
+				for (const item of items) {
+					const sd = rt.SymbolDescriptor.create(item.kind, item.name, item.containerKind, item.containerName);
+					if (!util.symbolDescriptorMatch(symQuery, sd)) {
+						continue;
+					}
+					const si = this.transformNavItem(this.root, config.getProgram(), item);
+					if (!util.isLocalUri(si.location.uri)) {
+						continue;
+					}
+					symbols.push(si);
+				}
+			} else {
+				Array.prototype.push.apply(symbols, this.getNavigationTreeItems(config));
+			}
+			return symbols;
+		}));
 		const symbols: SymbolInformation[] = [];
 		for (const cs of configSymbols) {
 			Array.prototype.push.apply(symbols, cs);
