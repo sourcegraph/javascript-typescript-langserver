@@ -1821,7 +1821,8 @@ let z : foo.`,
 					'reference.ts': `namespace foo { 
 	/** bar doc*/
 	export interface bar {}
-}`
+}`,
+					'empty.ts': ``
 				}, done);
 			});
 			after(function (done: () => void) {
@@ -1899,6 +1900,17 @@ let z : foo.`,
 					sortText: '0',
 					detail: 'interface foo.bar'
 				}], done);
+			});
+			it('produces completions for empty files', function (done: (err?: Error) => void) {
+				utils.completions({
+					textDocument: {
+						uri: 'file:///empty.ts'
+					},
+					position: {
+						line: 0,
+						character: 0
+					}
+				}, null, done);
 			});
 		});
 	});

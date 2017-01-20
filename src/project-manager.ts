@@ -573,11 +573,11 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 
 	getScriptSnapshot(fileName: string): ts.IScriptSnapshot {
 		let entry = this.fs.readFile(fileName);
-		if (!entry) {
+		if (entry === undefined) {
 			fileName = path_.posix.join(this.root, fileName);
 			entry = this.fs.readFile(fileName);
 		}
-		if (!entry) {
+		if (entry === undefined) {
 			return undefined;
 		}
 		return ts.ScriptSnapshot.fromString(entry);
@@ -592,11 +592,9 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	}
 
 	trace(message: string) {
-		console.error(message);
 	}
 
 	log(message: string) {
-		console.error(message);
 	}
 
 	error(message: string) {
