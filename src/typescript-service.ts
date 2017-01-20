@@ -2,7 +2,6 @@ import * as path_ from 'path';
 import * as ts from 'typescript';
 import {
 	InitializeParams,
-	InitializeResult,
 	TextDocumentPositionParams,
 	TextDocumentSyncKind,
 	ReferenceParams,
@@ -45,18 +44,18 @@ export class TypeScriptService implements LanguageHandler {
 
 	private strict: boolean;
 	private emptyQueryWorkspaceSymbols: Promise<SymbolInformation[]>; // cached response for empty workspace/symbol query
-	private initialized: Promise<InitializeResult>;
+	private initialized: Promise<rt.InitializeResult>;
 	private traceModuleResolution: boolean;
 
 	constructor(traceModuleResolution?: boolean) {
 		this.traceModuleResolution = traceModuleResolution || false;
 	}
 
-	initialize(params: InitializeParams, remoteFs: FileSystem.FileSystem, strict: boolean): Promise<InitializeResult> {
+	initialize(params: InitializeParams, remoteFs: FileSystem.FileSystem, strict: boolean): Promise<rt.InitializeResult> {
 		if (this.initialized) {
 			return this.initialized;
 		}
-		this.initialized = new Promise<InitializeResult>((resolve) => {
+		this.initialized = new Promise<rt.InitializeResult>((resolve) => {
 			if (params.rootPath) {
 				this.root = util.uri2path(params.rootPath);
 				this.strict = strict;

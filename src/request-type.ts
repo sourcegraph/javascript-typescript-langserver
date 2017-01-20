@@ -11,11 +11,18 @@ export namespace GlobalRefsRequest {
 }
 
 export namespace InitializeRequest {
-	export const type: vscode.RequestType<vscode.InitializeParams, vscode.InitializeResult, any> = {
+	export const type: vscode.RequestType<vscode.InitializeParams, InitializeResult, any> = {
 		get method() {
 			return 'initialize';
 		}
 	};
+}
+
+export interface InitializeResult extends vscode.InitializeResult {
+	xworkspaceReferencesProvider?: boolean;
+	xdefinitionProvider?: boolean;
+	xdependenciesProvider?: boolean;
+	packagesProvider?: boolean;
 }
 
 export namespace ShutdownRequest {

@@ -1,6 +1,5 @@
 import {
 	InitializeParams,
-	InitializeResult,
 	TextDocumentPositionParams,
 	ReferenceParams,
 	Location,
@@ -25,7 +24,7 @@ import * as rt from './request-type';
  * registration method on IConnection.
  */
 export interface LanguageHandler {
-	initialize(params: InitializeParams, remoteFs: FileSystem, strict: boolean): Promise<InitializeResult>;
+	initialize(params: InitializeParams, remoteFs: FileSystem, strict: boolean): Promise<rt.InitializeResult>;
 	shutdown(): Promise<void>;
 	getDefinition(params: TextDocumentPositionParams): Promise<Location[]>;
 	getXdefinition(params: TextDocumentPositionParams): Promise<rt.SymbolLocationInformation[]>;

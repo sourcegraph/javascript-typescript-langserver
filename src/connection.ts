@@ -2,7 +2,6 @@ import {
 	IConnection,
 	createConnection,
 	InitializeParams,
-	InitializeResult,
 	TextDocumentPositionParams,
 	Definition,
 	ReferenceParams,
@@ -93,7 +92,7 @@ export function newConnection(input: any, output: any, trace: TraceOptions): ICo
 }
 
 export function registerLanguageHandler(connection: IConnection, strict: boolean, handler: LanguageHandler): void {
-	connection.onRequest(rt.InitializeRequest.type, async (params: InitializeParams): Promise<InitializeResult> => {
+	connection.onRequest(rt.InitializeRequest.type, async (params: InitializeParams): Promise<rt.InitializeResult> => {
 		console.error('initialize', params.rootPath);
 		let remoteFs: fs.FileSystem;
 		if (strict) {

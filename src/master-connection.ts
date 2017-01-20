@@ -1,7 +1,6 @@
 import {
 	IConnection,
 	InitializeParams,
-	InitializeResult,
 	TextDocumentPositionParams,
 	Definition,
 	ReferenceParams,
@@ -35,7 +34,7 @@ import * as rt from './request-type';
  * worker one. All notifications are forwarded to both workers.
  */
 export function registerMasterHandler(connection: IConnection, one: IConnection, two: IConnection): void {
-	connection.onRequest(rt.InitializeRequest.type, async (params: InitializeParams): Promise<InitializeResult> => {
+	connection.onRequest(rt.InitializeRequest.type, async (params: InitializeParams): Promise<rt.InitializeResult> => {
 		const resultOne = one.sendRequest(rt.InitializeRequest.type, params);
 		two.sendRequest(rt.InitializeRequest.type, params);
 		return resultOne;
