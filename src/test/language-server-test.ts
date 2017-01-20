@@ -907,116 +907,6 @@ declare function resolve(id: string, cb: resolveCallback): void;\n\
 			after(function (done: () => void) {
 				utils.tearDown(done);
 			});
-			it('workspace/symbol text query: resolve', function (done: (err?: Error) => void) {
-				utils.symbols({
-					query: 'resolve',
-					limit: 10,
-				}, [{
-					"kind": 12,
-					"location": {
-						"range": {
-							"end": {
-								"character": 64,
-								"line": 3,
-							},
-							"start": {
-								"character": 0,
-								"line": 3,
-							},
-						},
-						"uri": "file:///resolve/index.d.ts",
-					},
-					"name": "resolve",
-				}, {
-					"kind": 12,
-					"location": {
-						"range": {
-							"end": {
-								"character": 64,
-								"line": 3,
-							},
-							"start": {
-								"character": 0,
-								"line": 3,
-							},
-						},
-						"uri": "file:///notResolve/index.d.ts",
-					},
-					"name": "resolve",
-				},
-				{
-					"kind": 15,
-					"location": {
-						"range": {
-							"end": {
-								"character": 63,
-								"line": 2,
-							},
-							"start": {
-								"character": 0,
-								"line": 2,
-							},
-						},
-						"uri": "file:///resolve/index.d.ts",
-					},
-					"name": "resolveCallback",
-				},
-				{
-					"kind": 15,
-					"location": {
-						"range": {
-							"end": {
-								"character": 63,
-								"line": 2,
-							},
-							"start": {
-								"character": 0,
-								"line": 2,
-							},
-						},
-						"uri": "file:///notResolve/index.d.ts",
-					},
-					"name": "resolveCallback",
-				}], done);
-			});
-			it('workspace/symbol symbol query: resolve', function (done: (err?: Error) => void) {
-				utils.symbols({
-					symbol: { 'name': 'resolve' },
-					limit: 10,
-				}, [{
-					"kind": 12,
-					"location": {
-						"range": {
-							"end": {
-								"character": 64,
-								"line": 3,
-							},
-							"start": {
-								"character": 0,
-								"line": 3,
-							},
-						},
-						"uri": "file:///resolve/index.d.ts",
-					},
-					"name": "resolve",
-				}, {
-					"kind": 12,
-					"location": {
-						"range": {
-							"end": {
-								"character": 64,
-								"line": 3,
-							},
-							"start": {
-								"character": 0,
-								"line": 3,
-							},
-						},
-						"uri": "file:///notResolve/index.d.ts",
-					},
-					"name": "resolve",
-				}], done);
-			});
 			it('workspace/symbol symbol query: resolve, with package', function (done: (err?: Error) => void) {
 				utils.symbols({
 					symbol: { 'name': 'resolveCallback', 'package': { 'name': '@types/resolve' } },
@@ -1084,6 +974,50 @@ declare function resolve(id: string, cb: resolveCallback): void;\n\
 			it('workspace/symbol symbol query with package', function (done: (err?: Error) => void) {
 				utils.symbols({
 					symbol: { name: 'a', kind: 'class', package: { name: 'mypkg' } },
+					limit: 10,
+				}, [{
+					"kind": 5,
+					"location": {
+						"range": {
+							"end": {
+								"character": 33,
+								"line": 0,
+							},
+							"start": {
+								"character": 0,
+								"line": 0,
+							},
+						},
+						"uri": "file:///a.ts",
+					},
+					"name": "a",
+				}], done);
+			});
+			it('workspace/symbol text query: a', function (done: (err?: Error) => void) {
+				utils.symbols({
+					query: 'a',
+					limit: 10,
+				}, [{
+					"kind": 5,
+					"location": {
+						"range": {
+							"end": {
+								"character": 33,
+								"line": 0,
+							},
+							"start": {
+								"character": 0,
+								"line": 0,
+							},
+						},
+						"uri": "file:///a.ts",
+					},
+					"name": "a",
+				}], done);
+			});
+			it('workspace/symbol symbol query: a', function (done: (err?: Error) => void) {
+				utils.symbols({
+					symbol: { 'name': 'a' },
 					limit: 10,
 				}, [{
 					"kind": 5,
