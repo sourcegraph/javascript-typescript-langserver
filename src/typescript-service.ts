@@ -242,13 +242,17 @@ export class TypeScriptService implements LanguageHandler {
 
 	async getWorkspaceSymbols(params: rt.WorkspaceSymbolParams): Promise<SymbolInformation[]> {
 		const query = params.query;
-		const symQuery = params.symbol;
+		const symQuery = params.symbol ? Object.assign({}, params.symbol) : undefined;
 		const limit = params.limit;
 
 		if (symQuery) {
 			const dtRes = await this.getWorkspaceSymbolsDefinitelyTyped(params);
 			if (dtRes) {
 				return dtRes;
+			}
+
+			if (!symQuery.containerKind) {
+				symQuery.containerKind = undefined; // symQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
 			}
 		}
 
@@ -258,11 +262,20 @@ export class TypeScriptService implements LanguageHandler {
 			return this.emptyQueryWorkspaceSymbols;
 		}
 		let configs;
-		const rootConfig = this.projectManager.getConfiguration('');
-		if (rootConfig) {
-			configs = [rootConfig];
+		if (symQuery && symQuery.package && symQuery.package.name) {
+			configs = [];
+			for (const config of this.projectManager.getConfigurations()) {
+				if (config.getPackageName() === symQuery.package.name) {
+					configs.push(config);
+				}
+			}
 		} else {
-			configs = this.projectManager.getConfigurations();
+			const rootConfig = this.projectManager.getConfiguration('');
+			if (rootConfig) {  // if there's a root configuration, it includes all files
+				configs = [rootConfig];
+			} else {
+				configs = this.projectManager.getConfigurations();
+			}
 		}
 		const itemsPromise = this.collectWorkspaceSymbols(configs, query, symQuery);
 		if (!query && !symQuery) {
@@ -296,8 +309,11 @@ export class TypeScriptService implements LanguageHandler {
 
 		this.projectManager.refreshConfigurations();
 
-		const symQuery = Object.assign({}, params.symbol);
+		const symQuery = params.symbol ? Object.assign({}, params.symbol) : undefined;
 		symQuery.package = undefined;
+		if (!symQuery.containerKind) {
+			symQuery.containerKind = undefined; // symQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
+		}
 
 		const config = this.projectManager.getConfiguration(relPkgRoot);
 		const itemsPromise = this.collectWorkspaceSymbols([config], params.query, symQuery);
@@ -1403,7 +1419,7 @@ export class TypeScriptService implements LanguageHandler {
 				// TODO(beyang): after workspace/symbol extension is accepted into LSP, push this logic upstream to getNavigateToItems
 				const items = config.getService().getNavigateToItems(symQuery.name || "", undefined, undefined, false);
 				for (const item of items) {
-					const sd = rt.SymbolDescriptor.create(item.kind, item.name, item.containerKind, item.containerName);
+					const sd = rt.SymbolDescriptor.create(item.kind, item.name, item.containerKind, item.containerName, { name: config.getPackageName() });
 					if (!util.symbolDescriptorMatch(symQuery, sd)) {
 						continue;
 					}

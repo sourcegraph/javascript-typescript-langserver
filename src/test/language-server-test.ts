@@ -1039,8 +1039,30 @@ declare function resolve(id: string, cb: resolveCallback): void;\n\
 					"name": "resolveCallback",
 				}], done);
 			});
+			it('workspace/symbol symbol query: resolve, with package, empty containerKind', function (done: (err?: Error) => void) {
+				utils.symbols({
+					symbol: { 'name': 'resolveCallback', 'containerKind': '', 'package': { 'name': '@types/resolve' } },
+					limit: 10,
+				}, [{
+					"kind": 15,
+					"location": {
+						"range": {
+							"end": {
+								"character": 63,
+								"line": 2,
+							},
+							"start": {
+								"character": 0,
+								"line": 2,
+							},
+						},
+						"uri": "file:///resolve/index.d.ts",
+					},
+					"name": "resolveCallback",
+				}], done);
+			});
 		});
-		describe('workspace/xreferences', function () {
+		describe('project with root package.json', function () {
 			before(function (done: () => void) {
 				utils.setUp(newLanguageHandler(), {
 					'a.ts': 'class a { foo() { const i = 1;} }',
@@ -1059,7 +1081,35 @@ declare function resolve(id: string, cb: resolveCallback): void;\n\
 			after(function (done: () => void) {
 				utils.tearDown(done);
 			});
-			it('foo references', function (done: (err?: Error) => void) {
+			it('workspace/symbol symbol query with package', function (done: (err?: Error) => void) {
+				utils.symbols({
+					symbol: { name: 'a', kind: 'class', package: { name: 'mypkg' } },
+					limit: 10,
+				}, [{
+					"kind": 5,
+					"location": {
+						"range": {
+							"end": {
+								"character": 33,
+								"line": 0,
+							},
+							"start": {
+								"character": 0,
+								"line": 0,
+							},
+						},
+						"uri": "file:///a.ts",
+					},
+					"name": "a",
+				}], done);
+			});
+			it('workspace/symbol symbol query with wrong package', function (done: (err?: Error) => void) {
+				utils.symbols({
+					symbol: { name: 'a', kind: 'class', package: { name: "not-mypkg" } },
+					limit: 10,
+				}, [], done);
+			});
+			it('workspace/xreferences "foo"', function (done: (err?: Error) => void) {
 				utils.workspaceReferences({ query: { "name": "foo", "kind": "method", "containerName": "a" } }, [{
 					"symbol": {
 						"containerKind": "",
@@ -1082,7 +1132,7 @@ declare function resolve(id: string, cb: resolveCallback): void;\n\
 					},
 				}], done);
 			});
-			it('foo references, with hint', function (done: (err?: Error) => void) {
+			it('workspace/xreferences "foo", with hint', function (done: (err?: Error) => void) {
 				utils.workspaceReferences({ query: { "name": "foo", "kind": "method", "containerName": "a" }, hints: { dependeePackageName: "mypkg" } }, [{
 					"symbol": {
 						"containerKind": "",
@@ -1105,10 +1155,10 @@ declare function resolve(id: string, cb: resolveCallback): void;\n\
 					},
 				}], done);
 			});
-			it('foo references, with hint, not found', function (done: (err?: Error) => void) {
+			it('workspace/xreferences "foo", with hint, not found', function (done: (err?: Error) => void) {
 				utils.workspaceReferences({ query: { "name": "foo", "kind": "method", "containerName": "a" }, hints: { dependeePackageName: "NOT-mypkg" } }, [], done);
 			});
-			it('dep reference', function (done: (err?: Error) => void) {
+			it('workspace/xreference dep reference', function (done: (err?: Error) => void) {
 				utils.workspaceReferences({ query: { "name": "x", "containerName": "/node_modules/dep/dep" } }, [{
 					"reference": {
 						"range": {
@@ -1131,7 +1181,7 @@ declare function resolve(id: string, cb: resolveCallback): void;\n\
 					},
 				}], done);
 			});
-			it('all references', function (done: (err?: Error) => void) {
+			it('workspace/xreferences all references', function (done: (err?: Error) => void) {
 				utils.workspaceReferences({ query: {} }, [
 					{
 						"symbol": {
