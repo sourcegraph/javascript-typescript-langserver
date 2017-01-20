@@ -144,7 +144,7 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 		try {
 			const result = await handler.getWorkspaceSymbols(params);
 			const exit = new Date().getTime();
-			console.error('workspace/symbol', params.query, params.symbol, (exit - enter) / 1000.0);
+			console.error('workspace/symbol', params.query, JSON.stringify(params.symbol), (exit - enter) / 1000.0);
 			return Promise.resolve(result || []);
 		} catch (e) {
 			console.error(params, e);
