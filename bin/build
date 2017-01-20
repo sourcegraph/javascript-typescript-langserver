@@ -3,27 +3,23 @@
 let fs = require('fs');
 let child_process = require('child_process');
 let path = require('path');
+let packageJson = require('../package.json');
 
 process.chdir(path.dirname(__dirname));
+process.env.npm_package_engines_vscode = process.env.npm_package_engines_vscode || packageJson.engines.vscode;
 
+// generating vscode/vscode.d.ts by running vscode's install script
 if (fs.existsSync('./node_modules/vscode/bin/install')) {
 	child_process.execSync('node ./node_modules/vscode/bin/install');
-} else if (fs.existsSync('../../node_modules/vscode/bin/install')) {
-	child_process.execSync('node ../../node_modules/vscode/bin/install');
 } else {
 	console.error('No vscode directory detected');
 	process.exit(1);
 }
 
-if (!fs.existsSync('./src')) {
-	process.exit(0);
-}
-
+// compiling project
 try {
 	if (fs.existsSync('./node_modules/.bin/tsc')) {
 		child_process.execSync(path.normalize('./node_modules/.bin/tsc'), {stdio: 'inherit'});
-	} else if (fs.existsSync('../../node_modules/.bin/tsc')) {
-		child_process.execSync(path.normalize('../../node_modules/.bin/tsc'), {stdio: 'inherit'});
 	} else {
 		console.error('No tsc compiler detected');
 		process.exit(1);

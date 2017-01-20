@@ -28,8 +28,7 @@
         "test": "node bin/test",
         "fmt-check": "node bin/fmt-check",
         "fmt": "node bin/fmt",
-        "prepublish": "node bin/build",
-        "postinstall": "node bin/build"
+        "prepublish": "node bin/build"
     },
     "dependencies": {
         "@types/async": "^2.0.32",
