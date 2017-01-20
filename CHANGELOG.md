@@ -9,3 +9,8 @@
 
 ## v1.1.1 - 13 January 2017
 - Added debug tracing of messages
+
+## v1.2.0 - 19 January 2017
+- experimental workspace/packages endpoint
+- experimental workspace/symbols endpoint extension (symbol query)
+- textDocument/completion
