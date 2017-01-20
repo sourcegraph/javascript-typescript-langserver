@@ -2,7 +2,7 @@
     "name": "javascript-typescript-langserver",
     "homepage": "https://github.com/sourcegraph/javascript-typescript-langserver",
     "author": "Sourcegraph",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "license": "Apache-2.0",
     "description": "A JavaScript/TypeScript analysis library that supports intelligent editor plugin operations like jump-to-def and find-refs. Implements the Language Server Protocol.",
     "keywords": [
