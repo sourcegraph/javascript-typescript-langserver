@@ -1471,7 +1471,13 @@ export class TypeScriptService implements LanguageHandler {
 			if (libraries.has(util.normalizePath(sourceFile.fileName))) {
 				continue;
 			}
-			const tree = configuration.getService().getNavigationTree(sourceFile.fileName);
+			let tree;
+			try {
+				tree = configuration.getService().getNavigationTree(sourceFile.fileName);
+			} catch (e) {
+				console.error("could not get navigation tree for file", sourceFile.fileName);
+				continue;
+			}
 			this.flattenNavigationTreeItem(tree, null, sourceFile, result, limit);
 			if (limit && result.length >= limit) {
 				break;
