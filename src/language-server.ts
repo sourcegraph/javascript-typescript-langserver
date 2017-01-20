@@ -10,7 +10,7 @@ const packageJson = require('../package.json');
 
 const defaultLspPort = 2089;
 const numCPUs = require('os').cpus().length;
-process.on('uncaughtException', (err: string) => {
+process.on('uncaughtException', (err: any) => {
 	console.error(err);
 });
 
