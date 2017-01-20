@@ -57,7 +57,7 @@
     },
     "files": [
         "lib",
-        "bin/build"
+        "NOTICE"        
     ],
     "bin": {
         "javascript-typescript-langserver": "./lib/language-server.js",
