@@ -90,13 +90,16 @@ export namespace DependenciesRequest {
 	};
 }
 
-export interface WorkspaceSymbolParamsWithLimit {
-	query: string;
-	limit: number;
+export namespace PackagesRequest {
+	export const type: vscode.RequestType<void, PackageInformation[], any> = {
+		get method() {
+			return 'workspace/packages';
+		}
+	};
 }
 
 export namespace WorkspaceSymbolsRequest {
-	export const type: vscode.RequestType<WorkspaceSymbolParamsWithLimit, vscode.SymbolInformation[], any> = {
+	export const type: vscode.RequestType<WorkspaceSymbolParams, vscode.SymbolInformation[], any> = {
 		get method() {
 			return 'workspace/symbol';
 		}
@@ -116,7 +119,7 @@ export interface SymbolDescriptor {
 	name: string;
 	containerKind: string;
 	containerName: string;
-	package?: DependencyAttributes;
+	package?: PackageDescriptor;
 }
 
 export interface PartialSymbolDescriptor {
@@ -124,7 +127,35 @@ export interface PartialSymbolDescriptor {
 	name?: string;
 	containerKind?: string;
 	containerName?: string;
-	package?: DependencyAttributes;
+	package?: PackageDescriptor;
+}
+
+export namespace SymbolDescriptor {
+	export function create(kind: string, name: string, containerKind: string, containerName: string, pkg?: PackageDescriptor): SymbolDescriptor {
+		return { kind, name, containerKind, containerName, package: pkg };
+	}
+}
+
+/*
+ * WorkspaceReferenceParams holds parameters for the extended
+ * workspace/symbols endpoint (an extension of the original LSP spec).
+ * If both properties are set, the requirements are AND'd.
+ */
+export interface WorkspaceSymbolParams {
+    /**
+     * A non-empty query string.
+     */
+	query?: string;
+
+	/**
+	 * A set of properties that describe the symbol to look up.
+	 */
+	symbol?: PartialSymbolDescriptor;
+
+	/**
+	 * The number of items to which to restrict the results set size.
+	 */
+	limit: number;
 }
 
 /*
@@ -151,9 +182,15 @@ export interface ReferenceInformation {
 	symbol: SymbolDescriptor;
 }
 
-export interface DependencyAttributes {
+export interface PackageInformation {
+	package: PackageDescriptor;
+	dependencies: DependencyReference[];
+}
+
+export interface PackageDescriptor {
 	name: string;
 	version?: string;
+	repoURL?: string;
 }
 
 export interface DependencyHints {
@@ -161,7 +198,7 @@ export interface DependencyHints {
 }
 
 export interface DependencyReference {
-	attributes: DependencyAttributes;
+	attributes: PackageDescriptor;
 	hints: DependencyHints;
 }
 

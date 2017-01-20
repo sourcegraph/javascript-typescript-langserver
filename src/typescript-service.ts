@@ -79,7 +79,8 @@ export class TypeScriptService implements LanguageHandler {
 						completionProvider: {
 							resolveProvider: false,
 							triggerCharacters: ['.']
-						}
+						},
+						packagesProvider: true,
 					}
 				})
 			}
@@ -239,21 +240,87 @@ export class TypeScriptService implements LanguageHandler {
 		});
 	}
 
-	async getWorkspaceSymbols(params: rt.WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]> {
+	async getWorkspaceSymbols(params: rt.WorkspaceSymbolParams): Promise<SymbolInformation[]> {
 		const query = params.query;
+		const symQuery = params.symbol ? Object.assign({}, params.symbol) : undefined;
+		if (symQuery && symQuery.package) {
+			symQuery.package = { name: symQuery.package.name };
+		}
 		const limit = params.limit;
+
+		if (symQuery) {
+			const dtRes = await this.getWorkspaceSymbolsDefinitelyTyped(params);
+			if (dtRes) {
+				return dtRes;
+			}
+
+			if (!symQuery.containerKind) {
+				symQuery.containerKind = undefined; // symQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
+			}
+		}
 
 		await this.projectManager.ensureFilesForWorkspaceSymbol();
 
-		if (!query && this.emptyQueryWorkspaceSymbols) {
+		if (!query && !symQuery && this.emptyQueryWorkspaceSymbols) {
 			return this.emptyQueryWorkspaceSymbols;
 		}
-		const configs = this.projectManager.getConfigurations();
-		const itemsPromise = this.collectWorkspaceSymbols(query, configs);
-		if (!query) {
+		let configs;
+		if (symQuery && symQuery.package && symQuery.package.name) {
+			configs = [];
+			for (const config of this.projectManager.getConfigurations()) {
+				if (config.getPackageName() === symQuery.package.name) {
+					configs.push(config);
+				}
+			}
+		} else {
+			const rootConfig = this.projectManager.getConfiguration('');
+			if (rootConfig) {  // if there's a root configuration, it includes all files
+				configs = [rootConfig];
+			} else {
+				configs = this.projectManager.getConfigurations();
+			}
+		}
+		const itemsPromise = this.collectWorkspaceSymbols(configs, query, symQuery);
+		if (!query && !symQuery) {
 			this.emptyQueryWorkspaceSymbols = itemsPromise;
 		}
 		return (await itemsPromise).slice(0, limit);
+	}
+
+	async getWorkspaceSymbolsDefinitelyTyped(params: rt.WorkspaceSymbolParams): Promise<SymbolInformation[] | null> {
+		try {
+			await this.projectManager.ensureFiles(['/package.json']);
+		} catch (e) {
+			return null;
+		}
+		if (!this.projectManager.getFs().fileExists('/package.json')) {
+			return null;
+		}
+		const rootConfig = JSON.parse(this.projectManager.getFs().readFile('/package.json'));
+		if (rootConfig['name'] !== 'definitely-typed') {
+			return null;
+		}
+		if (!params.symbol || !params.symbol.package) {
+			return null;
+		}
+		const pkg = params.symbol.package;
+		if (!pkg.name || !pkg.name.startsWith('@types/')) {
+			return null;
+		}
+		const relPkgRoot = pkg.name.slice('@types/'.length);
+		await this.projectManager.refreshFileTree(relPkgRoot, false);
+
+		this.projectManager.refreshConfigurations();
+
+		const symQuery = params.symbol ? Object.assign({}, params.symbol) : undefined;
+		symQuery.package = undefined;
+		if (!symQuery.containerKind) {
+			symQuery.containerKind = undefined; // symQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
+		}
+
+		const config = this.projectManager.getConfiguration(relPkgRoot);
+		const itemsPromise = this.collectWorkspaceSymbols([config], params.query, symQuery);
+		return (await itemsPromise).slice(0, params.limit);
 	}
 
 	async getDocumentSymbol(params: DocumentSymbolParams): Promise<SymbolInformation[]> {
@@ -332,6 +399,49 @@ export class TypeScriptService implements LanguageHandler {
 		}));
 
 		return refInfo;
+	}
+
+	async getPackages(): Promise<rt.PackageInformation[]> {
+		await this.projectManager.ensureModuleStructure();
+
+		const pkgFiles: string[] = [];
+		pm.walkInMemoryFs(this.projectManager.getFs(), "/", (path: string, isdir: boolean): Error | void => {
+			if (isdir && path_.basename(path) === "node_modules") {
+				return pm.skipDir;
+			}
+			if (isdir) {
+				return;
+			}
+			if (path_.basename(path) !== "package.json") {
+				return;
+			}
+			pkgFiles.push(path);
+		});
+
+		const pkgs: rt.PackageInformation[] = [];
+		const pkgJsons = pkgFiles.map((p) => JSON.parse(this.projectManager.getFs().readFile(p)));
+		for (const pkgJson of pkgJsons) {
+			const deps: rt.DependencyReference[] = [];
+			const pkgName = pkgJson['name'];
+			const pkgVersion = pkgJson['version'];
+			const pkgRepoURL = pkgJson['repository'] ? pkgJson['repository']['url'] : undefined;
+			for (const k of ['dependencies', 'devDependencies', 'peerDependencies']) {
+				if (pkgJson[k]) {
+					for (const name in pkgJson[k]) {
+						deps.push({ attributes: { 'name': name, 'version': pkgJson[k][name] }, hints: { dependeePackageName: pkgName } });
+					}
+				}
+			}
+			pkgs.push({
+				package: {
+					name: pkgName,
+					version: pkgVersion,
+					repoURL: pkgRepoURL,
+				},
+				dependencies: deps,
+			})
+		}
+		return pkgs;
 	}
 
 	async getDependencies(): Promise<rt.DependencyReference[]> {
@@ -1295,22 +1405,38 @@ export class TypeScriptService implements LanguageHandler {
 			this.defUri(item.fileName), item.containerName);
 	}
 
-	private async collectWorkspaceSymbols(query: string, configs: pm.ProjectConfiguration[]): Promise<SymbolInformation[]> {
-		const configSymbols: SymbolInformation[][] = await Promise.all(
-			configs.map(async (config) => {
-				const symbols: SymbolInformation[] = [];
-				await config.ensureAllFiles();
-				if (query) {
-					const items = config.getService().getNavigateToItems(query, undefined, undefined, true);
-					for (const item of items) {
-						symbols.push(this.transformNavItem(this.root, config.getProgram(), item));
+	private async collectWorkspaceSymbols(configs: pm.ProjectConfiguration[], query?: string, symQuery?: rt.PartialSymbolDescriptor): Promise<SymbolInformation[]> {
+		const configSymbols: SymbolInformation[][] = await Promise.all(configs.map(async (config) => {
+			const symbols: SymbolInformation[] = [];
+			await config.ensureAllFiles();
+			if (query) {
+				const items = config.getService().getNavigateToItems(query, undefined, undefined, false);
+				for (const item of items) {
+					const si = this.transformNavItem(this.root, config.getProgram(), item);
+					if (!util.isLocalUri(si.location.uri)) {
+						continue;
 					}
-				} else {
-					Array.prototype.push.apply(symbols, this.getNavigationTreeItems(config));
+					symbols.push(si);
 				}
-				return symbols;
-			})
-		);
+			} else if (symQuery) {
+				// TODO(beyang): after workspace/symbol extension is accepted into LSP, push this logic upstream to getNavigateToItems
+				const items = config.getService().getNavigateToItems(symQuery.name || "", undefined, undefined, false);
+				for (const item of items) {
+					const sd = rt.SymbolDescriptor.create(item.kind, item.name, item.containerKind, item.containerName, { name: config.getPackageName() });
+					if (!util.symbolDescriptorMatch(symQuery, sd)) {
+						continue;
+					}
+					const si = this.transformNavItem(this.root, config.getProgram(), item);
+					if (!util.isLocalUri(si.location.uri)) {
+						continue;
+					}
+					symbols.push(si);
+				}
+			} else {
+				Array.prototype.push.apply(symbols, this.getNavigationTreeItems(config));
+			}
+			return symbols;
+		}));
 		const symbols: SymbolInformation[] = [];
 		for (const cs of configSymbols) {
 			Array.prototype.push.apply(symbols, cs);
@@ -1345,7 +1471,13 @@ export class TypeScriptService implements LanguageHandler {
 			if (libraries.has(util.normalizePath(sourceFile.fileName))) {
 				continue;
 			}
-			const tree = configuration.getService().getNavigationTree(sourceFile.fileName);
+			let tree;
+			try {
+				tree = configuration.getService().getNavigationTree(sourceFile.fileName);
+			} catch (e) {
+				console.error("could not get navigation tree for file", sourceFile.fileName, "error:", e);
+				continue;
+			}
 			this.flattenNavigationTreeItem(tree, null, sourceFile, result, limit);
 			if (limit && result.length >= limit) {
 				break;

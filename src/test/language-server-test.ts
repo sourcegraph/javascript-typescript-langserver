@@ -20,7 +20,18 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					'foo': {
 						'b.ts': "/* This is class Foo */\nexport class Foo {}",
 						'c.ts': "import {Foo} from './b';",
-					}
+					},
+					'd.ts': `\
+export interface I {\n\
+  target: string;\n\
+}\
+`,
+					'e.ts': `\
+import * as d from './d';\n\
+\n\
+let i: d.I = { target: "hi" };\n\
+let target = i.target;\
+`,
 				}, done);
 			});
 			after(function (done: () => void) {
@@ -47,6 +58,37 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 								character: 13
 							}
 						}
+					}, done);
+			});
+			it('xdefinition on interface field reference', function (done: (err?: Error) => void) {
+				utils.xdefinition({
+					textDocument: {
+						uri: 'file:///e.ts'
+					},
+					position: {
+						line: 3,
+						character: 15
+					}
+				}, {
+						location: {
+							uri: 'file:///d.ts',
+							range: {
+								start: {
+									line: 1,
+									character: 2
+								},
+								end: {
+									line: 1,
+									character: 17
+								}
+							}
+						},
+						symbol: {
+							containerName: "I",
+							containerKind: "",
+							kind: "property",
+							name: "target",
+						},
 					}, done);
 			});
 			it('xdefinition in same file', function (done: (err?: Error) => void) {
@@ -693,6 +735,73 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					limit: 100
 				}, [], done);
 			});
+			it('workspace/symbols with partial SymbolDescriptor query', function (done: (err?: Error) => void) {
+				utils.symbols({
+					symbol: { name: 'a' },
+					limit: 10,
+				}, [{
+					"kind": 5,
+					"location": {
+						"range": {
+							"end": {
+								"character": 33,
+								"line": 0,
+							},
+							"start": {
+								"character": 0,
+								"line": 0,
+							}
+						},
+						"uri": "file:///a.ts",
+					},
+					"name": "a",
+				}], done);
+			});
+			it('workspace/symbols with full SymbolDescriptor query 1', function (done: (err?: Error) => void) {
+				utils.symbols({
+					symbol: { name: 'a', kind: 'class', containerName: '', containerKind: '' },
+					limit: 10,
+				}, [{
+					"kind": 5,
+					"location": {
+						"range": {
+							"end": {
+								"character": 33,
+								"line": 0,
+							},
+							"start": {
+								"character": 0,
+								"line": 0,
+							}
+						},
+						"uri": "file:///a.ts",
+					},
+					"name": "a",
+				}], done);
+			});
+			it('workspace/symbols with full SymbolDescriptor query 2', function (done: (err?: Error) => void) {
+				utils.symbols({
+					symbol: { name: 'baz', kind: 'method', containerName: 'b', containerKind: 'class' },
+					limit: 10,
+				}, [{
+					"containerName": "b",
+					"kind": 6,
+					"location": {
+						"range": {
+							"end": {
+								"character": 56,
+								"line": 0,
+							},
+							"start": {
+								"character": 23,
+								"line": 0,
+							},
+						},
+						"uri": "file:///foo/b.ts",
+					},
+					"name": "baz",
+				}], done);
+			});
 		});
 		describe('workspace/symbol with dependencies', function () {
 			before(function (done: () => void) {
@@ -743,7 +852,149 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 				}, [], done);
 			});
 		});
-		describe('workspace/xreferences', function () {
+		describe('DefinitelyTyped', function () {
+			before(function (done: () => void) {
+				utils.setUp(newLanguageHandler(), {
+					'package.json': `\
+{\n\
+  "private": true,\n\
+  "name": "definitely-typed",\n\
+  "version": "0.0.1",\n\
+  "homepage": "https://github.com/DefinitelyTyped/DefinitelyTyped",\n\
+  "repository": {\n\
+	"type": "git",\n\
+	"url": "git+https://github.com/DefinitelyTyped/DefinitelyTyped.git"\n\
+  },\n\
+  "license": "MIT",\n\
+  "bugs": {\n\
+	"url": "https://github.com/DefinitelyTyped/DefinitelyTyped/issues"\n\
+  },\n\
+  "engines": {\n\
+	"node": ">= 6.9.1"\n\
+  },\n\
+  "scripts": {\n\
+	"compile-scripts": "tsc -p scripts",\n\
+	"new-package": "node scripts/new-package.js",\n\
+	"not-needed": "node scripts/not-needed.js",\n\
+	"lint": "node scripts/lint.js",\n\
+	"test": "node node_modules/types-publisher/bin/tester/test.js --run-from-definitely-typed --nProcesses 1"\n\
+  },\n\
+  "devDependencies": {\n\
+	"types-publisher": "Microsoft/types-publisher#production"\n\
+  }\n\
+}\
+					`,
+					'resolve': {
+						'index.d.ts': '\
+/// <reference types="node" />\n\
+\n\
+type resolveCallback = (err: Error, resolved?: string) => void;\n\
+declare function resolve(id: string, cb: resolveCallback): void;\n\
+',
+						'tsconfig.json': '\
+{\n\
+    "compilerOptions": {\n\
+        "module": "commonjs",\n\
+        "lib": [\n\
+            "es6"\n\
+        ],\n\
+        "noImplicitAny": true,\n\
+        "noImplicitThis": true,\n\
+        "strictNullChecks": false,\n\
+        "baseUrl": "../",\n\
+        "typeRoots": [\n\
+            "../"\n\
+        ],\n\
+        "types": [],\n\
+        "noEmit": true,\n\
+        "forceConsistentCasingInFileNames": true\n\
+    },\n\
+    "files": [\n\
+        "index.d.ts"\n\
+    ]\n\
+}',
+					},
+					'notResolve': {
+						'index.d.ts': '\
+/// <reference types="node" />\n\
+\n\
+type resolveCallback = (err: Error, resolved?: string) => void;\n\
+declare function resolve(id: string, cb: resolveCallback): void;\n\
+',
+						'tsconfig.json': '\
+{\n\
+    "compilerOptions": {\n\
+        "module": "commonjs",\n\
+        "lib": [\n\
+            "es6"\n\
+        ],\n\
+        "noImplicitAny": true,\n\
+        "noImplicitThis": true,\n\
+        "strictNullChecks": false,\n\
+        "baseUrl": "../",\n\
+        "typeRoots": [\n\
+            "../"\n\
+        ],\n\
+        "types": [],\n\
+        "noEmit": true,\n\
+        "forceConsistentCasingInFileNames": true\n\
+    },\n\
+    "files": [\n\
+        "index.d.ts"\n\
+    ]\n\
+}',
+					},
+				}, done);
+			});
+			after(function (done: () => void) {
+				utils.tearDown(done);
+			});
+			it('workspace/symbol symbol query: resolve, with package', function (done: (err?: Error) => void) {
+				utils.symbols({
+					symbol: { 'name': 'resolveCallback', 'package': { 'name': '@types/resolve' } },
+					limit: 10,
+				}, [{
+					"kind": 15,
+					"location": {
+						"range": {
+							"end": {
+								"character": 63,
+								"line": 2,
+							},
+							"start": {
+								"character": 0,
+								"line": 2,
+							},
+						},
+						"uri": "file:///resolve/index.d.ts",
+					},
+					"name": "resolveCallback",
+				}], done);
+			});
+			it('workspace/symbol symbol query: resolve, with package, empty containerKind', function (done: (err?: Error) => void) {
+				utils.symbols({
+					symbol: { 'name': 'resolveCallback', 'containerKind': '', 'package': { 'name': '@types/resolve' } },
+					limit: 10,
+				}, [{
+					"kind": 15,
+					"location": {
+						"range": {
+							"end": {
+								"character": 63,
+								"line": 2,
+							},
+							"start": {
+								"character": 0,
+								"line": 2,
+							},
+						},
+						"uri": "file:///resolve/index.d.ts",
+					},
+					"name": "resolveCallback",
+				}], done);
+			});
+		});
+		describe('project with root package.json', function () {
 			before(function (done: () => void) {
 				utils.setUp(newLanguageHandler(), {
 					'a.ts': 'class a { foo() { const i = 1;} }',
@@ -762,7 +1013,101 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 			after(function (done: () => void) {
 				utils.tearDown(done);
 			});
-			it('foo references', function (done: (err?: Error) => void) {
+			it('workspace/symbol symbol query with package', function (done: (err?: Error) => void) {
+				utils.symbols({
+					symbol: { name: 'a', kind: 'class', package: { name: 'mypkg' } },
+					limit: 10,
+				}, [{
+					"kind": 5,
+					"location": {
+						"range": {
+							"end": {
+								"character": 33,
+								"line": 0,
+							},
+							"start": {
+								"character": 0,
+								"line": 0,
+							},
+						},
+						"uri": "file:///a.ts",
+					},
+					"name": "a",
+				}], done);
+			});
+			it('workspace/symbol symbol query with package, with package version (ignored)', function (done: (err?: Error) => void) {
+				utils.symbols({
+					symbol: { name: 'a', kind: 'class', package: { name: 'mypkg', version: "203940234" } },
+					limit: 10,
+				}, [{
+					"kind": 5,
+					"location": {
+						"range": {
+							"end": {
+								"character": 33,
+								"line": 0,
+							},
+							"start": {
+								"character": 0,
+								"line": 0,
+							},
+						},
+						"uri": "file:///a.ts",
+					},
+					"name": "a",
+				}], done);
+			});
+			it('workspace/symbol text query: a', function (done: (err?: Error) => void) {
+				utils.symbols({
+					query: 'a',
+					limit: 10,
+				}, [{
+					"kind": 5,
+					"location": {
+						"range": {
+							"end": {
+								"character": 33,
+								"line": 0,
+							},
+							"start": {
+								"character": 0,
+								"line": 0,
+							},
+						},
+						"uri": "file:///a.ts",
+					},
+					"name": "a",
+				}], done);
+			});
+			it('workspace/symbol symbol query: a', function (done: (err?: Error) => void) {
+				utils.symbols({
+					symbol: { 'name': 'a' },
+					limit: 10,
+				}, [{
+					"kind": 5,
+					"location": {
+						"range": {
+							"end": {
+								"character": 33,
+								"line": 0,
+							},
+							"start": {
+								"character": 0,
+								"line": 0,
+							},
+						},
+						"uri": "file:///a.ts",
+					},
+					"name": "a",
+				}], done);
+			});
+			it('workspace/symbol symbol query with wrong package', function (done: (err?: Error) => void) {
+				utils.symbols({
+					symbol: { name: 'a', kind: 'class', package: { name: "not-mypkg" } },
+					limit: 10,
+				}, [], done);
+			});
+			it('workspace/xreferences "foo"', function (done: (err?: Error) => void) {
 				utils.workspaceReferences({ query: { "name": "foo", "kind": "method", "containerName": "a" } }, [{
 					"symbol": {
 						"containerKind": "",
@@ -785,7 +1130,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					},
 				}], done);
 			});
-			it('foo references, with hint', function (done: (err?: Error) => void) {
+			it('workspace/xreferences "foo", with hint', function (done: (err?: Error) => void) {
 				utils.workspaceReferences({ query: { "name": "foo", "kind": "method", "containerName": "a" }, hints: { dependeePackageName: "mypkg" } }, [{
 					"symbol": {
 						"containerKind": "",
@@ -808,11 +1153,11 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					},
 				}], done);
 			});
-			it('foo references, with hint, not found', function (done: (err?: Error) => void) {
+			it('workspace/xreferences "foo", with hint, not found', function (done: (err?: Error) => void) {
 				utils.workspaceReferences({ query: { "name": "foo", "kind": "method", "containerName": "a" }, hints: { dependeePackageName: "NOT-mypkg" } }, [], done);
 			});
-			it('dep reference', function (done: (err?: Error) => void) {
-				utils.workspaceReferences({ query: { "name": "x", "containerName": "\"/node_modules/dep/dep\"" } }, [{
+			it('workspace/xreference dep reference', function (done: (err?: Error) => void) {
+				utils.workspaceReferences({ query: { "name": "x", "containerName": "/node_modules/dep/dep" } }, [{
 					"reference": {
 						"range": {
 							"end": {
@@ -828,13 +1173,13 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					},
 					"symbol": {
 						"containerKind": "",
-						"containerName": "\"/node_modules/dep/dep\"",
+						"containerName": "/node_modules/dep/dep",
 						"kind": "var",
 						"name": "x",
 					},
 				}], done);
 			});
-			it('all references', function (done: (err?: Error) => void) {
+			it('workspace/xreferences all references', function (done: (err?: Error) => void) {
 				utils.workspaceReferences({ query: {} }, [
 					{
 						"symbol": {
@@ -915,7 +1260,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 						},
 						"symbol": {
 							"containerKind": "",
-							"containerName": "\"/node_modules/dep/dep\"",
+							"containerName": "/node_modules/dep/dep",
 							"kind": "var",
 							"name": "x",
 						},
@@ -1028,7 +1373,7 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 				], done);
 			});
 		});
-		describe('workspace/xdependencies', function () {
+		describe('workspace/xdependencies and workspace/packages', function () {
 			before(function (done: () => void) {
 				utils.setUp(newLanguageHandler(), {
 					'package.json': '\
@@ -1057,7 +1402,14 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 						},
 					},
 					'subproject': {
-						'package.json': '{ "name": "subproject", "dependencies": { "subproject-dep": "0.0.0" } }',
+						'package.json': '\
+{\
+  "name": "subproject", \
+  "repository": {\
+    "url": "https://github.com/my/subproject"\
+  },\
+  "dependencies": { "subproject-dep": "0.0.0" }\
+}',
 					},
 				}, done);
 			});
@@ -1077,6 +1429,34 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					{ attributes: { 'name': "typescript", 'version': ">=2.0.0" }, hints: { 'dependeePackageName': 'tslint' } },
 					{ attributes: { 'name': "subproject-dep", 'version': "0.0.0" }, hints: { 'dependeePackageName': 'subproject' } },
 				]
+					, done);
+			});
+			it('all packages accounted for', function (done: (err?: Error) => void) {
+				utils.packages([{
+					package: {
+						name: 'tslint',
+						version: '4.0.2',
+					},
+					dependencies: [
+						{ attributes: { 'name': 'babel-code-frame', 'version': '^6.16.0' }, hints: { 'dependeePackageName': 'tslint' } },
+						{ attributes: { 'name': 'findup-sync', 'version': '~0.3.0' }, hints: { 'dependeePackageName': 'tslint' } },
+						{ attributes: { 'name': "@types/babel-code-frame", 'version': "^6.16.0" }, hints: { 'dependeePackageName': 'tslint' } },
+						{ attributes: { 'name': "@types/optimist", 'version': "0.0.29" }, hints: { 'dependeePackageName': 'tslint' } },
+						{ attributes: { 'name': "chai", 'version': "^3.0.0" }, hints: { 'dependeePackageName': 'tslint' } },
+						{ attributes: { 'name': "tslint", 'version': "latest" }, hints: { 'dependeePackageName': 'tslint' } },
+						{ attributes: { 'name': "tslint-test-config-non-relative", 'version': "file:test/external/tslint-test-config-non-relative" }, hints: { 'dependeePackageName': 'tslint' } },
+						{ attributes: { 'name': "typescript", 'version': "2.0.10" }, hints: { 'dependeePackageName': 'tslint' } },
+						{ attributes: { 'name': "typescript", 'version': ">=2.0.0" }, hints: { 'dependeePackageName': 'tslint' } },
+					],
+				}, {
+					package: {
+						name: 'subproject',
+						repoURL: "https://github.com/my/subproject",
+					},
+					dependencies: [
+						{ attributes: { 'name': "subproject-dep", 'version': "0.0.0" }, hints: { 'dependeePackageName': 'subproject' } },
+					],
+				}]
 					, done);
 			});
 		});

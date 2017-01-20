@@ -110,6 +110,10 @@ export function uri2relpath(uri: string, root: string): string {
 	return uri;
 }
 
+export function isLocalUri(uri: string): boolean {
+	return uri.startsWith('file://');
+}
+
 export function resolve(root: string, file: string): string {
 	if (!strict || os.platform() != 'win32') {
 		return path.resolve(root, file);
@@ -196,17 +200,50 @@ export function normalizeDir(dir: string) {
 export function defInfoToSymbolDescriptor(d: ts.DefinitionInfo): rt.SymbolDescriptor {
 	return {
 		kind: d.kind || "",
-		name: d.name || "",
+		name: stripQuotes(d.name) || "",
 		containerKind: d.containerKind || "",
-		containerName: d.containerName || "",
+		containerName: (d.containerName ? lastDotCmp(stripQuotes(d.containerName)) : ""),
 	};
 }
 
 export function symbolDescriptorMatch(query: rt.PartialSymbolDescriptor, sym: rt.SymbolDescriptor): boolean {
 	for (const key of Object.keys(query)) {
+		if ((<any>query)[key] === undefined) {
+			continue;
+		}
+		if (key === 'package') {
+			if (!sym.package || !packageDescriptorMatch(query.package, sym.package)) {
+				return false;
+			}
+			continue;
+		}
 		if ((<any>query)[key] !== (<any>sym)[key]) {
 			return false;
 		}
 	}
 	return true;
+}
+
+function packageDescriptorMatch(query: rt.PackageDescriptor, sym: rt.PackageDescriptor): boolean {
+	for (const key of Object.keys(query)) {
+		if ((<any>query)[key] === undefined) {
+			continue;
+		}
+		if ((<any>query)[key] !== (<any>sym)[key]) {
+			return false;
+		}
+	}
+	return true;
+}
+
+function stripQuotes(s: string): string {
+	if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+		return s.substring(1, s.length - 1);
+	}
+	return s;
+}
+
+function lastDotCmp(s: string): string {
+	const cmps = s.split('.');
+	return cmps[cmps.length - 1];
 }

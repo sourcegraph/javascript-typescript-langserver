@@ -139,12 +139,12 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 		});
 	});
 
-	connection.onRequest(rt.WorkspaceSymbolsRequest.type, async (params: rt.WorkspaceSymbolParamsWithLimit): Promise<SymbolInformation[]> => {
+	connection.onRequest(rt.WorkspaceSymbolsRequest.type, async (params: rt.WorkspaceSymbolParams): Promise<SymbolInformation[]> => {
 		const enter = new Date().getTime();
 		try {
 			const result = await handler.getWorkspaceSymbols(params);
 			const exit = new Date().getTime();
-			console.error('workspace/symbol', params.query, (exit - enter) / 1000.0);
+			console.error('workspace/symbol', params.query, JSON.stringify(params.symbol), (exit - enter) / 1000.0);
 			return Promise.resolve(result || []);
 		} catch (e) {
 			console.error(params, e);
@@ -226,6 +226,19 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 			return Promise.resolve(result || []);
 		} catch (e) {
 			console.error(params, e);
+			return Promise.reject(e);
+		}
+	});
+
+	connection.onRequest(rt.PackagesRequest.type, async (): Promise<rt.PackageInformation[]> => {
+		const enter = new Date().getTime();
+		try {
+			const result = await handler.getPackages();
+			const exit = new Date().getTime();
+			console.error('packages found', result.length, (exit - enter) / 1000.0);
+			return Promise.resolve(result || []);
+		} catch (e) {
+			console.error(e);
 			return Promise.reject(e);
 		}
 	});

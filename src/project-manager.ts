@@ -89,7 +89,7 @@ export class ProjectManager {
      */
 	ensureModuleStructure(): Promise<void> {
 		if (!this.ensuredModuleStructure) {
-			this.ensuredModuleStructure = this.refreshModuleStructureAt(this.root).then(() => {
+			this.ensuredModuleStructure = this.refreshFileTree(this.root, true).then(() => {
 				this.refreshConfigurations();
 			});
 			this.ensuredModuleStructure.catch((err) => {
@@ -101,19 +101,18 @@ export class ProjectManager {
 	}
 
 	/*
-	 * refreshModuleStructureAt refreshes the local in-memory
-	 * filesytem's (this.localFs) files under the specified path
-	 * (root) with the contents of the remote filesystem
-	 * (this.remoteFs). It will also reset the ProjectConfigurations
-	 * that are affected by the refreshed files.
+	 * refreshFileTree refreshes the local in-memory filesytem's (this.localFs) files under the
+	 * specified path (root) with the contents of the remote filesystem (this.remoteFs). It will
+	 * also reset the ProjectConfigurations that are affected by the refreshed files.
 	 *
-	 * This method is public because a ProjectManager instance assumes
-	 * there are no changes made to the remote filesystem structure
-	 * after initialization. If such changes are made, it is necessary
-	 * to call this method to alert the ProjectManager instance of the
-	 * change.
+	 * If moduleStructureOnly is true, then only files related to module structure (package.json,
+	 * tsconfig.json, etc.) will be refreshed.
+	 *
+	 * This method is public because a ProjectManager instance assumes there are no changes made to
+	 * the remote filesystem structure after initialization. If such changes are made, it is
+	 * necessary to call this method to alert the ProjectManager instance of the change.
 	 */
-	async refreshModuleStructureAt(root: string): Promise<void> {
+	async refreshFileTree(root: string, moduleStructureOnly: boolean): Promise<void> {
 		root = util.normalizeDir(root);
 		const filesToFetch: string[] = [];
 		await this.walkRemote(root, (path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) => {
@@ -123,7 +122,7 @@ export class ProjectManager {
 				return null;
 			}
 			const rel = path_.posix.relative(this.root, util.normalizePath(path));
-			if (util.isGlobalTSFile(rel) || util.isConfigFile(rel) || util.isPackageJsonFile(rel)) {
+			if (!moduleStructureOnly || util.isGlobalTSFile(rel) || util.isConfigFile(rel) || util.isPackageJsonFile(rel)) {
 				filesToFetch.push(path);
 			} else {
 				if (!this.localFs.fileExists(rel)) {
@@ -365,7 +364,7 @@ export class ProjectManager {
 	 * @return project configuration for a given source file. Climbs directory tree up to workspace root if needed 
 	 */
 	getConfiguration(fileName: string): ProjectConfiguration {
-		let dir = path_.posix.dirname(fileName);
+		let dir = fileName;
 		let config;
 		while (dir && dir != this.root) {
 			config = this.configs.get(dir);
@@ -448,9 +447,6 @@ export class ProjectManager {
 				this.remoteFs.readFile(path, (err?: Error, result?: string) => {
 					if (err) {
 						console.error('Unable to fetch content of ' + path, err);
-						// There is a chance that we request not-existent file.
-						const rel = path_.posix.relative(this.root, path);
-						this.localFs.addFile(rel, '');
 						return callback();
 					}
 					const rel = path_.posix.relative(this.root, path);
