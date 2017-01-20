@@ -993,6 +993,28 @@ declare function resolve(id: string, cb: resolveCallback): void;\n\
 					"name": "a",
 				}], done);
 			});
+			it('workspace/symbol symbol query with package, with package version (ignored)', function (done: (err?: Error) => void) {
+				utils.symbols({
+					symbol: { name: 'a', kind: 'class', package: { name: 'mypkg', version: "203940234" } },
+					limit: 10,
+				}, [{
+					"kind": 5,
+					"location": {
+						"range": {
+							"end": {
+								"character": 33,
+								"line": 0,
+							},
+							"start": {
+								"character": 0,
+								"line": 0,
+							},
+						},
+						"uri": "file:///a.ts",
+					},
+					"name": "a",
+				}], done);
+			});
 			it('workspace/symbol text query: a', function (done: (err?: Error) => void) {
 				utils.symbols({
 					query: 'a',

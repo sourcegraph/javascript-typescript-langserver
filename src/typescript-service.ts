@@ -243,6 +243,9 @@ export class TypeScriptService implements LanguageHandler {
 	async getWorkspaceSymbols(params: rt.WorkspaceSymbolParams): Promise<SymbolInformation[]> {
 		const query = params.query;
 		const symQuery = params.symbol ? Object.assign({}, params.symbol) : undefined;
+		if (symQuery && symQuery.package) {
+			symQuery.package = { name: symQuery.package.name };
+		}
 		const limit = params.limit;
 
 		if (symQuery) {
