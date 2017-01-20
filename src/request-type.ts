@@ -19,6 +19,13 @@ export namespace InitializeRequest {
 }
 
 export interface InitializeResult extends vscode.InitializeResult {
+	/**
+     * The capabilities the language server provides.
+     */
+	capabilities: ServerCapabilities;
+}
+
+export interface ServerCapabilities extends vscode.ServerCapabilities {
 	xworkspaceReferencesProvider?: boolean;
 	xdefinitionProvider?: boolean;
 	xdependenciesProvider?: boolean;
