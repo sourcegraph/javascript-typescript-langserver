@@ -79,7 +79,7 @@ export class TypeScriptService implements LanguageHandler {
 							resolveProvider: false,
 							triggerCharacters: ['.']
 						},
-						packagesProvider: true,
+						xpackagesProvider: true,
 					}
 				})
 			}

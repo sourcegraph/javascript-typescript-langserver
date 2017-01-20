@@ -29,7 +29,7 @@ export interface ServerCapabilities extends vscode.ServerCapabilities {
 	xworkspaceReferencesProvider?: boolean;
 	xdefinitionProvider?: boolean;
 	xdependenciesProvider?: boolean;
-	packagesProvider?: boolean;
+	xpackagesProvider?: boolean;
 }
 
 export namespace ShutdownRequest {
@@ -107,7 +107,7 @@ export namespace DependenciesRequest {
 export namespace PackagesRequest {
 	export const type: vscode.RequestType<void, PackageInformation[], any> = {
 		get method() {
-			return 'workspace/packages';
+			return 'workspace/xpackages';
 		}
 	};
 }

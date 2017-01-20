@@ -1373,7 +1373,7 @@ declare function resolve(id: string, cb: resolveCallback): void;\n\
 				], done);
 			});
 		});
-		describe('workspace/xdependencies and workspace/packages', function () {
+		describe('workspace/xdependencies and workspace/xpackages', function () {
 			before(function (done: () => void) {
 				utils.setUp(newLanguageHandler(), {
 					'package.json': '\
