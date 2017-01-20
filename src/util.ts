@@ -202,7 +202,7 @@ export function defInfoToSymbolDescriptor(d: ts.DefinitionInfo): rt.SymbolDescri
 		kind: d.kind || "",
 		name: stripQuotes(d.name) || "",
 		containerKind: d.containerKind || "",
-		containerName: stripQuotes(d.containerName) || "",
+		containerName: (d.containerName ? lastDotCmp(stripQuotes(d.containerName)) : ""),
 	};
 }
 
@@ -241,4 +241,9 @@ function stripQuotes(s: string): string {
 		return s.substring(1, s.length - 1);
 	}
 	return s;
+}
+
+function lastDotCmp(s: string): string {
+	const cmps = s.split('.');
+	return cmps[cmps.length - 1];
 }

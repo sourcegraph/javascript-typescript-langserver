@@ -20,7 +20,18 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 					'foo': {
 						'b.ts': "/* This is class Foo */\nexport class Foo {}",
 						'c.ts': "import {Foo} from './b';",
-					}
+					},
+					'd.ts': `\
+export interface I {\n\
+  target: string;\n\
+}\
+`,
+					'e.ts': `\
+import * as d from './d';\n\
+\n\
+let i: d.I = { target: "hi" };\n\
+let target = i.target;\
+`,
 				}, done);
 			});
 			after(function (done: () => void) {
@@ -47,6 +58,37 @@ export function testWithLangHandler(newLanguageHandler: () => LanguageHandler) {
 								character: 13
 							}
 						}
+					}, done);
+			});
+			it('xdefinition on interface field reference', function (done: (err?: Error) => void) {
+				utils.xdefinition({
+					textDocument: {
+						uri: 'file:///e.ts'
+					},
+					position: {
+						line: 3,
+						character: 15
+					}
+				}, {
+						location: {
+							uri: 'file:///d.ts',
+							range: {
+								start: {
+									line: 1,
+									character: 2
+								},
+								end: {
+									line: 1,
+									character: 17
+								}
+							}
+						},
+						symbol: {
+							containerName: "I",
+							containerKind: "",
+							kind: "property",
+							name: "target",
+						},
 					}, done);
 			});
 			it('xdefinition in same file', function (done: (err?: Error) => void) {
