@@ -1,12 +1,14 @@
 import * as net from 'net';
 import * as chai from 'chai';
 import * as vscode from 'vscode-languageserver';
+import * as async from 'async';
 
 import { newConnection, registerLanguageHandler } from '../connection';
 import { LanguageHandler } from '../lang-handler';
-import { FileInfo } from '../fs';
+import { FileInfo, FileSystem, MemoryFileSystemNode, MemoryFileSystem } from '../fs';
 import * as rt from '../request-type';
 import { IConnection } from 'vscode-languageserver';
+import { path2uri } from '../util';
 
 class Channel {
 	server: net.Server;
@@ -22,7 +24,7 @@ class Channel {
 
 let channel: Channel;
 
-export function setUp(langhandler: LanguageHandler, memfs: any, done: (err?: Error) => void) {
+export function setUp(langhandler: LanguageHandler, fs: FileSystem | MemoryFileSystemNode, done: (err?: Error) => void) {
 	if (channel) {
 		throw new Error("channel wasn't torn down properly after previous test suite");
 	}
@@ -60,7 +62,8 @@ export function setUp(langhandler: LanguageHandler, memfs: any, done: (err?: Err
 	channel.client = net.createServer((stream) => {
 		channel.clientIn = stream;
 		channel.clientConnection = newConnection(channel.clientIn, channel.clientOut, { trace: false });
-		initFs(channel.clientConnection, memfs);
+		const fs_ = (fs as FileSystem).readDir ? fs as FileSystem : new MemoryFileSystem(fs as MemoryFileSystemNode);
+		initFs(channel.clientConnection, fs_);
 		maybeDone();
 	});
 	channel.server.listen(0, () => {
@@ -71,57 +74,27 @@ export function setUp(langhandler: LanguageHandler, memfs: any, done: (err?: Err
 	});
 }
 
-function initFs(connection: IConnection, memfs: any) {
-	connection.onRequest(rt.ReadDirRequest.type, (params: string): FileInfo[] => {
-		params = params.substring(1);
-		const path = params.length ? params.split('/') : [];
-		let node = memfs;
-		let i = 0;
-		while (i < path.length) {
-			node = node[path[i]];
-			if (!node || typeof node != 'object') {
-				throw new Error('no such file: ' + params);
-			}
-			i++;
-		}
-		const keys = Object.keys(node);
-		let result: FileInfo[] = []
-		keys.forEach((k) => {
-			const v = node[k];
-			if (typeof v == 'string') {
-				result.push({
-					name: k,
-					size: v.length,
-					dir: false
-				})
-			} else {
-				result.push({
-					name: k,
-					size: 0,
-					dir: true
-				});
-			}
+function initFs(connection: IConnection, fs: FileSystem) {
+	connection.onRequest(rt.ReadDirRequest.type, (params: string): Promise<FileInfo[]> => {
+		return new Promise<FileInfo[]>((resolve, reject) => {
+			fs.readDir(params, (err: Error, result?: FileInfo[]) => {
+				if (err) {
+					return reject(err);
+				}
+				return resolve(result);
+			});
 		});
-		return result;
 	});
 
-	connection.onRequest(rt.ReadFileRequest.type, (params: string): string => {
-		params = params.substring(1);
-		const path = params.length ? params.split('/') : [];
-		let node = memfs;
-		let i = 0;
-		while (i < path.length - 1) {
-			node = node[path[i]];
-			if (!node || typeof node != 'object') {
-				throw new Error('no such file: ' + params);
-			}
-			i++;
-		}
-		const content = node[path[path.length - 1]];
-		if (!content || typeof content != 'string') {
-			throw new Error('no such file');
-		}
-		return new Buffer(content).toString('base64');
+	connection.onRequest(rt.ReadFileRequest.type, (params: string): Promise<string> => {
+		return new Promise<string>((resolve, reject) => {
+			fs.readFile(params, (err: Error, result?: string) => {
+				if (err) {
+					return reject(err);
+				}
+				return resolve(new Buffer(result).toString('base64'));
+			});
+		});
 	});
 }
 
@@ -223,9 +196,10 @@ export function workspaceReferences(params: rt.WorkspaceReferenceParams, expecte
 }
 
 export function packages(expected: rt.PackageInformation[], done: (err?: Error) => void) {
+	const cmp = (a: rt.PackageInformation, b: rt.PackageInformation) => a.package.name.localeCompare(b.package.name);
 	channel.clientConnection.sendRequest(rt.PackagesRequest.type).then((result: rt.PackageInformation[]) => {
 		check(done, () => {
-			chai.expect(result).to.deep.equal(expected);
+			chai.expect(result.sort(cmp)).to.deep.equal(expected.sort(cmp));
 		});
 	}, (err?: Error) => {
 		return done(err || new Error('packages request failed'))
@@ -303,4 +277,221 @@ export function completions(params: vscode.TextDocumentPositionParams, expected:
 	}, (err?: Error) => {
 		return done(err || new Error('textDocument/completion request failed'))
 	})
+}
+
+export interface TestDescriptor {
+	definitions?: { [position: string]: string | string[] };
+	hovers?: { [position: string]: vscode.Hover };
+	references?: { [position: string]: number };
+	workspaceReferences?: [{ params: rt.WorkspaceReferenceParams, expected: rt.ReferenceInformation[] }];
+	packages?: rt.PackageInformation[];
+	dependencies?: rt.DependencyReference[];
+	symbols?: [{ params: rt.WorkspaceSymbolParams, expected: vscode.SymbolInformation[] }];
+	documentSymbols?: { [uri: string]: vscode.SymbolInformation[] };
+	completions?: { [position: string]: vscode.CompletionItem[] };
+	xdefinitions?: { [position: string]: rt.SymbolLocationInformation | rt.SymbolLocationInformation[] }
+}
+
+export function position(pos: string): vscode.TextDocumentPositionParams {
+	const parts = pos.split(':', 3);
+	return {
+		textDocument: {
+			uri: path2uri('', parts[0])
+		},
+		position: {
+			line: parseInt(parts[1]),
+			character: parseInt(parts[2])
+		}
+	};
+}
+
+export function location(s: string | string[]): vscode.Location[] {
+	if (!Array.isArray(s)) {
+		s = [s];
+	}
+	const ret: vscode.Location[] = [];
+	s.forEach(item => {
+		const parts = item.split(':', 5);
+		ret.push({
+			uri: path2uri('', '/' + parts[0]),
+			range: {
+				start: {
+					line: parseInt(parts[1]),
+					character: parseInt(parts[2])
+				},
+				end: {
+					line: parseInt(parts[3]),
+					character: parseInt(parts[4])
+				}
+			}
+		});
+	});
+	return ret;
+}
+
+export function reference(pos: string): vscode.ReferenceParams {
+	const parts = pos.split(':', 3);
+	return {
+		textDocument: {
+			uri: path2uri('', parts[0])
+		},
+		position: {
+			line: parseInt(parts[1]),
+			character: parseInt(parts[2])
+		},
+		context: {
+			includeDeclaration: false
+		}
+	};
+}
+
+function testHover(descriptor: TestDescriptor): (done: (err?: Error) => void) => void {
+	return (done: (err?: Error) => void) => {
+		if (!descriptor.hovers) {
+			return done();
+		}
+		const tasks = [];
+		for (const pos in descriptor.hovers) {
+			tasks.push((callback: (err?: Error) => void) => {
+				hover(position(pos), descriptor.hovers[pos], callback);
+			});
+		}
+		async.parallel(tasks, done);
+	}
+}
+
+function testDefinition(descriptor: TestDescriptor): (done: (err?: Error) => void) => void {
+	return (done: (err?: Error) => void) => {
+		if (!descriptor.definitions) {
+			return done();
+		}
+		const tasks = [];
+		for (const pos in descriptor.definitions) {
+			tasks.push((callback: (err?: Error) => void) => {
+				definition(position(pos), location(descriptor.definitions[pos]), callback);
+			});
+		}
+		async.parallel(tasks, done);
+	}
+}
+
+function testReferences(descriptor: TestDescriptor): (done: (err?: Error) => void) => void {
+	return (done: (err?: Error) => void) => {
+		if (!descriptor.references) {
+			return done();
+		}
+		const tasks = [];
+		for (const pos in descriptor.references) {
+			tasks.push((callback: (err?: Error) => void) => {
+				references(reference(pos), descriptor.references[pos], callback);
+			});
+		}
+		async.parallel(tasks, done);
+	}
+}
+
+function testXDefinition(descriptor: TestDescriptor): (done: (err?: Error) => void) => void {
+	return (done: (err?: Error) => void) => {
+		if (!descriptor.xdefinitions) {
+			return done();
+		}
+		const tasks = [];
+		for (const pos in descriptor.xdefinitions) {
+			tasks.push((callback: (err?: Error) => void) => {
+				xdefinition(position(pos), descriptor.xdefinitions[pos], callback);
+			});
+		}
+		async.parallel(tasks, done);
+	}
+}
+
+function testPackages(descriptor: TestDescriptor): (done: (err?: Error) => void) => void {
+	return (done: (err?: Error) => void) => {
+		if (!descriptor.packages) {
+			return done();
+		}
+		packages(descriptor.packages, done);
+	}
+}
+
+function testWorkspaceReferences(descriptor: TestDescriptor): (done: (err?: Error) => void) => void {
+	return (done: (err?: Error) => void) => {
+		if (!descriptor.workspaceReferences) {
+			return done();
+		}
+		const tasks = [];
+		for (const i in descriptor.workspaceReferences) {
+			tasks.push((callback: (err?: Error) => void) => {
+				workspaceReferences(descriptor.workspaceReferences[i].params, descriptor.workspaceReferences[i].expected, callback);
+			});
+		}
+		async.parallel(tasks, done);
+	}
+}
+
+function testDependencies(descriptor: TestDescriptor): (done: (err?: Error) => void) => void {
+	return (done: (err?: Error) => void) => {
+		if (!descriptor.dependencies) {
+			return done();
+		}
+		dependencies(descriptor.dependencies, done);
+	}
+}
+
+function testSymbols(descriptor: TestDescriptor): (done: (err?: Error) => void) => void {
+	return (done: (err?: Error) => void) => {
+		if (!descriptor.symbols) {
+			return done();
+		}
+		const tasks = [];
+		for (const i in descriptor.symbols) {
+			tasks.push((callback: (err?: Error) => void) => {
+				symbols(descriptor.symbols[i].params, descriptor.symbols[i].expected, callback);
+			});
+		}
+		async.parallel(tasks, done);
+	}
+}
+
+function testDocumentSymbols(descriptor: TestDescriptor): (done: (err?: Error) => void) => void {
+	return (done: (err?: Error) => void) => {
+		if (!descriptor.documentSymbols) {
+			return done();
+		}
+		const tasks = [];
+		for (const p in descriptor.documentSymbols) {
+			tasks.push((callback: (err?: Error) => void) => {
+				documentSymbols({ textDocument: { uri: path2uri('', p) } }, descriptor.documentSymbols[p], callback);
+			});
+		}
+		async.parallel(tasks, done);
+	}
+}
+
+function testCompletions(descriptor: TestDescriptor): (done: (err?: Error) => void) => void {
+	return (done: (err?: Error) => void) => {
+		if (!descriptor.completions) {
+			return done();
+		}
+		const tasks = [];
+		for (const p in descriptor.completions) {
+			tasks.push((callback: (err?: Error) => void) => {
+				completions(position(p), descriptor.completions[p], callback);
+			});
+		}
+		async.parallel(tasks, done);
+	}
+}
+
+export function tests(descriptor: TestDescriptor) {
+	it('hover', testHover(descriptor));
+	it('definition', testDefinition(descriptor));
+	it('references', testReferences(descriptor));
+	it('xdefinition', testXDefinition(descriptor));
+	it('packages', testPackages(descriptor));
+	it('workspaceReferences', testWorkspaceReferences(descriptor));
+	it('dependencies', testDependencies(descriptor));
+	it('symbols', testSymbols(descriptor));
+	it('documentSymbols', testDocumentSymbols(descriptor));
+	it('completions', testCompletions(descriptor));
 }
