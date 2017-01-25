@@ -6,8 +6,13 @@ let path = require('path');
 
 process.chdir(path.dirname(__dirname));
 
+let filter = '';
+if (process.argv.length > 2) {
+	filter = '-g ' + process.argv[2];
+}
+
 try {
-	child_process.execSync(path.normalize('./node_modules/.bin/mocha') + ' -r ts-node/register src/test/**/*.ts', {stdio: 'inherit'});
+	child_process.execSync(path.normalize('./node_modules/.bin/mocha') + ' -r ts-node/register ' + filter + ' src/test/**/*.ts', {stdio: 'inherit'});
 } catch (e) {
 	process.exit(1);
 }

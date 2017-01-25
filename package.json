@@ -26,6 +26,8 @@
     },
     "scripts": {
         "test": "node bin/test",
+        "test-e2e": "node bin/test e2e",
+        "test-lsp": "node bin/test LSP",
         "fmt-check": "node bin/fmt-check",
         "fmt": "node bin/fmt",
         "prepublish": "node bin/build",
@@ -51,8 +53,10 @@
     "devDependencies": {
         "@types/chai": "^3.4.34",
         "@types/mocha": "^2.2.32",
+        "@types/tmp": "^0.0.32",
         "chai": "^3.4.34",
         "mocha": "^2.2.32",
+        "tmp": "^0.0.31",
         "ts-node": "^1.6.1",
         "typescript-formatter": "^4.0.0"
     },
