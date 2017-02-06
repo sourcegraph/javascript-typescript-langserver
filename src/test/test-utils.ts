@@ -297,8 +297,13 @@ export function completions(params: vscode.TextDocumentPositionParams, expected:
 	channel.clientConnection.sendRequest(rt.TextDocumentCompletionRequest.type, params).then((result: vscode.CompletionList) => {
 		check(done, () => {
 			chai.assert(result);
+			chai.assert(result.items);
 			result.items.sort(cmp);
-			chai.expect(result.items).to.deep.equal(expected.sort(cmp));
+			if (expected) {
+				chai.expect(result.items).to.deep.equal(expected.sort(cmp));
+			} else {
+				chai.expect(result.items.length).to.not.equal(0);
+			}
 		});
 	}, (err?: Error) => {
 		return done(err || new Error('textDocument/completion request failed'))
