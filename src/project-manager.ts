@@ -643,7 +643,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 		return this.readFile(path) !== undefined;
 	}
 
-	readFile(path: string): string {
+	readFile(path: string): string | undefined {
 		let content = this.overlay[path];
 		if (content !== undefined) {
 			return content;
