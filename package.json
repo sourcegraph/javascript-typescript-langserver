@@ -1,59 +1,59 @@
 {
-    "name": "javascript-typescript-langserver",
-    "homepage": "https://github.com/sourcegraph/javascript-typescript-langserver",
-    "author": "Sourcegraph",
-    "version": "1.2.1",
-    "license": "Apache-2.0",
-    "description": "A JavaScript/TypeScript analysis library that supports intelligent editor plugin operations like jump-to-def and find-refs. Implements the Language Server Protocol.",
-    "keywords": [
-        "LSP",
-        "compiler",
-        "language",
-        "javascript",
-        "editor",
-        "typescript"
-    ],
-    "bugs": {
-        "url": "https://github.com/sourcegraph/javascript-typescript-langserver/issues"
-    },
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/sourcegraph/javascript-typescript-langserver.git"
-    },
-    "engines": {
-        "node": ">=6.0.0",
-        "vscode": "1.x.x"
-    },
-    "scripts": {
-        "test": "node bin/test",
-        "fmt-check": "node bin/fmt-check",
-        "fmt": "node bin/fmt",
-        "prepublish": "node bin/build",
-        "postinstall": "node bin/build"
-    },
-    "dependencies": {
-        "@types/async": "^2.0.32",
-        "@types/node": "^6.0.46",
-        "async": "^2.0.32",
-        "commander": "^2.9.0",
-        "typescript": "2.1.1",
-        "vscode-languageserver": "^2.2.1",
-        "vscode-languageserver-types": "^1.0.3"
-    },
-    "devDependencies": {
-        "@types/chai": "^3.4.34",
-        "@types/mocha": "^2.2.32",
-        "chai": "^3.4.34",
-        "mocha": "^2.2.32",
-        "ts-node": "^1.6.1",
-        "typescript-formatter": "^4.0.0"
-    },
-    "files": [
-        "lib",
-        "bin/build"
-    ],
-    "bin": {
-        "javascript-typescript-langserver": "./lib/language-server.js",
-        "javascript-typescript-stdio": "./lib/language-server-stdio.js"
-    }
+  "name": "javascript-typescript-langserver",
+  "homepage": "https://github.com/sourcegraph/javascript-typescript-langserver",
+  "author": "Sourcegraph",
+  "version": "1.2.2",
+  "license": "Apache-2.0",
+  "description": "A JavaScript/TypeScript analysis library that supports intelligent editor plugin operations like jump-to-def and find-refs. Implements the Language Server Protocol.",
+  "keywords": [
+    "LSP",
+    "compiler",
+    "language",
+    "javascript",
+    "editor",
+    "typescript"
+  ],
+  "bugs": {
+    "url": "https://github.com/sourcegraph/javascript-typescript-langserver/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sourcegraph/javascript-typescript-langserver.git"
+  },
+  "engines": {
+    "node": ">=6.0.0",
+    "vscode": "1.x.x"
+  },
+  "scripts": {
+    "test": "node bin/test",
+    "fmt-check": "node bin/fmt-check",
+    "fmt": "node bin/fmt",
+    "prepublish": "node bin/build",
+    "postinstall": "node bin/build"
+  },
+  "dependencies": {
+    "@types/async": "^2.0.32",
+    "@types/node": "^6.0.46",
+    "async": "^2.0.32",
+    "commander": "^2.9.0",
+    "typescript": "2.1.1",
+    "vscode-languageserver": "^2.2.1",
+    "vscode-languageserver-types": "^1.0.3"
+  },
+  "devDependencies": {
+    "@types/chai": "^3.4.34",
+    "@types/mocha": "^2.2.32",
+    "chai": "^3.4.34",
+    "mocha": "^2.2.32",
+    "ts-node": "^1.6.1",
+    "typescript-formatter": "^4.0.0"
+  },
+  "files": [
+    "lib",
+    "bin/build"
+  ],
+  "bin": {
+    "javascript-typescript-langserver": "./lib/language-server.js",
+    "javascript-typescript-stdio": "./lib/language-server-stdio.js"
+  }
 }
