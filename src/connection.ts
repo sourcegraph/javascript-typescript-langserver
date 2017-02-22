@@ -34,7 +34,7 @@ export interface TraceOptions {
 	logfile?: string;
 }
 
-export function newConnection(input: any, output: any, trace: TraceOptions): IConnection {
+export function newConnection(input: NodeJS.ReadableStream, output: NodeJS.WritableStream, trace: TraceOptions): IConnection {
 
 	const reader = new StreamMessageReader(input);
 
