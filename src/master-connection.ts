@@ -37,11 +37,11 @@ import * as rt from './request-type';
  * @param leigthWeight Connection for short-running requests
  * @param heavyDuty    Connection for long-running requests
  */
-export function registerMasterHandler(master: IConnection, leightWeight: IConnection, heavyDuty: IConnection): void {
+export function registerMasterHandler(master: IConnection, lightWeight: IConnection, heavyDuty: IConnection): void {
 
 	// Forward calls from the worker to the master
 
-	for (const worker of [leightWeight, heavyDuty]) {
+	for (const worker of [lightWeight, heavyDuty]) {
 		worker.onRequest(rt.ReadFileRequest.type, async (params: any): Promise<any> => {
 			return master.sendRequest(rt.ReadFileRequest.type, params);
 		});
@@ -54,16 +54,16 @@ export function registerMasterHandler(master: IConnection, leightWeight: IConnec
 
 	master.onRequest(rt.InitializeRequest.type, async (params: InitializeParams): Promise<rt.InitializeResult> => {
 		const [result] = await Promise.all([
-			leightWeight.sendRequest(rt.InitializeRequest.type, params),
+			lightWeight.sendRequest(rt.InitializeRequest.type, params),
 			heavyDuty.sendRequest(rt.InitializeRequest.type, params)
 		]);
 		return result;
 	});
 
 	master.onRequest({ method: 'shutdown' }, async () => {
-		const [result] = await Promise.all([leightWeight, heavyDuty].map(worker => worker.sendRequest(rt.ShutdownRequest.type)));
+		const [result] = await Promise.all([lightWeight, heavyDuty].map(worker => worker.sendRequest(rt.ShutdownRequest.type)));
 		// Shutting down the master means killing the workers
-		for (const worker of [leightWeight, heavyDuty]) {
+		for (const worker of [lightWeight, heavyDuty]) {
 			worker.sendNotification(rt.ExitRequest.type);
 		}
 		return result;
@@ -72,25 +72,25 @@ export function registerMasterHandler(master: IConnection, leightWeight: IConnec
 	// Notifications (both workers)
 
 	master.onDidOpenTextDocument((params: DidOpenTextDocumentParams) => {
-		for (const worker of [leightWeight, heavyDuty]) {
+		for (const worker of [lightWeight, heavyDuty]) {
 			worker.sendNotification(rt.TextDocumentDidOpenNotification.type, params)
 		}
 	});
 
 	master.onDidChangeTextDocument((params: DidChangeTextDocumentParams) => {
-		for (const worker of [leightWeight, heavyDuty]) {
+		for (const worker of [lightWeight, heavyDuty]) {
 			worker.sendNotification(rt.TextDocumentDidChangeNotification.type, params);
 		}
 	});
 
 	master.onDidSaveTextDocument((params: DidSaveTextDocumentParams) => {
-		for (const worker of [leightWeight, heavyDuty]) {
+		for (const worker of [lightWeight, heavyDuty]) {
 			worker.sendNotification(rt.TextDocumentDidSaveNotification.type, params);
 		}
 	});
 
 	master.onDidCloseTextDocument((params: DidCloseTextDocumentParams) => {
-		for (const worker of [leightWeight, heavyDuty]) {
+		for (const worker of [lightWeight, heavyDuty]) {
 			worker.sendNotification(rt.TextDocumentDidCloseNotification.type, params);
 		}
 	});
@@ -99,11 +99,11 @@ export function registerMasterHandler(master: IConnection, leightWeight: IConnec
 	// These are all that can typically only need very specific files to be parsed
 
 	master.onDefinition(async (params: TextDocumentPositionParams): Promise<Definition> => {
-		return leightWeight.sendRequest(rt.DefinitionRequest.type, params);
+		return lightWeight.sendRequest(rt.DefinitionRequest.type, params);
 	});
 
 	master.onHover(async (params: TextDocumentPositionParams): Promise<Hover> => {
-		return leightWeight.sendRequest(rt.HoverRequest.type, params);
+		return lightWeight.sendRequest(rt.HoverRequest.type, params);
 	});
 
 	// Long-running requests (worker two)
