@@ -32,95 +32,112 @@ import * as rt from './request-type';
  * delegate to worker one. On initialize, the master handler forwards
  * the request to both workers, but only returns the response from
  * worker one. All notifications are forwarded to both workers.
+ *
+ * @param master       The connection to register on
+ * @param leigthWeight Connection for short-running requests
+ * @param heavyDuty    Connection for long-running requests
  */
-export function registerMasterHandler(connection: IConnection, one: IConnection, two: IConnection): void {
-	connection.onRequest(rt.InitializeRequest.type, async (params: InitializeParams): Promise<rt.InitializeResult> => {
-		const resultOne = one.sendRequest(rt.InitializeRequest.type, params);
-		two.sendRequest(rt.InitializeRequest.type, params);
-		return resultOne;
+export function registerMasterHandler(master: IConnection, lightWeight: IConnection, heavyDuty: IConnection): void {
+
+	// Forward calls from the worker to the master
+
+	for (const worker of [lightWeight, heavyDuty]) {
+		worker.onRequest(rt.ReadFileRequest.type, async (params: any): Promise<any> => {
+			return master.sendRequest(rt.ReadFileRequest.type, params);
+		});
+		worker.onRequest(rt.ReadDirRequest.type, async (params: any): Promise<any> => {
+			return master.sendRequest(rt.ReadDirRequest.type, params);
+		});
+	}
+
+	// Forward initialize, shutdown
+
+	master.onRequest(rt.InitializeRequest.type, async (params: InitializeParams): Promise<rt.InitializeResult> => {
+		const [result] = await Promise.all([
+			lightWeight.sendRequest(rt.InitializeRequest.type, params),
+			heavyDuty.sendRequest(rt.InitializeRequest.type, params)
+		]);
+		return result;
 	});
 
-	connection.onShutdown(() => {
-		for (const worker of [one, two]) {
-			worker.sendRequest(rt.ShutdownRequest.type);
-
-			// The master's exit notification is not forwarded to the worker, so send it here.
+	master.onRequest({ method: 'shutdown' }, async () => {
+		const [result] = await Promise.all([lightWeight, heavyDuty].map(worker => worker.sendRequest(rt.ShutdownRequest.type)));
+		// Shutting down the master means killing the workers
+		for (const worker of [lightWeight, heavyDuty]) {
 			worker.sendNotification(rt.ExitRequest.type);
 		}
+		return result;
 	});
 
-	connection.onDidOpenTextDocument((params: DidOpenTextDocumentParams) => {
-		for (const worker of [one, two]) {
+	// Notifications (both workers)
+
+	master.onDidOpenTextDocument((params: DidOpenTextDocumentParams) => {
+		for (const worker of [lightWeight, heavyDuty]) {
 			worker.sendNotification(rt.TextDocumentDidOpenNotification.type, params)
 		}
 	});
 
-	connection.onDidChangeTextDocument((params: DidChangeTextDocumentParams) => {
-		for (const worker of [one, two]) {
+	master.onDidChangeTextDocument((params: DidChangeTextDocumentParams) => {
+		for (const worker of [lightWeight, heavyDuty]) {
 			worker.sendNotification(rt.TextDocumentDidChangeNotification.type, params);
 		}
 	});
 
-	connection.onDidSaveTextDocument((params: DidSaveTextDocumentParams) => {
-		for (const worker of [one, two]) {
+	master.onDidSaveTextDocument((params: DidSaveTextDocumentParams) => {
+		for (const worker of [lightWeight, heavyDuty]) {
 			worker.sendNotification(rt.TextDocumentDidSaveNotification.type, params);
 		}
 	});
 
-	connection.onDidCloseTextDocument((params: DidCloseTextDocumentParams) => {
-		for (const worker of [one, two]) {
+	master.onDidCloseTextDocument((params: DidCloseTextDocumentParams) => {
+		for (const worker of [lightWeight, heavyDuty]) {
 			worker.sendNotification(rt.TextDocumentDidCloseNotification.type, params);
 		}
 	});
 
-	connection.onDefinition(async (params: TextDocumentPositionParams): Promise<Definition> => {
-		const resps = [one, two].map((worker) => {
-			return worker.sendRequest(rt.DefinitionRequest.type, params);
-		});
-		return promiseFirstSuccess(resps);
+	// Short-running requests (worker one)
+	// These are all that can typically only need very specific files to be parsed
+
+	master.onDefinition(async (params: TextDocumentPositionParams): Promise<Definition> => {
+		return lightWeight.sendRequest(rt.DefinitionRequest.type, params);
 	});
 
-	connection.onHover(async (params: TextDocumentPositionParams): Promise<Hover> => {
-		const resps = [one, two].map((worker) => {
-			return worker.sendRequest(rt.HoverRequest.type, params);
-		});
-		return promiseFirstSuccess(resps);
+	master.onHover(async (params: TextDocumentPositionParams): Promise<Hover> => {
+		return lightWeight.sendRequest(rt.HoverRequest.type, params);
 	});
 
-	connection.onRequest(rt.WorkspaceSymbolsRequest.type, async (params: rt.WorkspaceSymbolParams): Promise<SymbolInformation[]> => {
-		return one.sendRequest(rt.WorkspaceSymbolsRequest.type, params);
+	// Long-running requests (worker two)
+	// These are all that require compilation of the full workspace
+
+	master.onRequest(rt.WorkspaceSymbolsRequest.type, async (params: rt.WorkspaceSymbolParams): Promise<SymbolInformation[]> => {
+		return heavyDuty.sendRequest(rt.WorkspaceSymbolsRequest.type, params);
 	});
 
-	connection.onRequest(rt.DocumentSymbolRequest.type, async (params: DocumentSymbolParams): Promise<SymbolInformation[]> => {
-		return one.sendRequest(rt.DocumentSymbolRequest.type, params);
+	master.onRequest(rt.DocumentSymbolRequest.type, async (params: DocumentSymbolParams): Promise<SymbolInformation[]> => {
+		return heavyDuty.sendRequest(rt.DocumentSymbolRequest.type, params);
 	});
 
-	connection.onRequest(rt.WorkspaceReferenceRequest.type, async (params: rt.WorkspaceReferenceParams): Promise<rt.ReferenceInformation[]> => {
-		return one.sendRequest(rt.WorkspaceReferenceRequest.type, params);
+	master.onRequest(rt.WorkspaceReferenceRequest.type, async (params: rt.WorkspaceReferenceParams): Promise<rt.ReferenceInformation[]> => {
+		return heavyDuty.sendRequest(rt.WorkspaceReferenceRequest.type, params);
 	});
 
-	connection.onReferences(async (params: ReferenceParams): Promise<Location[]> => {
-		return one.sendRequest(rt.ReferencesRequest.type, params);
+	master.onRequest(rt.DependenciesRequest.type, async (params: any): Promise<any> => {
+		return heavyDuty.sendRequest(rt.DependenciesRequest.type, params);
 	});
-}
 
-function promiseFirstSuccess<T>(promises: Thenable<T>[]): Promise<T> {
-	return new Promise<T>((resolve, reject) => {
-		let doneCt = 0;
-		for (const p of promises) {
-			p.then((result) => {
-				doneCt++;
-				if (doneCt > 1) {
-					return;
-				}
-				return resolve(result);
-			}, (err) => {
-				doneCt++;
-				if (doneCt === 2) {
-					return reject(err);
-				}
-				return;
-			});
-		}
+	master.onRequest(rt.XdefinitionRequest.type, async (params: any): Promise<any> => {
+		return heavyDuty.sendRequest(rt.XdefinitionRequest.type, params);
+	});
+
+	master.onRequest(rt.GlobalRefsRequest.type, async (params: any): Promise<any> => {
+		return heavyDuty.sendRequest(rt.GlobalRefsRequest.type, params);
+	});
+
+	master.onReferences(async (params: ReferenceParams): Promise<Location[]> => {
+		return heavyDuty.sendRequest(rt.ReferencesRequest.type, params);
+	});
+
+	master.onCompletion(async (params: any) => {
+		return heavyDuty.sendRequest(rt.TextDocumentCompletionRequest.type, params);
 	});
 }

@@ -2,7 +2,10 @@ import * as net from 'net';
 import * as cluster from 'cluster';
 
 import { newConnection, registerLanguageHandler, TraceOptions } from './connection';
+import { registerMasterHandler } from './master-connection';
 import { LanguageHandler } from './lang-handler';
+import { IConnection } from 'vscode-languageserver';
+import { ExitRequest } from './request-type';
 
 async function rewriteConsole() {
 	const consoleErr = console.error;
@@ -27,8 +30,10 @@ export interface ServeOptions extends TraceOptions {
  * serve starts a singleton language server instance that uses a
  * cluster of worker processes to achieve some semblance of
  * parallelism.
+ *
+ * @param createWorkerConnection Should return a connection to a subworker (for example by spawning a child process)
  */
-export async function serve(options: ServeOptions, newLangHandler: () => LanguageHandler): Promise<void> {
+export async function serve(options: ServeOptions, createLangHandler: () => LanguageHandler, createWorkerConnection?: () => IConnection): Promise<void> {
 	rewriteConsole();
 
 	if (cluster.isMaster) {
@@ -45,10 +50,34 @@ export async function serve(options: ServeOptions, newLangHandler: () => Languag
 		});
 	} else {
 		console.error('Listening for incoming LSP connections on', options.lspPort);
-		var server = net.createServer((socket) => {
-			const connection = newConnection(socket, socket, options);
-			registerLanguageHandler(connection, options.strict, newLangHandler());
-			connection.listen();
+		var server = net.createServer(socket => {
+			// This connection listens on the socket
+			const master = newConnection(socket, socket, options);
+
+			// Override the default exit notification handler so the process is not killed
+			master.onNotification(ExitRequest.type, () => {
+				console.error('Closing socket');
+				socket.end();
+			});
+
+			if (createWorkerConnection) {
+				// Spawn two child processes that communicate through STDIN/STDOUT
+				// One gets short-running requests like textDocument/definition,
+				// the other long-running requests like textDocument/references
+				// TODO: Don't spawn new processes on every connection, keep them warm
+				//       Need to make sure exit notifications don't come through and LS supports re-initialization
+				const leightWeightWorker = createWorkerConnection();
+				const heavyDutyWorker = createWorkerConnection();
+
+				registerMasterHandler(master, leightWeightWorker, heavyDutyWorker);
+
+				leightWeightWorker.listen();
+				heavyDutyWorker.listen();
+			} else {
+				registerLanguageHandler(master, options.strict, createLangHandler());
+			}
+
+			master.listen();
 		});
 
 		server.listen(options.lspPort);
