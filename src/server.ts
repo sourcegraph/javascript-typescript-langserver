@@ -37,12 +37,12 @@ export async function serve(options: ServeOptions, createLangHandler: () => Lang
 	rewriteConsole();
 
 	if (cluster.isMaster) {
-		console.error(`Master node process spawning ${options.clusterSize} workers`);
+		console.error(`Master (PID ${process.pid}) spawning ${options.clusterSize} workers`);
 		cluster.on('online', worker => {
-			console.error(`Worker ${worker.id} online`);
+			console.error(`Worker ${worker.id} (PID ${worker.process.pid}) online`);
 		});
 		cluster.on('exit', (worker, code, signal) => {
-			console.error(`Worker ${worker.id} exited from signal ${signal} with code ${code}, restarting`);
+			console.error(`Worker ${worker.id} (PID ${worker.process.pid}) exited from signal ${signal} with code ${code}, restarting`);
 			cluster.fork();
 		});
 		for (let i = 0; i < options.clusterSize; ++i) {
