@@ -5,6 +5,7 @@ import { newConnection, registerLanguageHandler, TraceOptions } from './connecti
 import { registerMasterHandler } from './master-connection';
 import { LanguageHandler } from './lang-handler';
 import { IConnection } from 'vscode-languageserver';
+import { ExitRequest } from './request-type';
 
 async function rewriteConsole() {
 	const consoleErr = console.error;
@@ -52,6 +53,13 @@ export async function serve(options: ServeOptions, createLangHandler: () => Lang
 		var server = net.createServer(socket => {
 			// This connection listens on the socket
 			const master = newConnection(socket, socket, options);
+
+			// Override the default exit notification handler so the process is not killed
+			master.onNotification(ExitRequest.type, () => {
+				console.error('Closing socket');
+				socket.end();
+			});
+
 			if (createWorkerConnection) {
 				// Spawn two child processes that communicate through STDIN/STDOUT
 				// One gets short-running requests like textDocument/definition,
@@ -65,10 +73,11 @@ export async function serve(options: ServeOptions, createLangHandler: () => Lang
 
 				leightWeightWorker.listen();
 				heavyDutyWorker.listen();
-				master.listen();
 			} else {
 				registerLanguageHandler(master, options.strict, createLangHandler());
 			}
+
+			master.listen();
 		});
 
 		server.listen(options.lspPort);

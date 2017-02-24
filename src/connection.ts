@@ -64,29 +64,12 @@ export function newConnection(input: NodeJS.ReadableStream, output: NodeJS.Writa
 	}
 
 	const connection = createConnection(reader, writer);
+
+	// Remove vscode-languageserver's stream listeners that kill the process if the stream is closed
 	input.removeAllListeners('end');
 	input.removeAllListeners('close');
 	output.removeAllListeners('end');
 	output.removeAllListeners('close');
-
-	let closed = false;
-	function close() {
-		if (!closed) {
-			if ((<fs_.ReadStream>input).close) {
-				(<fs_.ReadStream>input).close();
-			}
-			if ((<fs_.WriteStream>output).close) {
-				(<fs_.WriteStream>output).close();
-			}
-			closed = true;
-		}
-	}
-
-	// We attach one notification handler on `exit` here to handle the
-	// teardown of the connection.  If other handlers want to do
-	// something on connection destruction, they should register a
-	// handler on `shutdown`.
-	connection.onNotification(rt.ExitRequest.type, close);
 
 	return connection;
 }

@@ -39,7 +39,7 @@ import * as rt from './request-type';
  */
 export function registerMasterHandler(master: IConnection, leightWeight: IConnection, heavyDuty: IConnection): void {
 
-	// Proxy calls from the worker to the master
+	// Forward calls from the worker to the master
 
 	for (const worker of [leightWeight, heavyDuty]) {
 		worker.onRequest(rt.ReadFileRequest.type, async (params: any): Promise<any> => {
@@ -50,22 +50,26 @@ export function registerMasterHandler(master: IConnection, leightWeight: IConnec
 		});
 	}
 
-	// Notifications (both workers)
+	// Forward initialize, shutdown
 
 	master.onRequest(rt.InitializeRequest.type, async (params: InitializeParams): Promise<rt.InitializeResult> => {
-		const resultOne = leightWeight.sendRequest(rt.InitializeRequest.type, params);
-		heavyDuty.sendRequest(rt.InitializeRequest.type, params);
-		return resultOne;
+		const [result] = await Promise.all([
+			leightWeight.sendRequest(rt.InitializeRequest.type, params),
+			heavyDuty.sendRequest(rt.InitializeRequest.type, params)
+		]);
+		return result;
 	});
 
-	master.onShutdown(() => {
+	master.onRequest({ method: 'shutdown' }, async () => {
+		const [result] = await Promise.all([leightWeight, heavyDuty].map(worker => worker.sendRequest(rt.ShutdownRequest.type)));
+		// Shutting down the master means killing the workers
 		for (const worker of [leightWeight, heavyDuty]) {
-			worker.sendRequest(rt.ShutdownRequest.type);
-
-			// The master's exit notification is not forwarded to the worker, so send it here.
 			worker.sendNotification(rt.ExitRequest.type);
 		}
+		return result;
 	});
+
+	// Notifications (both workers)
 
 	master.onDidOpenTextDocument((params: DidOpenTextDocumentParams) => {
 		for (const worker of [leightWeight, heavyDuty]) {
