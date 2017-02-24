@@ -37,17 +37,17 @@ export async function serve(options: ServeOptions, createLangHandler: () => Lang
 	rewriteConsole();
 
 	if (cluster.isMaster) {
-		console.error(`Master node process spawning ${options.clusterSize} workers`)
-		for (let i = 0; i < options.clusterSize; ++i) {
-			const worker = cluster.fork().on('disconnect', () => {
-				console.error(`worker ${worker.process.pid} disconnect`)
-			});
-		}
-
-		cluster.on('exit', (worker, code, signal) => {
-			const reason = code === null ? signal : code;
-			console.error(`worker ${worker.process.pid} exit (${reason})`);
+		console.error(`Master (PID ${process.pid}) spawning ${options.clusterSize} workers`);
+		cluster.on('online', worker => {
+			console.error(`Worker ${worker.id} (PID ${worker.process.pid}) online`);
 		});
+		cluster.on('exit', (worker, code, signal) => {
+			console.error(`Worker ${worker.id} (PID ${worker.process.pid}) exited from signal ${signal} with code ${code}, restarting`);
+			cluster.fork();
+		});
+		for (let i = 0; i < options.clusterSize; ++i) {
+			cluster.fork();
+		}
 	} else {
 		console.error('Listening for incoming LSP connections on', options.lspPort);
 		var server = net.createServer(socket => {
