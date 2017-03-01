@@ -61,7 +61,7 @@ export class TypeScriptService implements LanguageHandler {
 				this.strict = strict;
 				this.projectManager = new pm.ProjectManager(this.root, remoteFs, strict, this.traceModuleResolution);
 
-				this.projectManager.ensureFilesForWorkspaceSymbol(); // pre-fetching
+				this.projectManager.ensureAllFiles(); // pre-fetching
 
 				resolve({
 					capabilities: {
@@ -1487,7 +1487,7 @@ export class TypeScriptService implements LanguageHandler {
 
     /**
      * Flattens navigation tree by transforming it to one-dimensional array.
-     * Some items (source files, modules) may be excluded 
+     * Some items (source files, modules) may be excluded
      */
 	private flattenNavigationTreeItem(item: ts.NavigationTree, parent: ts.NavigationTree | null, sourceFile: ts.SourceFile, result: SymbolInformation[], limit?: number) {
 		if (!limit || result.length < limit) {
@@ -1519,7 +1519,7 @@ export class TypeScriptService implements LanguageHandler {
 	}
 
     /**
-     * @return true if navigation tree item is acceptable for inclusion into workspace/symbols 
+     * @return true if navigation tree item is acceptable for inclusion into workspace/symbols
      */
 	private static isAcceptableNavigationTreeItem(item: ts.NavigationTree): boolean {
 		// modules and source files should be excluded

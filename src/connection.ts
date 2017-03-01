@@ -76,7 +76,7 @@ export function newConnection(input: NodeJS.ReadableStream, output: NodeJS.Writa
 
 export function registerLanguageHandler(connection: IConnection, strict: boolean, handler: LanguageHandler): void {
 	connection.onRequest(rt.InitializeRequest.type, async (params: InitializeParams): Promise<rt.InitializeResult> => {
-		console.error('initialize', params.rootPath);
+		console.error('initialize', params);
 		let remoteFs: fs.FileSystem;
 		if (strict) {
 			remoteFs = new fs.RemoteFileSystem(connection);

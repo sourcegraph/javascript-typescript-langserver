@@ -1,7 +1,5 @@
 import * as vscode from 'vscode-languageserver';
 
-import * as fs from './fs';
-
 export namespace GlobalRefsRequest {
 	export const type: vscode.RequestType<vscode.WorkspaceSymbolParams, vscode.SymbolInformation[], any> = {
 		get method() {
@@ -44,22 +42,6 @@ export namespace ExitRequest {
 	export const type = {
 		get method() {
 			return 'exit';
-		}
-	};
-}
-
-export namespace ReadDirRequest {
-	export const type: vscode.RequestType<string, fs.FileInfo[], any> = {
-		get method() {
-			return 'fs/readDir';
-		}
-	};
-}
-
-export namespace ReadFileRequest {
-	export const type: vscode.RequestType<string, string, any> = {
-		get method() {
-			return 'fs/readFile';
 		}
 	};
 }

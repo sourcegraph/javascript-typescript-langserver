@@ -36,7 +36,7 @@ export interface ServeOptions extends TraceOptions {
 export async function serve(options: ServeOptions, createLangHandler: () => LanguageHandler, createWorkerConnection?: () => IConnection): Promise<void> {
 	rewriteConsole();
 
-	if (cluster.isMaster) {
+	if (options.clusterSize > 1 && cluster.isMaster) {
 		console.error(`Master (PID ${process.pid}) spawning ${options.clusterSize} workers`);
 		cluster.on('online', worker => {
 			console.error(`Worker ${worker.id} (PID ${worker.process.pid}) online`);
@@ -51,13 +51,15 @@ export async function serve(options: ServeOptions, createLangHandler: () => Lang
 	} else {
 		console.error('Listening for incoming LSP connections on', options.lspPort);
 		var server = net.createServer(socket => {
+			console.error('Connection accepted');
 			// This connection listens on the socket
 			const master = newConnection(socket, socket, options);
 
 			// Override the default exit notification handler so the process is not killed
 			master.onNotification(ExitRequest.type, () => {
-				console.error('Closing socket');
+				console.error('Exit notification, closing socket');
 				socket.end();
+				socket.destroy();
 			});
 
 			if (createWorkerConnection) {

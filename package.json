@@ -27,18 +27,23 @@
   "scripts": {
     "test": "node bin/test",
     "fmt-check": "node bin/fmt-check",
-    "fmt": "node bin/fmt",
-    "prepublish": "node bin/build",
-    "postinstall": "node bin/build"
+    "fmt": "node bin/fmt"
   },
   "dependencies": {
-    "@types/async": "^2.0.32",
+    "@types/async": "^2.0.38",
+    "@types/bluebird": "^3.0.37",
+    "@types/glob": "^5.0.30",
+    "@types/mz": "^0.0.30",
     "@types/node": "^6.0.46",
-    "async": "^2.0.32",
+    "async": "^2.1.5",
+    "bluebird": "^3.4.7",
     "commander": "^2.9.0",
+    "glob": "^7.1.1",
+    "mz": "^2.6.0",
     "typescript": "2.1.1",
     "vscode-languageserver": "^2.2.1",
-    "vscode-languageserver-types": "^1.0.3"
+    "vscode-languageserver-types": "^1.0.3",
+    "yarn": "^0.21.3"
   },
   "devDependencies": {
     "@types/chai": "^3.4.34",

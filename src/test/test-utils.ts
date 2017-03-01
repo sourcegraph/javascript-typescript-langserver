@@ -4,9 +4,9 @@ import * as vscode from 'vscode-languageserver';
 
 import { newConnection, registerLanguageHandler } from '../connection';
 import { LanguageHandler } from '../lang-handler';
-import { FileInfo } from '../fs';
 import * as rt from '../request-type';
 import { IConnection } from 'vscode-languageserver';
+import { uri2path, path2uri } from '../util'
 
 class Channel {
 	server: net.Server;
@@ -72,56 +72,46 @@ export function setUp(langhandler: LanguageHandler, memfs: any, done: (err?: Err
 }
 
 function initFs(connection: IConnection, memfs: any) {
-	connection.onRequest(rt.ReadDirRequest.type, (params: string): FileInfo[] => {
-		params = params.substring(1);
-		const path = params.length ? params.split('/') : [];
+	connection.onRequest({ method: 'workspace/xfiles' }, (params: { base?: string }): vscode.TextDocumentIdentifier[] => {
+		const basePath = uri2path(params.base).substring(1);
+		const segments = basePath.length > 0 ? basePath.split('/') : [];
 		let node = memfs;
-		let i = 0;
-		while (i < path.length) {
-			node = node[path[i]];
-			if (!node || typeof node != 'object') {
-				throw new Error('no such file: ' + params);
+		// Find base node
+		for (const segment of segments) {
+			node = node[segment];
+			if (!node || typeof node !== 'object') {
+				throw new Error('No such directory: ' + basePath);
 			}
-			i++;
 		}
-		const keys = Object.keys(node);
-		let result: FileInfo[] = []
-		keys.forEach((k) => {
-			const v = node[k];
-			if (typeof v == 'string') {
-				result.push({
-					name: k,
-					size: v.length,
-					dir: false
-				})
+		const uris: vscode.TextDocumentIdentifier[] = [];
+		const getPaths = (node: any, prefix: string) => {
+			if (typeof node === 'string') {
+				uris.push({ uri: path2uri('', prefix + '/' + node) });
 			} else {
-				result.push({
-					name: k,
-					size: 0,
-					dir: true
-				});
+				for (const key of Object.keys(node)) {
+					getPaths(node[key], prefix + '/' + key);
+				}
 			}
-		});
-		return result;
+		};
+		getPaths(node, '');
+		return uris;
 	});
 
-	connection.onRequest(rt.ReadFileRequest.type, (params: string): string => {
-		params = params.substring(1);
-		const path = params.length ? params.split('/') : [];
+	connection.onRequest({ method: 'textDocument/xcontent' }, (params: vscode.TextDocumentIdentifier): { text: string } => {
+		const file = uri2path(params.uri).substring(1);
+		const segments = file.length > 0 ? file.split('/') : [];
 		let node = memfs;
-		let i = 0;
-		while (i < path.length - 1) {
-			node = node[path[i]];
-			if (!node || typeof node != 'object') {
-				throw new Error('no such file: ' + params);
+		// Find file
+		for (const segment of segments) {
+			if (!node || typeof node !== 'object') {
+				throw new Error('No such directory: ' + file);
 			}
-			i++;
+			node = node[segment];
 		}
-		const content = node[path[path.length - 1]];
-		if (!content || typeof content != 'string') {
-			throw new Error('no such file');
+		if (typeof node !== 'string') {
+			throw new Error('No such file: ' + params.uri);
 		}
-		return new Buffer(content).toString('base64');
+		return { text: node };
 	});
 }
 
