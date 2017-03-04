@@ -48,8 +48,10 @@
   "devDependencies": {
     "@types/chai": "^3.4.34",
     "@types/mocha": "^2.2.32",
+    "@types/sinon": "^1.16.35",
     "chai": "^3.4.34",
     "mocha": "^2.2.32",
+    "sinon": "^1.17.7",
     "ts-node": "^1.6.1",
     "typescript-formatter": "^4.0.0"
   },

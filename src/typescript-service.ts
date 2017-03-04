@@ -51,37 +51,34 @@ export class TypeScriptService implements LanguageHandler {
 		this.traceModuleResolution = traceModuleResolution || false;
 	}
 
+	// TODO pass remoteFs and strict to constructor
 	initialize(params: InitializeParams, remoteFs: FileSystem.FileSystem, strict: boolean): Promise<rt.InitializeResult> {
 		if (this.initialized) {
 			return this.initialized;
 		}
-		this.initialized = new Promise<rt.InitializeResult>((resolve) => {
-			if (params.rootPath) {
-				this.root = util.uri2path(params.rootPath);
-				this.strict = strict;
-				this.projectManager = new pm.ProjectManager(this.root, remoteFs, strict, this.traceModuleResolution);
-
-				this.projectManager.ensureAllFiles(); // pre-fetching
-
-				resolve({
-					capabilities: {
-						// Tell the client that the server works in FULL text document sync mode
-						textDocumentSync: TextDocumentSyncKind.Full,
-						hoverProvider: true,
-						definitionProvider: true,
-						referencesProvider: true,
-						documentSymbolProvider: true,
-						workspaceSymbolProvider: true,
-						xworkspaceReferencesProvider: true,
-						xdefinitionProvider: true,
-						xdependenciesProvider: true,
-						completionProvider: {
-							resolveProvider: false,
-							triggerCharacters: ['.']
-						},
-						xpackagesProvider: true,
-					}
-				})
+		if (params.rootPath) {
+			this.root = util.uri2path(params.rootPath);
+			this.strict = strict;
+			this.projectManager = new pm.ProjectManager(this.root, remoteFs, strict, this.traceModuleResolution);
+			this.projectManager.ensureAllFiles(); // pre-fetching
+		}
+		this.initialized = Promise.resolve({
+			capabilities: {
+				// Tell the client that the server works in FULL text document sync mode
+				textDocumentSync: TextDocumentSyncKind.Full,
+				hoverProvider: true,
+				definitionProvider: true,
+				referencesProvider: true,
+				documentSymbolProvider: true,
+				workspaceSymbolProvider: true,
+				xworkspaceReferencesProvider: true,
+				xdefinitionProvider: true,
+				xdependenciesProvider: true,
+				completionProvider: {
+					resolveProvider: false,
+					triggerCharacters: ['.']
+				},
+				xpackagesProvider: true,
 			}
 		});
 		return this.initialized;

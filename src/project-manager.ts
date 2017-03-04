@@ -142,6 +142,7 @@ export class ProjectManager {
 		}
 	}
 
+	// TODO replace this with something like a WorkspaceTree class
 	private ensuredFilesForHoverAndDefinition = new Map<string, Promise<void>>();
 
 	ensureFilesForHoverAndDefinition(uri: string): Promise<void> {
@@ -355,7 +356,7 @@ export class ProjectManager {
 	 */
 	refreshConfigurations() {
 		const rootdirs = new Set<string>();
-		Object.keys(this.localFs.entries).forEach((k) => {
+		for (const k of Object.keys(this.localFs.entries)) {
 			if (!/(^|\/)[tj]sconfig\.json$/.test(k)) {
 				return;
 			}
@@ -368,7 +369,7 @@ export class ProjectManager {
 			}
 			this.configs.set(dir, new ProjectConfiguration(this.localFs, path_.posix.join('/', dir), this.versions, k, undefined, this.traceModuleResolution));
 			rootdirs.add(dir);
-		});
+		}
 		if (!rootdirs.has('')) {
 			// collecting all the files in workspace by making fake configuration object
 			this.configs.set('', new ProjectConfiguration(this.localFs, '/', this.versions, '', {

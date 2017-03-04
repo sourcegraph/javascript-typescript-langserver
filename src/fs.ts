@@ -12,6 +12,7 @@ export interface FileSystem {
 	 * Returns all files in the workspace under base
 	 *
 	 * @param base A URI under which to search, resolved relative to the rootUri
+	 * @return A promise that is fulfilled with an array of URIs
 	 */
 	getWorkspaceFiles(base?: string): Promise<string[]>;
 
@@ -19,6 +20,7 @@ export interface FileSystem {
 	 * Returns the content of a text document
 	 *
 	 * @param uri The URI of the text document, resolved relative to the rootUri
+	 * @return A promise that is fulfilled with the text document content
 	 */
 	getTextDocumentContent(uri: string): Promise<string>;
 }
