@@ -7,6 +7,7 @@ import {
 	ReferenceParams,
 	Location,
 	Hover,
+	MarkedString,
 	DocumentSymbolParams,
 	SymbolInformation,
 	Range,
@@ -60,7 +61,10 @@ export class TypeScriptService implements LanguageHandler {
 			this.root = util.uri2path(params.rootPath);
 			this.strict = strict;
 			this.projectManager = new pm.ProjectManager(this.root, remoteFs, strict, this.traceModuleResolution);
-			this.projectManager.ensureAllFiles(); // pre-fetching
+			// Pre-fetch files in the background
+			// TODO why does ensureAllFiles() fetch less files than ensureFilesForWorkspaceSymbol()?
+			//      (package.json is not fetched)
+			this.projectManager.ensureFilesForWorkspaceSymbol();
 		}
 		this.initialized = Promise.resolve({
 			capabilities: {
@@ -160,7 +164,7 @@ export class TypeScriptService implements LanguageHandler {
 		return ret;
 	}
 
-	async getHover(params: TextDocumentPositionParams): Promise<Hover | null> {
+	async getHover(params: TextDocumentPositionParams): Promise<Hover> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root)
 		const line = params.position.line;
 		const column = params.position.character;
@@ -172,18 +176,17 @@ export class TypeScriptService implements LanguageHandler {
 
 		let sourceFile = this.getSourceFile(configuration, fileName);
 		if (!sourceFile) {
-			return null;
+			throw new Error(`Unknown text document ${params.textDocument.uri}`);
 		}
 		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
 		const info = configuration.getService().getQuickInfoAtPosition(fileName, offset);
 		if (!info) {
-			return null;
+			return { contents: [] };
 		}
-		const contents = [];
-		contents.push({
+		const contents: MarkedString[] = [{
 			language: 'typescript',
 			value: ts.displayPartsToString(info.displayParts)
-		});
+		}];
 		let documentation = ts.displayPartsToString(info.documentation);
 		if (documentation) {
 			contents.push(documentation);
@@ -191,7 +194,7 @@ export class TypeScriptService implements LanguageHandler {
 		const start = ts.getLineAndCharacterOfPosition(sourceFile, info.textSpan.start);
 		const end = ts.getLineAndCharacterOfPosition(sourceFile, info.textSpan.start + info.textSpan.length);
 
-		return { contents: contents, range: Range.create(start.line, start.character, end.line, end.character) };
+		return { contents, range: Range.create(start.line, start.character, end.line, end.character) };
 	}
 
 	async getReferences(params: ReferenceParams): Promise<Location[]> {

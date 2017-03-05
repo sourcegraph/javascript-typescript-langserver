@@ -192,7 +192,7 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 			const result = await handler.getHover(params);
 			const exit = new Date().getTime();
 			console.error('hover', docid(params), (exit - enter) / 1000.0);
-			return Promise.resolve(result || { contents: [] });
+			return Promise.resolve(result);
 		} catch (e) {
 			console.error(params, e);
 			return Promise.reject(e);

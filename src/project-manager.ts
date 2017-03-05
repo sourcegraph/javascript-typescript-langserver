@@ -358,10 +358,10 @@ export class ProjectManager {
 		const rootdirs = new Set<string>();
 		for (const k of Object.keys(this.localFs.entries)) {
 			if (!/(^|\/)[tj]sconfig\.json$/.test(k)) {
-				return;
+				continue;
 			}
 			if (/(^|\/)node_modules\//.test(k)) {
-				return;
+				continue;
 			}
 			let dir = path_.posix.dirname(k);
 			if (dir == '.') {
