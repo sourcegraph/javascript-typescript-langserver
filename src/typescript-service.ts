@@ -1345,11 +1345,11 @@ export class TypeScriptService implements LanguageHandler {
 		});
 	}
 
-    /**
-     * Fetches (or creates if needed) source file object for a given file name
-     * @param configuration project configuration
-     * @param fileName file name to fetch source file for or create it
-     */
+	/**
+	 * Fetches (or creates if needed) source file object for a given file name
+	 * @param configuration project configuration
+	 * @param fileName file name to fetch source file for or create it
+	 */
 	private getSourceFile(configuration: pm.ProjectConfiguration, fileName: string): ts.SourceFile | null {
 		const sourceFile = configuration.getProgram().getSourceFile(fileName);
 		if (sourceFile) {
@@ -1364,9 +1364,9 @@ export class TypeScriptService implements LanguageHandler {
 		return configuration.getProgram().getSourceFile(fileName);
 	}
 
-    /**
-     * Produces async function that converts ReferenceEntry object to Location
-     */
+	/**
+	 * Produces async function that converts ReferenceEntry object to Location
+	 */
 	private transformReference(root: string,
 		program: ts.Program,
 		includeDeclaration: boolean,
@@ -1388,9 +1388,9 @@ export class TypeScriptService implements LanguageHandler {
 		}
 	}
 
-    /**
-     * transformNavItem transforms a NavigateToItem instance to a SymbolInformation instance
-     */
+	/**
+	 * transformNavItem transforms a NavigateToItem instance to a SymbolInformation instance
+	 */
 	private transformNavItem(root: string, program: ts.Program, item: ts.NavigateToItem): SymbolInformation {
 		const sourceFile = program.getSourceFile(item.fileName);
 		if (!sourceFile) {
@@ -1447,10 +1447,10 @@ export class TypeScriptService implements LanguageHandler {
 		return symbols;
 	}
 
-    /**
-     * Transforms definition's file name to URI. If definition belongs to TypeScript library,
-     * returns git://github.com/Microsoft/TypeScript URL, otherwise returns file:// one
-     */
+	/**
+	 * Transforms definition's file name to URI. If definition belongs to TypeScript library,
+	 * returns git://github.com/Microsoft/TypeScript URL, otherwise returns file:// one
+	 */
 	private defUri(filePath: string): string {
 		filePath = util.normalizePath(filePath);
 		if (pm.getTypeScriptLibraries().has(filePath)) {
@@ -1459,9 +1459,9 @@ export class TypeScriptService implements LanguageHandler {
 		return util.path2uri(this.root, filePath);
 	}
 
-    /**
-     * Fetches up to limit navigation bar items from given project, flattens them
-     */
+	/**
+	 * Fetches up to limit navigation bar items from given project, flattens them
+	 */
 	private getNavigationTreeItems(configuration: pm.ProjectConfiguration, limit?: number): SymbolInformation[] {
 		const result: SymbolInformation[] = [];
 		const libraries = pm.getTypeScriptLibraries();
@@ -1485,10 +1485,10 @@ export class TypeScriptService implements LanguageHandler {
 		return result;
 	}
 
-    /**
-     * Flattens navigation tree by transforming it to one-dimensional array.
-     * Some items (source files, modules) may be excluded
-     */
+	/**
+	 * Flattens navigation tree by transforming it to one-dimensional array.
+	 * Some items (source files, modules) may be excluded
+	 */
 	private flattenNavigationTreeItem(item: ts.NavigationTree, parent: ts.NavigationTree | null, sourceFile: ts.SourceFile, result: SymbolInformation[], limit?: number) {
 		if (!limit || result.length < limit) {
 			const acceptable = TypeScriptService.isAcceptableNavigationTreeItem(item);
@@ -1505,9 +1505,9 @@ export class TypeScriptService implements LanguageHandler {
 		}
 	}
 
-    /**
-     * Transforms NavigationTree to SymbolInformation
-     */
+	/**
+	 * Transforms NavigationTree to SymbolInformation
+	 */
 	private transformNavigationTreeItem(item: ts.NavigationTree, parent: ts.NavigationTree | null, sourceFile: ts.SourceFile): SymbolInformation {
 		const span = item.spans[0];
 		let start = ts.getLineAndCharacterOfPosition(sourceFile, span.start);
@@ -1518,9 +1518,9 @@ export class TypeScriptService implements LanguageHandler {
 			this.defUri(sourceFile.fileName), parent ? parent.text : '');
 	}
 
-    /**
-     * @return true if navigation tree item is acceptable for inclusion into workspace/symbols
-     */
+	/**
+	 * @return true if navigation tree item is acceptable for inclusion into workspace/symbols
+	 */
 	private static isAcceptableNavigationTreeItem(item: ts.NavigationTree): boolean {
 		// modules and source files should be excluded
 		if ([ts.ScriptElementKind.moduleElement, "sourcefile"].indexOf(item.kind) >= 0) {

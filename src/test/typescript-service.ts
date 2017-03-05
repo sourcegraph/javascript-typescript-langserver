@@ -1036,8 +1036,8 @@ describe('TypeScriptService', () => {
 			assert.deepEqual(result, {
 				range: {
 			  	  	end: {
-			  	    	character: 14,
-			  	    	line: 0
+			  			character: 14,
+			  			line: 0
 			  	  	},
 					start: {
 						character: 4,

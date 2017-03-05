@@ -29,14 +29,14 @@ export class ProjectManager {
 
 	private traceModuleResolution: boolean;
 
-    /**
-     * fetched keeps track of which files in localFs have actually
-     * been fetched from remoteFs. (Some might have a placeholder
-     * value). If a file has already been successfully fetched, we
-     * won't fetch it again. This should be cleared if remoteFs files
-     * have been modified in some way, but does not need to be cleared
-     * if remoteFs files have only been added.
-     */
+	/**
+	 * fetched keeps track of which files in localFs have actually
+	 * been fetched from remoteFs. (Some might have a placeholder
+	 * value). If a file has already been successfully fetched, we
+	 * won't fetch it again. This should be cleared if remoteFs files
+	 * have been modified in some way, but does not need to be cleared
+	 * if remoteFs files have only been added.
+	 */
 	private fetched: Set<string>;
 
 	constructor(root: string, remoteFs: FileSystem.FileSystem, strict: boolean, traceModuleResolution?: boolean) {
@@ -79,14 +79,14 @@ export class ProjectManager {
 
 	private ensuredModuleStructure?: Promise<void>;
 
-    /**
-     * ensureModuleStructure ensures that the module structure of the
-     * project exists in localFs. TypeScript/JavaScript module
-     * structure is determined by [jt]sconfig.json, filesystem layout,
-     * global*.d.ts files. For performance reasons, we only read in
-     * the contents of some files and store "var dummy_0ff1bd;" as the
-     * contents of all other files.
-     */
+	/**
+	 * ensureModuleStructure ensures that the module structure of the
+	 * project exists in localFs. TypeScript/JavaScript module
+	 * structure is determined by [jt]sconfig.json, filesystem layout,
+	 * global*.d.ts files. For performance reasons, we only read in
+	 * the contents of some files and store "var dummy_0ff1bd;" as the
+	 * contents of all other files.
+	 */
 	ensureModuleStructure(): Promise<void> {
 		if (!this.ensuredModuleStructure) {
 			this.ensuredModuleStructure = this.refreshFileTree(this.root, true).then(() => {
@@ -325,15 +325,15 @@ export class ProjectManager {
 	}
 
 	/**
-     * ensureFiles ensures the following files have been fetched to
-     * localFs. The files parameter is expected to contain paths in
-     * the remote FS. ensureFiles only syncs unfetched file content
-     * from remoteFs to localFs. It does not update project
-     * state. Callers that want to do so after file contents have been
-     * fetched should call this.refreshConfigurations().
+	 * ensureFiles ensures the following files have been fetched to
+	 * localFs. The files parameter is expected to contain paths in
+	 * the remote FS. ensureFiles only syncs unfetched file content
+	 * from remoteFs to localFs. It does not update project
+	 * state. Callers that want to do so after file contents have been
+	 * fetched should call this.refreshConfigurations().
 	 *
 	 * @param files File paths
-     */
+	 */
 	async ensureFiles(files: string[]): Promise<void> {
 
 		// Only fetch files that are not already fetched
@@ -415,10 +415,10 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 		});
 	}
 
-    /**
-     * TypeScript uses this method (when present) to compare project's version
-     * with the last known one to decide if internal data should be synchronized
-     */
+	/**
+	 * TypeScript uses this method (when present) to compare project's version
+	 * with the last known one to decide if internal data should be synchronized
+	 */
 	getProjectVersion(): string {
 		return '' + this.projectVersion;
 	}
@@ -435,10 +435,10 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 		return this.files;
 	}
 
-    /**
-     * Adds a file and increments project version, used in conjunction with getProjectVersion()
-     * which may be called by TypeScript to check if internal data is up to date
-     */
+	/**
+	 * Adds a file and increments project version, used in conjunction with getProjectVersion()
+	 * which may be called by TypeScript to check if internal data is up to date
+	 */
 	addFile(fileName: string) {
 		this.files.push(fileName);
 		this.incProjectVersion();
