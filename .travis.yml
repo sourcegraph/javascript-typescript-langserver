@@ -8,5 +8,4 @@ cache:
 
 script:
   - yarn run build
-  - yarn run fmt-check
   - yarn test

@@ -27,9 +27,7 @@
   "scripts": {
     "test": "mocha -r source-map-support/register lib/**/*.js",
     "build": "tsc",
-    "watch": "tsc -w",
-    "fmt-check": "node bin/fmt-check",
-    "fmt": "node bin/fmt"
+    "watch": "tsc -w"
   },
   "dependencies": {
     "@types/async": "^2.0.38",
