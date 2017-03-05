@@ -25,7 +25,9 @@
     "vscode": "1.x.x"
   },
   "scripts": {
-    "test": "node bin/test",
+    "test": "mocha -r source-map-support/register lib/**/*.js",
+    "build": "tsc",
+    "watch": "tsc -w",
     "fmt-check": "node bin/fmt-check",
     "fmt": "node bin/fmt"
   },
