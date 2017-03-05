@@ -25,7 +25,7 @@
     "vscode": "1.x.x"
   },
   "scripts": {
-    "test": "mocha -r source-map-support/register lib/**/*.js",
+    "test": "mocha --require source-map-support/register --timeout 5000 --slow 2000 lib/test/**/*.js",
     "build": "tsc",
     "watch": "tsc -w"
   },
