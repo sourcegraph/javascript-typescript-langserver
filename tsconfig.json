@@ -12,6 +12,7 @@
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,
     "noImplicitReturns": true,
+    "noImplicitThis": true,
     "noUnusedLocals": true,
     "noImplicitAny": true,
     "strictNullChecks": false
