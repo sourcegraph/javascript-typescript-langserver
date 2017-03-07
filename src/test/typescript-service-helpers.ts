@@ -14,6 +14,9 @@ export class TestFileSystem {
 		return Array.from(this.files.keys());
 	}
 	async getTextDocumentContent(uri: string): Promise<string> {
+		if (!this.files.has(uri)) {
+			throw new Error(`Unknown file ${uri}`);
+		}
 		return this.files.get(uri);
 	}
 }
@@ -262,7 +265,7 @@ export function describeTypeScriptService() {
 						line: 0,
 						character: 0
 					}
-				}), 'Unknown text document file:///foo/a.ts');
+				}));
 			});
 		});
 	});

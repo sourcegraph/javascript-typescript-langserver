@@ -332,6 +332,8 @@ export class ProjectManager {
 	 * state. Callers that want to do so after file contents have been
 	 * fetched should call this.refreshConfigurations().
 	 *
+	 * If one file fetch failed, the error will be caught and logged.
+	 *
 	 * @param files File paths
 	 */
 	async ensureFiles(files: string[]): Promise<void> {
@@ -340,10 +342,14 @@ export class ProjectManager {
 		files = files.filter(file => !this.fetched.has(file));
 
 		await bluebird.map(files, async path => {
-			const content = await this.remoteFs.getTextDocumentContent(util.path2uri('', path))
-			const relativePath = path_.posix.relative(this.root, path);
-			this.localFs.addFile(relativePath, content);
-			this.fetched.add(util.normalizePath(path));
+			try {
+				const content = await this.remoteFs.getTextDocumentContent(util.path2uri('', path));
+				const relativePath = path_.posix.relative(this.root, path);
+				this.localFs.addFile(relativePath, content);
+				this.fetched.add(util.normalizePath(path));
+			} catch (e) {
+				console.error(e);
+			}
 		}, {
 			// There may be too many open files when working with local FS and trying
 			// to open them in parallel, so limit concurrent readFile calls to 100
