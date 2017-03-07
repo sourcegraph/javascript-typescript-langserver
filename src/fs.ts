@@ -1,86 +1,90 @@
-import {
-	RequestType, IConnection
-} from 'vscode-languageserver';
+import { IConnection } from 'vscode-languageserver';
 
-import * as fs from 'fs';
-import * as path_ from 'path';
+import { TextDocumentIdentifier, TextDocumentItem } from 'vscode-languageserver-types';
 
-export interface FileInfo {
-	name: string
-	size: number
-	dir: boolean
-}
+import * as path from 'path';
+import * as fs from 'mz/fs';
+import glob = require('glob');
+import { path2uri, uri2path } from './util';
 
 export interface FileSystem {
-	readDir(path: string, callback: (err: Error, result?: FileInfo[]) => void): void
-	readFile(path: string, callback: (err: Error, result?: string) => void): void
-}
+	/**
+	 * Returns all files in the workspace under base
+	 *
+	 * @param base A URI under which to search, resolved relative to the rootUri
+	 * @return A promise that is fulfilled with an array of URIs
+	 */
+	getWorkspaceFiles(base?: string): Promise<string[]>;
 
-export namespace ReadDirRequest {
-	export const type: RequestType<string, FileInfo[], any> = { get method() { return 'fs/readDir'; } };
-}
-
-export namespace ReadFileRequest {
-	export const type: RequestType<string, string, any> = { get method() { return 'fs/readFile'; } };
+	/**
+	 * Returns the content of a text document
+	 *
+	 * @param uri The URI of the text document, resolved relative to the rootUri
+	 * @return A promise that is fulfilled with the text document content
+	 */
+	getTextDocumentContent(uri: string): Promise<string>;
 }
 
 export class RemoteFileSystem implements FileSystem {
 
 	private connection: IConnection;
+	private workspaceFilesPromise?: Promise<string[]>;
 
 	constructor(connection: IConnection) {
 		this.connection = connection
 	}
 
-	readDir(path: string, callback: (err: Error | null, result?: FileInfo[]) => void) {
-		this.connection.sendRequest(ReadDirRequest.type, path).then((f: FileInfo[]) => {
-			return callback(null, f)
-		}, callback)
+	/**
+	 * The files request is sent from the server to the client to request a list of all files in the workspace or inside the directory of the base parameter, if given.
+	 * A language server can use the result to index files by filtering and doing a content request for each text document of interest.
+	 */
+	getWorkspaceFiles(base?: string): Promise<string[]> {
+		// TODO cache this at a different layer and invalidate it properly
+		// This is just a quick and dirty solution to avoid multiple requests
+		if (!this.workspaceFilesPromise) {
+			this.workspaceFilesPromise = Promise.resolve(this.connection.sendRequest<any, TextDocumentIdentifier[], any>({ method: 'workspace/xfiles' }, { base }))
+				.then(textDocuments => textDocuments.map(textDocument => textDocument.uri))
+				.catch(err => {
+					this.workspaceFilesPromise = undefined;
+					throw err;
+				});
+		}
+		return this.workspaceFilesPromise;
 	}
 
-	readFile(path: string, callback: (err: Error | null, result?: string) => void) {
-		this.connection.sendRequest(ReadFileRequest.type, path).then((content: string) => {
-			return callback(null, Buffer.from(content, 'base64').toString())
-		}, callback)
+	/**
+	 * The content request is sent from the server to the client to request the current content of any text document. This allows language servers to operate without accessing the file system directly.
+	 */
+	async getTextDocumentContent(uri: string): Promise<string> {
+		const textDocument = await this.connection.sendRequest<any, TextDocumentItem, any>({ method: 'textDocument/xcontent' }, {
+			textDocument: { uri }
+		});
+		return textDocument.text;
 	}
-
 }
 
 export class LocalFileSystem implements FileSystem {
 
-	private root: string;
+	/**
+	 * @param rootPath The root directory path that relative URIs should be resolved to
+	 */
+	constructor(private rootPath: string) {}
 
-	constructor(root: string) {
-		this.root = root
+	/**
+	 * Converts the URI to an absolute path
+	 */
+	protected resolveUriToPath(uri: string): string {
+		return path.resolve(this.rootPath, uri2path(uri));
 	}
 
-	readDir(path: string, callback: (err: Error | null, result?: FileInfo[]) => void): void {
-		path = path_.resolve(this.root, path);
-		fs.readdir(path, (err: Error, files: string[]) => {
-			if (err) {
-				return callback(err)
-			}
-			let ret: FileInfo[] = [];
-			files.forEach((f) => {
-				const stats: fs.Stats = fs.statSync(path_.resolve(path, f));
-				ret.push({
-					name: f,
-					size: stats.size,
-					dir: stats.isDirectory()
-				})
-			});
-			return callback(null, ret)
+	async getWorkspaceFiles(base?: string): Promise<string[]> {
+		const files = await new Promise<string[]>((resolve, reject) => {
+			glob(path.join(this.resolveUriToPath(base), '**/*.*'), { nodir: true }, (err, matches) => err ? reject(err) : resolve(matches));
 		});
+		return files.map(file => path2uri('', file));
 	}
 
-	readFile(path: string, callback: (err: Error | null, result?: string) => void): void {
-		path = path_.resolve(this.root, path);
-		fs.readFile(path, (err: Error, buf: Buffer) => {
-			if (err) {
-				return callback(err)
-			}
-			return callback(null, buf.toString())
-		});
+	async getTextDocumentContent(uri: string): Promise<string> {
+		return fs.readFile(this.resolveUriToPath(uri), 'utf8');
 	}
-
 }

@@ -1,23 +1,23 @@
 {
-
-    "compilerOptions": {
-        "target": "ES6",
-        "lib": ["es2016"],
-        "types": ["node", "mocha", "chai"],
-        "module": "commonjs",
-        "moduleResolution": "node",
-        "sourceMap": true,
-        "outDir": "lib",
-	"declaration": true,
-	"declarationDir": "lib",
-	"allowUnreachableCode": false,
-	"allowUnusedLabels": false,
-	"noImplicitReturns": true,
-	"noUnusedLocals": true,
-	"noImplicitAny": true
-    },
-    "exclude": [
-        "node_modules",
-	"lib"
-    ]
+  "compilerOptions": {
+    "target": "es2016",
+    "lib": [
+      "es2016"
+    ],
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "sourceMap": true,
+    "outDir": "lib",
+    "declaration": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "noUnusedLocals": true,
+    "noImplicitAny": true,
+    "strictNullChecks": false
+  },
+  "include": [
+    "src/**/*.ts"
+  ]
 }

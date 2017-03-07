@@ -5,9 +5,7 @@ node_js:
 
 cache:
   yarn: true
-  directories:
-    - node_modules
 
 script:
-  - yarn run fmt-check
+  - yarn run build
   - yarn test

@@ -3,17 +3,17 @@ import * as fs_ from 'fs';
 import * as os from 'os';
 
 import * as ts from 'typescript';
-import * as async from 'async';
 
 import * as FileSystem from './fs';
 import * as util from './util';
 import * as match from './match-files';
+import * as bluebird from 'bluebird';
 
 /**
  * ProjectManager translates VFS files to one or many projects denoted by [tj]config.json.
  * It uses either local or remote file system to fetch directory tree and files from and then
  * makes one or more LanguageService objects. By default all LanguageService objects contain no files,
- * they are added on demand - current file for hover or definition, project's files for references and 
+ * they are added on demand - current file for hover or definition, project's files for references and
  * all files from all projects for workspace symbols.
  */
 export class ProjectManager {
@@ -29,14 +29,14 @@ export class ProjectManager {
 
 	private traceModuleResolution: boolean;
 
-    /**
-     * fetched keeps track of which files in localFs have actually
-     * been fetched from remoteFs. (Some might have a placeholder
-     * value). If a file has already been successfully fetched, we
-     * won't fetch it again. This should be cleared if remoteFs files
-     * have been modified in some way, but does not need to be cleared
-     * if remoteFs files have only been added.
-     */
+	/**
+	 * fetched keeps track of which files in localFs have actually
+	 * been fetched from remoteFs. (Some might have a placeholder
+	 * value). If a file has already been successfully fetched, we
+	 * won't fetch it again. This should be cleared if remoteFs files
+	 * have been modified in some way, but does not need to be cleared
+	 * if remoteFs files have only been added.
+	 */
 	private fetched: Set<string>;
 
 	constructor(root: string, remoteFs: FileSystem.FileSystem, strict: boolean, traceModuleResolution?: boolean) {
@@ -79,14 +79,14 @@ export class ProjectManager {
 
 	private ensuredModuleStructure?: Promise<void>;
 
-    /**
-     * ensureModuleStructure ensures that the module structure of the
-     * project exists in localFs. TypeScript/JavaScript module
-     * structure is determined by [jt]sconfig.json, filesystem layout,
-     * global*.d.ts files. For performance reasons, we only read in
-     * the contents of some files and store "var dummy_0ff1bd;" as the
-     * contents of all other files.
-     */
+	/**
+	 * ensureModuleStructure ensures that the module structure of the
+	 * project exists in localFs. TypeScript/JavaScript module
+	 * structure is determined by [jt]sconfig.json, filesystem layout,
+	 * global*.d.ts files. For performance reasons, we only read in
+	 * the contents of some files and store "var dummy_0ff1bd;" as the
+	 * contents of all other files.
+	 */
 	ensureModuleStructure(): Promise<void> {
 		if (!this.ensuredModuleStructure) {
 			this.ensuredModuleStructure = this.refreshFileTree(this.root, true).then(() => {
@@ -115,22 +115,16 @@ export class ProjectManager {
 	async refreshFileTree(root: string, moduleStructureOnly: boolean): Promise<void> {
 		root = util.normalizeDir(root);
 		const filesToFetch: string[] = [];
-		await this.walkRemote(root, (path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) => {
-			if (err) {
-				return err;
-			} else if (info.dir) {
-				return null;
-			}
-			const rel = path_.posix.relative(this.root, util.normalizePath(path));
+		const uris = await this.remoteFs.getWorkspaceFiles(util.path2uri('', root));
+		for (const uri of uris) {
+			const file = util.uri2path(uri);
+			const rel = path_.posix.relative(this.root, util.normalizePath(file));
 			if (!moduleStructureOnly || util.isGlobalTSFile(rel) || util.isConfigFile(rel) || util.isPackageJsonFile(rel)) {
-				filesToFetch.push(path);
-			} else {
-				if (!this.localFs.fileExists(rel)) {
-					this.localFs.addFile(rel, localFSPlaceholder);
-				}
+				filesToFetch.push(file);
+			} else if (!this.localFs.fileExists(rel)) {
+				this.localFs.addFile(rel, localFSPlaceholder);
 			}
-			return null;
-		});
+		}
 		await this.ensureFiles(filesToFetch);
 
 		// require re-fetching of dependency files (but not for
@@ -148,6 +142,7 @@ export class ProjectManager {
 		}
 	}
 
+	// TODO replace this with something like a WorkspaceTree class
 	private ensuredFilesForHoverAndDefinition = new Map<string, Promise<void>>();
 
 	ensureFilesForHoverAndDefinition(uri: string): Promise<void> {
@@ -178,29 +173,19 @@ export class ProjectManager {
 			return this.ensuredFilesForWorkspaceSymbol;
 		}
 
-		const filesToEnsure: string[] = [];
-		const promise = this.walkRemote(this.getRemoteRoot(), function (path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
-			if (err) {
-				return err;
-			} else if (info.dir) {
-				if (util.normalizePath(info.name).indexOf(`${path_.posix.sep}node_modules${path_.posix.sep}`) !== -1) {
-					return skipDir;
-				} else {
-					return null;
-				}
-			}
-			if (util.isJSTSFile(path) || util.isConfigFile(path) || util.isPackageJsonFile(path)) {
-				filesToEnsure.push(path);
-			}
-			return null;
-		}).then(() => {
-			return this.ensureFiles(filesToEnsure)
-		}).then(() => {
-			return this.refreshConfigurations();
-		});
+		const promise = this.remoteFs.getWorkspaceFiles(util.path2uri('', this.getRemoteRoot()))
+			.then(uris => uris
+				.map(uri => util.uri2path(uri))
+				.filter(file =>
+					util.normalizePath(file).indexOf('/node_modules/') === -1
+					&& (util.isJSTSFile(file) || util.isConfigFile(file) || util.isPackageJsonFile(file))
+				)
+			)
+			.then(filesToEnsure => this.ensureFiles(filesToEnsure))
+			.then(() => this.refreshConfigurations());
 
 		this.ensuredFilesForWorkspaceSymbol = promise;
-		promise.catch((err) => {
+		promise.catch(err => {
 			console.error("Failed to fetch files for workspace/symbol:", err);
 			this.ensuredFilesForWorkspaceSymbol = undefined;
 		});
@@ -215,25 +200,16 @@ export class ProjectManager {
 			return this.ensuredAllFiles;
 		}
 
-		const filesToEnsure: string[] = [];
-		const promise = this.walkRemote(this.getRemoteRoot(), function (path: string, info: FileSystem.FileInfo, err?: Error): (Error | null) {
-			if (err) {
-				return err;
-			} else if (info.dir) {
-				return null;
-			}
-			if (util.isJSTSFile(path)) {
-				filesToEnsure.push(path);
-			}
-			return null;
-		}).then(() => {
-			return this.ensureFiles(filesToEnsure)
-		}).then(() => {
-			return this.refreshConfigurations();
-		});
+		const promise = this.remoteFs.getWorkspaceFiles(util.path2uri('', this.getRemoteRoot()))
+			.then(uris => this.ensureFiles(
+				uris
+					.map(uri => util.uri2path(uri))
+					.filter(file => util.isJSTSFile(file))
+			))
+			.then(() => this.refreshConfigurations());
 
 		this.ensuredAllFiles = promise;
-		promise.catch((err) => {
+		promise.catch(err => {
 			console.error("Failed to fetch files for references:", err);
 			this.ensuredAllFiles = undefined;
 		});
@@ -295,73 +271,8 @@ export class ProjectManager {
 		};
 	}
 
-    /**
-     * ensureFiles ensures the following files have been fetched to
-     * localFs. The files parameter is expected to contain paths in
-     * the remote FS. ensureFiles only syncs unfetched file content
-     * from remoteFs to localFs. It does not update project
-     * state. Callers that want to do so after file contents have been
-     * fetched should call this.refreshConfigurations().
-     */
-	ensureFiles(files: string[]): Promise<void> {
-		const filesToFetch = files;
-		if (filesToFetch.length === 0) {
-			return Promise.resolve();
-		}
-		return new Promise<void>((resolve, reject) => {
-			this.fetchContent(filesToFetch, (err) => {
-				if (err) {
-					return reject(err);
-				}
-				return resolve();
-			});
-		});
-	}
-
-	walkRemote(root: string, walkfn: (path: string, info: FileSystem.FileInfo, err?: Error) => Error | null): Promise<void> {
-		const info = {
-			name: root,
-			size: 0,
-			dir: true,
-		}
-		return this.walkRemoter(root, info, walkfn);
-	}
-
-	private walkRemoter(path: string, info: FileSystem.FileInfo, walkfn: (path: string, info: FileSystem.FileInfo, err?: Error) => Error | null): Promise<void> {
-		if (info.name.indexOf('/.') >= 0) {
-			return Promise.resolve();
-		}
-
-		const err = walkfn(path, info);
-		if (err === skipDir) {
-			return Promise.resolve();
-		} else if (err) {
-			return Promise.reject(err);
-		}
-
-		if (!info.dir) {
-			return Promise.resolve();
-		}
-
-		return new Promise<void>((resolve, reject) => {
-			this.fetchDir(path)((err: Error, result?: FileSystem.FileInfo[]) => {
-				if (err) {
-					const err2 = walkfn(path, info, err);
-					if (err2) {
-						return reject(err);
-					} else {
-						return resolve();
-					}
-				}
-				if (result) {
-					Promise.all(result.map((fi) => this.walkRemoter(fi.name, fi, walkfn))).then(() => resolve(), reject);
-				}
-			});
-		});
-	}
-
 	/**
-	 * @return project configuration for a given source file. Climbs directory tree up to workspace root if needed 
+	 * @return project configuration for a given source file. Climbs directory tree up to workspace root if needed
 	 */
 	getConfiguration(fileName: string): ProjectConfiguration {
 		let dir = fileName;
@@ -413,56 +324,36 @@ export class ProjectManager {
 		this.localFs.didSave(fileName);
 	}
 
+	/**
+	 * ensureFiles ensures the following files have been fetched to
+	 * localFs. The files parameter is expected to contain paths in
+	 * the remote FS. ensureFiles only syncs unfetched file content
+	 * from remoteFs to localFs. It does not update project
+	 * state. Callers that want to do so after file contents have been
+	 * fetched should call this.refreshConfigurations().
+	 *
+	 * If one file fetch failed, the error will be caught and logged.
+	 *
+	 * @param files File paths
+	 */
+	async ensureFiles(files: string[]): Promise<void> {
 
-    /**
-     * @return asynchronous function that fetches directory content from VFS
-     */
-	private fetchDir(path: string): AsyncFunction<FileSystem.FileInfo[], Error> {
-		return (callback: (err?: Error, result?: FileSystem.FileInfo[]) => void) => {
-			this.remoteFs.readDir(path, (err?: Error, result?: FileSystem.FileInfo[]) => {
-				if (result) {
-					result.forEach((fi) => {
-						fi.name = path_.posix.join(path, fi.name)
-					})
-				}
-				return callback(err, result)
-			});
-		}
-	}
+		// Only fetch files that are not already fetched
+		files = files.filter(file => !this.fetched.has(file));
 
-    /**
-     * Fetches content of the specified files
-     */
-	private fetchContent(files: string[], callback: (err?: Error) => void) {
-		if (!files) {
-			return callback();
-		}
-		files = files.filter((f) => !this.fetched.has(f));
-		if (files.length === 0) {
-			return callback();
-		}
-
-		const fetch = (path: string): AsyncFunction<string, Error> => {
-			return (callback: (err?: Error, result?: string) => void) => {
-				this.remoteFs.readFile(path, (err?: Error, result?: string) => {
-					if (err) {
-						console.error('Unable to fetch content of ' + path, err);
-						return callback();
-					}
-					const rel = path_.posix.relative(this.root, path);
-					this.localFs.addFile(rel, result || '');
-					this.fetched.add(util.normalizePath(path));
-					return callback()
-				})
+		await bluebird.map(files, async path => {
+			try {
+				const content = await this.remoteFs.getTextDocumentContent(util.path2uri('', path));
+				const relativePath = path_.posix.relative(this.root, path);
+				this.localFs.addFile(relativePath, content);
+				this.fetched.add(util.normalizePath(path));
+			} catch (e) {
+				console.error(e);
 			}
-		};
-		let tasks = files.map(fetch);
-		const start = new Date().getTime();
-		// Why parallelLimit: There may be too many open files when working with local FS and trying
-		// to open them in parallel
-		async.parallelLimit(tasks, 100, (err) => {
-			console.error('files fetched in', (new Date().getTime() - start) / 1000.0);
-			return callback(err);
+		}, {
+			// There may be too many open files when working with local FS and trying
+			// to open them in parallel, so limit concurrent readFile calls to 100
+			concurrency: 100
 		});
 	}
 
@@ -471,12 +362,12 @@ export class ProjectManager {
 	 */
 	refreshConfigurations() {
 		const rootdirs = new Set<string>();
-		Object.keys(this.localFs.entries).forEach((k) => {
+		for (const k of Object.keys(this.localFs.entries)) {
 			if (!/(^|\/)[tj]sconfig\.json$/.test(k)) {
-				return;
+				continue;
 			}
 			if (/(^|\/)node_modules\//.test(k)) {
-				return;
+				continue;
 			}
 			let dir = path_.posix.dirname(k);
 			if (dir == '.') {
@@ -484,7 +375,7 @@ export class ProjectManager {
 			}
 			this.configs.set(dir, new ProjectConfiguration(this.localFs, path_.posix.join('/', dir), this.versions, k, undefined, this.traceModuleResolution));
 			rootdirs.add(dir);
-		});
+		}
 		if (!rootdirs.has('')) {
 			// collecting all the files in workspace by making fake configuration object
 			this.configs.set('', new ProjectConfiguration(this.localFs, '/', this.versions, '', {
@@ -530,10 +421,10 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 		});
 	}
 
-    /**
-     * TypeScript uses this method (when present) to compare project's version 
-     * with the last known one to decide if internal data should be synchronized
-     */
+	/**
+	 * TypeScript uses this method (when present) to compare project's version
+	 * with the last known one to decide if internal data should be synchronized
+	 */
 	getProjectVersion(): string {
 		return '' + this.projectVersion;
 	}
@@ -550,10 +441,10 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 		return this.files;
 	}
 
-    /**
-     * Adds a file and increments project version, used in conjunction with getProjectVersion()
-     * which may be called by TypeScript to check if internal data is up to date
-     */
+	/**
+	 * Adds a file and increments project version, used in conjunction with getProjectVersion()
+	 * which may be called by TypeScript to check if internal data is up to date
+	 */
 	addFile(fileName: string) {
 		this.files.push(fileName);
 		this.incProjectVersion();

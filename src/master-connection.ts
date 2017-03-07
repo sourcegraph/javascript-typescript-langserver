@@ -42,11 +42,11 @@ export function registerMasterHandler(master: IConnection, lightWeight: IConnect
 	// Forward calls from the worker to the master
 
 	for (const worker of [lightWeight, heavyDuty]) {
-		worker.onRequest(rt.ReadFileRequest.type, async (params: any): Promise<any> => {
-			return master.sendRequest(rt.ReadFileRequest.type, params);
+		worker.onRequest({ method: 'workspace/xfiles' }, async (params: any): Promise<any> => {
+			return master.sendRequest({ method: 'workspace/xfiles' }, params);
 		});
-		worker.onRequest(rt.ReadDirRequest.type, async (params: any): Promise<any> => {
-			return master.sendRequest(rt.ReadDirRequest.type, params);
+		worker.onRequest({ method: 'textDocument/xcontent' }, async (params: any): Promise<any> => {
+			return master.sendRequest({ method: 'textDocument/xcontent' }, params);
 		});
 	}
 

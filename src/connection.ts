@@ -76,7 +76,7 @@ export function newConnection(input: NodeJS.ReadableStream, output: NodeJS.Writa
 
 export function registerLanguageHandler(connection: IConnection, strict: boolean, handler: LanguageHandler): void {
 	connection.onRequest(rt.InitializeRequest.type, async (params: InitializeParams): Promise<rt.InitializeResult> => {
-		console.error('initialize', params.rootPath);
+		console.error('initialize', params);
 		let remoteFs: fs.FileSystem;
 		if (strict) {
 			remoteFs = new fs.RemoteFileSystem(connection);
@@ -192,7 +192,7 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 			const result = await handler.getHover(params);
 			const exit = new Date().getTime();
 			console.error('hover', docid(params), (exit - enter) / 1000.0);
-			return Promise.resolve(result || { contents: [] });
+			return Promise.resolve(result);
 		} catch (e) {
 			console.error(params, e);
 			return Promise.reject(e);
