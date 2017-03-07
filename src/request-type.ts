@@ -18,8 +18,8 @@ export namespace InitializeRequest {
 
 export interface InitializeResult extends vscode.InitializeResult {
 	/**
-     * The capabilities the language server provides.
-     */
+	 * The capabilities the language server provides.
+	 */
 	capabilities: ServerCapabilities;
 }
 
@@ -201,7 +201,7 @@ export interface DependencyReference {
 export namespace DocumentSymbolRequest {
 	export const type: vscode.RequestType<vscode.DocumentSymbolParams, vscode.SymbolInformation[], any> = {
 		get method() {
-			return "textDocument/documentSymbol";
+			return 'textDocument/documentSymbol';
 		}
 	};
 }

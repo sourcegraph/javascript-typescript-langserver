@@ -2,8 +2,8 @@ import { IConnection } from 'vscode-languageserver';
 
 import { TextDocumentIdentifier, TextDocumentItem } from 'vscode-languageserver-types';
 
-import * as path from 'path';
 import * as fs from 'mz/fs';
+import * as path from 'path';
 import glob = require('glob');
 import { path2uri, uri2path } from './util';
 
@@ -31,7 +31,7 @@ export class RemoteFileSystem implements FileSystem {
 	private workspaceFilesPromise?: Promise<string[]>;
 
 	constructor(connection: IConnection) {
-		this.connection = connection
+		this.connection = connection;
 	}
 
 	/**

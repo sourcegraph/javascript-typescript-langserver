@@ -5,7 +5,7 @@ import { TypeScriptService } from './typescript-service';
 import * as util from './util';
 
 const packageJson = require('../package.json');
-var program = require('commander');
+const program = require('commander');
 
 process.on('uncaughtException', (err: string) => {
 	console.error(err);

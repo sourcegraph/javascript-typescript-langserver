@@ -1,21 +1,21 @@
-import * as net from 'net';
 import * as cluster from 'cluster';
+import * as net from 'net';
 
-import { newConnection, registerLanguageHandler, TraceOptions } from './connection';
-import { registerMasterHandler } from './master-connection';
-import { LanguageHandler } from './lang-handler';
 import { IConnection } from 'vscode-languageserver';
+import { newConnection, registerLanguageHandler, TraceOptions } from './connection';
+import { LanguageHandler } from './lang-handler';
+import { registerMasterHandler } from './master-connection';
 import { ExitRequest } from './request-type';
 
 async function rewriteConsole() {
 	const consoleErr = console.error;
-	console.error = function () {
+	console.error = () => {
 		if (cluster.isMaster) {
 			consoleErr(`[mstr]`, ...arguments);
 		} else {
 			consoleErr(`[wkr${cluster.worker.id}]`, ...arguments);
 		}
-	}
+	};
 }
 
 export interface ServeOptions extends TraceOptions {
@@ -50,7 +50,7 @@ export async function serve(options: ServeOptions, createLangHandler: () => Lang
 		}
 	} else {
 		console.error('Listening for incoming LSP connections on', options.lspPort);
-		var server = net.createServer(socket => {
+		let server = net.createServer(socket => {
 			console.error('Connection accepted');
 			// This connection listens on the socket
 			const master = newConnection(socket, socket, options);

@@ -1,31 +1,31 @@
 import * as path_ from 'path';
 import * as ts from 'typescript';
 import {
-	InitializeParams,
-	TextDocumentPositionParams,
-	TextDocumentSyncKind,
-	ReferenceParams,
-	Location,
-	Hover,
-	MarkedString,
-	DocumentSymbolParams,
-	SymbolInformation,
-	Range,
-	DidOpenTextDocumentParams,
-	DidCloseTextDocumentParams,
-	DidChangeTextDocumentParams,
-	DidSaveTextDocumentParams,
-	CompletionList,
 	CompletionItem,
-	CompletionItemKind
+	CompletionItemKind,
+	CompletionList,
+	DidChangeTextDocumentParams,
+	DidCloseTextDocumentParams,
+	DidOpenTextDocumentParams,
+	DidSaveTextDocumentParams,
+	DocumentSymbolParams,
+	Hover,
+	InitializeParams,
+	Location,
+	MarkedString,
+	Range,
+	ReferenceParams,
+	SymbolInformation,
+	TextDocumentPositionParams,
+	TextDocumentSyncKind
 } from 'vscode-languageserver';
 
 import * as async from 'async';
 
 import * as FileSystem from './fs';
-import * as util from './util';
 import * as pm from './project-manager';
 import * as rt from './request-type';
+import * as util from './util';
 
 import { LanguageHandler } from './lang-handler';
 
@@ -82,7 +82,7 @@ export class TypeScriptService implements LanguageHandler {
 					resolveProvider: false,
 					triggerCharacters: ['.']
 				},
-				xpackagesProvider: true,
+				xpackagesProvider: true
 			}
 		});
 		return this.initialized;
@@ -117,8 +117,8 @@ export class TypeScriptService implements LanguageHandler {
 				const start = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start);
 				const end = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start + def.textSpan.length);
 				ret.push(Location.create(this.defUri(def.fileName), {
-					start: start,
-					end: end
+					start,
+					end
 				}));
 			}
 		}
@@ -152,12 +152,12 @@ export class TypeScriptService implements LanguageHandler {
 				const start = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start);
 				const end = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start + def.textSpan.length);
 				const loc = Location.create(this.defUri(def.fileName), {
-					start: start,
-					end: end
+					start,
+					end
 				});
 				ret.push({
 					symbol: util.defInfoToSymbolDescriptor(def),
-					location: loc,
+					location: loc
 				});
 			}
 		}
@@ -165,10 +165,10 @@ export class TypeScriptService implements LanguageHandler {
 	}
 
 	async getHover(params: TextDocumentPositionParams): Promise<Hover> {
-		const uri = util.uri2reluri(params.textDocument.uri, this.root)
+		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
-		await this.projectManager.ensureFilesForHoverAndDefinition(uri)
+		await this.projectManager.ensureFilesForHoverAndDefinition(uri);
 
 		const fileName: string = util.uri2path(uri);
 		const configuration = this.projectManager.getConfiguration(fileName);
@@ -198,7 +198,7 @@ export class TypeScriptService implements LanguageHandler {
 	}
 
 	async getReferences(params: ReferenceParams): Promise<Location[]> {
-		const uri = util.uri2reluri(params.textDocument.uri, this.root)
+		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
 		const fileName: string = util.uri2path(uri);
@@ -296,7 +296,7 @@ export class TypeScriptService implements LanguageHandler {
 			return null;
 		}
 		const rootConfig = JSON.parse(this.projectManager.getFs().readFile('/package.json'));
-		if (rootConfig['name'] !== 'definitely-typed') {
+		if (rootConfig.name !== 'definitely-typed') {
 			return null;
 		}
 		if (!params.symbol || !params.symbol.package) {
@@ -345,7 +345,7 @@ export class TypeScriptService implements LanguageHandler {
 		await this.projectManager.ensureAllFiles();
 
 		const configs = this.projectManager.getConfigurations();
-		await Promise.all(configs.map(async (config) => {
+		await Promise.all(configs.map(async config => {
 			if (params.hints && params.hints.dependeePackageName && params.hints.dependeePackageName !== config.getPackageName()) {
 				return;
 			}
@@ -359,7 +359,7 @@ export class TypeScriptService implements LanguageHandler {
 					continue;
 				}
 
-				this.walkMostAST(source, (node) => {
+				this.walkMostAST(source, node => {
 					switch (node.kind) {
 						case ts.SyntaxKind.Identifier: { // include all matching refs at the node
 							const defs = config.getService().getDefinitionAtPosition(source.fileName, node.pos + 1);
@@ -376,13 +376,13 @@ export class TypeScriptService implements LanguageHandler {
 								const loc = {
 									uri: this.defUri(source.fileName),
 									range: {
-										start: start,
-										end: end,
-									},
+										start,
+										end
+									}
 								};
 								refInfo.push({
 									symbol: sd,
-									reference: loc,
+									reference: loc
 								});
 							}
 							break;
@@ -404,30 +404,30 @@ export class TypeScriptService implements LanguageHandler {
 		await this.projectManager.ensureModuleStructure();
 
 		const pkgFiles: string[] = [];
-		pm.walkInMemoryFs(this.projectManager.getFs(), "/", (path: string, isdir: boolean): Error | void => {
-			if (isdir && path_.basename(path) === "node_modules") {
+		pm.walkInMemoryFs(this.projectManager.getFs(), '/', (path: string, isdir: boolean): Error | void => {
+			if (isdir && path_.basename(path) === 'node_modules') {
 				return pm.skipDir;
 			}
 			if (isdir) {
 				return;
 			}
-			if (path_.basename(path) !== "package.json") {
+			if (path_.basename(path) !== 'package.json') {
 				return;
 			}
 			pkgFiles.push(path);
 		});
 
 		const pkgs: rt.PackageInformation[] = [];
-		const pkgJsons = pkgFiles.map((p) => JSON.parse(this.projectManager.getFs().readFile(p)));
+		const pkgJsons = pkgFiles.map(p => JSON.parse(this.projectManager.getFs().readFile(p)));
 		for (const pkgJson of pkgJsons) {
 			const deps: rt.DependencyReference[] = [];
-			const pkgName = pkgJson['name'];
-			const pkgVersion = pkgJson['version'];
-			const pkgRepoURL = pkgJson['repository'] ? pkgJson['repository']['url'] : undefined;
+			const pkgName = pkgJson.name;
+			const pkgVersion = pkgJson.version;
+			const pkgRepoURL = pkgJson.repository ? pkgJson.repository.url : undefined;
 			for (const k of ['dependencies', 'devDependencies', 'peerDependencies']) {
 				if (pkgJson[k]) {
-					for (const name in pkgJson[k]) {
-						deps.push({ attributes: { 'name': name, 'version': pkgJson[k][name] }, hints: { dependeePackageName: pkgName } });
+					for (const name of Object.keys(pkgJson[k])) {
+						deps.push({ attributes: { name, version: pkgJson[k][name] }, hints: { dependeePackageName: pkgName } });
 					}
 				}
 			}
@@ -435,10 +435,10 @@ export class TypeScriptService implements LanguageHandler {
 				package: {
 					name: pkgName,
 					version: pkgVersion,
-					repoURL: pkgRepoURL,
+					repoURL: pkgRepoURL
 				},
-				dependencies: deps,
-			})
+				dependencies: deps
+			});
 		}
 		return pkgs;
 	}
@@ -447,27 +447,27 @@ export class TypeScriptService implements LanguageHandler {
 		await this.projectManager.ensureModuleStructure();
 
 		const pkgFiles: string[] = [];
-		pm.walkInMemoryFs(this.projectManager.getFs(), "/", (path: string, isdir: boolean): Error | void => {
-			if (isdir && path_.basename(path) === "node_modules") {
+		pm.walkInMemoryFs(this.projectManager.getFs(), '/', (path: string, isdir: boolean): Error | void => {
+			if (isdir && path_.basename(path) === 'node_modules') {
 				return pm.skipDir;
 			}
 			if (isdir) {
 				return;
 			}
-			if (path_.basename(path) !== "package.json") {
+			if (path_.basename(path) !== 'package.json') {
 				return;
 			}
 			pkgFiles.push(path);
 		});
 
 		const deps: rt.DependencyReference[] = [];
-		const pkgJsons = pkgFiles.map((p) => JSON.parse(this.projectManager.getFs().readFile(p)));
+		const pkgJsons = pkgFiles.map(p => JSON.parse(this.projectManager.getFs().readFile(p)));
 		for (const pkgJson of pkgJsons) {
-			const pkgName = pkgJson['name'];
+			const pkgName = pkgJson.name;
 			for (const k of ['dependencies', 'devDependencies', 'peerDependencies']) {
 				if (pkgJson[k]) {
-					for (const name in pkgJson[k]) {
-						deps.push({ attributes: { 'name': name, 'version': pkgJson[k][name] }, hints: { dependeePackageName: pkgName } });
+					for (const name of Object.keys(pkgJson[k])) {
+						deps.push({ attributes: { name, version: pkgJson[k][name] }, hints: { dependeePackageName: pkgName } });
 					}
 				}
 			}
@@ -476,7 +476,7 @@ export class TypeScriptService implements LanguageHandler {
 	}
 
 	async getCompletions(params: TextDocumentPositionParams): Promise<CompletionList> {
-		const uri = util.uri2reluri(params.textDocument.uri, this.root)
+		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
 		const fileName: string = util.uri2path(uri);
@@ -1319,7 +1319,7 @@ export class TypeScriptService implements LanguageHandler {
 	async didChange(params: DidChangeTextDocumentParams): Promise<void> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		let text = null;
-		params.contentChanges.forEach((change) => {
+		params.contentChanges.forEach(change => {
 			if (change.range || change.rangeLength) {
 				throw new Error('incremental updates in textDocument/didChange not supported for file ' + params.textDocument.uri);
 			}
@@ -1367,10 +1367,7 @@ export class TypeScriptService implements LanguageHandler {
 	/**
 	 * Produces async function that converts ReferenceEntry object to Location
 	 */
-	private transformReference(root: string,
-		program: ts.Program,
-		includeDeclaration: boolean,
-		ref: ts.ReferenceEntry): AsyncFunction<Location, Error> {
+	private transformReference(root: string, program: ts.Program, includeDeclaration: boolean, ref: ts.ReferenceEntry): AsyncFunction<Location, Error> {
 		return (callback: (err?: Error, result?: Location) => void) => {
 			if (!includeDeclaration && ref.isDefinition) {
 				return callback(null);
@@ -1382,10 +1379,10 @@ export class TypeScriptService implements LanguageHandler {
 			let start = ts.getLineAndCharacterOfPosition(sourceFile, ref.textSpan.start);
 			let end = ts.getLineAndCharacterOfPosition(sourceFile, ref.textSpan.start + ref.textSpan.length);
 			callback(undefined, Location.create(util.path2uri(root, ref.fileName), {
-				start: start,
-				end: end
+				start,
+				end
 			}));
-		}
+		};
 	}
 
 	/**
@@ -1405,7 +1402,7 @@ export class TypeScriptService implements LanguageHandler {
 	}
 
 	private async collectWorkspaceSymbols(configs: pm.ProjectConfiguration[], query?: string, symQuery?: rt.PartialSymbolDescriptor): Promise<SymbolInformation[]> {
-		const configSymbols: SymbolInformation[][] = await Promise.all(configs.map(async (config) => {
+		const configSymbols: SymbolInformation[][] = await Promise.all(configs.map(async config => {
 			const symbols: SymbolInformation[] = [];
 			await config.ensureAllFiles();
 			if (query) {
@@ -1419,7 +1416,7 @@ export class TypeScriptService implements LanguageHandler {
 				}
 			} else if (symQuery) {
 				// TODO(beyang): after workspace/symbol extension is accepted into LSP, push this logic upstream to getNavigateToItems
-				const items = config.getService().getNavigateToItems(symQuery.name || "", undefined, undefined, false);
+				const items = config.getService().getNavigateToItems(symQuery.name || '', undefined, undefined, false);
 				for (const item of items) {
 					const sd = rt.SymbolDescriptor.create(item.kind, item.name, item.containerKind, item.containerName, { name: config.getPackageName() });
 					if (!util.symbolDescriptorMatch(symQuery, sd)) {
@@ -1474,7 +1471,7 @@ export class TypeScriptService implements LanguageHandler {
 			try {
 				tree = configuration.getService().getNavigationTree(sourceFile.fileName);
 			} catch (e) {
-				console.error("could not get navigation tree for file", sourceFile.fileName);
+				console.error('could not get navigation tree for file', sourceFile.fileName);
 				continue;
 			}
 			this.flattenNavigationTreeItem(tree, null, sourceFile, result, limit);
@@ -1523,7 +1520,7 @@ export class TypeScriptService implements LanguageHandler {
 	 */
 	private static isAcceptableNavigationTreeItem(item: ts.NavigationTree): boolean {
 		// modules and source files should be excluded
-		if ([ts.ScriptElementKind.moduleElement, "sourcefile"].indexOf(item.kind) >= 0) {
+		if ([ts.ScriptElementKind.moduleElement, 'sourcefile'].indexOf(item.kind) >= 0) {
 			return false;
 		}
 		// special items may start with ", (, [, or <
@@ -1531,7 +1528,7 @@ export class TypeScriptService implements LanguageHandler {
 			return false;
 		}
 		// magic words
-		if (["default", "constructor", "new()"].indexOf(item.text) >= 0) {
+		if (['default', 'constructor', 'new()'].indexOf(item.text) >= 0) {
 			return false;
 		}
 		return true;
@@ -1551,21 +1548,21 @@ function pushall<T>(arr: T[], ...elems: (T | null | undefined)[]): number {
  * Maps string-based CompletionEntry::kind to enum-based CompletionItemKind
  */
 const completionKinds: { [name: string]: CompletionItemKind } = {
-	"class": CompletionItemKind.Class,
-	"constructor": CompletionItemKind.Constructor,
-	"enum": CompletionItemKind.Enum,
-	"field": CompletionItemKind.Field,
-	"file": CompletionItemKind.File,
-	"function": CompletionItemKind.Function,
-	"interface": CompletionItemKind.Interface,
-	"keyword": CompletionItemKind.Keyword,
-	"method": CompletionItemKind.Method,
-	"module": CompletionItemKind.Module,
-	"property": CompletionItemKind.Property,
-	"reference": CompletionItemKind.Reference,
-	"snippet": CompletionItemKind.Snippet,
-	"text": CompletionItemKind.Text,
-	"unit": CompletionItemKind.Unit,
-	"value": CompletionItemKind.Value,
-	"variable": CompletionItemKind.Variable
+	class: CompletionItemKind.Class,
+	constructor: CompletionItemKind.Constructor,
+	enum: CompletionItemKind.Enum,
+	field: CompletionItemKind.Field,
+	file: CompletionItemKind.File,
+	function: CompletionItemKind.Function,
+	interface: CompletionItemKind.Interface,
+	keyword: CompletionItemKind.Keyword,
+	method: CompletionItemKind.Method,
+	module: CompletionItemKind.Module,
+	property: CompletionItemKind.Property,
+	reference: CompletionItemKind.Reference,
+	snippet: CompletionItemKind.Snippet,
+	text: CompletionItemKind.Text,
+	unit: CompletionItemKind.Unit,
+	value: CompletionItemKind.Value,
+	variable: CompletionItemKind.Variable
 };

@@ -26,6 +26,7 @@
   },
   "scripts": {
     "test": "mocha --require source-map-support/register --timeout 5000 --slow 2000 lib/test/**/*.js",
+    "lint": "tslint -t msbuild -c tslint.json 'src/**/*.ts'",
     "build": "tsc",
     "watch": "tsc -w"
   },
@@ -46,8 +47,8 @@
     "@types/chai": "^3.4.34",
     "@types/chai-as-promised": "^0.0.29",
     "@types/glob": "^5.0.30",
-    "@types/mz": "^0.0.30",
     "@types/mocha": "^2.2.32",
+    "@types/mz": "^0.0.30",
     "@types/node": "^6.0.46",
     "chai": "^3.4.34",
     "chai-as-promised": "^6.0.0",
@@ -55,6 +56,7 @@
     "sinon": "^1.17.7",
     "source-map-support": "^0.4.11",
     "ts-node": "^1.6.1",
+    "tslint": "^4.5.1",
     "typescript-formatter": "^4.0.0"
   },
   "files": [
