@@ -1,11 +1,8 @@
 import * as cluster from 'cluster';
 import * as net from 'net';
 
-import { IConnection } from 'vscode-languageserver';
 import { newConnection, registerLanguageHandler, TraceOptions } from './connection';
 import { LanguageHandler } from './lang-handler';
-import { registerMasterHandler } from './master-connection';
-import { ExitRequest } from './request-type';
 
 async function rewriteConsole() {
 	const consoleErr = console.error;
@@ -30,10 +27,8 @@ export interface ServeOptions extends TraceOptions {
  * serve starts a singleton language server instance that uses a
  * cluster of worker processes to achieve some semblance of
  * parallelism.
- *
- * @param createWorkerConnection Should return a connection to a subworker (for example by spawning a child process)
  */
-export async function serve(options: ServeOptions, createLangHandler: () => LanguageHandler, createWorkerConnection?: () => IConnection): Promise<void> {
+export async function serve(options: ServeOptions, createLangHandler: () => LanguageHandler): Promise<void> {
 	rewriteConsole();
 
 	if (options.clusterSize > 1 && cluster.isMaster) {
@@ -53,33 +48,18 @@ export async function serve(options: ServeOptions, createLangHandler: () => Lang
 		let server = net.createServer(socket => {
 			console.error('Connection accepted');
 			// This connection listens on the socket
-			const master = newConnection(socket, socket, options);
+			const connection = newConnection(socket, socket, options);
 
 			// Override the default exit notification handler so the process is not killed
-			master.onNotification(ExitRequest.type, () => {
+			connection.onNotification('exit', () => {
 				console.error('Exit notification, closing socket');
 				socket.end();
 				socket.destroy();
 			});
 
-			if (createWorkerConnection) {
-				// Spawn two child processes that communicate through STDIN/STDOUT
-				// One gets short-running requests like textDocument/definition,
-				// the other long-running requests like textDocument/references
-				// TODO: Don't spawn new processes on every connection, keep them warm
-				//       Need to make sure exit notifications don't come through and LS supports re-initialization
-				const leightWeightWorker = createWorkerConnection();
-				const heavyDutyWorker = createWorkerConnection();
+			registerLanguageHandler(connection, options.strict, createLangHandler());
 
-				registerMasterHandler(master, leightWeightWorker, heavyDutyWorker);
-
-				leightWeightWorker.listen();
-				heavyDutyWorker.listen();
-			} else {
-				registerLanguageHandler(master, options.strict, createLangHandler());
-			}
-
-			master.listen();
+			connection.listen();
 		});
 
 		server.listen(options.lspPort);

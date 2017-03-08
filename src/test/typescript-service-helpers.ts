@@ -27,7 +27,7 @@ export interface TestContext {
 export const initializeTypeScriptService = (fileSystem: FileSystem) => async function (this: TestContext): Promise<void> {
 	await this.service.initialize({
 		processId: process.pid,
-		rootPath: '/',
+		rootUri: 'file:///',
 		capabilities: {}
 	}, fileSystem, true);
 };

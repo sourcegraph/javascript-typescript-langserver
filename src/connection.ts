@@ -11,6 +11,7 @@ import {
 	Hover,
 	IConnection,
 	InitializeParams,
+	InitializeResult,
 	Location,
 	ReferenceParams,
 	SymbolInformation,
@@ -21,7 +22,14 @@ import * as fs_ from 'fs';
 import { EOL } from 'os';
 
 import * as fs from './fs';
-import * as rt from './request-type';
+import {
+	DependencyReference,
+	PackageInformation,
+	ReferenceInformation,
+	SymbolLocationInformation,
+	WorkspaceReferenceParams,
+	WorkspaceSymbolParams
+} from './request-type';
 import * as util from './util';
 
 import { LanguageHandler } from './lang-handler';
@@ -75,7 +83,7 @@ export function newConnection(input: NodeJS.ReadableStream, output: NodeJS.Writa
 }
 
 export function registerLanguageHandler(connection: IConnection, strict: boolean, handler: LanguageHandler): void {
-	connection.onRequest(rt.InitializeRequest.type, async (params: InitializeParams): Promise<rt.InitializeResult> => {
+	connection.onRequest('initialize', async (params: InitializeParams): Promise<InitializeResult> => {
 		console.error('initialize', params);
 		let remoteFs: fs.FileSystem;
 		if (strict) {
@@ -121,7 +129,7 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 		});
 	});
 
-	connection.onRequest(rt.WorkspaceSymbolsRequest.type, async (params: rt.WorkspaceSymbolParams): Promise<SymbolInformation[]> => {
+	connection.onWorkspaceSymbol(async (params: WorkspaceSymbolParams): Promise<SymbolInformation[]> => {
 		const enter = new Date().getTime();
 		try {
 			const result = await handler.getWorkspaceSymbols(params);
@@ -134,7 +142,7 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 		}
 	});
 
-	connection.onRequest(rt.DocumentSymbolRequest.type, async (params: DocumentSymbolParams): Promise<SymbolInformation[]> => {
+	connection.onDocumentSymbol(async (params: DocumentSymbolParams): Promise<SymbolInformation[]> => {
 		const enter = new Date().getTime();
 		try {
 			const result = await handler.getDocumentSymbol(params);
@@ -147,7 +155,7 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 		}
 	});
 
-	connection.onRequest(rt.WorkspaceReferenceRequest.type, async (params: rt.WorkspaceReferenceParams): Promise<rt.ReferenceInformation[]> => {
+	connection.onRequest('workspace/references', async (params: WorkspaceReferenceParams): Promise<ReferenceInformation[]> => {
 		const enter = new Date().getTime();
 		try {
 			const result = await handler.getWorkspaceReference(params);
@@ -173,7 +181,7 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 		}
 	});
 
-	connection.onRequest(rt.XdefinitionRequest.type, async (params: TextDocumentPositionParams): Promise<rt.SymbolLocationInformation[]> => {
+	connection.onRequest('textDocument/xdefinition', async (params: TextDocumentPositionParams): Promise<SymbolLocationInformation[]> => {
 		const enter = new Date().getTime();
 		try {
 			const result = await handler.getXdefinition(params);
@@ -212,7 +220,7 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 		}
 	});
 
-	connection.onRequest(rt.PackagesRequest.type, async (): Promise<rt.PackageInformation[]> => {
+	connection.onRequest('workspace/xpackages', async (): Promise<PackageInformation[]> => {
 		const enter = new Date().getTime();
 		try {
 			const result = await handler.getPackages();
@@ -225,7 +233,7 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 		}
 	});
 
-	connection.onRequest(rt.DependenciesRequest.type, async (): Promise<rt.DependencyReference[]> => {
+	connection.onRequest('workspace/xdependencies', async (): Promise<DependencyReference[]> => {
 		const enter = new Date().getTime();
 		try {
 			const result = await handler.getDependencies();
@@ -238,7 +246,7 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 		}
 	});
 
-	connection.onRequest(rt.TextDocumentCompletionRequest.type, async (params: TextDocumentPositionParams): Promise<CompletionList> => {
+	connection.onCompletion(async (params: TextDocumentPositionParams): Promise<CompletionList> => {
 		const enter = new Date().getTime();
 		try {
 			const result = await handler.getCompletions(params);
