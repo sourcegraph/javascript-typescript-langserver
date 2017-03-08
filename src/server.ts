@@ -6,11 +6,11 @@ import { LanguageHandler } from './lang-handler';
 
 async function rewriteConsole() {
 	const consoleErr = console.error;
-	console.error = () => {
+	console.error = function error(this: typeof console) {
 		if (cluster.isMaster) {
-			consoleErr(`[mstr]`, ...arguments);
+			consoleErr.call(this, `[mstr]`, ...arguments);
 		} else {
-			consoleErr(`[wkr${cluster.worker.id}]`, ...arguments);
+			consoleErr.call(this, `[wkr${cluster.worker.id}]`, ...arguments);
 		}
 	};
 }
