@@ -42,8 +42,8 @@ export class RemoteFileSystem implements FileSystem {
 		// TODO cache this at a different layer and invalidate it properly
 		// This is just a quick and dirty solution to avoid multiple requests
 		if (!this.workspaceFilesPromise) {
-			this.workspaceFilesPromise = Promise.resolve(this.connection.sendRequest<any, TextDocumentIdentifier[], any>({ method: 'workspace/xfiles' }, { base }))
-				.then(textDocuments => textDocuments.map(textDocument => textDocument.uri))
+			this.workspaceFilesPromise = Promise.resolve(this.connection.sendRequest('workspace/xfiles', { base }))
+				.then((textDocuments: TextDocumentIdentifier[]) => textDocuments.map(textDocument => textDocument.uri))
 				.catch(err => {
 					this.workspaceFilesPromise = undefined;
 					throw err;
@@ -56,7 +56,7 @@ export class RemoteFileSystem implements FileSystem {
 	 * The content request is sent from the server to the client to request the current content of any text document. This allows language servers to operate without accessing the file system directly.
 	 */
 	async getTextDocumentContent(uri: string): Promise<string> {
-		const textDocument = await this.connection.sendRequest<any, TextDocumentItem, any>({ method: 'textDocument/xcontent' }, {
+		const textDocument = await this.connection.sendRequest<TextDocumentItem>('textDocument/xcontent', {
 			textDocument: { uri }
 		});
 		return textDocument.text;

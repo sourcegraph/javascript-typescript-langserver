@@ -11,6 +11,7 @@ import {
 	DocumentSymbolParams,
 	Hover,
 	InitializeParams,
+	InitializeResult,
 	Location,
 	MarkedString,
 	Range,
@@ -19,12 +20,21 @@ import {
 	TextDocumentPositionParams,
 	TextDocumentSyncKind
 } from 'vscode-languageserver';
+import {
+	DependencyReference,
+	PackageInformation,
+	PartialSymbolDescriptor,
+	ReferenceInformation,
+	SymbolDescriptor,
+	SymbolLocationInformation,
+	WorkspaceReferenceParams,
+	WorkspaceSymbolParams
+} from './request-type';
 
 import * as async from 'async';
 
 import * as FileSystem from './fs';
 import * as pm from './project-manager';
-import * as rt from './request-type';
 import * as util from './util';
 
 import { LanguageHandler } from './lang-handler';
@@ -45,7 +55,7 @@ export class TypeScriptService implements LanguageHandler {
 
 	private strict: boolean;
 	private emptyQueryWorkspaceSymbols: Promise<SymbolInformation[]>; // cached response for empty workspace/symbol query
-	private initialized: Promise<rt.InitializeResult>;
+	private initialized: Promise<InitializeResult>;
 	private traceModuleResolution: boolean;
 
 	constructor(traceModuleResolution?: boolean) {
@@ -53,12 +63,12 @@ export class TypeScriptService implements LanguageHandler {
 	}
 
 	// TODO pass remoteFs and strict to constructor
-	initialize(params: InitializeParams, remoteFs: FileSystem.FileSystem, strict: boolean): Promise<rt.InitializeResult> {
+	initialize(params: InitializeParams, remoteFs: FileSystem.FileSystem, strict: boolean): Promise<InitializeResult> {
 		if (this.initialized) {
 			return this.initialized;
 		}
-		if (params.rootPath) {
-			this.root = util.uri2path(params.rootPath);
+		if (params.rootUri || params.rootPath) {
+			this.root = params.rootPath || util.uri2path(params.rootUri);
 			this.strict = strict;
 			this.projectManager = new pm.ProjectManager(this.root, remoteFs, strict, this.traceModuleResolution);
 			// Pre-fetch files in the background
@@ -125,7 +135,7 @@ export class TypeScriptService implements LanguageHandler {
 		return ret;
 	}
 
-	async getXdefinition(params: TextDocumentPositionParams): Promise<rt.SymbolLocationInformation[]> {
+	async getXdefinition(params: TextDocumentPositionParams): Promise<SymbolLocationInformation[]> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
@@ -239,7 +249,7 @@ export class TypeScriptService implements LanguageHandler {
 		});
 	}
 
-	async getWorkspaceSymbols(params: rt.WorkspaceSymbolParams): Promise<SymbolInformation[]> {
+	async getWorkspaceSymbols(params: WorkspaceSymbolParams): Promise<SymbolInformation[]> {
 		const query = params.query;
 		const symQuery = params.symbol ? Object.assign({}, params.symbol) : undefined;
 		if (symQuery && symQuery.package) {
@@ -286,7 +296,7 @@ export class TypeScriptService implements LanguageHandler {
 		return (await itemsPromise).slice(0, limit);
 	}
 
-	async getWorkspaceSymbolsDefinitelyTyped(params: rt.WorkspaceSymbolParams): Promise<SymbolInformation[] | null> {
+	async getWorkspaceSymbolsDefinitelyTyped(params: WorkspaceSymbolParams): Promise<SymbolInformation[] | null> {
 		try {
 			await this.projectManager.ensureFiles(['/package.json']);
 		} catch (e) {
@@ -339,8 +349,8 @@ export class TypeScriptService implements LanguageHandler {
 		return Promise.resolve(result);
 	}
 
-	async getWorkspaceReference(params: rt.WorkspaceReferenceParams): Promise<rt.ReferenceInformation[]> {
-		const refInfo: rt.ReferenceInformation[] = [];
+	async getWorkspaceReference(params: WorkspaceReferenceParams): Promise<ReferenceInformation[]> {
+		const refInfo: ReferenceInformation[] = [];
 
 		await this.projectManager.ensureAllFiles();
 
@@ -400,7 +410,7 @@ export class TypeScriptService implements LanguageHandler {
 		return refInfo;
 	}
 
-	async getPackages(): Promise<rt.PackageInformation[]> {
+	async getPackages(): Promise<PackageInformation[]> {
 		await this.projectManager.ensureModuleStructure();
 
 		const pkgFiles: string[] = [];
@@ -417,10 +427,10 @@ export class TypeScriptService implements LanguageHandler {
 			pkgFiles.push(path);
 		});
 
-		const pkgs: rt.PackageInformation[] = [];
+		const pkgs: PackageInformation[] = [];
 		const pkgJsons = pkgFiles.map(p => JSON.parse(this.projectManager.getFs().readFile(p)));
 		for (const pkgJson of pkgJsons) {
-			const deps: rt.DependencyReference[] = [];
+			const deps: DependencyReference[] = [];
 			const pkgName = pkgJson.name;
 			const pkgVersion = pkgJson.version;
 			const pkgRepoURL = pkgJson.repository ? pkgJson.repository.url : undefined;
@@ -443,7 +453,7 @@ export class TypeScriptService implements LanguageHandler {
 		return pkgs;
 	}
 
-	async getDependencies(): Promise<rt.DependencyReference[]> {
+	async getDependencies(): Promise<DependencyReference[]> {
 		await this.projectManager.ensureModuleStructure();
 
 		const pkgFiles: string[] = [];
@@ -460,7 +470,7 @@ export class TypeScriptService implements LanguageHandler {
 			pkgFiles.push(path);
 		});
 
-		const deps: rt.DependencyReference[] = [];
+		const deps: DependencyReference[] = [];
 		const pkgJsons = pkgFiles.map(p => JSON.parse(this.projectManager.getFs().readFile(p)));
 		for (const pkgJson of pkgJsons) {
 			const pkgName = pkgJson.name;
@@ -1401,7 +1411,7 @@ export class TypeScriptService implements LanguageHandler {
 			this.defUri(item.fileName), item.containerName);
 	}
 
-	private async collectWorkspaceSymbols(configs: pm.ProjectConfiguration[], query?: string, symQuery?: rt.PartialSymbolDescriptor): Promise<SymbolInformation[]> {
+	private async collectWorkspaceSymbols(configs: pm.ProjectConfiguration[], query?: string, symQuery?: PartialSymbolDescriptor): Promise<SymbolInformation[]> {
 		const configSymbols: SymbolInformation[][] = await Promise.all(configs.map(async config => {
 			const symbols: SymbolInformation[] = [];
 			await config.ensureAllFiles();
@@ -1418,7 +1428,7 @@ export class TypeScriptService implements LanguageHandler {
 				// TODO(beyang): after workspace/symbol extension is accepted into LSP, push this logic upstream to getNavigateToItems
 				const items = config.getService().getNavigateToItems(symQuery.name || '', undefined, undefined, false);
 				for (const item of items) {
-					const sd = rt.SymbolDescriptor.create(item.kind, item.name, item.containerKind, item.containerName, { name: config.getPackageName() });
+					const sd = SymbolDescriptor.create(item.kind, item.name, item.containerKind, item.containerName, { name: config.getPackageName() });
 					if (!util.symbolDescriptorMatch(symQuery, sd)) {
 						continue;
 					}
