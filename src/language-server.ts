@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { TypeScriptService } from './typescript-service';
 import * as server from './server';
+import { TypeScriptService } from './typescript-service';
 import * as util from './util';
 const program = require('commander');
 const packageJson = require('../package.json');
@@ -23,8 +23,8 @@ const lspPort = program.port || defaultLspPort;
 const clusterSize = program.cluster || numCPUs;
 
 const options: server.ServeOptions = {
-	clusterSize: clusterSize,
-	lspPort: lspPort,
+	clusterSize,
+	lspPort,
 	strict: program.strict,
 	trace: program.trace,
 	logfile: program.logfile

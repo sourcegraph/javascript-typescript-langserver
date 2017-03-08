@@ -1,28 +1,28 @@
+import { DataCallback, Message, StreamMessageReader, StreamMessageWriter } from 'vscode-jsonrpc';
 import {
-	IConnection,
+	CompletionList,
 	createConnection,
-	InitializeParams,
-	TextDocumentPositionParams,
 	Definition,
-	ReferenceParams,
-	Location,
-	Hover,
-	DocumentSymbolParams,
-	SymbolInformation,
-	DidOpenTextDocumentParams,
-	DidCloseTextDocumentParams,
 	DidChangeTextDocumentParams,
+	DidCloseTextDocumentParams,
+	DidOpenTextDocumentParams,
 	DidSaveTextDocumentParams,
-	CompletionList
+	DocumentSymbolParams,
+	Hover,
+	IConnection,
+	InitializeParams,
+	Location,
+	ReferenceParams,
+	SymbolInformation,
+	TextDocumentPositionParams
 } from 'vscode-languageserver';
-import { Message, StreamMessageReader, StreamMessageWriter, DataCallback } from 'vscode-jsonrpc';
 
 import * as fs_ from 'fs';
 import { EOL } from 'os';
 
-import * as util from './util';
 import * as fs from './fs';
 import * as rt from './request-type';
+import * as util from './util';
 
 import { LanguageHandler } from './lang-handler';
 
@@ -38,30 +38,30 @@ export function newConnection(input: NodeJS.ReadableStream, output: NodeJS.Writa
 
 	const reader = new StreamMessageReader(input);
 
-	var logger: fs_.WriteStream = null;
+	let logger: fs_.WriteStream = null;
 	if (trace.trace && trace.logfile) {
 		try {
-			logger = fs_.createWriteStream(trace.logfile, { 'flags': 'a', encoding: 'utf-8' });
+			logger = fs_.createWriteStream(trace.logfile, { flags: 'a', encoding: 'utf-8' });
 		} catch (e) {
 			console.error('Unable to initialize logger', e);
 		}
 	}
 
-	const _listen = reader.listen.bind(reader);
-	reader.listen = function (callback: DataCallback): void {
+	const listen = reader.listen.bind(reader);
+	reader.listen = (callback: DataCallback) => {
 		const tracer = (message: Message): void => {
 			doTrace(message, trace, logger, '-->');
 			callback(message);
 		};
-		_listen(tracer);
+		listen(tracer);
 	};
 
 	const writer = new StreamMessageWriter(output);
-	const _write = writer.write.bind(writer);
-	writer.write = function (message: Message) {
+	const write = writer.write.bind(writer);
+	writer.write = (message: Message) => {
 		doTrace(message, trace, logger, '<--');
-		_write(message);
-	}
+		write(message);
+	};
 
 	const connection = createConnection(reader, writer);
 
@@ -92,32 +92,32 @@ export function registerLanguageHandler(connection: IConnection, strict: boolean
 	});
 
 	connection.onShutdown(() => {
-		handler.shutdown().catch((e) => {
-			console.error("shutdown failed:", e);
+		handler.shutdown().catch(e => {
+			console.error('shutdown failed:', e);
 		});
 	});
 
 	connection.onDidOpenTextDocument((params: DidOpenTextDocumentParams) => {
-		handler.didOpen(params).catch((e) => {
-			console.error("textDocument/didOpen failed:", e);
+		handler.didOpen(params).catch(e => {
+			console.error('textDocument/didOpen failed:', e);
 		});
 	});
 
 	connection.onDidChangeTextDocument((params: DidChangeTextDocumentParams) => {
-		handler.didChange(params).catch((e) => {
-			console.error("textDocument/didChange failed:", e);
+		handler.didChange(params).catch(e => {
+			console.error('textDocument/didChange failed:', e);
 		});
 	});
 
 	connection.onDidSaveTextDocument((params: DidSaveTextDocumentParams) => {
-		handler.didSave(params).catch((e) => {
-			console.error("textDocument/didSave failed:", e);
+		handler.didSave(params).catch(e => {
+			console.error('textDocument/didSave failed:', e);
 		});
 	});
 
 	connection.onDidCloseTextDocument((params: DidCloseTextDocumentParams) => {
-		handler.didClose(params).catch((e) => {
-			console.error("textDocument/didClose failed:", e);
+		handler.didClose(params).catch(e => {
+			console.error('textDocument/didClose failed:', e);
 		});
 	});
 

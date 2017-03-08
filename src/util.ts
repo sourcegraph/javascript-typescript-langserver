@@ -1,11 +1,11 @@
-import * as os from "os";
-import * as path from "path";
+import * as os from 'os';
+import * as path from 'path';
 
-import * as ts from "typescript";
-import { SymbolKind, Range, Position } from 'vscode-languageserver';
-import * as rt from "./request-type";
+import * as ts from 'typescript';
+import { Position, Range, SymbolKind } from 'vscode-languageserver';
+import * as rt from './request-type';
 
-var strict = false;
+let strict = false;
 
 /**
  * Toggles "strict" flag, affects how we are parsing/generating URLs.
@@ -16,7 +16,7 @@ export function setStrict(value: boolean) {
 }
 
 export function formEmptyRange(): Range {
-	return Range.create(Position.create(0, 0), Position.create(0, 0))
+	return Range.create(Position.create(0, 0), Position.create(0, 0));
 }
 
 export function formEmptyPosition(): Position {
@@ -24,7 +24,7 @@ export function formEmptyPosition(): Position {
 }
 
 export function formEmptyKind(): number {
-	return SymbolKind.Namespace
+	return SymbolKind.Namespace;
 }
 
 /**
@@ -43,33 +43,33 @@ export function normalizePath(file: string): string {
 
 export function convertStringtoSymbolKind(kind: string): SymbolKind {
 	switch (kind) {
-		case "file": return SymbolKind.File;
-		case "module": return SymbolKind.Module
-		case "namespace": return SymbolKind.Namespace
-		case "package": return SymbolKind.Package
-		case "class": return SymbolKind.Class
-		case "method": return SymbolKind.Method
-		case "property": return SymbolKind.Property
-		case "field": return SymbolKind.Field
-		case "constructor": return SymbolKind.Constructor
-		case "enum": return SymbolKind.Enum
-		case "interface": return SymbolKind.Interface
-		case "function": return SymbolKind.Function
-		case "variable": return SymbolKind.Variable
-		case "constant": return SymbolKind.Constant
-		case "string": return SymbolKind.String
-		case "number": return SymbolKind.Number
-		case "boolean": return SymbolKind.Boolean
-		case "array": return SymbolKind.Array
-		case "array": return SymbolKind.Array
-		case "sourcefile": return SymbolKind.File
-		default: return SymbolKind.String
+		case 'file': return SymbolKind.File;
+		case 'module': return SymbolKind.Module;
+		case 'namespace': return SymbolKind.Namespace;
+		case 'package': return SymbolKind.Package;
+		case 'class': return SymbolKind.Class;
+		case 'method': return SymbolKind.Method;
+		case 'property': return SymbolKind.Property;
+		case 'field': return SymbolKind.Field;
+		case 'constructor': return SymbolKind.Constructor;
+		case 'enum': return SymbolKind.Enum;
+		case 'interface': return SymbolKind.Interface;
+		case 'function': return SymbolKind.Function;
+		case 'variable': return SymbolKind.Variable;
+		case 'constant': return SymbolKind.Constant;
+		case 'string': return SymbolKind.String;
+		case 'number': return SymbolKind.Number;
+		case 'boolean': return SymbolKind.Boolean;
+		case 'array': return SymbolKind.Array;
+		case 'array': return SymbolKind.Array;
+		case 'sourcefile': return SymbolKind.File;
+		default: return SymbolKind.String;
 	}
 }
 
 export function path2uri(root: string, file: string): string {
 	let ret = 'file://';
-	if (!strict && process.platform == 'win32') {
+	if (!strict && process.platform === 'win32') {
 		ret += '/';
 	}
 	let p;
@@ -84,7 +84,7 @@ export function path2uri(root: string, file: string): string {
 export function uri2path(uri: string): string {
 	if (uri.startsWith('file://')) {
 		uri = uri.substring('file://'.length);
-		if (process.platform == 'win32') {
+		if (process.platform === 'win32') {
 			if (!strict) {
 				uri = uri.substring(1);
 			}
@@ -115,7 +115,7 @@ export function isLocalUri(uri: string): boolean {
 }
 
 export function resolve(root: string, file: string): string {
-	if (!strict || os.platform() != 'win32') {
+	if (!strict || os.platform() !== 'win32') {
 		return path.resolve(root, file);
 	} else {
 		return path.posix.resolve(root, file);
@@ -144,7 +144,7 @@ const globalTSPatterns = [
 	/(^|\/)globals?\.d\.ts$/,
 	/node_modules\/\@types\/node\/.*/,
 	/(^|\/)typings\/.*/,
-	/(^|\/)tsd\.d\.ts($|\/)/,
+	/(^|\/)tsd\.d\.ts($|\/)/
 ];
 
 // isGlobalTSFile returns whether or not the filename contains global
@@ -156,18 +156,18 @@ const globalTSPatterns = [
 export function isGlobalTSFile(filename: string): boolean {
 	for (const globalTSPattern of globalTSPatterns) {
 		if (globalTSPattern.test(filename)) {
-			return true
+			return true;
 		}
 	}
 	return false;
 }
 
 export function isDependencyFile(filename: string): boolean {
-	return filename.startsWith("node_modules/") || filename.indexOf("/node_modules/") !== -1;
+	return filename.startsWith('node_modules/') || filename.indexOf('/node_modules/') !== -1;
 }
 
 export function isDeclarationFile(filename: string): boolean {
-	return filename.endsWith(".d.ts");
+	return filename.endsWith('.d.ts');
 }
 
 /**
@@ -199,16 +199,16 @@ export function normalizeDir(dir: string) {
  */
 export function defInfoToSymbolDescriptor(d: ts.DefinitionInfo): rt.SymbolDescriptor {
 	return {
-		kind: d.kind || "",
-		name: stripQuotes(d.name) || "",
-		containerKind: d.containerKind || "",
-		containerName: (d.containerName ? lastDotCmp(stripQuotes(d.containerName)) : ""),
+		kind: d.kind || '',
+		name: stripQuotes(d.name) || '',
+		containerKind: d.containerKind || '',
+		containerName: (d.containerName ? lastDotCmp(stripQuotes(d.containerName)) : '')
 	};
 }
 
 export function symbolDescriptorMatch(query: rt.PartialSymbolDescriptor, sym: rt.SymbolDescriptor): boolean {
 	for (const key of Object.keys(query)) {
-		if ((<any>query)[key] === undefined) {
+		if ((<any> query)[key] === undefined) {
 			continue;
 		}
 		if (key === 'package') {
@@ -217,7 +217,7 @@ export function symbolDescriptorMatch(query: rt.PartialSymbolDescriptor, sym: rt
 			}
 			continue;
 		}
-		if ((<any>query)[key] !== (<any>sym)[key]) {
+		if ((<any> query)[key] !== (<any> sym)[key]) {
 			return false;
 		}
 	}
@@ -226,10 +226,10 @@ export function symbolDescriptorMatch(query: rt.PartialSymbolDescriptor, sym: rt
 
 function packageDescriptorMatch(query: rt.PackageDescriptor, sym: rt.PackageDescriptor): boolean {
 	for (const key of Object.keys(query)) {
-		if ((<any>query)[key] === undefined) {
+		if ((<any> query)[key] === undefined) {
 			continue;
 		}
-		if ((<any>query)[key] !== (<any>sym)[key]) {
+		if ((<any> query)[key] !== (<any> sym)[key]) {
 			return false;
 		}
 	}

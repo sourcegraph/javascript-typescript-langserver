@@ -2,6 +2,7 @@
  * This file contains subset of functions copied over from src/compiler/sys.ts and src/compiler/core.ts of microsoft/typescript.
  * The purpose is to expose `matchFiles` helper function
  */
+/* tslint:disable */
 
 export interface FileSystemEntries {
 	files: string[];
@@ -13,11 +14,9 @@ export function matchFiles(path: string, extensions: string[], excludes: string[
 	path = normalizePath(path);
 	currentDirectory = normalizePath(currentDirectory);
 
-
 	const patterns = getFileMatcherPatterns(path, extensions, excludes, includes, useCaseSensitiveFileNames, currentDirectory);
 
-
-	const regexFlag = useCaseSensitiveFileNames ? "" : "i";
+	const regexFlag = useCaseSensitiveFileNames ? '' : 'i';
 
 	const includeFileRegex = patterns.includeFilePattern && new RegExp(patterns.includeFilePattern, regexFlag);
 
@@ -54,7 +53,7 @@ export function matchFiles(path: string, extensions: string[], excludes: string[
 	}
 }
 
-const directorySeparator = "/";
+const directorySeparator = '/';
 
 function combinePaths(path1: string, path2: string) {
 	if (!(path1 && path1.length)) return path2;
@@ -84,9 +83,9 @@ function getFileMatcherPatterns(path: string, extensions: string[], excludes: st
 	const absolutePath = combinePaths(currentDirectory, path);
 
 	return {
-		includeFilePattern: getRegularExpressionForWildcard(includes, absolutePath, "files") || "",
-		includeDirectoryPattern: getRegularExpressionForWildcard(includes, absolutePath, "directories") || "",
-		excludePattern: getRegularExpressionForWildcard(excludes, absolutePath, "exclude") || "",
+		includeFilePattern: getRegularExpressionForWildcard(includes, absolutePath, 'files') || '',
+		includeDirectoryPattern: getRegularExpressionForWildcard(includes, absolutePath, 'directories') || '',
+		excludePattern: getRegularExpressionForWildcard(excludes, absolutePath, 'exclude') || '',
 		basePaths: getBasePaths(path, includes, useCaseSensitiveFileNames) || [],
 	};
 }
@@ -105,32 +104,32 @@ function fileExtensionIsAny(path: string, extensions: string[]): boolean {
 	return false;
 }
 
-function getRegularExpressionForWildcard(specs: string[], basePath: string, usage: "files" | "directories" | "exclude") {
+function getRegularExpressionForWildcard(specs: string[], basePath: string, usage: 'files' | 'directories' | 'exclude') {
 	if (specs === undefined || specs.length === 0) {
 		return undefined;
 	}
 
-	const replaceWildcardCharacter = usage === "files" ? replaceWildCardCharacterFiles : replaceWildCardCharacterOther;
-	const singleAsteriskRegexFragment = usage === "files" ? singleAsteriskRegexFragmentFiles : singleAsteriskRegexFragmentOther;
+	const replaceWildcardCharacter = usage === 'files' ? replaceWildCardCharacterFiles : replaceWildCardCharacterOther;
+	const singleAsteriskRegexFragment = usage === 'files' ? singleAsteriskRegexFragmentFiles : singleAsteriskRegexFragmentOther;
 
     /**
      * Regex for the ** wildcard. Matches any number of subdirectories. When used for including
      * files or directories, does not match subdirectories that start with a . character
      */
-	const doubleAsteriskRegexFragment = usage === "exclude" ? "(/.+?)?" : "(/[^/.][^/]*)*?";
+	const doubleAsteriskRegexFragment = usage === 'exclude' ? '(/.+?)?' : '(/[^/.][^/]*)*?';
 
-	let pattern = "";
+	let pattern = '';
 	let hasWrittenSubpattern = false;
 	spec: for (const spec of specs) {
 		if (!spec) {
 			continue;
 		}
 
-		let subpattern = "";
+		let subpattern = '';
 		let hasRecursiveDirectoryWildcard = false;
 		let hasWrittenComponent = false;
 		const components = getNormalizedPathComponents(spec, basePath);
-		if (usage !== "exclude" && components[components.length - 1] === "**") {
+		if (usage !== 'exclude' && components[components.length - 1] === '**') {
 			continue spec;
 		}
 
@@ -140,7 +139,7 @@ function getRegularExpressionForWildcard(specs: string[], basePath: string, usag
 
 		let optionalCount = 0;
 		for (let component of components) {
-			if (component === "**") {
+			if (component === '**') {
 				if (hasRecursiveDirectoryWildcard) {
 					continue spec;
 				}
@@ -150,8 +149,8 @@ function getRegularExpressionForWildcard(specs: string[], basePath: string, usag
 				hasWrittenComponent = true;
 			}
 			else {
-				if (usage === "directories") {
-					subpattern += "(";
+				if (usage === 'directories') {
+					subpattern += '(';
 					optionalCount++;
 				}
 
@@ -159,16 +158,16 @@ function getRegularExpressionForWildcard(specs: string[], basePath: string, usag
 					subpattern += directorySeparator;
 				}
 
-				if (usage !== "exclude") {
+				if (usage !== 'exclude') {
 					// The * and ? wildcards should not match directories or files that start with . if they
 					// appear first in a component. Dotted directories and files can be included explicitly
 					// like so: **/.*/.*
 					if (component.charCodeAt(0) === CharacterCodes.asterisk) {
-						subpattern += "([^./]" + singleAsteriskRegexFragment + ")?";
+						subpattern += '([^./]' + singleAsteriskRegexFragment + ')?';
 						component = component.substr(1);
 					}
 					else if (component.charCodeAt(0) === CharacterCodes.question) {
-						subpattern += "[^./]";
+						subpattern += '[^./]';
 						component = component.substr(1);
 					}
 				}
@@ -179,15 +178,15 @@ function getRegularExpressionForWildcard(specs: string[], basePath: string, usag
 		}
 
 		while (optionalCount > 0) {
-			subpattern += ")?";
+			subpattern += ')?';
 			optionalCount--;
 		}
 
 		if (hasWrittenSubpattern) {
-			pattern += "|";
+			pattern += '|';
 		}
 
-		pattern += "(" + subpattern + ")";
+		pattern += '(' + subpattern + ')';
 		hasWrittenSubpattern = true;
 	}
 
@@ -195,16 +194,15 @@ function getRegularExpressionForWildcard(specs: string[], basePath: string, usag
 		return undefined;
 	}
 
-	return "^(" + pattern + (usage === "exclude" ? ")($|/)" : ")$");
+	return '^(' + pattern + (usage === 'exclude' ? ')($|/)' : ')$');
 }
-
 
 function getRootLength(path: string): number {
 	if (path.charCodeAt(0) === CharacterCodes.slash) {
 		if (path.charCodeAt(1) !== CharacterCodes.slash) return 1;
-		const p1 = path.indexOf("/", 2);
+		const p1 = path.indexOf('/', 2);
 		if (p1 < 0) return 2;
-		const p2 = path.indexOf("/", p1 + 1);
+		const p2 = path.indexOf('/', p1 + 1);
 		if (p2 < 0) return p1 + 1;
 		return p2 + 1;
 	}
@@ -217,12 +215,12 @@ function getRootLength(path: string): number {
 	// however slash after the omitted <host> is not removed.
 	// file:///folder1/file1 - this is a correct URI
 	// file://folder2/file2 - this is an incorrect URI
-	if (path.lastIndexOf("file:///", 0) === 0) {
-		return "file:///".length;
+	if (path.lastIndexOf('file:///', 0) === 0) {
+		return 'file:///'.length;
 	}
-	const idx = path.indexOf("://");
+	const idx = path.indexOf('://');
 	if (idx !== -1) {
-		return idx + "://".length;
+		return idx + '://'.length;
 	}
 	return 0;
 }
@@ -231,8 +229,8 @@ function getNormalizedParts(normalizedSlashedPath: string, rootLength: number): 
 	const parts = normalizedSlashedPath.substr(rootLength).split(directorySeparator);
 	const normalized: string[] = [];
 	for (const part of parts) {
-		if (part !== ".") {
-			if (part === ".." && normalized.length > 0 && lastOrUndefined(normalized) !== "..") {
+		if (part !== '.') {
+			if (part === '..' && normalized.length > 0 && lastOrUndefined(normalized) !== '..') {
 				normalized.pop();
 			}
 			else {
@@ -261,7 +259,7 @@ function replaceWildCardCharacterOther(match: string) {
 }
 
 function replaceWildcardCharacter(match: string, singleAsteriskRegexFragment: string) {
-	return match === "*" ? singleAsteriskRegexFragment : match === "?" ? "[^/]" : "\\" + match;
+	return match === '*' ? singleAsteriskRegexFragment : match === '?' ? '[^/]' : '\\' + match;
 }
 
 function getBasePaths(path: string, includes: string[], useCaseSensitiveFileNames: boolean) {
@@ -315,7 +313,7 @@ function compareStrings(a: string, b: string, ignoreCase?: boolean): Comparison 
 	if (b === undefined) return Comparison.GreaterThan;
 	if (ignoreCase) {
 		if (String.prototype.localeCompare) {
-			const result = a.localeCompare(b, /*locales*/ undefined, { usage: "sort", sensitivity: "accent" });
+			const result = a.localeCompare(b, /*locales*/ undefined, { usage: 'sort', sensitivity: 'accent' });
 			return result < 0 ? Comparison.LessThan : result > 0 ? Comparison.GreaterThan : Comparison.EqualTo;
 		}
 
@@ -331,8 +329,8 @@ function compareStringsCaseInsensitive(a: string, b: string) {
 	return compareStrings(a, b, /*ignoreCase*/ true);
 }
 
-const singleAsteriskRegexFragmentFiles = "([^./]|(\\.(?!min\\.js$))?)*";
-const singleAsteriskRegexFragmentOther = "[^/]*";
+const singleAsteriskRegexFragmentFiles = '([^./]|(\\.(?!min\\.js$))?)*';
+const singleAsteriskRegexFragmentOther = '[^/]*';
 
 function getNormalizedPathComponents(path: string, currentDirectory: string) {
 	path = normalizeSlashes(path);
@@ -397,7 +395,7 @@ interface FileMatcherPatterns {
 const enum Comparison {
 	LessThan = -1,
 	EqualTo = 0,
-	GreaterThan = 1
+	GreaterThan = 1,
 }
 
 const enum CharacterCodes {
@@ -571,5 +569,5 @@ function contains<T>(array: T[], value: T): boolean {
 }
 
 function normalizeSlashes(path: string): string {
-	return path.replace(/\\/g, "/");
+	return path.replace(/\\/g, '/');
 }

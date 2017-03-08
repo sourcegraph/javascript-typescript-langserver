@@ -1,17 +1,17 @@
 import {
+	Definition,
+	DidChangeTextDocumentParams,
+	DidCloseTextDocumentParams,
+	DidOpenTextDocumentParams,
+	DidSaveTextDocumentParams,
+	DocumentSymbolParams,
+	Hover,
 	IConnection,
 	InitializeParams,
-	TextDocumentPositionParams,
-	Definition,
-	ReferenceParams,
 	Location,
-	Hover,
-	DocumentSymbolParams,
+	ReferenceParams,
 	SymbolInformation,
-	DidOpenTextDocumentParams,
-	DidCloseTextDocumentParams,
-	DidChangeTextDocumentParams,
-	DidSaveTextDocumentParams
+	TextDocumentPositionParams
 } from 'vscode-languageserver';
 
 import * as rt from './request-type';
@@ -73,7 +73,7 @@ export function registerMasterHandler(master: IConnection, lightWeight: IConnect
 
 	master.onDidOpenTextDocument((params: DidOpenTextDocumentParams) => {
 		for (const worker of [lightWeight, heavyDuty]) {
-			worker.sendNotification(rt.TextDocumentDidOpenNotification.type, params)
+			worker.sendNotification(rt.TextDocumentDidOpenNotification.type, params);
 		}
 	});
 

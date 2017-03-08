@@ -1,16 +1,16 @@
 import {
-	InitializeParams,
-	TextDocumentPositionParams,
-	ReferenceParams,
-	Location,
-	Hover,
-	DocumentSymbolParams,
-	SymbolInformation,
-	DidOpenTextDocumentParams,
-	DidCloseTextDocumentParams,
+	CompletionList,
 	DidChangeTextDocumentParams,
+	DidCloseTextDocumentParams,
+	DidOpenTextDocumentParams,
 	DidSaveTextDocumentParams,
-	CompletionList
+	DocumentSymbolParams,
+	Hover,
+	InitializeParams,
+	Location,
+	ReferenceParams,
+	SymbolInformation,
+	TextDocumentPositionParams
 } from 'vscode-languageserver';
 
 import { FileSystem } from './fs';
