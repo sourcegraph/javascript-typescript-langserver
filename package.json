@@ -26,8 +26,8 @@
   },
   "scripts": {
     "clean": "rimraf lib",
-    "cover": "nyc --silent --all --require source-map-support/register mocha --timeout 5000 --slow 2000 lib/test/**/*.js",
-    "test": "mocha --require source-map-support/register --timeout 5000 --slow 2000 lib/test/**/*.js",
+    "cover": "nyc --silent --all --require source-map-support/register mocha --timeout 7000 --slow 2000 lib/test/**/*.js",
+    "test": "mocha --require source-map-support/register --timeout 7000 --slow 2000 lib/test/**/*.js",
     "lint": "tslint -t msbuild -c tslint.json 'src/**/*.ts'",
     "build": "tsc",
     "watch": "tsc -w"
@@ -38,7 +38,7 @@
     "commander": "^2.9.0",
     "glob": "^7.1.1",
     "mz": "^2.6.0",
-    "typescript": "2.1.1",
+    "typescript": "2.2.1",
     "vscode-jsonrpc": "^3.1.0",
     "vscode-languageserver": "^3.1.0",
     "vscode-languageserver-types": "^3.0.3",
