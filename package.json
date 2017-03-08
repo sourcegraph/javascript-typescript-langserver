@@ -26,7 +26,7 @@
   },
   "scripts": {
     "clean": "rimraf lib",
-    "test": "mocha --require source-map-support/register --timeout 5000 --slow 2000 lib/test/**/*.js",
+    "test": "mocha --require source-map-support/register --timeout 7000 --slow 2000 lib/test/**/*.js",
     "lint": "tslint -t msbuild -c tslint.json 'src/**/*.ts'",
     "build": "tsc",
     "watch": "tsc -w"
