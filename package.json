@@ -62,10 +62,6 @@
     "tslint": "^4.5.1",
     "typescript-formatter": "^4.0.0"
   },
-  "files": [
-    "lib",
-    "bin/build"
-  ],
   "bin": {
     "javascript-typescript-langserver": "./lib/language-server.js",
     "javascript-typescript-stdio": "./lib/language-server-stdio.js"
