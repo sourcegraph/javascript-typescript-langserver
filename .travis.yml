@@ -9,4 +9,8 @@ cache:
 script:
   - yarn run lint
   - yarn run build
-  - yarn test
+  - yarn run cover
+
+after_success:
+  # Upload coverage to codecov
+  - 'nyc report --reporter=lcov > coverage.lcov && bash <(curl -s https://codecov.io/bash) -f coverage/lcov.info'
