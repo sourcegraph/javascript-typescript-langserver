@@ -80,7 +80,7 @@ export function describeTypeScriptService() {
 						},
 						end: {
 							line: 0,
-							character: 13
+							character: 9
 						}
 					}
 				}]);
@@ -112,11 +112,11 @@ export function describeTypeScriptService() {
 					range: {
 						start: {
 							line: 1,
-							character: 0
+							character: 13
 						},
 						end: {
 							line: 1,
-							character: 19
+							character: 16
 						}
 					}
 				}]);
@@ -143,7 +143,7 @@ export function describeTypeScriptService() {
 							},
 							end: {
 								line: 1,
-								character: 17
+								character: 8
 							}
 						}
 					},
@@ -175,7 +175,7 @@ export function describeTypeScriptService() {
 							},
 							end: {
 								line: 0,
-								character: 13
+								character: 9
 							}
 						}
 					},
@@ -306,11 +306,11 @@ export function describeTypeScriptService() {
 					range: {
 						start: {
 							line: 0,
-							character: 0
+							character: 15
 						},
 						end: {
 							line: 0,
-							character: 23
+							character: 20
 						}
 					}
 				}]);
@@ -331,11 +331,11 @@ export function describeTypeScriptService() {
 						range: {
 							start: {
 								line: 0,
-								character: 0
+								character: 15
 							},
 							end: {
 								line: 0,
-								character: 23
+								character: 20
 							}
 						}
 					}]);
@@ -355,11 +355,11 @@ export function describeTypeScriptService() {
 						range: {
 							start: {
 								line: 0,
-								character: 0
+								character: 15
 							},
 							end: {
 								line: 0,
-								character: 23
+								character: 20
 							}
 						}
 					}]);
@@ -390,11 +390,11 @@ export function describeTypeScriptService() {
 				range: {
 					start: {
 						line: 0,
-						character: 24
+						character: 34
 					},
 					end: {
 						line: 0,
-						character: 40
+						character: 36
 					}
 				}
 			}]);
@@ -1183,11 +1183,11 @@ export function describeTypeScriptService() {
 					range: {
 						start: {
 							line: 0,
-							character: 15
+							character: 32
 						},
 						end: {
 							line: 0,
-							character: 38
+							character: 35
 						}
 					}
 				}]);
@@ -1207,11 +1207,11 @@ export function describeTypeScriptService() {
 					range: {
 						start: {
 							line: 0,
-							character: 0
+							character: 16
 						},
 						end: {
 							line: 0,
-							character: 24
+							character: 19
 						}
 					}
 				}]);
@@ -1231,11 +1231,11 @@ export function describeTypeScriptService() {
 					range: {
 						start: {
 							line: 1,
-							character: 4
+							character: 21
 						},
 						end: {
-							line: 3,
-							character: 5
+							line: 1,
+							character: 24
 						}
 					}
 				}]);
@@ -1258,11 +1258,11 @@ export function describeTypeScriptService() {
 					range: {
 						start: {
 							line: 1,
-							character: 0
+							character: 17
 						},
 						end: {
 							line: 1,
-							character: 23
+							character: 20
 						}
 					}
 				}]);
@@ -1344,24 +1344,24 @@ export function describeTypeScriptService() {
 					uri: 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/lib.dom.d.ts',
 					range: {
 						start: {
-							line: 8750,
-							character: 0
+							line: 8248,
+							character: 10
 						},
 						end: {
-							line: 8800,
-							character: 1
+							line: 8248,
+							character: 14
 						}
 					}
 				}, {
 					uri: 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/lib.dom.d.ts',
 					range: {
 						start: {
-							line: 8802,
+							line: 8300,
 							character: 12
 						},
 						end: {
-							line: 8823,
-							character: 1
+							line: 8300,
+							character: 16
 						}
 					}
 				}]);
@@ -1383,7 +1383,7 @@ export function describeTypeScriptService() {
 						},
 						end: {
 							line: 24,
-							character: 25
+							character: 17
 						}
 					}
 				}]);

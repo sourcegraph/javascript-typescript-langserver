@@ -817,8 +817,8 @@ export class TypeScriptService implements LanguageHandler {
 				pushall(children, n.expression);
 				break;
 			}
-			case ts.SyntaxKind.SpreadElementExpression: {
-				const n = node as ts.SpreadElementExpression;
+			case ts.SyntaxKind.SpreadElement: {
+				const n = node as ts.SpreadElement;
 				children.push(n.expression);
 				break;
 			}
