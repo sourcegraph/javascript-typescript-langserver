@@ -4,7 +4,7 @@
   "author": "Sourcegraph",
   "version": "1.3.1",
   "license": "Apache-2.0",
-  "description": "A JavaScript/TypeScript analysis library that supports intelligent editor plugin operations like jump-to-def and find-refs. Implements the Language Server Protocol.",
+  "description": "Implementation of the Language Server Protocol for JavaScript and TypeScript",
   "keywords": [
     "LSP",
     "compiler",
@@ -26,6 +26,7 @@
   },
   "scripts": {
     "clean": "rimraf lib",
+    "cover": "nyc --silent --all --require source-map-support/register mocha --timeout 5000 --slow 2000 lib/test/**/*.js",
     "test": "mocha --require source-map-support/register --timeout 5000 --slow 2000 lib/test/**/*.js",
     "lint": "tslint -t msbuild -c tslint.json 'src/**/*.ts'",
     "build": "tsc",
@@ -55,6 +56,7 @@
     "chai": "^3.4.34",
     "chai-as-promised": "^6.0.0",
     "mocha": "^3.2.0",
+    "nyc": "^10.1.2",
     "rimraf": "^2.6.1",
     "sinon": "^1.17.7",
     "source-map-support": "^0.4.11",
@@ -65,5 +67,13 @@
   "bin": {
     "javascript-typescript-langserver": "./lib/language-server.js",
     "javascript-typescript-stdio": "./lib/language-server-stdio.js"
+  },
+  "nyc": {
+    "include": [
+      "lib/**/*.js"
+    ],
+    "exclude": [
+      "lib/test/**/*.js"
+    ]
   }
 }

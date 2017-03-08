@@ -2,5 +2,7 @@ node_modules/
 src/
 .idea/
 .vscode/
+.nyc_output/
+coverage/
 *.iml
 npm-debug.log
