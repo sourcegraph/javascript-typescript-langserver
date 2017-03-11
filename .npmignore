@@ -6,3 +6,4 @@ src/
 coverage/
 *.iml
 npm-debug.log
+yarn.lock
