@@ -1,5 +1,6 @@
 import * as path_ from 'path';
 import * as ts from 'typescript';
+import { CancellationToken } from 'vscode-jsonrpc';
 import {
 	CompletionItem,
 	CompletionItemKind,
@@ -10,7 +11,6 @@ import {
 	DidSaveTextDocumentParams,
 	DocumentSymbolParams,
 	Hover,
-	InitializeParams,
 	InitializeResult,
 	Location,
 	MarkedString,
@@ -22,6 +22,7 @@ import {
 } from 'vscode-languageserver';
 import {
 	DependencyReference,
+	InitializeParams,
 	PackageInformation,
 	PartialSymbolDescriptor,
 	ReferenceInformation,
@@ -33,11 +34,17 @@ import {
 
 import * as async from 'async';
 
-import * as FileSystem from './fs';
+import { FileSystem, LocalFileSystem, RemoteFileSystem } from './fs';
 import * as pm from './project-manager';
 import * as util from './util';
 
-import { LanguageHandler } from './lang-handler';
+import { isCancelledError } from './cancellation';
+import { LanguageClientHandler, LanguageHandler } from './lang-handler';
+
+export interface TypeScriptServiceOptions {
+	traceModuleResolution?: boolean;
+	strict?: boolean;
+}
 
 /**
  * TypeScriptService handles incoming requests and return
@@ -53,30 +60,33 @@ export class TypeScriptService implements LanguageHandler {
 	projectManager: pm.ProjectManager;
 	root: string;
 
-	private strict: boolean;
 	private emptyQueryWorkspaceSymbols: Promise<SymbolInformation[]>; // cached response for empty workspace/symbol query
-	private initialized: Promise<InitializeResult>;
 	private traceModuleResolution: boolean;
 
-	constructor(traceModuleResolution?: boolean) {
-		this.traceModuleResolution = traceModuleResolution || false;
-	}
+	protected fileSystem: FileSystem;
 
-	// TODO pass remoteFs and strict to constructor
-	initialize(params: InitializeParams, remoteFs: FileSystem.FileSystem, strict: boolean): Promise<InitializeResult> {
-		if (this.initialized) {
-			return this.initialized;
-		}
+	constructor(protected client: LanguageClientHandler, protected options: TypeScriptServiceOptions = {}) {}
+
+	async initialize(params: InitializeParams, token = CancellationToken.None): Promise<InitializeResult> {
 		if (params.rootUri || params.rootPath) {
 			this.root = params.rootPath || util.uri2path(params.rootUri);
-			this.strict = strict;
-			this.projectManager = new pm.ProjectManager(this.root, remoteFs, strict, this.traceModuleResolution);
+			if (params.capabilities.xcontentProvider && params.capabilities.xfilesProvider) {
+				this.fileSystem = new RemoteFileSystem(this.client);
+			} else {
+				this.fileSystem = new LocalFileSystem(util.uri2path(this.root));
+			}
+			await this.beforeProjectInit();
+			this.projectManager = new pm.ProjectManager(this.root, this.fileSystem, this.options.strict, this.traceModuleResolution);
 			// Pre-fetch files in the background
 			// TODO why does ensureAllFiles() fetch less files than ensureFilesForWorkspaceSymbol()?
 			//      (package.json is not fetched)
-			this.projectManager.ensureFilesForWorkspaceSymbol();
+			this.projectManager.ensureFilesForWorkspaceSymbol().catch(err => {
+				if (!isCancelledError(err)) {
+					console.error('Background fetching failed', err);
+				}
+			});
 		}
-		this.initialized = Promise.resolve({
+		return {
 			capabilities: {
 				// Tell the client that the server works in FULL text document sync mode
 				textDocumentSync: TextDocumentSyncKind.Full,
@@ -94,13 +104,21 @@ export class TypeScriptService implements LanguageHandler {
 				},
 				xpackagesProvider: true
 			}
-		});
-		return this.initialized;
+		};
 	}
 
-	shutdown(): Promise<void> { return Promise.resolve(); }
+	/**
+	 * Called before the ProjectManager is initialized, after the FileSystem was initialized
+	 */
+	protected async beforeProjectInit(): Promise<void> {
+		// To be overridden
+	}
 
-	async getDefinition(params: TextDocumentPositionParams): Promise<Location[]> {
+	async shutdown(): Promise<void> {
+		this.projectManager.dispose();
+	}
+
+	async getDefinition(params: TextDocumentPositionParams, token = CancellationToken.None): Promise<Location[]> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
@@ -135,7 +153,7 @@ export class TypeScriptService implements LanguageHandler {
 		return ret;
 	}
 
-	async getXdefinition(params: TextDocumentPositionParams): Promise<SymbolLocationInformation[]> {
+	async getXdefinition(params: TextDocumentPositionParams, token = CancellationToken.None): Promise<SymbolLocationInformation[]> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
@@ -174,7 +192,7 @@ export class TypeScriptService implements LanguageHandler {
 		return ret;
 	}
 
-	async getHover(params: TextDocumentPositionParams): Promise<Hover> {
+	async getHover(params: TextDocumentPositionParams, token = CancellationToken.None): Promise<Hover> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
@@ -207,7 +225,7 @@ export class TypeScriptService implements LanguageHandler {
 		return { contents, range: Range.create(start.line, start.character, end.line, end.character) };
 	}
 
-	async getReferences(params: ReferenceParams): Promise<Location[]> {
+	async getReferences(params: ReferenceParams, token = CancellationToken.None): Promise<Location[]> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
@@ -249,7 +267,7 @@ export class TypeScriptService implements LanguageHandler {
 		});
 	}
 
-	async getWorkspaceSymbols(params: WorkspaceSymbolParams): Promise<SymbolInformation[]> {
+	async getWorkspaceSymbols(params: WorkspaceSymbolParams, token = CancellationToken.None): Promise<SymbolInformation[]> {
 		const query = params.query;
 		const symQuery = params.symbol ? Object.assign({}, params.symbol) : undefined;
 		if (symQuery && symQuery.package) {
@@ -296,7 +314,7 @@ export class TypeScriptService implements LanguageHandler {
 		return (await itemsPromise).slice(0, limit);
 	}
 
-	async getWorkspaceSymbolsDefinitelyTyped(params: WorkspaceSymbolParams): Promise<SymbolInformation[] | null> {
+	async getWorkspaceSymbolsDefinitelyTyped(params: WorkspaceSymbolParams, token = CancellationToken.None): Promise<SymbolInformation[] | null> {
 		try {
 			await this.projectManager.ensureFiles(['/package.json']);
 		} catch (e) {
@@ -332,7 +350,7 @@ export class TypeScriptService implements LanguageHandler {
 		return (await itemsPromise).slice(0, params.limit);
 	}
 
-	async getDocumentSymbol(params: DocumentSymbolParams): Promise<SymbolInformation[]> {
+	async getDocumentSymbol(params: DocumentSymbolParams, token = CancellationToken.None): Promise<SymbolInformation[]> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		await this.projectManager.ensureFilesForHoverAndDefinition(uri);
 		const fileName = util.uri2path(uri);
@@ -349,7 +367,7 @@ export class TypeScriptService implements LanguageHandler {
 		return Promise.resolve(result);
 	}
 
-	async getWorkspaceReference(params: WorkspaceReferenceParams): Promise<ReferenceInformation[]> {
+	async getWorkspaceReference(params: WorkspaceReferenceParams, token = CancellationToken.None): Promise<ReferenceInformation[]> {
 		const refInfo: ReferenceInformation[] = [];
 
 		await this.projectManager.ensureAllFiles();
@@ -410,7 +428,7 @@ export class TypeScriptService implements LanguageHandler {
 		return refInfo;
 	}
 
-	async getPackages(): Promise<PackageInformation[]> {
+	async getPackages(params = {}, token = CancellationToken.None): Promise<PackageInformation[]> {
 		await this.projectManager.ensureModuleStructure();
 
 		const pkgFiles: string[] = [];
@@ -453,7 +471,7 @@ export class TypeScriptService implements LanguageHandler {
 		return pkgs;
 	}
 
-	async getDependencies(): Promise<DependencyReference[]> {
+	async getDependencies(params = {}, token = CancellationToken.None): Promise<DependencyReference[]> {
 		await this.projectManager.ensureModuleStructure();
 
 		const pkgFiles: string[] = [];
@@ -485,7 +503,7 @@ export class TypeScriptService implements LanguageHandler {
 		return deps;
 	}
 
-	async getCompletions(params: TextDocumentPositionParams): Promise<CompletionList> {
+	async getCompletions(params: TextDocumentPositionParams, token = CancellationToken.None): Promise<CompletionList> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;

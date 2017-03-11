@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { newConnection, registerLanguageHandler } from './connection';
+import { RemoteLanguageClient } from './lang-handler';
 import { TypeScriptService } from './typescript-service';
 import * as util from './util';
 
@@ -20,5 +21,7 @@ program
 
 util.setStrict(program.strict);
 const connection = newConnection(process.stdin, process.stdout, { trace: program.trace, logfile: program.logfile });
-registerLanguageHandler(connection, program.strict, new TypeScriptService());
+registerLanguageHandler(connection, new TypeScriptService(new RemoteLanguageClient(connection), {
+	strict: program.strict
+}));
 connection.listen();

@@ -1,10 +1,27 @@
 import * as vscode from 'vscode-languageserver';
 
+export interface InitializeParams extends vscode.InitializeParams {
+	capabilities: ClientCapabilities;
+}
+
+export interface ClientCapabilities {
+	xfilesProvider?: boolean;
+	xcontentProvider?: boolean;
+}
+
 export interface ServerCapabilities extends vscode.ServerCapabilities {
 	xworkspaceReferencesProvider?: boolean;
 	xdefinitionProvider?: boolean;
 	xdependenciesProvider?: boolean;
 	xpackagesProvider?: boolean;
+}
+
+export interface TextDocumentContentParams {
+	textDocument: vscode.TextDocumentIdentifier;
+}
+
+export interface WorkspaceFilesParams {
+	base?: string;
 }
 
 export interface SymbolDescriptor {

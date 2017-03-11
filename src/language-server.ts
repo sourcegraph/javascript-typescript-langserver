@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
-import * as server from './server';
-import { TypeScriptService } from './typescript-service';
+import { RemoteLanguageClient } from './lang-handler';
+import { serve, ServeOptions } from './server';
+import { TypeScriptService, TypeScriptServiceOptions } from './typescript-service';
 import * as util from './util';
 const program = require('commander');
 const packageJson = require('../package.json');
@@ -22,11 +23,11 @@ util.setStrict(program.strict);
 const lspPort = program.port || defaultLspPort;
 const clusterSize = program.cluster || numCPUs;
 
-const options: server.ServeOptions = {
+const options: ServeOptions & TypeScriptServiceOptions = {
 	clusterSize,
 	lspPort,
 	strict: program.strict,
 	trace: program.trace,
 	logfile: program.logfile
 };
-server.serve(options, () => new TypeScriptService());
+serve(options, connection => new TypeScriptService(new RemoteLanguageClient(connection), options));
