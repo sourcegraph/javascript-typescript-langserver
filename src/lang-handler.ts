@@ -1,3 +1,4 @@
+import { CancellationToken } from 'vscode-jsonrpc';
 import {
 	CompletionList,
 	DidChangeTextDocumentParams,
@@ -6,17 +7,27 @@ import {
 	DidSaveTextDocumentParams,
 	DocumentSymbolParams,
 	Hover,
+	IConnection,
 	InitializeParams,
 	InitializeResult,
 	Location,
 	ReferenceParams,
 	SymbolInformation,
+	TextDocumentIdentifier,
+	TextDocumentItem,
 	TextDocumentPositionParams
 } from 'vscode-languageserver';
 
-import { FileSystem } from './fs';
-
-import * as rt from './request-type';
+import {
+	DependencyReference,
+	PackageInformation,
+	ReferenceInformation,
+	SymbolLocationInformation,
+	TextDocumentContentParams,
+	WorkspaceFilesParams,
+	WorkspaceReferenceParams,
+	WorkspaceSymbolParams
+} from './request-type';
 
 /**
  * LanguageHandler handles LSP requests. It includes a handler method
@@ -25,20 +36,38 @@ import * as rt from './request-type';
  * registration method on IConnection.
  */
 export interface LanguageHandler {
-	initialize(params: InitializeParams, remoteFs: FileSystem, strict: boolean): Promise<InitializeResult>;
+	initialize(params: InitializeParams, token?: CancellationToken): Promise<InitializeResult>;
 	shutdown(): Promise<void>;
-	getDefinition(params: TextDocumentPositionParams): Promise<Location[]>;
-	getXdefinition(params: TextDocumentPositionParams): Promise<rt.SymbolLocationInformation[]>;
-	getHover(params: TextDocumentPositionParams): Promise<Hover>;
-	getReferences(params: ReferenceParams): Promise<Location[]>;
-	getWorkspaceSymbols(params: rt.WorkspaceSymbolParams): Promise<SymbolInformation[]>;
-	getDocumentSymbol(params: DocumentSymbolParams): Promise<SymbolInformation[]>;
-	getWorkspaceReference(params: rt.WorkspaceReferenceParams): Promise<rt.ReferenceInformation[]>;
-	getPackages(): Promise<rt.PackageInformation[]>;
-	getDependencies(): Promise<rt.DependencyReference[]>;
-	didOpen(params: DidOpenTextDocumentParams): Promise<void>;
-	didChange(params: DidChangeTextDocumentParams): Promise<void>;
-	didClose(params: DidCloseTextDocumentParams): Promise<void>;
-	didSave(params: DidSaveTextDocumentParams): Promise<void>;
-	getCompletions(params: TextDocumentPositionParams): Promise<CompletionList>;
+	getDefinition(params: TextDocumentPositionParams, token?: CancellationToken): Promise<Location[]>;
+	getXdefinition(params: TextDocumentPositionParams, token?: CancellationToken): Promise<SymbolLocationInformation[]>;
+	getHover(params: TextDocumentPositionParams, token?: CancellationToken): Promise<Hover>;
+	getReferences(params: ReferenceParams, token?: CancellationToken): Promise<Location[]>;
+	getWorkspaceSymbols(params: WorkspaceSymbolParams, token?: CancellationToken): Promise<SymbolInformation[]>;
+	getDocumentSymbol(params: DocumentSymbolParams, token?: CancellationToken): Promise<SymbolInformation[]>;
+	getWorkspaceReference(params: WorkspaceReferenceParams, token?: CancellationToken): Promise<ReferenceInformation[]>;
+	getPackages(params?: {}, token?: CancellationToken): Promise<PackageInformation[]>;
+	getDependencies(params?: {}, token?: CancellationToken): Promise<DependencyReference[]>;
+	didOpen(params: DidOpenTextDocumentParams, token?: CancellationToken): Promise<void>;
+	didChange(params: DidChangeTextDocumentParams, token?: CancellationToken): Promise<void>;
+	didClose(params: DidCloseTextDocumentParams, token?: CancellationToken): Promise<void>;
+	didSave(params: DidSaveTextDocumentParams, token?: CancellationToken): Promise<void>;
+	getCompletions(params: TextDocumentPositionParams, token?: CancellationToken): Promise<CompletionList>;
+}
+
+export interface LanguageClientHandler {
+	getTextDocumentContent(params: TextDocumentContentParams, token?: CancellationToken): Promise<TextDocumentItem>;
+	getWorkspaceFiles(params: WorkspaceFilesParams, token?: CancellationToken): Promise<TextDocumentIdentifier[]>;
+}
+
+export class RemoteLanguageClient implements LanguageClientHandler {
+
+	constructor(private connection: IConnection) {}
+
+	getTextDocumentContent(params: TextDocumentContentParams, token = CancellationToken.None): Promise<TextDocumentItem> {
+		return Promise.resolve(this.connection.sendRequest('textDocument/xcontent', params, token));
+	}
+
+	getWorkspaceFiles(params: WorkspaceFilesParams, token = CancellationToken.None): Promise<TextDocumentIdentifier[]> {
+		return Promise.resolve(this.connection.sendRequest('workspace/xfiles', params, token));
+	}
 }

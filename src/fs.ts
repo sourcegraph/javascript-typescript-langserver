@@ -1,9 +1,8 @@
-import { IConnection } from 'vscode-languageserver';
-
-import { TextDocumentIdentifier, TextDocumentItem } from 'vscode-languageserver-types';
-
 import * as fs from 'mz/fs';
 import * as path from 'path';
+import { CancellationToken } from 'vscode-jsonrpc';
+import { TextDocumentIdentifier } from 'vscode-languageserver-types';
+import { LanguageClientHandler } from './lang-handler';
 import glob = require('glob');
 import { path2uri, uri2path } from './util';
 
@@ -14,7 +13,7 @@ export interface FileSystem {
 	 * @param base A URI under which to search, resolved relative to the rootUri
 	 * @return A promise that is fulfilled with an array of URIs
 	 */
-	getWorkspaceFiles(base?: string): Promise<string[]>;
+	getWorkspaceFiles(base?: string, token?: CancellationToken): Promise<string[]>;
 
 	/**
 	 * Returns the content of a text document
@@ -22,27 +21,24 @@ export interface FileSystem {
 	 * @param uri The URI of the text document, resolved relative to the rootUri
 	 * @return A promise that is fulfilled with the text document content
 	 */
-	getTextDocumentContent(uri: string): Promise<string>;
+	getTextDocumentContent(uri: string, token?: CancellationToken): Promise<string>;
 }
 
 export class RemoteFileSystem implements FileSystem {
 
-	private connection: IConnection;
 	private workspaceFilesPromise?: Promise<string[]>;
 
-	constructor(connection: IConnection) {
-		this.connection = connection;
-	}
+	constructor(private client: LanguageClientHandler) {}
 
 	/**
 	 * The files request is sent from the server to the client to request a list of all files in the workspace or inside the directory of the base parameter, if given.
 	 * A language server can use the result to index files by filtering and doing a content request for each text document of interest.
 	 */
-	getWorkspaceFiles(base?: string): Promise<string[]> {
+	getWorkspaceFiles(base?: string, token = CancellationToken.None): Promise<string[]> {
 		// TODO cache this at a different layer and invalidate it properly
 		// This is just a quick and dirty solution to avoid multiple requests
 		if (!this.workspaceFilesPromise) {
-			this.workspaceFilesPromise = Promise.resolve(this.connection.sendRequest('workspace/xfiles', { base }))
+			this.workspaceFilesPromise = this.client.getWorkspaceFiles({ base }, token)
 				.then((textDocuments: TextDocumentIdentifier[]) => textDocuments.map(textDocument => textDocument.uri))
 				.catch(err => {
 					this.workspaceFilesPromise = undefined;
@@ -55,10 +51,8 @@ export class RemoteFileSystem implements FileSystem {
 	/**
 	 * The content request is sent from the server to the client to request the current content of any text document. This allows language servers to operate without accessing the file system directly.
 	 */
-	async getTextDocumentContent(uri: string): Promise<string> {
-		const textDocument = await this.connection.sendRequest<TextDocumentItem>('textDocument/xcontent', {
-			textDocument: { uri }
-		});
+	async getTextDocumentContent(uri: string, token = CancellationToken.None): Promise<string> {
+		const textDocument = await this.client.getTextDocumentContent({ textDocument: { uri } }, token);
 		return textDocument.text;
 	}
 }

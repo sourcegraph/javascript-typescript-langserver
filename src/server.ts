@@ -1,6 +1,7 @@
 import * as cluster from 'cluster';
 import * as net from 'net';
 
+import { IConnection } from 'vscode-languageserver';
 import { newConnection, registerLanguageHandler, TraceOptions } from './connection';
 import { LanguageHandler } from './lang-handler';
 
@@ -18,7 +19,6 @@ async function rewriteConsole() {
 export interface ServeOptions extends TraceOptions {
 	clusterSize: number;
 	lspPort: number;
-	strict?: boolean;
 	trace?: boolean;
 	logfile?: string;
 }
@@ -28,7 +28,7 @@ export interface ServeOptions extends TraceOptions {
  * cluster of worker processes to achieve some semblance of
  * parallelism.
  */
-export async function serve(options: ServeOptions, createLangHandler: () => LanguageHandler): Promise<void> {
+export async function serve(options: ServeOptions, createLangHandler: (connection: IConnection) => LanguageHandler): Promise<void> {
 	rewriteConsole();
 
 	if (options.clusterSize > 1 && cluster.isMaster) {
@@ -45,19 +45,21 @@ export async function serve(options: ServeOptions, createLangHandler: () => Lang
 		}
 	} else {
 		console.error('Listening for incoming LSP connections on', options.lspPort);
+		let counter = 1;
 		let server = net.createServer(socket => {
-			console.error('Connection accepted');
+			const id = counter++;
+			console.error(`Connection ${id} accepted`);
 			// This connection listens on the socket
 			const connection = newConnection(socket, socket, options);
 
 			// Override the default exit notification handler so the process is not killed
 			connection.onNotification('exit', () => {
-				console.error('Exit notification, closing socket');
 				socket.end();
 				socket.destroy();
+				console.error(`Connection ${id} closed (exit notification)`);
 			});
 
-			registerLanguageHandler(connection, options.strict, createLangHandler());
+			registerLanguageHandler(connection, createLangHandler(connection));
 
 			connection.listen();
 		});

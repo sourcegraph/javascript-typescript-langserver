@@ -5,6 +5,10 @@ import * as path_ from 'path';
 import * as ts from 'typescript';
 
 import * as bluebird from 'bluebird';
+import { memoize } from 'lodash';
+import { CancellationToken, CancellationTokenSource } from 'vscode-jsonrpc';
+import { Disposable } from 'vscode-languageserver';
+import { throwIfRequested } from './cancellation';
 import * as FileSystem from './fs';
 import * as match from './match-files';
 import * as util from './util';
@@ -16,8 +20,12 @@ import * as util from './util';
  * they are added on demand - current file for hover or definition, project's files for references and
  * all files from all projects for workspace symbols.
  */
-export class ProjectManager {
+export class ProjectManager implements Disposable {
 
+	/**
+	 * Cancellations to do when the object is disposed
+	 */
+	private cancellationSources = new Set<CancellationTokenSource>();
 	private root: string;
 	private configs: Map<string, ProjectConfiguration>;
 	private strict: boolean;
@@ -42,7 +50,6 @@ export class ProjectManager {
 	private ensuredModuleStructure?: Promise<void>;
 	private ensuredFilesForHoverAndDefinition = new Map<string, Promise<void>>();
 	private ensuredAllFiles?: Promise<void>;
-	private ensuredFilesForWorkspaceSymbol?: Promise<void>;
 
 	constructor(root: string, remoteFs: FileSystem.FileSystem, strict: boolean, traceModuleResolution?: boolean) {
 		this.root = util.normalizePath(root);
@@ -53,6 +60,15 @@ export class ProjectManager {
 		this.remoteFs = remoteFs;
 		this.strict = strict;
 		this.traceModuleResolution = traceModuleResolution || false;
+	}
+
+	/**
+	 * Disposes the object and cancels any asynchronous operations that are still active
+	 */
+	dispose(): void {
+		for (const source of this.cancellationSources) {
+			source.cancel();
+		}
 	}
 
 	getRemoteRoot(): string {
@@ -165,30 +181,31 @@ export class ProjectManager {
 		return promise;
 	}
 
-	ensureFilesForWorkspaceSymbol(): Promise<void> {
-		if (this.ensuredFilesForWorkspaceSymbol) {
-			return this.ensuredFilesForWorkspaceSymbol;
-		}
-
-		const promise = this.remoteFs.getWorkspaceFiles(util.path2uri('', this.getRemoteRoot()))
-			.then(uris => uris
-				.map(uri => util.uri2path(uri))
-				.filter(file =>
+	/**
+	 * Ensures all files needed for a workspace/symbol request are available in memory.
+	 * This includes all js/ts files, tsconfig files and package.json files.
+	 * It excludes files in node_modules.
+	 */
+	ensureFilesForWorkspaceSymbol = memoize(async (): Promise<void> => {
+		try {
+			const uris = await this.remoteFs.getWorkspaceFiles(util.path2uri('', this.getRemoteRoot()));
+			const filesToEnsure = [];
+			for (const uri of uris) {
+				const file = util.uri2path(uri);
+				if (
 					util.normalizePath(file).indexOf('/node_modules/') === -1
 					&& (util.isJSTSFile(file) || util.isConfigFile(file) || util.isPackageJsonFile(file))
-				)
-			)
-			.then(filesToEnsure => this.ensureFiles(filesToEnsure))
-			.then(() => this.refreshConfigurations());
-
-		this.ensuredFilesForWorkspaceSymbol = promise;
-		promise.catch(err => {
-			console.error('Failed to fetch files for workspace/symbol:', err);
-			this.ensuredFilesForWorkspaceSymbol = undefined;
-		});
-
-		return promise;
-	}
+				) {
+					filesToEnsure.push(file);
+				}
+			}
+			await this.ensureFiles(filesToEnsure);
+			await this.refreshConfigurations();
+		} catch (e) {
+			(this.ensureFilesForWorkspaceSymbol.cache as Map<undefined, Promise<void>>).clear();
+			throw e;
+		}
+	});
 
 	ensureAllFiles(): Promise<void> {
 		if (this.ensuredAllFiles) {
@@ -331,25 +348,38 @@ export class ProjectManager {
 	 *
 	 * @param files File paths
 	 */
-	async ensureFiles(files: string[]): Promise<void> {
-
-		// Only fetch files that are not already fetched
-		files = files.filter(file => !this.fetched.has(file));
-
-		await bluebird.map(files, async path => {
-			try {
-				const content = await this.remoteFs.getTextDocumentContent(util.path2uri('', path));
-				const relativePath = path_.posix.relative(this.root, path);
-				this.localFs.addFile(relativePath, content);
-				this.fetched.add(util.normalizePath(path));
-			} catch (e) {
-				console.error(e);
-			}
-		}, {
-			// There may be too many open files when working with local FS and trying
-			// to open them in parallel, so limit concurrent readFile calls to 100
-			concurrency: 100
-		});
+	async ensureFiles(files: string[], token: CancellationToken = CancellationToken.None): Promise<void> {
+		const source = new CancellationTokenSource();
+		token.onCancellationRequested(() => source.cancel());
+		this.cancellationSources.add(source);
+		token = source.token;
+		try {
+			await bluebird.map(files, async path => {
+				throwIfRequested(token);
+				// Only fetch files that are not already fetched
+				if (this.fetched.has(path)) {
+					return;
+				}
+				try {
+					const content = await this.remoteFs.getTextDocumentContent(util.path2uri('', path), token);
+					const relativePath = path_.posix.relative(this.root, path);
+					this.localFs.addFile(relativePath, content);
+					this.fetched.add(util.normalizePath(path));
+				} catch (e) {
+					// if cancellation was requested, break out of the loop
+					throwIfRequested(token);
+					// else log error and continue
+					console.error(`Ensuring file ${path} failed`, e);
+				}
+			}, {
+				// There may be too many open files when working with local FS and trying
+				// to open them in parallel, so limit concurrent readFile calls to 100
+				// TODO only do this when working with localFs?
+				concurrency: 100
+			});
+		} finally {
+			this.cancellationSources.delete(source);
+		}
 	}
 
 	/**
