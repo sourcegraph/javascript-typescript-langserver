@@ -28,9 +28,9 @@ export class ProjectManager implements Disposable {
 	private cancellationSources = new Set<CancellationTokenSource>();
 
 	/**
-	 * Root URI (as passed to `initialize` request)
+	 * Root path (as passed to `initialize` request)
 	 */
-	private root: string;
+	private rootPath: string;
 
 	/**
 	 * Workspace subtree (folder) -> JS/TS configuration mapping.
@@ -95,15 +95,15 @@ export class ProjectManager implements Disposable {
 	private ensuredAllFiles?: Promise<void>;
 
 	/**
-	 * @param root root URI as passed to `initialize`
+	 * @param rootPath root path as passed to `initialize`
 	 * @param remoteFS remote side of file content provider, used to fetch content from on demand
 	 * @param strict indicates if we are working in strict mode (VFS) or with a local file system
 	 * @param traceModuleResolution allows to enable module resolution tracing (done by TS compiler)
 	 */
-	constructor(root: string, remoteFs: FileSystem.FileSystem, strict: boolean, traceModuleResolution?: boolean) {
-		this.root = util.normalizePath(root);
+	constructor(rootPath: string, remoteFs: FileSystem.FileSystem, strict: boolean, traceModuleResolution?: boolean) {
+		this.rootPath = util.normalizePath(rootPath);
 		this.configs = new Map<string, ProjectConfiguration>();
-		this.localFs = new InMemoryFileSystem(this.root);
+		this.localFs = new InMemoryFileSystem(this.rootPath);
 		this.versions = new Map<string, number>();
 		this.fetched = new Set<string>();
 		this.remoteFs = remoteFs;
@@ -121,10 +121,10 @@ export class ProjectManager implements Disposable {
 	}
 
 	/**
-	 * @return root URI (as passed to `initialize`)
+	 * @return root path (as passed to `initialize`)
 	 */
 	getRemoteRoot(): string {
-		return this.root;
+		return this.rootPath;
 	}
 
 	/**
@@ -135,10 +135,10 @@ export class ProjectManager implements Disposable {
 	}
 
 	/**
-	 * @return true if there is a fetched file with a given name
+	 * @return true if there is a fetched file with a given path
 	 */
-	hasFile(name: string) {
-		return this.localFs.fileExists(name);
+	hasFile(filePath: string) {
+		return this.localFs.fileExists(filePath);
 	}
 
 	/**
@@ -164,7 +164,7 @@ export class ProjectManager implements Disposable {
 	 */
 	ensureModuleStructure(): Promise<void> {
 		if (!this.ensuredModuleStructure) {
-			this.ensuredModuleStructure = this.refreshFileTree(this.root, true).then(() => {
+			this.ensuredModuleStructure = this.refreshFileTree(this.rootPath, true).then(() => {
 				this.refreshConfigurations();
 			});
 			this.ensuredModuleStructure.catch(err => {
@@ -187,17 +187,17 @@ export class ProjectManager implements Disposable {
 	 * the remote filesystem structure after initialization. If such changes are made, it is
 	 * necessary to call this method to alert the ProjectManager instance of the change.
 	 *
-	 * @param root root URI
+	 * @param rootPath root path
 	 * @param moduleStructureOnly indicates if we need to fetch only configuration files such as tsconfig.json,
 	 * jsconfig.json or package.json (otherwise we want to fetch them plus source files)
 	 */
-	async refreshFileTree(root: string, moduleStructureOnly: boolean): Promise<void> {
-		root = util.normalizeDir(root);
+	async refreshFileTree(rootPath: string, moduleStructureOnly: boolean): Promise<void> {
+		rootPath = util.normalizeDir(rootPath);
 		const filesToFetch: string[] = [];
-		const uris = await this.remoteFs.getWorkspaceFiles(util.path2uri('', root));
+		const uris = await this.remoteFs.getWorkspaceFiles(util.path2uri('', rootPath));
 		for (const uri of uris) {
 			const file = util.uri2path(uri);
-			const rel = path_.posix.relative(this.root, util.normalizePath(file));
+			const rel = path_.posix.relative(this.rootPath, util.normalizePath(file));
 			if (!moduleStructureOnly || util.isGlobalTSFile(rel) || util.isConfigFile(rel) || util.isPackageJsonFile(rel)) {
 				filesToFetch.push(file);
 			} else if (!this.localFs.fileExists(rel)) {
@@ -215,7 +215,7 @@ export class ProjectManager implements Disposable {
 		for (let [dir, config] of this.configs) {
 			dir = util.normalizeDir(dir);
 
-			if (dir.startsWith(root + '/') || root.startsWith(dir + '/') || root === dir) {
+			if (dir.startsWith(rootPath + '/') || rootPath.startsWith(dir + '/') || rootPath === dir) {
 				config.reset();
 			}
 		}
@@ -341,7 +341,7 @@ export class ProjectManager implements Disposable {
 		}
 		fileNames.forEach(f => seen.add(f));
 
-		const absFileNames = fileNames.map(f => util.normalizePath(util.resolve(this.root, f)));
+		const absFileNames = fileNames.map(f => util.normalizePath(util.resolve(this.rootPath, f)));
 		await this.ensureFiles(absFileNames);
 
 		if (maxDepth > 0) {
@@ -368,8 +368,8 @@ export class ProjectManager implements Disposable {
 					// Resolving triple slash references relative to current file
 					// instead of using module resolution host because it behaves
 					// differently in "nodejs" mode
-					const refFileName = util.normalizePath(path_.relative(this.root,
-						resolver.resolve(this.root,
+					const refFileName = util.normalizePath(path_.relative(this.rootPath,
+						resolver.resolve(this.rootPath,
 							resolver.dirname(fileName),
 							ref.fileName)));
 					importFiles.add(refFileName);
@@ -380,13 +380,13 @@ export class ProjectManager implements Disposable {
 	}
 
 	/**
-	 * @param fileName source file path
+	 * @param filePath source file path
 	 * @return project configuration for a given source file. Climbs directory tree up to workspace root if needed
 	 */
-	getConfiguration(fileName: string): ProjectConfiguration {
-		let dir = fileName;
+	getConfiguration(filePath: string): ProjectConfiguration {
+		let dir = filePath;
 		let config;
-		while (dir && dir !== this.root) {
+		while (dir && dir !== this.rootPath) {
 			config = this.configs.get(dir);
 			if (config) {
 				return config;
@@ -478,7 +478,7 @@ export class ProjectManager implements Disposable {
 				}
 				try {
 					const content = await this.remoteFs.getTextDocumentContent(util.path2uri('', path), token);
-					const relativePath = path_.posix.relative(this.root, path);
+					const relativePath = path_.posix.relative(this.rootPath, path);
 					this.localFs.addFile(relativePath, content);
 					this.fetched.add(util.normalizePath(path));
 				} catch (e) {
@@ -674,19 +674,27 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 const localFSPlaceholder = 'var dummy_0ff1bd;';
 
 /**
+ * In-memory file cache node which represents either a folder or a file
+ */
+export interface FileSystemNode {
+	file: boolean;
+	children: {[directory: string]: FileSystemNode};
+};
+
+/**
  * In-memory file system, can be served as a ParseConfigHost (thus allowing listing files that belong to project based on tsconfig.json options)
  */
 export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResolutionHost {
 
 	/**
-	 * It's actually a map (filepath -> string content) of files fetched from the remote file system
+	 * Map (filepath -> string content) of files fetched from the remote file system. Paths are relative to `this.path`
 	 */
-	entries: any;
+	entries: { [filePath: string]: string };
 
 	/**
-	 * It's actually a map (filepath -> string content) of temporary files made while user modifies local file(s)
+	 * Map (filepath -> string content) of temporary files made while user modifies local file(s).  Paths are relative to `this.path`
 	 */
-	overlay: any;
+	overlay: { [filePath: string]: string };
 
 	/**
 	 * Should we take into account register when performing a file name match or not. On Windows when using local file system, file names are case-insensitive
@@ -694,21 +702,20 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	useCaseSensitiveFileNames: boolean;
 
 	/**
-	 * Root URI
+	 * Root path
 	 */
 	path: string;
 
 	/**
-	 * It's a tree node where properties point to either a file (typeof node[p] == "string") or to a sub-tree.
-	 * We are using it when TS service scans for source files that making some project
+	 * File tree root
 	 */
-	rootNode: any;
+	rootNode: FileSystemNode;
 
 	constructor(path: string) {
 		this.path = path;
 		this.entries = {};
 		this.overlay = {};
-		this.rootNode = {};
+		this.rootNode = {file: false, children: {}};
 	}
 
 	/**
@@ -720,10 +727,14 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 		this.entries[path] = content;
 		let node = this.rootNode;
 		path.split('/').forEach((component, i, components) => {
-			const n = node[component];
+			const n = node.children[component];
 			if (!n) {
-				node[component] = (i === components.length - 1) ? '*' : {};
-				node = node[component];
+				if (i < components.length - 1) {
+					node.children[component] = {file: false, children: {}};
+					node = node.children[component];
+				} else {
+					node.children[component] = {file: true, children: {}};
+				}
 			} else {
 				node = n;
 			}
@@ -806,15 +817,15 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 		const components = path.split('/').filter(c => c);
 		if (components.length !== 1 || components[0]) {
 			for (const component of components) {
-				const n = node[component];
+				const n = node.children[component];
 				if (!n) {
 					return ret;
 				}
 				node = n;
 			}
 		}
-		Object.keys(node).forEach(name => {
-			if (typeof node[name] === 'string') {
+		Object.keys(node.children).forEach(name => {
+			if (node.children[name].file) {
 				ret.files.push(name);
 			} else {
 				ret.directories.push(name);
