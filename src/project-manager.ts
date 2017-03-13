@@ -26,15 +26,44 @@ export class ProjectManager implements Disposable {
 	 * Cancellations to do when the object is disposed
 	 */
 	private cancellationSources = new Set<CancellationTokenSource>();
+
+	/**
+	 * Root URI (as passed to `initialize` request)
+	 */
 	private root: string;
+
+	/**
+	 * Workspace subtree (folder) -> JS/TS configuration mapping.
+	 * Configuration settings for a source file A are located in the closest parent folder of A
+	 */
 	private configs: Map<string, ProjectConfiguration>;
+
+	/**
+	 * When on, indicates that client is responsible to provide file content (VFS),
+	 * otherwise we are working with a local file system
+	 */
 	private strict: boolean;
 
+    /**
+     * Remote side of file content provider which may point to either a client (strict mode) or
+     * to a local file system
+     */
 	private remoteFs: FileSystem.FileSystem;
+
+	/**
+	 * Local side of file content provider which keeps cache of fetched files
+	 */
 	private localFs: InMemoryFileSystem;
 
+	/**
+	 * URI -> version map. Every time file content is about to change or changed (didChange/didOpen/...), we are incrementing it's version
+	 * signalling that file is changed and file's user must invalidate cached and requery file content
+	 */
 	private versions: Map<string, number>;
 
+	/**
+	 * Enables module resolution tracing by TS compiler
+	 */
 	private traceModuleResolution: boolean;
 
 	/**
@@ -47,10 +76,30 @@ export class ProjectManager implements Disposable {
 	 */
 	private fetched: Set<string>;
 
+	/**
+	 * Flag indicating that we fetched module struture (tsconfig.json, jsconfig.json, package.json files) from the remote file system.
+	 * Without having this information we won't be able to split workspace to sub-projects
+	 */
 	private ensuredModuleStructure?: Promise<void>;
+
+	/**
+	 * Tracks if source file denoted by the given URI is fetched from remote file system and available locally.
+	 * For hover or definition we only need a single file (and maybe its transitive includes/references as reported by TS compiler).
+	 * This map prevents fetching of file content from remote filesystem twice
+	 */
 	private ensuredFilesForHoverAndDefinition = new Map<string, Promise<void>>();
+
+	/**
+	 * For references/symbols we need all the source files making workspace so this flag tracks if we already did it
+	 */
 	private ensuredAllFiles?: Promise<void>;
 
+	/**
+	 * @param root root URI as passed to `initialize`
+	 * @param remoteFS remote side of file content provider, used to fetch content from on demand
+	 * @param strict indicates if we are working in strict mode (VFS) or with a local file system
+	 * @param traceModuleResolution allows to enable module resolution tracing (done by TS compiler)
+	 */
 	constructor(root: string, remoteFs: FileSystem.FileSystem, strict: boolean, traceModuleResolution?: boolean) {
 		this.root = util.normalizePath(root);
 		this.configs = new Map<string, ProjectConfiguration>();
@@ -71,23 +120,31 @@ export class ProjectManager implements Disposable {
 		}
 	}
 
+	/**
+	 * @return root URI (as passed to `initialize`)
+	 */
 	getRemoteRoot(): string {
 		return this.root;
 	}
 
+	/**
+	 * @return local side of file content provider which keeps cached copies of fethed files
+	 */
 	getFs(): InMemoryFileSystem {
 		return this.localFs;
 	}
 
 	/**
-	 * @return true if there is a file with a given name
+	 * @return true if there is a fetched file with a given name
 	 */
 	hasFile(name: string) {
 		return this.localFs.fileExists(name);
 	}
 
 	/**
-	 * @return all projects
+	 * @return all sub-projects we have identified for a given workspace.
+	 * Sub-project is mainly a folder which contains tsconfig.json, jsconfig.json, package.json,
+	 * or a root folder which serves as a fallback
 	 */
 	getConfigurations(): ProjectConfiguration[] {
 		const ret: ProjectConfiguration[] = [];
@@ -129,6 +186,10 @@ export class ProjectManager implements Disposable {
 	 * This method is public because a ProjectManager instance assumes there are no changes made to
 	 * the remote filesystem structure after initialization. If such changes are made, it is
 	 * necessary to call this method to alert the ProjectManager instance of the change.
+	 *
+	 * @param root root URI
+	 * @param moduleStructureOnly indicates if we need to fetch only configuration files such as tsconfig.json,
+	 * jsconfig.json or package.json (otherwise we want to fetch them plus source files)
 	 */
 	async refreshFileTree(root: string, moduleStructureOnly: boolean): Promise<void> {
 		root = util.normalizeDir(root);
@@ -160,6 +221,16 @@ export class ProjectManager implements Disposable {
 		}
 	}
 
+    /**
+     * Ensures that all the files needed to produce hover and definitions for a given
+     * source file URI were fetched from the remote file system. Set of the needed files includes:
+     * - file itself
+     * - file's includes and dependencies (transitive) reported by TS compiler up to depth 30
+     * There is no need to fetch/parse/compile all the workspace files to produce hover of a symbol in the file F because
+     * definition of this symbol must be in one of files references by F or its dependencies
+     *
+     * @param uri target file URI
+     */
 	ensureFilesForHoverAndDefinition(uri: string): Promise<void> {
 		const existing = this.ensuredFilesForHoverAndDefinition.get(uri);
 		if (existing) {
@@ -185,6 +256,7 @@ export class ProjectManager implements Disposable {
 	 * Ensures all files needed for a workspace/symbol request are available in memory.
 	 * This includes all js/ts files, tsconfig files and package.json files.
 	 * It excludes files in node_modules.
+	 * Invalidates project configurations after execution
 	 */
 	ensureFilesForWorkspaceSymbol = memoize(async (): Promise<void> => {
 		try {
@@ -207,6 +279,10 @@ export class ProjectManager implements Disposable {
 		}
 	});
 
+	/**
+	 * Ensures all files were fetched from the remote file system.
+	 * Invalidates project configurations after execution
+	 */
 	ensureAllFiles(): Promise<void> {
 		if (this.ensuredAllFiles) {
 			return this.ensuredAllFiles;
@@ -229,6 +305,13 @@ export class ProjectManager implements Disposable {
 		return promise;
 	}
 
+	/**
+	 * Ensures that we have all the files needed to retrieve all the references to a symbol in the given file.
+	 * Pretty much it's the same set of files needed to produce workspace symbols unless file is located in `node_modules`
+	 * in which case we need to fetch the whole tree
+	 *
+	 * @param uri target file URI
+	 */
 	ensureFilesForReferences(uri: string): Promise<void> {
 		const fileName: string = util.uri2path(uri);
 		if (util.normalizePath(fileName).indexOf(`${path_.posix.sep}node_modules${path_.posix.sep}`) !== -1) {
@@ -238,6 +321,19 @@ export class ProjectManager implements Disposable {
 		return this.ensureAllFiles();
 	}
 
+	/**
+	 * Recursively collects file(s) dependencies up to given level.
+	 * Dependencies are extracted by TS compiler from import and reference statements
+	 *
+	 * Dependencies include:
+	 * - all the configuration files
+	 * - files referenced by the given file
+	 * - files included by the given file
+	 *
+	 * @param fileNames files to process
+	 * @param maxDepth stop collecting when reached given recursion level
+	 * @param seen tracks visited files to avoid cycles
+	 */
 	private async ensureTransitiveFileDependencies(fileNames: string[], maxDepth: number, seen: Set<string>): Promise<void> {
 		fileNames = fileNames.filter(f => !seen.has(f));
 		if (fileNames.length === 0) {
@@ -284,6 +380,7 @@ export class ProjectManager implements Disposable {
 	}
 
 	/**
+	 * @param fileName source file path
 	 * @return project configuration for a given source file. Climbs directory tree up to workspace root if needed
 	 */
 	getConfiguration(fileName: string): ProjectConfiguration {
@@ -306,10 +403,20 @@ export class ProjectManager implements Disposable {
 		throw new Error('unreachable');
 	}
 
+	/**
+	 * Called when file was opened by client. Current implementation
+	 * does not differenciates open and change events
+	 * @param fileName path to a file
+	 * @param text file's content
+	 */
 	didOpen(fileName: string, text: string) {
 		this.didChange(fileName, text);
 	}
 
+	/**
+	 * Called when file was closed by client. Current implementation invalidates compiled version
+	 * @param fileName path to a file
+	 */
 	didClose(fileName: string) {
 		this.localFs.didClose(fileName);
 		let version = this.versions.get(fileName) || 0;
@@ -321,6 +428,11 @@ export class ProjectManager implements Disposable {
 		});
 	}
 
+	/**
+	 * Called when file was changed by client. Current implementation invalidates compiled version
+	 * @param fileName path to a file
+	 * @param text file's content
+	 */
 	didChange(fileName: string, text: string) {
 		this.localFs.didChange(fileName, text);
 		let version = this.versions.get(fileName) || 0;
@@ -332,6 +444,10 @@ export class ProjectManager implements Disposable {
 		});
 	}
 
+	/**
+	 * Called when file was saved by client
+	 * @param fileName path to a file
+	 */
 	didSave(fileName: string) {
 		this.localFs.didSave(fileName);
 	}
@@ -372,11 +488,11 @@ export class ProjectManager implements Disposable {
 					console.error(`Ensuring file ${path} failed`, e);
 				}
 			}, {
-				// There may be too many open files when working with local FS and trying
-				// to open them in parallel, so limit concurrent readFile calls to 100
-				// TODO only do this when working with localFs?
-				concurrency: 100
-			});
+					// There may be too many open files when working with local FS and trying
+					// to open them in parallel, so limit concurrent readFile calls to 100
+					// TODO only do this when working with localFs?
+					concurrency: 100
+				});
 		} finally {
 			this.cancellationSources.delete(source);
 		}
@@ -384,6 +500,7 @@ export class ProjectManager implements Disposable {
 
 	/**
 	 * Detects projects and creates projects denoted by tsconfig.json. Previously detected projects are discarded.
+	 * If there is no root configuration, adds it to catch all orphan files
 	 */
 	refreshConfigurations() {
 		const rootdirs = new Set<string>();
@@ -415,21 +532,51 @@ export class ProjectManager implements Disposable {
 }
 
 /**
- * Implementaton of LanguageServiceHost that works with in-memory file system
+ * Implementaton of LanguageServiceHost that works with in-memory file system.
+ * It takes file content from local cache and provides it to TS compiler on demand
+ *
+ * @implements ts.LanguageServiceHost
  */
 export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 
 	complete: boolean;
 
+	/**
+	 * Root URI
+	 */
 	private root: string;
+
+	/**
+	 * Compiler options to use when parsing/analyzing source files.
+	 * We are extracting them from tsconfig.json or jsconfig.json
+	 */
 	private options: ts.CompilerOptions;
+
+	/**
+	 * Local file cache where we looking for file content
+	 */
 	private fs: InMemoryFileSystem;
+
+	/**
+	 * List of files that project consist of (based on tsconfig includes/excludes and wildcards)
+	 */
 	expectedFiles: string[];
 
+	/**
+	 * Current list of files that were implicitly added to project
+	 * (every time when we need to extract data from a file that we havem't touched yet)
+	 */
 	private files: string[];
 
+	/**
+	 * Current project version. When something significant is changed, incrementing it to signal TS compiler that
+	 * files should be updated and cached data should be invalidated
+	 */
 	private projectVersion: number;
 
+	/**
+	 * Tracks individual files versions to invalidate TS compiler data when single file is changed
+	 */
 	private versions: Map<string, number>;
 
 	constructor(root: string, options: ts.CompilerOptions, fs: InMemoryFileSystem, expectedFiles: string[], versions: Map<string, number>) {
@@ -454,6 +601,9 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 		return '' + this.projectVersion;
 	}
 
+	/**
+	 * Incrementing current project version, telling TS compiler to invalidate internal data
+	 */
 	incProjectVersion() {
 		this.projectVersion++;
 	}
@@ -528,11 +678,30 @@ const localFSPlaceholder = 'var dummy_0ff1bd;';
  */
 export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResolutionHost {
 
+	/**
+	 * It's actually a map (filepath -> string content) of files fetched from the remote file system
+	 */
 	entries: any;
+
+	/**
+	 * It's actually a map (filepath -> string content) of temporary files made while user modifies local file(s)
+	 */
 	overlay: any;
+
+	/**
+	 * Should we take into account register when performing a file name match or not. On Windows when using local file system, file names are case-insensitive
+	 */
 	useCaseSensitiveFileNames: boolean;
+
+	/**
+	 * Root URI
+	 */
 	path: string;
 
+	/**
+	 * It's a tree node where properties point to either a file (typeof node[p] == "string") or to a sub-tree.
+	 * We are using it when TS service scans for source files that making some project
+	 */
 	rootNode: any;
 
 	constructor(path: string) {
@@ -542,6 +711,11 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 		this.rootNode = {};
 	}
 
+	/**
+	 * Adds file content to a local cache
+	 * @param path file path
+	 * @param content file content
+	 */
 	addFile(path: string, content: string) {
 		this.entries[path] = content;
 		let node = this.rootNode;
@@ -556,10 +730,18 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 		});
 	}
 
+	/**
+	 * Tells if a file denoted by the given name exists in the local cache
+	 * @param path file path
+	 */
 	fileExists(path: string): boolean {
 		return this.readFile(path) !== undefined;
 	}
 
+	/**
+	 * @param path file path
+	 * @return file's content in the following order (overlay then cache) if any
+	 */
 	readFile(path: string): string | undefined {
 		let content = this.overlay[path];
 		if (content !== undefined) {
@@ -581,18 +763,30 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 		return this.entries[rel];
 	}
 
+	/**
+	 * Invalidates temporary content denoted by the given path
+	 */
 	didClose(path: string) {
 		delete this.overlay[path];
 	}
 
+	/**
+	 * Adds temporary content denoted by the given path
+	 */
 	didSave(path: string) {
 		this.addFile(path, this.readFile(path));
 	}
 
+	/**
+	 * Updates temporary content denoted by the given path
+	 */
 	didChange(path: string, text: string) {
 		this.overlay[path] = text;
 	}
 
+	/**
+	 * Called by TS service to scan virtual directory when TS service looks for source files that belong to a project
+	 */
 	readDirectory(rootDir: string, extensions: string[], excludes: string[], includes: string[]): string[] {
 		return match.matchFiles(rootDir,
 			extensions,
@@ -603,6 +797,9 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 			p => this.getFileSystemEntries(p));
 	}
 
+	/**
+	 * Called by TS service to scan virtual directory when TS service looks for source files that belong to a project
+	 */
 	getFileSystemEntries(path: string): match.FileSystemEntries {
 		const ret: { files: string[], directories: string[] } = { files: [], directories: [] };
 		let node = this.rootNode;
@@ -631,6 +828,9 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	}
 }
 
+/**
+ * Iterates over in-memory cache calling given function on each node until callback signals abort or all nodes were traversed
+ */
 export function walkInMemoryFs(fs: InMemoryFileSystem, rootdir: string, walkfn: (path: string, isdir: boolean) => Error | void): Error | void {
 	const err = walkfn(rootdir, true);
 	if (err) {
@@ -639,7 +839,7 @@ export function walkInMemoryFs(fs: InMemoryFileSystem, rootdir: string, walkfn: 
 		}
 		return err;
 	}
-	const {files, directories} = fs.getFileSystemEntries(rootdir);
+	const { files, directories } = fs.getFileSystemEntries(rootdir);
 	for (const file of files) {
 		const err = walkfn(path_.posix.join(rootdir, file), false);
 		if (err) {
@@ -680,13 +880,39 @@ export class ProjectConfiguration {
 	// (https://github.com/Microsoft/TypeScript-wiki/blob/master/Architectural-Overview.md#data-structures)
 	private program?: ts.Program;
 
+	/**
+	 * Object TS service will use to fetch content of source files
+	 */
 	private host?: InMemoryLanguageServiceHost;
 
+	/**
+	 * Local file cache
+	 */
 	private fs: InMemoryFileSystem;
+
+	/**
+	 * Path to configuration file (tsconfig.json/jsconfig.json)
+	 */
 	private configFileName: string; // path to [tj]sconfig.json, if exists
+
+	/**
+	 * Configuration JSON object. May be used when there is no real configuration file to parse and use
+	 */
 	private configContent: any;
+
+	/**
+	 * Tracks source file -> version
+	 */
 	private versions: Map<string, number>;
+
+	/**
+	 * Enables module resolution tracing (done by TS service)
+	 */
 	private traceModuleResolution: boolean;
+
+	/**
+	 * Root folder
+	 */
 	private dir: string;
 
 	/**
@@ -703,6 +929,9 @@ export class ProjectConfiguration {
 		this.dir = dir;
 	}
 
+	/**
+	 * @return module resolution host to use by TS service
+	 */
 	moduleResolutionHost(): ts.ModuleResolutionHost {
 		return this.fs;
 	}
@@ -723,6 +952,9 @@ export class ProjectConfiguration {
 		this.host = undefined;
 	}
 
+	/**
+	 * @return package name (project name) of a given project
+	 */
 	getPackageName(): string | null {
 		const pkgJsonFile = path_.posix.join(this.dir, 'package.json');
 		if (this.fs.fileExists(pkgJsonFile)) {
@@ -731,6 +963,9 @@ export class ProjectConfiguration {
 		return null;
 	}
 
+	/**
+	 * @return language service object
+	 */
 	getService(): ts.LanguageService {
 		if (!this.service) {
 			throw new Error('project is uninitialized');
@@ -738,6 +973,10 @@ export class ProjectConfiguration {
 		return this.service;
 	}
 
+	/**
+	 * Note that it does not perform any parsing or typechecking
+	 * @return program object (cached result of parsing and typechecking done by TS service)
+	 */
 	getProgram(): ts.Program {
 		if (!this.program) {
 			throw new Error('project is uninitialized');
@@ -745,6 +984,9 @@ export class ProjectConfiguration {
 		return this.program;
 	}
 
+	/**
+	 * @return language service host that TS service uses to read the data
+	 */
 	getHost(): InMemoryLanguageServiceHost {
 		if (!this.host) {
 			throw new Error('project is uninitialized');
@@ -752,12 +994,20 @@ export class ProjectConfiguration {
 		return this.host;
 	}
 
+	/**
+	 * Tells TS service to recompile program (if needed) based on current list of files and compilation options.
+	 * TS service relies on information provided by language servide host to see if there were any changes in
+	 * the whole project or in some files
+	 */
 	syncProgram(): void {
 		this.program = this.getService().getProgram();
 	}
 
 	private initialized?: Promise<void>;
 
+	/**
+	 * Initializes (sub)project by parsing configuration and making proper internal objects
+	 */
 	private init(): Promise<void> {
 		if (this.initialized) {
 			return this.initialized;
@@ -812,12 +1062,18 @@ export class ProjectConfiguration {
 		return this.initialized;
 	}
 
+	/**
+	 * Ensures we are ready to process files from a given sub-project
+	 */
 	ensureConfigFile(): Promise<void> {
 		return this.init();
 	}
 
 	private ensuredBasicFiles?: Promise<void>;
 
+	/**
+	 * Ensures we fetched basic files (global TS files, dependencies, declarations)
+	 */
 	async ensureBasicFiles(): Promise<void> {
 		if (this.ensuredBasicFiles) {
 			return this.ensuredBasicFiles;
@@ -844,6 +1100,9 @@ export class ProjectConfiguration {
 
 	private ensuredAllFiles?: Promise<void>;
 
+	/**
+	 * Ensures we fetched all project's source file (as were defined in tsconfig.json)
+	 */
 	async ensureAllFiles(): Promise<void> {
 		if (this.ensuredAllFiles) {
 			return this.ensuredAllFiles;
@@ -871,11 +1130,17 @@ export class ProjectConfiguration {
 	}
 }
 
+/**
+ * Indicates that tree traversal function should stop
+ */
 export const skipDir: Error = {
 	name: 'WALK_FN_SKIP_DIR',
 	message: ''
 };
 
+/**
+ * TypeScript library files fetched from the local file system (bundled TS)
+ */
 let tsLibraries: Map<string, string>;
 
 /**
