@@ -565,14 +565,14 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	 * List of files that project consist of (based on tsconfig includes/excludes and wildcards).
 	 * Each item is a relative file path
 	 */
-	expectedFilesPaths: string[];
+	expectedFilePaths: string[];
 
 	/**
 	 * Current list of files that were implicitly added to project
 	 * (every time when we need to extract data from a file that we haven't touched yet).
 	 * Each item is a relative file path
 	 */
-	private filesPaths: string[];
+	private filePaths: string[];
 
 	/**
 	 * Current project version. When something significant is changed, incrementing it to signal TS compiler that
@@ -589,10 +589,10 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 		this.rootPath = rootPath;
 		this.options = options;
 		this.fs = fs;
-		this.expectedFilesPaths = expectedFiles;
+		this.expectedFilePaths = expectedFiles;
 		this.versions = versions;
 		this.projectVersion = 1;
-		this.filesPaths = [];
+		this.filePaths = [];
 		// adding library files from the local file system
 		getTypeScriptLibraries().forEach((content, name) => {
 			this.fs.entries.set(name, content);
@@ -619,7 +619,7 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	}
 
 	getScriptFileNames(): string[] {
-		return this.filesPaths;
+		return this.filePaths;
 	}
 
 	/**
@@ -629,7 +629,7 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	 * @param filePath relative file path
 	 */
 	addFile(filePath: string) {
-		this.filesPaths.push(filePath);
+		this.filePaths.push(filePath);
 		this.incProjectVersion();
 	}
 
@@ -1110,7 +1110,7 @@ export class ProjectConfiguration {
 
 		this.ensuredBasicFiles = this.init().then(() => {
 			let changed = false;
-			for (const fileName of (this.getHost().expectedFilesPaths || [])) {
+			for (const fileName of (this.getHost().expectedFilePaths || [])) {
 				if (util.isGlobalTSFile(fileName) || (!util.isDependencyFile(fileName) && util.isDeclarationFile(fileName))) {
 					const sourceFile = this.getProgram().getSourceFile(fileName);
 					if (!sourceFile) {
@@ -1142,7 +1142,7 @@ export class ProjectConfiguration {
 				return;
 			}
 			let changed = false;
-			for (const fileName of (this.getHost().expectedFilesPaths || [])) {
+			for (const fileName of (this.getHost().expectedFilePaths || [])) {
 				const sourceFile = this.getProgram().getSourceFile(fileName);
 				if (!sourceFile) {
 					this.getHost().addFile(fileName);
