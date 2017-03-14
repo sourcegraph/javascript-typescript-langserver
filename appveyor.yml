@@ -16,8 +16,7 @@ test_script:
   - npm --version
   # run tests
   - yarn run lint
-  - yarn run build
   - yarn run cover
 
-# Don't actually build.
-build: off
+build_script:
+  - yarn run build
