@@ -8,6 +8,12 @@ import chaiAsPromised = require('chai-as-promised');
 chai.use(chaiAsPromised);
 const assert = chai.assert;
 
+/**
+ * Enforcing strict mode to make tests pass on Windows
+ */
+import { setStrict } from '../util';
+setStrict(true);
+
 export interface TestContext {
 
 	/** TypeScript service under test */
