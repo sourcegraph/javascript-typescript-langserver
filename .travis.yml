@@ -7,9 +7,9 @@ cache:
   yarn: true
 
 script:
-  - yarn run lint
-  - yarn run build
-  - yarn run cover
+  - npm run lint
+  - npm run build
+  - npm run cover
 
 after_success:
   # Upload coverage to codecov
