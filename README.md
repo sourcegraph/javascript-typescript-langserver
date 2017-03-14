@@ -3,6 +3,7 @@
 [![npm](https://img.shields.io/npm/v/javascript-typescript-langserver.svg)](https://www.npmjs.com/package/javascript-typescript-langserver)
 [![npm](https://img.shields.io/npm/dm/javascript-typescript-langserver.svg)](https://www.npmjs.com/package/javascript-typescript-langserver)
 [![Build Status](https://travis-ci.org/sourcegraph/javascript-typescript-langserver.svg?branch=master)](https://travis-ci.org/sourcegraph/javascript-typescript-langserver)
+[![Windows Build Status](https://ci.appveyor.com/api/projects/status/==========SECRET=======/branch/master?svg=true)](https://ci.appveyor.com/project/sourcegraph/javascript-typescript-langserver/branch/master)
 [![codecov](https://codecov.io/gh/sourcegraph/javascript-typescript-langserver/branch/master/graph/badge.svg)](https://codecov.io/gh/sourcegraph/javascript-typescript-langserver)
 [![Dependencies](https://david-dm.org/sourcegraph/javascript-typescript-langserver.svg)](https://david-dm.org/sourcegraph/javascript-typescript-langserver)
 [![Gitter](https://badges.gitter.im/sourcegraph/javascript-typescript-langserver.svg)](https://gitter.im/sourcegraph/javascript-typescript-langserver?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
