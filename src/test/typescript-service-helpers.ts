@@ -8,6 +8,12 @@ import chaiAsPromised = require('chai-as-promised');
 chai.use(chaiAsPromised);
 const assert = chai.assert;
 
+/**
+ * Enforcing strict mode to make tests pass on Windows
+ */
+import { setStrict } from '../util';
+setStrict(true);
+
 export interface TestContext {
 
 	/** TypeScript service under test */
@@ -1564,6 +1570,73 @@ export function describeTypeScriptService(TypeScriptServiceConstructor = TypeScr
 				}
 			});
 			assert.notDeepEqual(result.items.length, []);
+		});
+	});
+
+	describe('Special file names', <any> function (this: TestContext) {
+
+		beforeEach(<any> initializeTypeScriptService(TypeScriptServiceConstructor, new Map([
+			['file:///keywords-in-path/class/constructor/a.ts', 'export function a() {}'],
+			['file:///special-characters-in-path/%40foo/b.ts', 'export function b() {}']
+		])));
+
+		afterEach(<any> shutdownTypeScriptService);
+
+		describe('getHovers()', <any> function (this: TestContext) {
+			it('should accept files with TypeScript keywords in path', <any> async function (this: TestContext) {
+				const result = await this.service.getHover({
+					textDocument: {
+						uri: 'file:///keywords-in-path/class/constructor/a.ts'
+					},
+					position: {
+						line: 0,
+						character: 16
+					}
+				});
+				assert.deepEqual(result, {
+					range: {
+						start: {
+							line: 0,
+							character: 16
+						},
+						end: {
+							line: 0,
+							character: 17
+						}
+					},
+					contents: [{
+						language: 'typescript',
+						value: 'function a(): void'
+					}]
+				});
+			});
+			it('should accept files with special characters in path', <any> async function (this: TestContext) {
+				const result = await this.service.getHover({
+					textDocument: {
+						uri: 'file:///special-characters-in-path/@foo/b.ts'
+					},
+					position: {
+						line: 0,
+						character: 16
+					}
+				});
+				assert.deepEqual(result, {
+					range: {
+						start: {
+							line: 0,
+							character: 16
+						},
+						end: {
+							line: 0,
+							character: 17
+						}
+					},
+					contents: [{
+						language: 'typescript',
+						value: 'function b(): void'
+					}]
+				});
+			});
 		});
 	});
 }

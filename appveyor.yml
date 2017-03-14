@@ -15,8 +15,8 @@ test_script:
   - node --version
   - npm --version
   # run tests
-  - yarn test
-  - yarn fmt-check
+  - yarn run lint
+  - yarn run cover
 
-# Don't actually build.
-build: off
+build_script:
+  - yarn run build

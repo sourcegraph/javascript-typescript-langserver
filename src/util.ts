@@ -78,7 +78,8 @@ export function path2uri(root: string, file: string): string {
 	} else {
 		p = file;
 	}
-	return ret + normalizePath(p);
+	p = normalizePath(p).split('/').map(encodeURIComponent).join('/');
+	return ret + p;
 }
 
 export function uri2path(uri: string): string {
@@ -88,8 +89,8 @@ export function uri2path(uri: string): string {
 			if (!strict) {
 				uri = uri.substring(1);
 			}
-			uri = uri.replace(/%3A/g, ':');
 		}
+		uri = uri.split('/').map(decodeURIComponent).join('/');
 	}
 	return uri;
 }
