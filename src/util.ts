@@ -218,7 +218,7 @@ export function defInfoToSymbolDescriptor(d: ts.DefinitionInfo): rt.SymbolDescri
 
 export function symbolDescriptorMatch(query: rt.PartialSymbolDescriptor, sym: rt.SymbolDescriptor): boolean {
 	for (const key of Object.keys(query)) {
-		if ((<any>query)[key] === undefined) {
+		if ((<any> query)[key] === undefined) {
 			continue;
 		}
 		if (key === 'package') {
@@ -227,7 +227,7 @@ export function symbolDescriptorMatch(query: rt.PartialSymbolDescriptor, sym: rt
 			}
 			continue;
 		}
-		if ((<any>query)[key] !== (<any>sym)[key]) {
+		if ((<any> query)[key] !== (<any> sym)[key]) {
 			return false;
 		}
 	}
@@ -236,10 +236,10 @@ export function symbolDescriptorMatch(query: rt.PartialSymbolDescriptor, sym: rt
 
 function packageDescriptorMatch(query: rt.PackageDescriptor, sym: rt.PackageDescriptor): boolean {
 	for (const key of Object.keys(query)) {
-		if ((<any>query)[key] === undefined) {
+		if ((<any> query)[key] === undefined) {
 			continue;
 		}
-		if ((<any>query)[key] !== (<any>sym)[key]) {
+		if ((<any> query)[key] !== (<any> sym)[key]) {
 			return false;
 		}
 	}

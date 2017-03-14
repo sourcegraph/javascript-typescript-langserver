@@ -34,7 +34,8 @@ export class ProjectManager implements Disposable {
 
 	/**
 	 * Workspace subtree (folder) -> JS/TS configuration mapping.
-	 * Configuration settings for a source file A are located in the closest parent folder of A
+	 * Configuration settings for a source file A are located in the closest parent folder of A.
+	 * Map keys are relative (to workspace root) paths
 	 */
 	private configs: Map<string, ProjectConfiguration>;
 
@@ -56,7 +57,7 @@ export class ProjectManager implements Disposable {
 	private localFs: InMemoryFileSystem;
 
 	/**
-	 * URI -> version map. Every time file content is about to change or changed (didChange/didOpen/...), we are incrementing it's version
+	 * Relative file path -> version map. Every time file content is about to change or changed (didChange/didOpen/...), we are incrementing it's version
 	 * signalling that file is changed and file's user must invalidate cached and requery file content
 	 */
 	private versions: Map<string, number>;
@@ -73,6 +74,8 @@ export class ProjectManager implements Disposable {
 	 * won't fetch it again. This should be cleared if remoteFs files
 	 * have been modified in some way, but does not need to be cleared
 	 * if remoteFs files have only been added.
+	 *
+	 * Set elements are absolute file paths
 	 */
 	private fetched: Set<string>;
 
@@ -135,6 +138,7 @@ export class ProjectManager implements Disposable {
 	}
 
 	/**
+	 * @param filePath file path (both absolute or relative file paths are accepted)
 	 * @return true if there is a fetched file with a given path
 	 */
 	hasFile(filePath: string) {
@@ -330,30 +334,30 @@ export class ProjectManager implements Disposable {
 	 * - files referenced by the given file
 	 * - files included by the given file
 	 *
-	 * @param fileNames files to process
+	 * @param filePaths files to process (both absolute and relative paths are accepted)
 	 * @param maxDepth stop collecting when reached given recursion level
 	 * @param seen tracks visited files to avoid cycles
 	 */
-	private async ensureTransitiveFileDependencies(fileNames: string[], maxDepth: number, seen: Set<string>): Promise<void> {
-		fileNames = fileNames.filter(f => !seen.has(f));
-		if (fileNames.length === 0) {
+	private async ensureTransitiveFileDependencies(filePaths: string[], maxDepth: number, seen: Set<string>): Promise<void> {
+		filePaths = filePaths.filter(f => !seen.has(f));
+		if (filePaths.length === 0) {
 			return Promise.resolve();
 		}
-		fileNames.forEach(f => seen.add(f));
+		filePaths.forEach(f => seen.add(f));
 
-		const absFileNames = fileNames.map(f => util.normalizePath(util.resolve(this.rootPath, f)));
-		await this.ensureFiles(absFileNames);
+		const absFilePaths = filePaths.map(f => util.normalizePath(util.resolve(this.rootPath, f)));
+		await this.ensureFiles(absFilePaths);
 
 		if (maxDepth > 0) {
-			const importFiles = new Set<string>();
-			await Promise.all(fileNames.map(async fileName => {
-				const config = this.getConfiguration(fileName);
+			const importPaths = new Set<string>();
+			await Promise.all(filePaths.map(async filePath => {
+				const config = this.getConfiguration(filePath);
 				await config.ensureBasicFiles();
-				const contents = this.getFs().readFile(fileName) || '';
+				const contents = this.getFs().readFile(filePath) || '';
 				const info = ts.preProcessFile(contents, true, true);
 				const compilerOpt = config.getHost().getCompilationSettings();
 				for (const imp of info.importedFiles) {
-					const resolved = ts.resolveModuleName(imp.fileName, fileName, compilerOpt, config.moduleResolutionHost());
+					const resolved = ts.resolveModuleName(imp.fileName, filePath, compilerOpt, config.moduleResolutionHost());
 					if (!resolved || !resolved.resolvedModule) {
 						// This means we didn't find a file defining
 						// the module. It could still exist as an
@@ -361,26 +365,26 @@ export class ProjectManager implements Disposable {
 						// global*.d.ts files.
 						continue;
 					}
-					importFiles.add(resolved.resolvedModule.resolvedFileName);
+					importPaths.add(resolved.resolvedModule.resolvedFileName);
 				}
 				const resolver = !this.strict && os.platform() === 'win32' ? path_ : path_.posix;
 				for (const ref of info.referencedFiles) {
 					// Resolving triple slash references relative to current file
 					// instead of using module resolution host because it behaves
 					// differently in "nodejs" mode
-					const refFileName = util.normalizePath(path_.relative(this.rootPath,
+					const refFilePath = util.normalizePath(path_.relative(this.rootPath,
 						resolver.resolve(this.rootPath,
-							resolver.dirname(fileName),
+							resolver.dirname(filePath),
 							ref.fileName)));
-					importFiles.add(refFileName);
+					importPaths.add(refFilePath);
 				}
 			}));
-			await this.ensureTransitiveFileDependencies(Array.from(importFiles), maxDepth - 1, seen);
+			await this.ensureTransitiveFileDependencies(Array.from(importPaths), maxDepth - 1, seen);
 		}
 	}
 
 	/**
-	 * @param filePath source file path
+	 * @param filePath source file path relative to project root
 	 * @return project configuration for a given source file. Climbs directory tree up to workspace root if needed
 	 */
 	getConfiguration(filePath: string): ProjectConfiguration {
@@ -406,22 +410,22 @@ export class ProjectManager implements Disposable {
 	/**
 	 * Called when file was opened by client. Current implementation
 	 * does not differenciates open and change events
-	 * @param fileName path to a file
+	 * @param filePath path to a file relative to project root
 	 * @param text file's content
 	 */
-	didOpen(fileName: string, text: string) {
-		this.didChange(fileName, text);
+	didOpen(filePath: string, text: string) {
+		this.didChange(filePath, text);
 	}
 
 	/**
 	 * Called when file was closed by client. Current implementation invalidates compiled version
-	 * @param fileName path to a file
+	 * @param filePath path to a file relative to project root
 	 */
-	didClose(fileName: string) {
-		this.localFs.didClose(fileName);
-		let version = this.versions.get(fileName) || 0;
-		this.versions.set(fileName, ++version);
-		const config = this.getConfiguration(fileName);
+	didClose(filePath: string) {
+		this.localFs.didClose(filePath);
+		let version = this.versions.get(filePath) || 0;
+		this.versions.set(filePath, ++version);
+		const config = this.getConfiguration(filePath);
 		config.ensureConfigFile().then(() => {
 			config.getHost().incProjectVersion();
 			config.syncProgram();
@@ -430,14 +434,14 @@ export class ProjectManager implements Disposable {
 
 	/**
 	 * Called when file was changed by client. Current implementation invalidates compiled version
-	 * @param fileName path to a file
+	 * @param filePath path to a file relative to project root
 	 * @param text file's content
 	 */
-	didChange(fileName: string, text: string) {
-		this.localFs.didChange(fileName, text);
-		let version = this.versions.get(fileName) || 0;
-		this.versions.set(fileName, ++version);
-		const config = this.getConfiguration(fileName);
+	didChange(filePath: string, text: string) {
+		this.localFs.didChange(filePath, text);
+		let version = this.versions.get(filePath) || 0;
+		this.versions.set(filePath, ++version);
+		const config = this.getConfiguration(filePath);
 		config.ensureConfigFile().then(() => {
 			config.getHost().incProjectVersion();
 			config.syncProgram();
@@ -446,10 +450,10 @@ export class ProjectManager implements Disposable {
 
 	/**
 	 * Called when file was saved by client
-	 * @param fileName path to a file
+	 * @param filePath path to a file relative to project root
 	 */
-	didSave(fileName: string) {
-		this.localFs.didSave(fileName);
+	didSave(filePath: string) {
+		this.localFs.didSave(filePath);
 	}
 
 	/**
@@ -488,11 +492,11 @@ export class ProjectManager implements Disposable {
 					console.error(`Ensuring file ${path} failed`, e);
 				}
 			}, {
-					// There may be too many open files when working with local FS and trying
-					// to open them in parallel, so limit concurrent readFile calls to 100
-					// TODO only do this when working with localFs?
-					concurrency: 100
-				});
+				// There may be too many open files when working with local FS and trying
+				// to open them in parallel, so limit concurrent readFile calls to 100
+				// TODO only do this when working with localFs?
+				concurrency: 100
+			});
 		} finally {
 			this.cancellationSources.delete(source);
 		}
@@ -542,9 +546,9 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	complete: boolean;
 
 	/**
-	 * Root URI
+	 * Root path
 	 */
-	private root: string;
+	private rootPath: string;
 
 	/**
 	 * Compiler options to use when parsing/analyzing source files.
@@ -558,15 +562,17 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	private fs: InMemoryFileSystem;
 
 	/**
-	 * List of files that project consist of (based on tsconfig includes/excludes and wildcards)
+	 * List of files that project consist of (based on tsconfig includes/excludes and wildcards).
+	 * Each item is a relative file path
 	 */
-	expectedFiles: string[];
+	expectedFilesPaths: string[];
 
 	/**
 	 * Current list of files that were implicitly added to project
-	 * (every time when we need to extract data from a file that we havem't touched yet)
+	 * (every time when we need to extract data from a file that we haven't touched yet).
+	 * Each item is a relative file path
 	 */
-	private files: string[];
+	private filesPaths: string[];
 
 	/**
 	 * Current project version. When something significant is changed, incrementing it to signal TS compiler that
@@ -579,14 +585,14 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	 */
 	private versions: Map<string, number>;
 
-	constructor(root: string, options: ts.CompilerOptions, fs: InMemoryFileSystem, expectedFiles: string[], versions: Map<string, number>) {
-		this.root = root;
+	constructor(rootPath: string, options: ts.CompilerOptions, fs: InMemoryFileSystem, expectedFiles: string[], versions: Map<string, number>) {
+		this.rootPath = rootPath;
 		this.options = options;
 		this.fs = fs;
-		this.expectedFiles = expectedFiles;
+		this.expectedFilesPaths = expectedFiles;
 		this.versions = versions;
 		this.projectVersion = 1;
-		this.files = [];
+		this.filesPaths = [];
 		// adding library files from the local file system
 		getTypeScriptLibraries().forEach((content, name) => {
 			this.fs.entries.set(name, content);
@@ -613,21 +619,26 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	}
 
 	getScriptFileNames(): string[] {
-		return this.files;
+		return this.filesPaths;
 	}
 
 	/**
 	 * Adds a file and increments project version, used in conjunction with getProjectVersion()
 	 * which may be called by TypeScript to check if internal data is up to date
+	 *
+	 * @param filePath relative file path
 	 */
-	addFile(fileName: string) {
-		this.files.push(fileName);
+	addFile(filePath: string) {
+		this.filesPaths.push(filePath);
 		this.incProjectVersion();
 	}
 
+	/**
+	 * @param fileName relative or absolute file path
+	 */
 	getScriptVersion(fileName: string): string {
 		if (path_.posix.isAbsolute(fileName) || path_.isAbsolute(fileName)) {
-			fileName = path_.posix.relative(this.root, util.normalizePath(fileName));
+			fileName = path_.posix.relative(this.rootPath, util.normalizePath(fileName));
 		}
 		let version = this.versions.get(fileName);
 		if (!version) {
@@ -637,10 +648,13 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 		return '' + version;
 	}
 
+	/**
+	 * @param fileName relative or absolute file path
+	 */
 	getScriptSnapshot(fileName: string): ts.IScriptSnapshot {
 		let entry = this.fs.readFile(fileName);
 		if (entry === undefined) {
-			fileName = path_.posix.join(this.root, fileName);
+			fileName = path_.posix.join(this.rootPath, fileName);
 			entry = this.fs.readFile(fileName);
 		}
 		if (entry === undefined) {
@@ -650,7 +664,7 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	}
 
 	getCurrentDirectory(): string {
-		return this.root;
+		return this.rootPath;
 	}
 
 	getDefaultLibFileName(options: ts.CompilerOptions): string {
@@ -687,12 +701,12 @@ export interface FileSystemNode {
 export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResolutionHost {
 
 	/**
-	 * Map (filepath -> string content) of files fetched from the remote file system. Paths are relative to `this.path`
+	 * Map (relative filepath -> string content) of files fetched from the remote file system. Paths are relative to `this.path`
 	 */
 	entries: Map<string, string>;
 
 	/**
-	 * Map (filepath -> string content) of temporary files made while user modifies local file(s).  Paths are relative to `this.path`
+	 * Map (relative filepath -> string content) of temporary files made while user modifies local file(s).  Paths are relative to `this.path`
 	 */
 	overlay: Map<string, string>;
 
@@ -715,12 +729,12 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 		this.path = path;
 		this.entries = new Map<string, string>();
 		this.overlay = new Map<string, string>();
-		this.rootNode = {file: false, children: new Map<string, FileSystemNode>()};
+		this.rootNode = { file: false, children: new Map<string, FileSystemNode>() };
 	}
 
 	/**
 	 * Adds file content to a local cache
-	 * @param path file path
+	 * @param path relative file path
 	 * @param content file content
 	 */
 	addFile(path: string, content: string) {
@@ -730,11 +744,11 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 			const n = node.children.get(component);
 			if (!n) {
 				if (i < components.length - 1) {
-					const n = {file: false, children: new Map<string, FileSystemNode>()};
+					const n = { file: false, children: new Map<string, FileSystemNode>() };
 					node.children.set(component, n);
 					node = n;
 				} else {
-					node.children.set(component, {file: true, children: new Map<string, FileSystemNode>()});
+					node.children.set(component, { file: true, children: new Map<string, FileSystemNode>() });
 				}
 			} else {
 				node = n;
@@ -744,14 +758,14 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 
 	/**
 	 * Tells if a file denoted by the given name exists in the local cache
-	 * @param path file path
+	 * @param path file path (both absolute or relative file paths are accepted)
 	 */
 	fileExists(path: string): boolean {
 		return this.readFile(path) !== undefined;
 	}
 
 	/**
-	 * @param path file path
+	 * @param path file path (both absolute or relative file paths are accepted)
 	 * @return file's content in the following order (overlay then cache) if any
 	 */
 	readFile(path: string): string | undefined {
@@ -776,6 +790,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 
 	/**
 	 * Invalidates temporary content denoted by the given path
+	 * @param path path to a file relative to project root
 	 */
 	didClose(path: string) {
 		this.overlay.delete(path);
@@ -783,6 +798,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 
 	/**
 	 * Adds temporary content denoted by the given path
+	 * @param path path to a file relative to project root
 	 */
 	didSave(path: string) {
 		this.addFile(path, this.readFile(path));
@@ -790,6 +806,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 
 	/**
 	 * Updates temporary content denoted by the given path
+	 * @param path path to a file relative to project root
 	 */
 	didChange(path: string, text: string) {
 		this.overlay.set(path, text);
@@ -902,9 +919,9 @@ export class ProjectConfiguration {
 	private fs: InMemoryFileSystem;
 
 	/**
-	 * Path to configuration file (tsconfig.json/jsconfig.json)
+	 * Relative path to configuration file (tsconfig.json/jsconfig.json)
 	 */
-	private configFileName: string; // path to [tj]sconfig.json, if exists
+	private configFilePath: string;
 
 	/**
 	 * Configuration JSON object. May be used when there is no real configuration file to parse and use
@@ -912,7 +929,7 @@ export class ProjectConfiguration {
 	private configContent: any;
 
 	/**
-	 * Tracks source file -> version
+	 * Relative source file path (relative) -> version associations
 	 */
 	private versions: Map<string, number>;
 
@@ -922,22 +939,23 @@ export class ProjectConfiguration {
 	private traceModuleResolution: boolean;
 
 	/**
-	 * Root folder
+	 * Root file path, relative to workspace hierarchy root
 	 */
-	private dir: string;
+	private rootFilePath: string;
 
 	/**
 	 * @param fs file system to use
-	 * @param configFileName configuration file name (relative to workspace root)
+	 * @param rootFilePath root file path, relative to workspace hierarchy root
+	 * @param configFilePath configuration file path (relative to workspace root)
 	 * @param configContent optional configuration content to use instead of reading configuration file)
 	 */
-	constructor(fs: InMemoryFileSystem, dir: string, versions: Map<string, number>, configFileName: string, configContent?: any, traceModuleResolution?: boolean) {
+	constructor(fs: InMemoryFileSystem, rootFilePath: string, versions: Map<string, number>, configFilePath: string, configContent?: any, traceModuleResolution?: boolean) {
 		this.fs = fs;
-		this.configFileName = configFileName;
+		this.configFilePath = configFilePath;
 		this.configContent = configContent;
 		this.versions = versions;
 		this.traceModuleResolution = traceModuleResolution || false;
-		this.dir = dir;
+		this.rootFilePath = rootFilePath;
 	}
 
 	/**
@@ -967,7 +985,7 @@ export class ProjectConfiguration {
 	 * @return package name (project name) of a given project
 	 */
 	getPackageName(): string | null {
-		const pkgJsonFile = path_.posix.join(this.dir, 'package.json');
+		const pkgJsonFile = path_.posix.join(this.rootFilePath, 'package.json');
 		if (this.fs.fileExists(pkgJsonFile)) {
 			return JSON.parse(this.fs.readFile(pkgJsonFile)).name;
 		}
@@ -1026,16 +1044,16 @@ export class ProjectConfiguration {
 		this.initialized = new Promise<void>((resolve, reject) => {
 			let configObject;
 			if (!this.configContent) {
-				const jsonConfig = ts.parseConfigFileTextToJson(this.configFileName, this.fs.readFile(this.configFileName));
+				const jsonConfig = ts.parseConfigFileTextToJson(this.configFilePath, this.fs.readFile(this.configFilePath));
 				if (jsonConfig.error) {
-					console.error('Cannot parse ' + this.configFileName + ': ' + jsonConfig.error.messageText);
-					return reject(new Error('Cannot parse ' + this.configFileName + ': ' + jsonConfig.error.messageText));
+					console.error('Cannot parse ' + this.configFilePath + ': ' + jsonConfig.error.messageText);
+					return reject(new Error('Cannot parse ' + this.configFilePath + ': ' + jsonConfig.error.messageText));
 				}
 				configObject = jsonConfig.config;
 			} else {
 				configObject = this.configContent;
 			}
-			let dir = path_.posix.dirname(this.configFileName);
+			let dir = path_.posix.dirname(this.configFilePath);
 			if (dir === '.') {
 				dir = '';
 			}
@@ -1055,7 +1073,7 @@ export class ProjectConfiguration {
 			}
 
 			const options = configParseResult.options;
-			if (/(^|\/)jsconfig\.json$/.test(this.configFileName)) {
+			if (/(^|\/)jsconfig\.json$/.test(this.configFilePath)) {
 				options.allowJs = true;
 			}
 			if (this.traceModuleResolution) {
@@ -1092,7 +1110,7 @@ export class ProjectConfiguration {
 
 		this.ensuredBasicFiles = this.init().then(() => {
 			let changed = false;
-			for (const fileName of (this.getHost().expectedFiles || [])) {
+			for (const fileName of (this.getHost().expectedFilesPaths || [])) {
 				if (util.isGlobalTSFile(fileName) || (!util.isDependencyFile(fileName) && util.isDeclarationFile(fileName))) {
 					const sourceFile = this.getProgram().getSourceFile(fileName);
 					if (!sourceFile) {
@@ -1124,7 +1142,7 @@ export class ProjectConfiguration {
 				return;
 			}
 			let changed = false;
-			for (const fileName of (this.getHost().expectedFiles || [])) {
+			for (const fileName of (this.getHost().expectedFilesPaths || [])) {
 				const sourceFile = this.getProgram().getSourceFile(fileName);
 				if (!sourceFile) {
 					this.getHost().addFile(fileName);
