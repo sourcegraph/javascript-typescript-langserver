@@ -78,12 +78,7 @@ export function path2uri(root: string, file: string): string {
 	} else {
 		p = file;
 	}
-	p = normalizePath(p);
-	const tokens = p.split('/');
-	tokens.forEach((token, i) => {
-		tokens[i] = encodeURIComponent(token);
-	});
-	p = tokens.join('/');
+	p = normalizePath(p).split('/').map(encodeURIComponent).join('/');
 	return ret + p;
 }
 
@@ -95,11 +90,7 @@ export function uri2path(uri: string): string {
 				uri = uri.substring(1);
 			}
 		}
-		const tokens = uri.split('/');
-		tokens.forEach((token, i) => {
-			tokens[i] = decodeURIComponent(token);
-		});
-		uri = tokens.join('/');
+		uri = uri.split('/').map(decodeURIComponent).join('/');
 	}
 	return uri;
 }
