@@ -45,10 +45,10 @@ export class ProjectManager implements Disposable {
 	 */
 	private strict: boolean;
 
-    /**
-     * Remote side of file content provider which may point to either a client (strict mode) or
-     * to a local file system
-     */
+	/**
+	 * Remote side of file content provider which may point to either a client (strict mode) or
+	 * to a local file system
+	 */
 	private remoteFs: FileSystem.FileSystem;
 
 	/**
@@ -179,7 +179,7 @@ export class ProjectManager implements Disposable {
 		return this.ensuredModuleStructure;
 	}
 
-	/*
+	/**
 	 * refreshFileTree refreshes the local in-memory filesytem's (this.localFs) files under the
 	 * specified path (root) with the contents of the remote filesystem (this.remoteFs). It will
 	 * also reset the ProjectConfigurations that are affected by the refreshed files.
@@ -225,16 +225,16 @@ export class ProjectManager implements Disposable {
 		}
 	}
 
-    /**
-     * Ensures that all the files needed to produce hover and definitions for a given
-     * source file URI were fetched from the remote file system. Set of the needed files includes:
-     * - file itself
-     * - file's includes and dependencies (transitive) reported by TS compiler up to depth 30
-     * There is no need to fetch/parse/compile all the workspace files to produce hover of a symbol in the file F because
-     * definition of this symbol must be in one of files references by F or its dependencies
-     *
-     * @param uri target file URI
-     */
+	/**
+	 * Ensures that all the files needed to produce hover and definitions for a given
+	 * source file URI were fetched from the remote file system. Set of the needed files includes:
+	 * - file itself
+	 * - file's includes and dependencies (transitive) reported by TS compiler up to depth 30
+	 * There is no need to fetch/parse/compile all the workspace files to produce hover of a symbol in the file F because
+	 * definition of this symbol must be in one of files references by F or its dependencies
+	 *
+	 * @param uri target file URI
+	 */
 	ensureFilesForHoverAndDefinition(uri: string): Promise<void> {
 		const existing = this.ensuredFilesForHoverAndDefinition.get(uri);
 		if (existing) {
