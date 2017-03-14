@@ -1573,7 +1573,7 @@ export function describeTypeScriptService(TypeScriptServiceConstructor = TypeScr
 		});
 	});
 
-	describe('special file names', <any> function (this: TestContext) {
+	describe('Special file names', <any> function (this: TestContext) {
 
 		beforeEach(<any> initializeTypeScriptService(TypeScriptServiceConstructor, new Map([
 			['file:///keywords-in-path/class/constructor/a.ts', 'export function a() {}'],
@@ -1584,8 +1584,9 @@ export function describeTypeScriptService(TypeScriptServiceConstructor = TypeScr
 
 		describe('getHovers()', <any> function (this: TestContext) {
 			it('should accept files with TypeScript keywords in path', <any> async function (this: TestContext) {
-				const result = await this.service.getHover({textDocument: {
-						uri: path2uri('', '/keywords-in-path/class/constructor/a.ts')
+				const result = await this.service.getHover({
+					textDocument: {
+						uri: 'file:///keywords-in-path/class/constructor/a.ts'
 					},
 					position: {
 						line: 0,
@@ -1610,8 +1611,9 @@ export function describeTypeScriptService(TypeScriptServiceConstructor = TypeScr
 				});
 			});
 			it('should accept files with special characters in path', <any> async function (this: TestContext) {
-				const result = await this.service.getHover({textDocument: {
-						uri: path2uri('', '/special-characters-in-path/@foo/b.ts')
+				const result = await this.service.getHover({
+					textDocument: {
+						uri: 'file:///special-characters-in-path/@foo/b.ts'
 					},
 					position: {
 						line: 0,
