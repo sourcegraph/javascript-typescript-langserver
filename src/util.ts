@@ -78,7 +78,13 @@ export function path2uri(root: string, file: string): string {
 	} else {
 		p = file;
 	}
-	return ret + normalizePath(p);
+	p = normalizePath(p);
+	const tokens = p.split('/');
+	tokens.forEach((token, i) => {
+		tokens[i] = encodeURIComponent(token);
+	});
+	p = tokens.join('/');
+	return ret + p;
 }
 
 export function uri2path(uri: string): string {
@@ -88,8 +94,12 @@ export function uri2path(uri: string): string {
 			if (!strict) {
 				uri = uri.substring(1);
 			}
-			uri = uri.replace(/%3A/g, ':');
 		}
+		const tokens = uri.split('/');
+		tokens.forEach((token, i) => {
+			tokens[i] = decodeURIComponent(token);
+		});
+		uri = tokens.join('/');
 	}
 	return uri;
 }
@@ -208,7 +218,7 @@ export function defInfoToSymbolDescriptor(d: ts.DefinitionInfo): rt.SymbolDescri
 
 export function symbolDescriptorMatch(query: rt.PartialSymbolDescriptor, sym: rt.SymbolDescriptor): boolean {
 	for (const key of Object.keys(query)) {
-		if ((<any> query)[key] === undefined) {
+		if ((<any>query)[key] === undefined) {
 			continue;
 		}
 		if (key === 'package') {
@@ -217,7 +227,7 @@ export function symbolDescriptorMatch(query: rt.PartialSymbolDescriptor, sym: rt
 			}
 			continue;
 		}
-		if ((<any> query)[key] !== (<any> sym)[key]) {
+		if ((<any>query)[key] !== (<any>sym)[key]) {
 			return false;
 		}
 	}
@@ -226,10 +236,10 @@ export function symbolDescriptorMatch(query: rt.PartialSymbolDescriptor, sym: rt
 
 function packageDescriptorMatch(query: rt.PackageDescriptor, sym: rt.PackageDescriptor): boolean {
 	for (const key of Object.keys(query)) {
-		if ((<any> query)[key] === undefined) {
+		if ((<any>query)[key] === undefined) {
 			continue;
 		}
-		if ((<any> query)[key] !== (<any> sym)[key]) {
+		if ((<any>query)[key] !== (<any>sym)[key]) {
 			return false;
 		}
 	}

@@ -504,12 +504,12 @@ export class ProjectManager implements Disposable {
 	 */
 	refreshConfigurations() {
 		const rootdirs = new Set<string>();
-		for (const k of Object.keys(this.localFs.entries)) {
+		this.localFs.entries.forEach((v, k) => {
 			if (!/(^|\/)[tj]sconfig\.json$/.test(k)) {
-				continue;
+				return;
 			}
 			if (/(^|\/)node_modules\//.test(k)) {
-				continue;
+				return;
 			}
 			let dir = path_.posix.dirname(k);
 			if (dir === '.') {
@@ -517,7 +517,7 @@ export class ProjectManager implements Disposable {
 			}
 			this.configs.set(dir, new ProjectConfiguration(this.localFs, path_.posix.join('/', dir), this.versions, k, undefined, this.traceModuleResolution));
 			rootdirs.add(dir);
-		}
+		});
 		if (!rootdirs.has('')) {
 			// collecting all the files in workspace by making fake configuration object
 			this.configs.set('', new ProjectConfiguration(this.localFs, '/', this.versions, '', {
@@ -589,7 +589,7 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 		this.files = [];
 		// adding library files from the local file system
 		getTypeScriptLibraries().forEach((content, name) => {
-			this.fs.entries[name] = content;
+			this.fs.entries.set(name, content);
 		});
 	}
 
@@ -678,7 +678,7 @@ const localFSPlaceholder = 'var dummy_0ff1bd;';
  */
 export interface FileSystemNode {
 	file: boolean;
-	children: {[directory: string]: FileSystemNode};
+	children: Map<string, FileSystemNode>;
 };
 
 /**
@@ -689,12 +689,12 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	/**
 	 * Map (filepath -> string content) of files fetched from the remote file system. Paths are relative to `this.path`
 	 */
-	entries: { [filePath: string]: string };
+	entries: Map<string, string>;
 
 	/**
 	 * Map (filepath -> string content) of temporary files made while user modifies local file(s).  Paths are relative to `this.path`
 	 */
-	overlay: { [filePath: string]: string };
+	overlay: Map<string, string>;
 
 	/**
 	 * Should we take into account register when performing a file name match or not. On Windows when using local file system, file names are case-insensitive
@@ -713,9 +713,9 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 
 	constructor(path: string) {
 		this.path = path;
-		this.entries = {};
-		this.overlay = {};
-		this.rootNode = {file: false, children: {}};
+		this.entries = new Map<string, string>();
+		this.overlay = new Map<string, string>();
+		this.rootNode = {file: false, children: new Map<string, FileSystemNode>()};
 	}
 
 	/**
@@ -724,16 +724,17 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 * @param content file content
 	 */
 	addFile(path: string, content: string) {
-		this.entries[path] = content;
+		this.entries.set(path, content);
 		let node = this.rootNode;
 		path.split('/').forEach((component, i, components) => {
-			const n = node.children[component];
+			const n = node.children.get(component);
 			if (!n) {
 				if (i < components.length - 1) {
-					node.children[component] = {file: false, children: {}};
-					node = node.children[component];
+					const n = {file: false, children: new Map<string, FileSystemNode>()};
+					node.children.set(component, n);
+					node = n;
 				} else {
-					node.children[component] = {file: true, children: {}};
+					node.children.set(component, {file: true, children: new Map<string, FileSystemNode>()});
 				}
 			} else {
 				node = n;
@@ -754,31 +755,30 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 * @return file's content in the following order (overlay then cache) if any
 	 */
 	readFile(path: string): string | undefined {
-		let content = this.overlay[path];
+		let content = this.overlay.get(path);
 		if (content !== undefined) {
 			return content;
 		}
 
 		const rel = path_.posix.relative('/', path);
-
-		content = this.overlay[rel];
+		content = this.overlay.get(rel);
 		if (content !== undefined) {
 			return content;
 		}
 
-		content = this.entries[path];
+		content = this.entries.get(path);
 		if (content !== undefined) {
 			return content;
 		}
 
-		return this.entries[rel];
+		return this.entries.get(rel);
 	}
 
 	/**
 	 * Invalidates temporary content denoted by the given path
 	 */
 	didClose(path: string) {
-		delete this.overlay[path];
+		this.overlay.delete(path);
 	}
 
 	/**
@@ -792,7 +792,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 * Updates temporary content denoted by the given path
 	 */
 	didChange(path: string, text: string) {
-		this.overlay[path] = text;
+		this.overlay.set(path, text);
 	}
 
 	/**
@@ -817,15 +817,15 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 		const components = path.split('/').filter(c => c);
 		if (components.length !== 1 || components[0]) {
 			for (const component of components) {
-				const n = node.children[component];
+				const n = node.children.get(component);
 				if (!n) {
 					return ret;
 				}
 				node = n;
 			}
 		}
-		Object.keys(node.children).forEach(name => {
-			if (node.children[name].file) {
+		node.children.forEach((value, name) => {
+			if (value.file) {
 				ret.files.push(name);
 			} else {
 				ret.directories.push(name);
