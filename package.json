@@ -57,6 +57,7 @@
     "@types/mocha": "2.2.32",
     "@types/mz": "0.0.30",
     "@types/node": "6.0.46",
+    "codecov": "^2.0.1",
     "mocha": "^3.2.0",
     "nyc": "^10.1.2",
     "rimraf": "^2.6.1",

@@ -20,7 +20,5 @@ test_script:
   - yarn run cover
 
 after_test:
-  - ps: |
-      $env:PATH = 'C:\Program Files\Git\usr\bin;' + $env:PATH
-      Invoke-WebRequest -Uri 'https://codecov.io/bash' -OutFile codecov.sh
-      bash codecov.sh -f "coverage\lcov.info"
+  # Upload coverge to codecov
+  - node_modules\.bin\nyc report --reporter=lcov > coverage.lcov && node_modules\.bin\codecov
