@@ -104,7 +104,7 @@ export class ProjectManager implements Disposable {
 	 * @param traceModuleResolution allows to enable module resolution tracing (done by TS compiler)
 	 */
 	constructor(rootPath: string, remoteFs: FileSystem.FileSystem, strict: boolean, traceModuleResolution?: boolean) {
-		this.rootPath = util.normalizePath(rootPath);
+		this.rootPath = util.toUnixPath(rootPath);
 		this.configs = new Map<string, ProjectConfiguration>();
 		this.localFs = new InMemoryFileSystem(this.rootPath);
 		this.versions = new Map<string, number>();
@@ -201,7 +201,7 @@ export class ProjectManager implements Disposable {
 		const uris = await this.remoteFs.getWorkspaceFiles(util.path2uri('', rootPath));
 		for (const uri of uris) {
 			const file = util.uri2path(uri);
-			const rel = path_.posix.relative(this.rootPath, util.normalizePath(file));
+			const rel = path_.posix.relative(this.rootPath, util.toUnixPath(file));
 			if (!moduleStructureOnly || util.isGlobalTSFile(rel) || util.isConfigFile(rel) || util.isPackageJsonFile(rel)) {
 				filesToFetch.push(file);
 			} else if (!this.localFs.fileExists(rel)) {
@@ -269,7 +269,7 @@ export class ProjectManager implements Disposable {
 			for (const uri of uris) {
 				const file = util.uri2path(uri);
 				if (
-					util.normalizePath(file).indexOf('/node_modules/') === -1
+					util.toUnixPath(file).indexOf('/node_modules/') === -1
 					&& (util.isJSTSFile(file) || util.isConfigFile(file) || util.isPackageJsonFile(file))
 				) {
 					filesToEnsure.push(file);
@@ -318,7 +318,7 @@ export class ProjectManager implements Disposable {
 	 */
 	ensureFilesForReferences(uri: string): Promise<void> {
 		const fileName: string = util.uri2path(uri);
-		if (util.normalizePath(fileName).indexOf(`${path_.posix.sep}node_modules${path_.posix.sep}`) !== -1) {
+		if (util.toUnixPath(fileName).indexOf(`${path_.posix.sep}node_modules${path_.posix.sep}`) !== -1) {
 			return this.ensureFilesForWorkspaceSymbol();
 		}
 
@@ -345,7 +345,7 @@ export class ProjectManager implements Disposable {
 		}
 		filePaths.forEach(f => seen.add(f));
 
-		const absFilePaths = filePaths.map(f => util.normalizePath(util.resolve(this.rootPath, f)));
+		const absFilePaths = filePaths.map(f => util.toUnixPath(util.resolve(this.rootPath, f)));
 		await this.ensureFiles(absFilePaths);
 
 		if (maxDepth > 0) {
@@ -357,7 +357,7 @@ export class ProjectManager implements Disposable {
 				const info = ts.preProcessFile(contents, true, true);
 				const compilerOpt = config.getHost().getCompilationSettings();
 				for (const imp of info.importedFiles) {
-					const resolved = ts.resolveModuleName(imp.fileName, filePath, compilerOpt, config.moduleResolutionHost());
+					const resolved = ts.resolveModuleName(util.toUnixPath(imp.fileName), filePath, compilerOpt, config.moduleResolutionHost());
 					if (!resolved || !resolved.resolvedModule) {
 						// This means we didn't find a file defining
 						// the module. It could still exist as an
@@ -372,10 +372,10 @@ export class ProjectManager implements Disposable {
 					// Resolving triple slash references relative to current file
 					// instead of using module resolution host because it behaves
 					// differently in "nodejs" mode
-					const refFilePath = util.normalizePath(path_.relative(this.rootPath,
+					const refFilePath = util.toUnixPath(path_.relative(this.rootPath,
 						resolver.resolve(this.rootPath,
 							resolver.dirname(filePath),
-							ref.fileName)));
+							util.toUnixPath(ref.fileName))));
 					importPaths.add(refFilePath);
 				}
 			}));
@@ -484,7 +484,7 @@ export class ProjectManager implements Disposable {
 					const content = await this.remoteFs.getTextDocumentContent(util.path2uri('', path), token);
 					const relativePath = path_.posix.relative(this.rootPath, path);
 					this.localFs.addFile(relativePath, content);
-					this.fetched.add(util.normalizePath(path));
+					this.fetched.add(util.toUnixPath(path));
 				} catch (e) {
 					// if cancellation was requested, break out of the loop
 					throwIfRequested(token);
@@ -638,7 +638,7 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	 */
 	getScriptVersion(fileName: string): string {
 		if (path_.posix.isAbsolute(fileName) || path_.isAbsolute(fileName)) {
-			fileName = path_.posix.relative(this.rootPath, util.normalizePath(fileName));
+			fileName = path_.posix.relative(this.rootPath, util.toUnixPath(fileName));
 		}
 		let version = this.versions.get(fileName);
 		if (!version) {
@@ -668,7 +668,7 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	}
 
 	getDefaultLibFileName(options: ts.CompilerOptions): string {
-		return util.normalizePath(ts.getDefaultLibFilePath(options));
+		return util.toUnixPath(ts.getDefaultLibFilePath(options));
 	}
 
 	trace(message: string) {
@@ -1182,7 +1182,7 @@ export function getTypeScriptLibraries(): Map<string, string> {
 		fs_.readdirSync(path).forEach(file => {
 			const fullPath = path_.join(path, file);
 			if (fs_.statSync(fullPath).isFile()) {
-				tsLibraries.set(util.normalizePath(fullPath), fs_.readFileSync(fullPath).toString());
+				tsLibraries.set(util.toUnixPath(fullPath), fs_.readFileSync(fullPath).toString());
 			}
 		});
 	}

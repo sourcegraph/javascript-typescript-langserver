@@ -383,7 +383,7 @@ export class TypeScriptService implements LanguageHandler {
 			const files = config.getService().getProgram().getSourceFiles().sort((a, b) => a.fileName.localeCompare(b.fileName));
 			for (const source of files) {
 				// ignore dependency files
-				if (util.normalizePath(source.fileName).indexOf(`${path_.posix.sep}node_modules${path_.posix.sep}`) !== -1) {
+				if (util.toUnixPath(source.fileName).indexOf(`${path_.posix.sep}node_modules${path_.posix.sep}`) !== -1) {
 					continue;
 				}
 
@@ -1477,7 +1477,7 @@ export class TypeScriptService implements LanguageHandler {
 	 * returns git://github.com/Microsoft/TypeScript URL, otherwise returns file:// one
 	 */
 	private defUri(filePath: string): string {
-		filePath = util.normalizePath(filePath);
+		filePath = util.toUnixPath(filePath);
 		if (pm.getTypeScriptLibraries().has(filePath)) {
 			return 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/' + path_.basename(filePath);
 		}
@@ -1492,7 +1492,7 @@ export class TypeScriptService implements LanguageHandler {
 		const libraries = pm.getTypeScriptLibraries();
 		for (const sourceFile of configuration.getProgram().getSourceFiles().sort((a, b) => a.fileName.localeCompare(b.fileName))) {
 			// excluding navigation items from TypeScript libraries
-			if (libraries.has(util.normalizePath(sourceFile.fileName))) {
+			if (libraries.has(util.toUnixPath(sourceFile.fileName))) {
 				continue;
 			}
 			let tree;
