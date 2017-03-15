@@ -1,22 +1,27 @@
-# Test against this version of Node.js
+version: '{build}'
+
+clone_depth: 1
+
+cache:
+ - '%LOCALAPPDATA%\Yarn'
+
 environment:
-  nodejs_version: "6.9.4"
+  NODEJS_VERSION: '6.9.4'
 
-# Install scripts. (runs after repo cloning)
 install:
-  # Get the latest stable version of Node.js or io.js
-  - ps: Install-Product node $env:nodejs_version
-  # install modules
-  - yarn
-
-# Post-install test scripts.
-test_script:
-  # Output useful info for debugging.
-  - node --version
-  - npm --version
-  # run tests
-  - yarn run lint
-  - yarn run cover
+  - ps: Install-Product node $env:NODEJS_VERSION
+  - yarn install
 
 build_script:
   - yarn run build
+
+test_script:
+  - yarn run lint
+  - yarn run cover
+
+after_test:
+  - ps: |
+      node_modules\.bin\nyc report --reporter=lcov
+      $env:PATH = 'C:\Program Files\Git\usr\bin;' + $env:PATH
+      Invoke-WebRequest -Uri 'https://codecov.io/bash' -OutFile codecov.sh
+      bash codecov.sh -f "coverage\lcov.info"
