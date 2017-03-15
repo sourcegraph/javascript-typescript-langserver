@@ -1577,66 +1577,91 @@ export function describeTypeScriptService(TypeScriptServiceConstructor = TypeScr
 
 		beforeEach(<any> initializeTypeScriptService(TypeScriptServiceConstructor, new Map([
 			['file:///keywords-in-path/class/constructor/a.ts', 'export function a() {}'],
-			['file:///special-characters-in-path/%40foo/b.ts', 'export function b() {}']
+			['file:///special-characters-in-path/%40foo/b.ts', 'export function b() {}'],
+			['file:///windows/app/master.ts', '/// <reference path="..\\lib\\master.ts" />\nc();'],
+			['file:///windows/lib/master.ts', '/// <reference path="..\\lib\\slave.ts" />'],
+			['file:///windows/lib/slave.ts', 'function c() {}']
 		])));
 
 		afterEach(<any> shutdownTypeScriptService);
 
-		describe('getHovers()', <any> function (this: TestContext) {
-			it('should accept files with TypeScript keywords in path', <any> async function (this: TestContext) {
-				const result = await this.service.getHover({
-					textDocument: {
-						uri: 'file:///keywords-in-path/class/constructor/a.ts'
-					},
-					position: {
+		it('should accept files with TypeScript keywords in path', <any> async function (this: TestContext) {
+			const result = await this.service.getHover({
+				textDocument: {
+					uri: 'file:///keywords-in-path/class/constructor/a.ts'
+				},
+				position: {
+					line: 0,
+					character: 16
+				}
+			});
+			assert.deepEqual(result, {
+				range: {
+					start: {
 						line: 0,
 						character: 16
+					},
+					end: {
+						line: 0,
+						character: 17
 					}
-				});
-				assert.deepEqual(result, {
-					range: {
-						start: {
-							line: 0,
-							character: 16
-						},
-						end: {
-							line: 0,
-							character: 17
-						}
-					},
-					contents: [{
-						language: 'typescript',
-						value: 'function a(): void'
-					}]
-				});
+				},
+				contents: [{
+					language: 'typescript',
+					value: 'function a(): void'
+				}]
 			});
-			it('should accept files with special characters in path', <any> async function (this: TestContext) {
-				const result = await this.service.getHover({
-					textDocument: {
-						uri: 'file:///special-characters-in-path/@foo/b.ts'
-					},
-					position: {
+		});
+		it('should accept files with special characters in path', <any> async function (this: TestContext) {
+			const result = await this.service.getHover({
+				textDocument: {
+					uri: 'file:///special-characters-in-path/@foo/b.ts'
+				},
+				position: {
+					line: 0,
+					character: 16
+				}
+			});
+			assert.deepEqual(result, {
+				range: {
+					start: {
 						line: 0,
 						character: 16
-					}
-				});
-				assert.deepEqual(result, {
-					range: {
-						start: {
-							line: 0,
-							character: 16
-						},
-						end: {
-							line: 0,
-							character: 17
-						}
 					},
-					contents: [{
-						language: 'typescript',
-						value: 'function b(): void'
-					}]
-				});
+					end: {
+						line: 0,
+						character: 17
+					}
+				},
+				contents: [{
+					language: 'typescript',
+					value: 'function b(): void'
+				}]
 			});
+		});
+		it('should handle Windows-style paths in triple slash references', <any> async function (this: TestContext) {
+			const result = await this.service.getDefinition({
+				textDocument: {
+					uri: 'file:///windows/app/master.ts'
+				},
+				position: {
+					line: 1,
+					character: 0
+				}
+			});
+			assert.deepEqual(result, [{
+				range: {
+					start: {
+						line: 0,
+						character: 9
+					},
+					end: {
+						line: 0,
+						character: 10
+					}
+				},
+				uri: 'file:///windows/lib/slave.ts'
+			}]);
 		});
 	});
 }

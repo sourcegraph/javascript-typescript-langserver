@@ -37,8 +37,8 @@ export function docstring(parts: ts.SymbolDisplayPart[]): string {
 /**
  * Normalizes path to match POSIX standard (slashes)
  */
-export function normalizePath(file: string): string {
-	return file.replace(new RegExp('\\' + path.sep, 'g'), path.posix.sep);
+export function toUnixPath(filePath: string): string {
+	return filePath.replace(/\\/g, '/');
 }
 
 export function convertStringtoSymbolKind(kind: string): SymbolKind {
@@ -78,7 +78,7 @@ export function path2uri(root: string, file: string): string {
 	} else {
 		p = file;
 	}
-	p = normalizePath(p).split('/').map(encodeURIComponent).join('/');
+	p = toUnixPath(p).split('/').map(encodeURIComponent).join('/');
 	return ret + p;
 }
 
@@ -101,7 +101,7 @@ export function uri2reluri(uri: string, root: string): string {
 
 export function uri2relpath(uri: string, root: string): string {
 	uri = uri2path(uri);
-	root = normalizePath(root);
+	root = toUnixPath(root);
 	if (uri.startsWith(root)) {
 		uri = uri.substring(root.length);
 	}
@@ -175,7 +175,7 @@ export function isDeclarationFile(filename: string): boolean {
  * Converts filename to POSIX-style absolute one if filename does not denote absolute path already
  */
 export function absolutize(filename: string) {
-	filename = normalizePath(filename);
+	filename = toUnixPath(filename);
 	// If POSIX path does not treats filename as absolute, let's try system-specific one
 	if (!path.posix.isAbsolute(filename) && !path.isAbsolute(filename)) {
 		filename = '/' + filename;
