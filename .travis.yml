@@ -13,4 +13,4 @@ script:
 
 after_success:
   # Upload coverage to codecov
-  - nyc report --reporter=lcov > coverage.lcov && codecov
+  - 'nyc report --reporter=lcov > coverage.lcov && bash <(curl -s https://codecov.io/bash) -f coverage/lcov.info'
