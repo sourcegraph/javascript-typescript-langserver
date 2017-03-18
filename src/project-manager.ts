@@ -105,7 +105,7 @@ export class ProjectManager implements Disposable {
 	constructor(rootPath: string, remoteFs: FileSystem.FileSystem, strict: boolean, traceModuleResolution?: boolean, protected logger: Logger = new NoopLogger()) {
 		this.rootPath = util.toUnixPath(rootPath);
 		this.configs = new Map<string, ProjectConfiguration>();
-		this.localFs = new InMemoryFileSystem(this.rootPath);
+		this.localFs = new InMemoryFileSystem(this.rootPath, this.logger);
 		this.versions = new Map<string, number>();
 		this.fetched = new Set<string>();
 		this.remoteFs = remoteFs;
@@ -529,7 +529,7 @@ export class ProjectManager implements Disposable {
 					allowNonTsExtensions: false,
 					allowJs: true
 				}
-			}, this.traceModuleResolution));
+			}, this.traceModuleResolution, this.logger));
 		}
 	}
 }
@@ -584,7 +584,7 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	 */
 	private versions: Map<string, number>;
 
-	constructor(rootPath: string, options: ts.CompilerOptions, fs: InMemoryFileSystem, expectedFiles: string[], versions: Map<string, number>, private logger: Logger) {
+	constructor(rootPath: string, options: ts.CompilerOptions, fs: InMemoryFileSystem, expectedFiles: string[], versions: Map<string, number>, private logger: Logger = new NoopLogger()) {
 		this.rootPath = rootPath;
 		this.options = options;
 		this.fs = fs;
