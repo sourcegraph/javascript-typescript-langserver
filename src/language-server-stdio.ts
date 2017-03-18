@@ -2,6 +2,7 @@
 
 import { newConnection, registerLanguageHandler } from './connection';
 import { RemoteLanguageClient } from './lang-handler';
+import { FileLogger, StderrLogger } from './logging';
 import { TypeScriptService } from './typescript-service';
 import * as util from './util';
 
@@ -16,7 +17,10 @@ program
 	.parse(process.argv);
 
 util.setStrict(program.strict);
-const connection = newConnection(process.stdin, process.stdout, { trace: program.trace, logfile: program.logfile });
+const connection = newConnection(process.stdin, process.stdout, {
+	trace: program.trace,
+	logger: program.logfile ? new FileLogger(program.logfile) : new StderrLogger()
+});
 registerLanguageHandler(connection, new TypeScriptService(new RemoteLanguageClient(connection), {
 	strict: program.strict
 }));

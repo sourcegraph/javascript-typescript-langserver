@@ -8,8 +8,6 @@ import { PrefixedLogger, StdioLogger } from './logging';
 export interface ServeOptions extends TraceOptions {
 	clusterSize: number;
 	lspPort: number;
-	trace?: boolean;
-	logfile?: string;
 }
 
 /**

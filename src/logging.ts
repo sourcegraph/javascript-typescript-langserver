@@ -1,5 +1,6 @@
 
 import * as chalk from 'chalk';
+import * as fs from 'fs';
 import { inspect } from 'util';
 import { MessageType } from 'vscode-languageserver';
 import { LanguageClientHandler } from './lang-handler';
@@ -19,7 +20,7 @@ function format(values: any[]): string {
 }
 
 /**
- * A logger implementation that sends window/logMessage notifications to the client
+ * A logger implementation that sends window/logMessage notifications to an LSP client
  */
 export class LSPLogger implements Logger {
 
@@ -46,24 +47,55 @@ export class LSPLogger implements Logger {
 }
 
 /**
- * Logger implementation that logs to STDOUT and STDERR depending on level
+ * Logging implementation that writes to an arbitrary NodeJS stream
  */
-export class StdioLogger {
-
+export class StreamLogger {
+	constructor(private outStream: NodeJS.WritableStream, private errStream: NodeJS.WritableStream) {}
 	log(...values: any[]): void {
-		process.stdout.write('LOG  ' + format(values) + '\n');
+		this.outStream.write('LOG  ' + format(values) + '\n');
 	}
 
 	info(...values: any[]): void {
-		process.stdout.write(chalk.bgCyan('INFO') + ' ' + format(values) + '\n');
+		this.outStream.write(chalk.bgCyan('INFO') + ' ' + format(values) + '\n');
 	}
 
 	warn(...values: any[]): void {
-		process.stderr.write(chalk.bgYellow('WARN') + ' ' + format(values) + '\n');
+		this.errStream.write(chalk.bgYellow('WARN') + ' ' + format(values) + '\n');
 	}
 
 	error(...values: any[]): void {
-		process.stderr.write(chalk.bgRed('ERR') + '  ' + format(values) + '\n');
+		this.errStream.write(chalk.bgRed('ERR') + '  ' + format(values) + '\n');
+	}
+}
+
+/**
+ * Logger implementation that logs to STDOUT and STDERR depending on level
+ */
+export class StdioLogger extends StreamLogger {
+	constructor() {
+		super(process.stdout, process.stderr);
+	}
+}
+
+/**
+ * Logger implementation that logs only to STDERR
+ */
+export class StderrLogger extends StreamLogger {
+	constructor() {
+		super(process.stderr, process.stderr);
+	}
+}
+
+/**
+ * Logger implementation that logs to a file
+ */
+export class FileLogger extends StreamLogger {
+	/**
+	 * @param file Path to the logfile
+	 */
+	constructor(file: string) {
+		const stream = fs.createWriteStream(file);
+		super(stream, stream);
 	}
 }
 
