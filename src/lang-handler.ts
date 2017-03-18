@@ -11,6 +11,7 @@ import {
 	InitializeParams,
 	InitializeResult,
 	Location,
+	LogMessageParams,
 	ReferenceParams,
 	SymbolInformation,
 	TextDocumentIdentifier,
@@ -57,6 +58,7 @@ export interface LanguageHandler {
 export interface LanguageClientHandler {
 	getTextDocumentContent(params: TextDocumentContentParams, token?: CancellationToken): Promise<TextDocumentItem>;
 	getWorkspaceFiles(params: WorkspaceFilesParams, token?: CancellationToken): Promise<TextDocumentIdentifier[]>;
+	logMessage(params: LogMessageParams): void;
 }
 
 export class RemoteLanguageClient implements LanguageClientHandler {
@@ -69,5 +71,9 @@ export class RemoteLanguageClient implements LanguageClientHandler {
 
 	getWorkspaceFiles(params: WorkspaceFilesParams, token = CancellationToken.None): Promise<TextDocumentIdentifier[]> {
 		return Promise.resolve(this.connection.sendRequest('workspace/xfiles', params, token));
+	}
+
+	logMessage(params: LogMessageParams): void {
+		this.connection.sendNotification('window/logMessage', params);
 	}
 }

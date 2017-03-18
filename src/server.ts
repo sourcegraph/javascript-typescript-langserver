@@ -1,20 +1,9 @@
 import * as cluster from 'cluster';
 import * as net from 'net';
-
 import { IConnection } from 'vscode-languageserver';
 import { newConnection, registerLanguageHandler, TraceOptions } from './connection';
 import { LanguageHandler } from './lang-handler';
-
-async function rewriteConsole() {
-	const consoleErr = console.error;
-	console.error = function error(this: typeof console) {
-		if (cluster.isMaster) {
-			consoleErr.call(this, `[mstr]`, ...arguments);
-		} else {
-			consoleErr.call(this, `[wkr${cluster.worker.id}]`, ...arguments);
-		}
-	};
-}
+import { PrefixedLogger, StdioLogger } from './logging';
 
 export interface ServeOptions extends TraceOptions {
 	clusterSize: number;
@@ -29,26 +18,25 @@ export interface ServeOptions extends TraceOptions {
  * parallelism.
  */
 export async function serve(options: ServeOptions, createLangHandler: (connection: IConnection) => LanguageHandler): Promise<void> {
-	rewriteConsole();
-
+	const logger = new PrefixedLogger(new StdioLogger(), cluster.isMaster ? 'master' : `wrkr ${cluster.worker.id}`);
 	if (options.clusterSize > 1 && cluster.isMaster) {
-		console.error(`Master (PID ${process.pid}) spawning ${options.clusterSize} workers`);
+		logger.log(`Spawning ${options.clusterSize} workers`);
 		cluster.on('online', worker => {
-			console.error(`Worker ${worker.id} (PID ${worker.process.pid}) online`);
+			logger.log(`Worker ${worker.id} (PID ${worker.process.pid}) online`);
 		});
 		cluster.on('exit', (worker, code, signal) => {
-			console.error(`Worker ${worker.id} (PID ${worker.process.pid}) exited from signal ${signal} with code ${code}, restarting`);
+			logger.error(`Worker ${worker.id} (PID ${worker.process.pid}) exited from signal ${signal} with code ${code}, restarting`);
 			cluster.fork();
 		});
 		for (let i = 0; i < options.clusterSize; ++i) {
 			cluster.fork();
 		}
 	} else {
-		console.error('Listening for incoming LSP connections on', options.lspPort);
+		logger.info(`Listening for incoming LSP connections on ${options.lspPort}`);
 		let counter = 1;
 		let server = net.createServer(socket => {
 			const id = counter++;
-			console.error(`Connection ${id} accepted`);
+			logger.log(`Connection ${id} accepted`);
 			// This connection listens on the socket
 			const connection = newConnection(socket, socket, options);
 
@@ -56,7 +44,7 @@ export async function serve(options: ServeOptions, createLangHandler: (connectio
 			connection.onNotification('exit', () => {
 				socket.end();
 				socket.destroy();
-				console.error(`Connection ${id} closed (exit notification)`);
+				logger.log(`Connection ${id} closed (exit notification)`);
 			});
 
 			registerLanguageHandler(connection, createLangHandler(connection));

@@ -8,10 +8,6 @@ import * as util from './util';
 const packageJson = require('../package.json');
 const program = require('commander');
 
-process.on('uncaughtException', (err: string) => {
-	console.error(err);
-});
-
 program
 	.version(packageJson.version)
 	.option('-s, --strict', 'enables strict mode')

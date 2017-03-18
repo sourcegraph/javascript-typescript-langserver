@@ -1,3 +1,4 @@
+import * as async from 'async';
 import * as path_ from 'path';
 import * as ts from 'typescript';
 import { CancellationToken } from 'vscode-jsonrpc';
@@ -20,6 +21,11 @@ import {
 	TextDocumentPositionParams,
 	TextDocumentSyncKind
 } from 'vscode-languageserver';
+import { isCancelledError } from './cancellation';
+import { FileSystem, LocalFileSystem, RemoteFileSystem } from './fs';
+import { LanguageClientHandler, LanguageHandler } from './lang-handler';
+import { Logger, LSPLogger } from './logging';
+import * as pm from './project-manager';
 import {
 	DependencyReference,
 	InitializeParams,
@@ -31,15 +37,7 @@ import {
 	WorkspaceReferenceParams,
 	WorkspaceSymbolParams
 } from './request-type';
-
-import * as async from 'async';
-
-import { FileSystem, LocalFileSystem, RemoteFileSystem } from './fs';
-import * as pm from './project-manager';
 import * as util from './util';
-
-import { isCancelledError } from './cancellation';
-import { LanguageClientHandler, LanguageHandler } from './lang-handler';
 
 export interface TypeScriptServiceOptions {
 	traceModuleResolution?: boolean;
@@ -65,7 +63,11 @@ export class TypeScriptService implements LanguageHandler {
 
 	protected fileSystem: FileSystem;
 
-	constructor(protected client: LanguageClientHandler, protected options: TypeScriptServiceOptions = {}) {}
+	protected logger: Logger;
+
+	constructor(protected client: LanguageClientHandler, protected options: TypeScriptServiceOptions = {}) {
+		this.logger = new LSPLogger(client);
+	}
 
 	async initialize(params: InitializeParams, token = CancellationToken.None): Promise<InitializeResult> {
 		if (params.rootUri || params.rootPath) {
@@ -76,13 +78,13 @@ export class TypeScriptService implements LanguageHandler {
 				this.fileSystem = new LocalFileSystem(util.uri2path(this.root));
 			}
 			await this.beforeProjectInit();
-			this.projectManager = new pm.ProjectManager(this.root, this.fileSystem, this.options.strict, this.traceModuleResolution);
+			this.projectManager = new pm.ProjectManager(this.root, this.fileSystem, this.options.strict, this.traceModuleResolution, this.logger);
 			// Pre-fetch files in the background
 			// TODO why does ensureAllFiles() fetch less files than ensureFilesForWorkspaceSymbol()?
 			//      (package.json is not fetched)
 			this.projectManager.ensureFilesForWorkspaceSymbol().catch(err => {
 				if (!isCancelledError(err)) {
-					console.error('Background fetching failed', err);
+					this.logger.error('Background fetching failed ', err);
 				}
 			});
 		}
@@ -241,13 +243,9 @@ export class TypeScriptService implements LanguageHandler {
 			return [];
 		}
 
-		const started = new Date().getTime();
-		const prepared = new Date().getTime();
-
 		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
 		const refs = configuration.getService().getReferencesAtPosition(fileName, offset);
 
-		const fetched = new Date().getTime();
 		const tasks: AsyncFunction<Location, Error>[] = [];
 
 		if (refs) {
@@ -260,8 +258,6 @@ export class TypeScriptService implements LanguageHandler {
 		}
 		return new Promise<Location[]>((resolve, reject) => {
 			async.parallel(tasks, (err: Error, results: Location[]) => {
-				const finished = new Date().getTime();
-				console.error('references', 'transform', (finished - fetched) / 1000.0, 'fetch', (fetched - prepared) / 1000.0, 'prepare', (prepared - started) / 1000.0);
 				return resolve(results.filter(item => item));
 			});
 		});
@@ -1499,7 +1495,7 @@ export class TypeScriptService implements LanguageHandler {
 			try {
 				tree = configuration.getService().getNavigationTree(sourceFile.fileName);
 			} catch (e) {
-				console.error('could not get navigation tree for file', sourceFile.fileName);
+				this.logger.error('could not get navigation tree for file', sourceFile.fileName);
 				continue;
 			}
 			this.flattenNavigationTreeItem(tree, null, sourceFile, result, limit);
