@@ -16,7 +16,7 @@ export interface ServeOptions extends TraceOptions {
  * parallelism.
  */
 export async function serve(options: ServeOptions, createLangHandler: (connection: IConnection) => LanguageHandler): Promise<void> {
-	const logger = new PrefixedLogger(new StdioLogger(), cluster.isMaster ? 'master' : `wrkr ${cluster.worker.id}`);
+	const logger = new PrefixedLogger(options.logger || new StdioLogger(), cluster.isMaster ? 'master' : `wrkr ${cluster.worker.id}`);
 	if (options.clusterSize > 1 && cluster.isMaster) {
 		logger.log(`Spawning ${options.clusterSize} workers`);
 		cluster.on('online', worker => {
