@@ -32,3 +32,12 @@ export function throwIfRequested(token: CancellationToken): void {
 		throw new CancelledError();
 	}
 }
+
+/**
+ * Rethrows the passed error if it is a CancelledError
+ */
+export function throwIfCancelledError(err: any): void {
+	if (isCancelledError(err)) {
+		throw err;
+	}
+}
