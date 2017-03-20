@@ -6,7 +6,6 @@ import * as path_ from 'path';
 import * as ts from 'typescript';
 import { Disposable } from 'vscode-languageserver';
 import { CancellationToken, CancellationTokenSource, throwIfCancelledError, throwIfRequested } from './cancellation';
-import * as FileSystem from './fs';
 import { FileSystemUpdater } from './fs';
 import { Logger, NoopLogger } from './logging';
 import * as match from './match-files';
@@ -43,12 +42,6 @@ export class ProjectManager implements Disposable {
 	 * otherwise we are working with a local file system
 	 */
 	private strict: boolean;
-
-	/**
-	 * Remote side of file content provider which may point to either a client (strict mode) or
-	 * to a local file system
-	 */
-	private remoteFs: FileSystem.FileSystem;
 
 	/**
 	 * Local side of file content provider which keeps cache of fetched files
@@ -91,17 +84,16 @@ export class ProjectManager implements Disposable {
 
 	/**
 	 * @param rootPath root path as passed to `initialize`
-	 * @param remoteFS remote side of file content provider, used to fetch content from on demand
+	 * @param inMemoryFileSystem File system that keeps structure and contents in memory
 	 * @param strict indicates if we are working in strict mode (VFS) or with a local file system
 	 * @param traceModuleResolution allows to enable module resolution tracing (done by TS compiler)
 	 */
-	constructor(rootPath: string, remoteFs: FileSystem.FileSystem, strict: boolean, traceModuleResolution?: boolean, protected logger: Logger = new NoopLogger()) {
+	constructor(rootPath: string, inMemoryFileSystem: InMemoryFileSystem, updater: FileSystemUpdater, strict: boolean, traceModuleResolution?: boolean, protected logger: Logger = new NoopLogger()) {
 		this.rootPath = util.toUnixPath(rootPath);
 		this.configs = new Map<string, ProjectConfiguration>();
-		this.localFs = new InMemoryFileSystem(this.rootPath);
-		this.updater = new FileSystemUpdater(remoteFs, this.localFs);
+		this.updater = updater;
+		this.localFs = inMemoryFileSystem;
 		this.versions = new Map<string, number>();
-		this.remoteFs = remoteFs;
 		this.strict = strict;
 		this.traceModuleResolution = traceModuleResolution || false;
 	}

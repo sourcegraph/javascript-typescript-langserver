@@ -3,6 +3,7 @@ import * as path from 'path';
 import { cancellableMemoize, CancellationToken, throwIfRequested } from './cancellation';
 import { LanguageClientHandler } from './lang-handler';
 import glob = require('glob');
+import iterate from 'iterare';
 import Semaphore from 'semaphore-async-await';
 import * as url from 'url';
 import { InMemoryFileSystem } from './project-manager';
@@ -15,7 +16,7 @@ export interface FileSystem {
 	 * @param base A URI under which to search, resolved relative to the rootUri
 	 * @return A promise that is fulfilled with an array of URIs
 	 */
-	getWorkspaceFiles(base?: string, token?: CancellationToken): Promise<string[]>;
+	getWorkspaceFiles(base?: string, token?: CancellationToken): Promise<Iterable<string>>;
 
 	/**
 	 * Returns the content of a text document
@@ -34,9 +35,9 @@ export class RemoteFileSystem implements FileSystem {
 	 * The files request is sent from the server to the client to request a list of all files in the workspace or inside the directory of the base parameter, if given.
 	 * A language server can use the result to index files by filtering and doing a content request for each text document of interest.
 	 */
-	async getWorkspaceFiles(base?: string, token = CancellationToken.None): Promise<string[]> {
-		const textDocuments = await this.client.getWorkspaceFiles({ base }, token);
-		return textDocuments.map(textDocument => textDocument.uri);
+	async getWorkspaceFiles(base?: string, token = CancellationToken.None): Promise<Iterable<string>> {
+		return iterate(await this.client.getWorkspaceFiles({ base }, token))
+			.map(textDocument => textDocument.uri);
 	}
 
 	/**
@@ -62,12 +63,12 @@ export class LocalFileSystem implements FileSystem {
 		return path.resolve(this.rootPath, uri2path(uri));
 	}
 
-	async getWorkspaceFiles(base?: string): Promise<string[]> {
+	async getWorkspaceFiles(base?: string): Promise<Iterable<string>> {
 		const pattern = base ? path.posix.join(this.resolveUriToPath(base), '**/*.*') : this.resolveUriToPath('file:///**/*.*');
 		const files = await new Promise<string[]>((resolve, reject) => {
 			glob(pattern, { nodir: true }, (err, matches) => err ? reject(err) : resolve(matches));
 		});
-		return files.map(file => path2uri('', file));
+		return iterate(files).map(file => path2uri('', file));
 	}
 
 	async getTextDocumentContent(uri: string): Promise<string> {
@@ -153,7 +154,11 @@ export class FileSystemUpdater {
 	 *
 	 * @param base The base directory which structure will be synced. Defaults to the workspace root
 	 */
-	async fetchStructure(base?: string, token = CancellationToken.None): Promise<void> {
+	fetchStructure(base: string, token?: CancellationToken): Promise<void>;
+	fetchStructure(token?: CancellationToken): Promise<void>;
+	async fetchStructure(...args: any[]): Promise<void> {
+		const token: CancellationToken = CancellationToken.is(args[args.length - 1]) ? args.pop() : CancellationToken.None;
+		const base: string | undefined = args[0];
 		const uris = await this.remoteFs.getWorkspaceFiles(base, token);
 		for (const uri of uris) {
 			this.inMemoryFs.add(uri);
