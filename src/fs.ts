@@ -1,6 +1,5 @@
 import * as fs from 'mz/fs';
 import * as path from 'path';
-import { TextDocumentIdentifier } from 'vscode-languageserver-types';
 import { CancellationToken, throwIfRequested } from './cancellation';
 import { LanguageClientHandler } from './lang-handler';
 import glob = require('glob');
@@ -28,26 +27,15 @@ export interface FileSystem {
 
 export class RemoteFileSystem implements FileSystem {
 
-	private workspaceFilesPromise?: Promise<string[]>;
-
 	constructor(private client: LanguageClientHandler) {}
 
 	/**
 	 * The files request is sent from the server to the client to request a list of all files in the workspace or inside the directory of the base parameter, if given.
 	 * A language server can use the result to index files by filtering and doing a content request for each text document of interest.
 	 */
-	getWorkspaceFiles(base?: string, token = CancellationToken.None): Promise<string[]> {
-		// TODO cache this at a different layer and invalidate it properly
-		// This is just a quick and dirty solution to avoid multiple requests
-		if (!this.workspaceFilesPromise) {
-			this.workspaceFilesPromise = this.client.getWorkspaceFiles({ base }, token)
-				.then((textDocuments: TextDocumentIdentifier[]) => textDocuments.map(textDocument => textDocument.uri))
-				.catch(err => {
-					this.workspaceFilesPromise = undefined;
-					throw err;
-				});
-		}
-		return this.workspaceFilesPromise;
+	async getWorkspaceFiles(base?: string, token = CancellationToken.None): Promise<string[]> {
+		const textDocuments = await this.client.getWorkspaceFiles({ base }, token);
+		return textDocuments.map(textDocument => textDocument.uri);
 	}
 
 	/**
@@ -74,8 +62,9 @@ export class LocalFileSystem implements FileSystem {
 	}
 
 	async getWorkspaceFiles(base?: string): Promise<string[]> {
+		const pattern = base ? path.posix.join(this.resolveUriToPath(base), '**/*.*') : this.resolveUriToPath('file:///**/*.*');
 		const files = await new Promise<string[]>((resolve, reject) => {
-			glob(path.join(this.resolveUriToPath(base), '**/*.*'), { nodir: true }, (err, matches) => err ? reject(err) : resolve(matches));
+			glob(pattern, { nodir: true }, (err, matches) => err ? reject(err) : resolve(matches));
 		});
 		return files.map(file => path2uri('', file));
 	}
@@ -101,6 +90,8 @@ export class FileSystemUpdater {
 	 * Limits concurrent fetches to not fetch thousands of files in parallel
 	 */
 	private concurrencyLimit = new Semaphore(100);
+
+	private structureFetch?: Promise<void>;
 
 	constructor(private remoteFs: FileSystem, private inMemoryFs: InMemoryFileSystem) {}
 
@@ -130,6 +121,8 @@ export class FileSystemUpdater {
 	 * Returns a promise that is resolved when the given URI has been fetched (at least once) to the in-memory file system.
 	 * This function cannot be cancelled because multiple callers get the result of the same operation.
 	 *
+	 * TODO use memoize helper and support cancellation with multiple consumers
+	 *
 	 * @param uri URI of the file to ensure
 	 */
 	async ensure(uri: string): Promise<void> {
@@ -140,9 +133,25 @@ export class FileSystemUpdater {
 	 * Fetches the file/directory structure from the remote file system and saves it in the in-memory file system
 	 */
 	async fetchStructure(token = CancellationToken.None): Promise<void> {
-		const uris = await this.remoteFs.getWorkspaceFiles(undefined, token);
-		for (const uri of uris) {
-			this.inMemoryFs.add(uri);
-		}
+		this.structureFetch = (async () => {
+			const uris = await this.remoteFs.getWorkspaceFiles(undefined, token);
+			for (const uri of uris) {
+				this.inMemoryFs.add(uri);
+			}
+		})();
+		this.structureFetch.catch(err => {
+			this.structureFetch = undefined;
+		});
+		return this.structureFetch;
+	}
+
+	/**
+	 * Returns a promise that is resolved as soon as the file/directory structure has been synced
+	 * from the remote file system to the in-memory file system (at least once)
+	 *
+	 * TODO use memoize helper and support cancellation with multiple consumers
+	 */
+	async ensureStructure(): Promise<void> {
+		return this.structureFetch || this.fetchStructure();
 	}
 }

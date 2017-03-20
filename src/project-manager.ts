@@ -1,5 +1,5 @@
-import * as bluebird from 'bluebird';
 import * as fs_ from 'fs';
+import iterate from 'iterare';
 import { memoize } from 'lodash';
 import * as os from 'os';
 import * as path_ from 'path';
@@ -189,8 +189,8 @@ export class ProjectManager implements Disposable {
 	async refreshFileTree(rootPath: string, moduleStructureOnly: boolean): Promise<void> {
 		rootPath = util.normalizeDir(rootPath);
 		const filesToFetch: string[] = [];
-		const uris = await this.remoteFs.getWorkspaceFiles(util.path2uri('', rootPath));
-		for (const uri of uris) {
+		await this.updater.fetchStructure();
+		for (const uri of this.localFs.uris()) {
 			const file = util.uri2path(uri);
 			const rel = path_.posix.relative(this.rootPath, util.toUnixPath(file));
 			if (!moduleStructureOnly || util.isGlobalTSFile(rel) || util.isConfigFile(rel) || util.isPackageJsonFile(rel)) {
@@ -255,9 +255,9 @@ export class ProjectManager implements Disposable {
 	 */
 	ensureFilesForWorkspaceSymbol = memoize(async (): Promise<void> => {
 		try {
-			const uris = await this.remoteFs.getWorkspaceFiles(util.path2uri('', this.getRemoteRoot()));
+			await this.updater.ensureStructure();
 			const filesToEnsure = [];
-			for (const uri of uris) {
+			for (const uri of this.localFs.uris()) {
 				const file = util.uri2path(uri);
 				if (
 					util.toUnixPath(file).indexOf('/node_modules/') === -1
@@ -283,9 +283,9 @@ export class ProjectManager implements Disposable {
 			return this.ensuredAllFiles;
 		}
 
-		const promise = this.remoteFs.getWorkspaceFiles(util.path2uri('', this.getRemoteRoot()))
-			.then(uris => this.ensureFiles(
-				uris
+		const promise = this.updater.ensureStructure()
+			.then(() => this.ensureFiles(
+				iterate(this.localFs.uris())
 					.map(uri => util.uri2path(uri))
 					.filter(file => util.isJSTSFile(file))
 			))
@@ -459,13 +459,13 @@ export class ProjectManager implements Disposable {
 	 *
 	 * @param files File paths
 	 */
-	async ensureFiles(files: string[], token: CancellationToken = CancellationToken.None): Promise<void> {
+	async ensureFiles(files: Iterable<string>, token: CancellationToken = CancellationToken.None): Promise<void> {
 		const source = new CancellationTokenSource();
 		token.onCancellationRequested(() => source.cancel());
 		this.cancellationSources.add(source);
 		token = source.token;
 		try {
-			await bluebird.map(files, async path => {
+			await Promise.all(iterate(files).map(async path => {
 				throwIfRequested(token);
 				try {
 					await this.updater.ensure(util.path2uri('', path));
@@ -476,7 +476,7 @@ export class ProjectManager implements Disposable {
 					// else log error and continue
 					console.error(`Ensuring file ${path} failed`, err);
 				}
-			});
+			}));
 		} finally {
 			this.cancellationSources.delete(source);
 		}
@@ -718,6 +718,13 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 		this.entries = new Map<string, string>();
 		this.overlay = new Map<string, string>();
 		this.rootNode = { file: false, children: new Map<string, FileSystemNode>() };
+	}
+
+	/**
+	 * Returns an IterableIterator for all URIs known to exist in the workspace (content loaded or not)
+	 */
+	uris(): IterableIterator<string> {
+		return this.files.keys();
 	}
 
 	/**

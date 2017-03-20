@@ -39,6 +39,7 @@
     "chai-as-promised": "^6.0.0",
     "commander": "^2.9.0",
     "glob": "^7.1.1",
+    "iterare": "^0.0.7",
     "lodash": "^4.17.4",
     "mz": "^2.6.0",
     "semaphore-async-await": "^1.5.1",
