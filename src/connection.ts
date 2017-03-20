@@ -27,7 +27,7 @@ export function newConnection(input: NodeJS.ReadableStream, output: NodeJS.Writa
 	const write = writer.write.bind(writer);
 	writer.write = (message: Message) => {
 		if (options.trace) {
-			logger.log('-->', message);
+			logger.log('<--', message);
 		}
 		write(message);
 	};
