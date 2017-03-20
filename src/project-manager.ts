@@ -292,7 +292,7 @@ export class ProjectManager implements Disposable {
 			.then(() => this.refreshConfigurations());
 
 		this.ensuredAllFiles = promise;
-		promise.catch(err => {
+		promise.catch((err: any) => {
 			console.error('Failed to fetch files for references:', err);
 			this.ensuredAllFiles = undefined;
 		});
@@ -468,7 +468,7 @@ export class ProjectManager implements Disposable {
 			await Promise.all(iterate(files).map(async path => {
 				throwIfRequested(token);
 				try {
-					await this.updater.ensure(util.path2uri('', path));
+					await this.updater.ensure(util.path2uri('', path), token);
 				} catch (err) {
 					// if cancellation was requested, break out of the loop
 					throwIfCancelledError(err);
