@@ -3,7 +3,7 @@ import * as net from 'net';
 import { IConnection } from 'vscode-languageserver';
 import { newConnection, registerLanguageHandler, TraceOptions } from './connection';
 import { LanguageHandler } from './lang-handler';
-import { PrefixedLogger, StdioLogger } from './logging';
+import { Logger, PrefixedLogger, StdioLogger } from './logging';
 
 export interface ServeOptions extends TraceOptions {
 	clusterSize: number;
@@ -15,7 +15,7 @@ export interface ServeOptions extends TraceOptions {
  * cluster of worker processes to achieve some semblance of
  * parallelism.
  */
-export async function serve(options: ServeOptions, createLangHandler: (connection: IConnection) => LanguageHandler): Promise<void> {
+export async function serve(options: ServeOptions, createLangHandler: (connection: IConnection, logger: Logger) => LanguageHandler): Promise<void> {
 	const logger = new PrefixedLogger(options.logger || new StdioLogger(), cluster.isMaster ? 'master' : `wrkr ${cluster.worker.id}`);
 	if (options.clusterSize > 1 && cluster.isMaster) {
 		logger.log(`Spawning ${options.clusterSize} workers`);
@@ -45,7 +45,7 @@ export async function serve(options: ServeOptions, createLangHandler: (connectio
 				logger.log(`Connection ${id} closed (exit notification)`);
 			});
 
-			registerLanguageHandler(connection, createLangHandler(connection));
+			registerLanguageHandler(connection, createLangHandler(connection, logger));
 
 			connection.listen();
 		});
