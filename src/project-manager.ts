@@ -1,15 +1,13 @@
 import * as fs_ from 'fs';
+import iterate from 'iterare';
+import { memoize } from 'lodash';
 import * as os from 'os';
 import * as path_ from 'path';
-
 import * as ts from 'typescript';
-
-import * as bluebird from 'bluebird';
-import { memoize } from 'lodash';
-import { CancellationToken, CancellationTokenSource } from 'vscode-jsonrpc';
 import { Disposable } from 'vscode-languageserver';
-import { throwIfRequested } from './cancellation';
+import { CancellationToken, CancellationTokenSource, throwIfCancelledError, throwIfRequested } from './cancellation';
 import * as FileSystem from './fs';
+import { FileSystemUpdater } from './fs';
 import * as match from './match-files';
 import * as util from './util';
 
@@ -57,6 +55,11 @@ export class ProjectManager implements Disposable {
 	private localFs: InMemoryFileSystem;
 
 	/**
+	 * File system updater that takes care of updating the in-memory file system
+	 */
+	private updater: FileSystemUpdater;
+
+	/**
 	 * Relative file path -> version map. Every time file content is about to change or changed (didChange/didOpen/...), we are incrementing it's version
 	 * signalling that file is changed and file's user must invalidate cached and requery file content
 	 */
@@ -66,18 +69,6 @@ export class ProjectManager implements Disposable {
 	 * Enables module resolution tracing by TS compiler
 	 */
 	private traceModuleResolution: boolean;
-
-	/**
-	 * fetched keeps track of which files in localFs have actually
-	 * been fetched from remoteFs. (Some might have a placeholder
-	 * value). If a file has already been successfully fetched, we
-	 * won't fetch it again. This should be cleared if remoteFs files
-	 * have been modified in some way, but does not need to be cleared
-	 * if remoteFs files have only been added.
-	 *
-	 * Set elements are absolute file paths
-	 */
-	private fetched: Set<string>;
 
 	/**
 	 * Flag indicating that we fetched module struture (tsconfig.json, jsconfig.json, package.json files) from the remote file system.
@@ -107,8 +98,8 @@ export class ProjectManager implements Disposable {
 		this.rootPath = util.toUnixPath(rootPath);
 		this.configs = new Map<string, ProjectConfiguration>();
 		this.localFs = new InMemoryFileSystem(this.rootPath);
+		this.updater = new FileSystemUpdater(remoteFs, this.localFs);
 		this.versions = new Map<string, number>();
-		this.fetched = new Set<string>();
 		this.remoteFs = remoteFs;
 		this.strict = strict;
 		this.traceModuleResolution = traceModuleResolution || false;
@@ -198,8 +189,8 @@ export class ProjectManager implements Disposable {
 	async refreshFileTree(rootPath: string, moduleStructureOnly: boolean): Promise<void> {
 		rootPath = util.normalizeDir(rootPath);
 		const filesToFetch: string[] = [];
-		const uris = await this.remoteFs.getWorkspaceFiles(util.path2uri('', rootPath));
-		for (const uri of uris) {
+		await this.updater.fetchStructure();
+		for (const uri of this.localFs.uris()) {
 			const file = util.uri2path(uri);
 			const rel = path_.posix.relative(this.rootPath, util.toUnixPath(file));
 			if (!moduleStructureOnly || util.isGlobalTSFile(rel) || util.isConfigFile(rel) || util.isPackageJsonFile(rel)) {
@@ -264,9 +255,9 @@ export class ProjectManager implements Disposable {
 	 */
 	ensureFilesForWorkspaceSymbol = memoize(async (): Promise<void> => {
 		try {
-			const uris = await this.remoteFs.getWorkspaceFiles(util.path2uri('', this.getRemoteRoot()));
+			await this.updater.ensureStructure();
 			const filesToEnsure = [];
-			for (const uri of uris) {
+			for (const uri of this.localFs.uris()) {
 				const file = util.uri2path(uri);
 				if (
 					util.toUnixPath(file).indexOf('/node_modules/') === -1
@@ -292,16 +283,16 @@ export class ProjectManager implements Disposable {
 			return this.ensuredAllFiles;
 		}
 
-		const promise = this.remoteFs.getWorkspaceFiles(util.path2uri('', this.getRemoteRoot()))
-			.then(uris => this.ensureFiles(
-				uris
+		const promise = this.updater.ensureStructure()
+			.then(() => this.ensureFiles(
+				iterate(this.localFs.uris())
 					.map(uri => util.uri2path(uri))
 					.filter(file => util.isJSTSFile(file))
 			))
 			.then(() => this.refreshConfigurations());
 
 		this.ensuredAllFiles = promise;
-		promise.catch(err => {
+		promise.catch((err: any) => {
 			console.error('Failed to fetch files for references:', err);
 			this.ensuredAllFiles = undefined;
 		});
@@ -468,35 +459,24 @@ export class ProjectManager implements Disposable {
 	 *
 	 * @param files File paths
 	 */
-	async ensureFiles(files: string[], token: CancellationToken = CancellationToken.None): Promise<void> {
+	async ensureFiles(files: Iterable<string>, token: CancellationToken = CancellationToken.None): Promise<void> {
 		const source = new CancellationTokenSource();
 		token.onCancellationRequested(() => source.cancel());
 		this.cancellationSources.add(source);
 		token = source.token;
 		try {
-			await bluebird.map(files, async path => {
+			await Promise.all(iterate(files).map(async path => {
 				throwIfRequested(token);
-				// Only fetch files that are not already fetched
-				if (this.fetched.has(path)) {
-					return;
-				}
 				try {
-					const content = await this.remoteFs.getTextDocumentContent(util.path2uri('', path), token);
-					const relativePath = path_.posix.relative(this.rootPath, path);
-					this.localFs.addFile(relativePath, content);
-					this.fetched.add(util.toUnixPath(path));
-				} catch (e) {
+					await this.updater.ensure(util.path2uri('', path), token);
+				} catch (err) {
 					// if cancellation was requested, break out of the loop
+					throwIfCancelledError(err);
 					throwIfRequested(token);
 					// else log error and continue
-					console.error(`Ensuring file ${path} failed`, e);
+					console.error(`Ensuring file ${path} failed`, err);
 				}
-			}, {
-				// There may be too many open files when working with local FS and trying
-				// to open them in parallel, so limit concurrent readFile calls to 100
-				// TODO only do this when working with localFs?
-				concurrency: 100
-			});
+			}));
 		} finally {
 			this.cancellationSources.delete(source);
 		}
@@ -701,6 +681,14 @@ export interface FileSystemNode {
 export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResolutionHost {
 
 	/**
+	 * Contains a Set of all URIs that exist in the workspace.
+	 * File contents for URIs in it do not neccessarily have to be fetched already.
+	 *
+	 * TODO: Turn this into a Map<string, string | undefined> and remove entries
+	 */
+	private files = new Set<string>();
+
+	/**
 	 * Map (relative filepath -> string content) of files fetched from the remote file system. Paths are relative to `this.path`
 	 */
 	entries: Map<string, string>;
@@ -733,11 +721,36 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	}
 
 	/**
+	 * Returns an IterableIterator for all URIs known to exist in the workspace (content loaded or not)
+	 */
+	uris(): IterableIterator<string> {
+		return this.files.keys();
+	}
+
+	/**
+	 * Adds a file to the local cache
+	 *
+	 * @param uri The URI of the file
+	 * @param content The optional content
+	 */
+	add(uri: string, content?: string): void {
+		this.files.add(uri);
+		if (content !== undefined) {
+			this.addFile(util.uri2path(uri), content);
+		}
+	}
+
+	/**
 	 * Adds file content to a local cache
-	 * @param path relative file path
-	 * @param content file content
+	 *
+	 * @param path File path, absolute or relative to rootPath
+	 * @param content File content
 	 */
 	addFile(path: string, content: string) {
+		// Ensure path is relative to rootpath
+		if (path_.posix.isAbsolute(path)) {
+			path = path_.posix.relative(this.path, path);
+		}
 		this.entries.set(path, content);
 		let node = this.rootNode;
 		path.split('/').forEach((component, i, components) => {
