@@ -774,18 +774,24 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 * @param path file path (both absolute or relative file paths are accepted)
 	 */
 	fileExists(path: string): boolean {
-		return this.readFileImpl(path) !== undefined;
+		return this.readFileIfExists(path) !== undefined;
 	}
 
 	/**
 	 * @param path file path (both absolute or relative file paths are accepted)
-	 * @return file's content in the following order (overlay then cache)
+	 * @return file's content in the following order (overlay then cache).
+	 * If there is no such file, returns empty string to match expected signature
 	 */
 	readFile(path: string): string {
-		return this.readFileImpl(path) || '';
+		return this.readFileIfExists(path) || '';
 	}
 
-	private readFileImpl(path: string): string | undefined {
+	/**
+	 * @param path file path (both absolute or relative file paths are accepted)
+	 * @return file's content in the following order (overlay then cache).
+	 * If there is no such file, returns undefined
+	 */
+	private readFileIfExists(path: string): string | undefined {
 		let content = this.overlay.get(path);
 		if (content !== undefined) {
 			return content;
@@ -818,7 +824,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 * @param path path to a file relative to project root
 	 */
 	didSave(path: string) {
-		const content = this.readFileImpl(path);
+		const content = this.readFileIfExists(path);
 		if (content !== undefined) {
 			this.addFile(path, content);
 		}

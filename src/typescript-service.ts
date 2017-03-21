@@ -69,7 +69,7 @@ export class TypeScriptService implements LanguageHandler {
 
 	async initialize(params: InitializeParams, token = CancellationToken.None): Promise<InitializeResult> {
 		if (params.rootUri || params.rootPath) {
-			this.root = params.rootPath || util.uri2path(params.rootUri as string);
+			this.root = params.rootPath || util.uri2path(params.rootUri!);
 			if (params.capabilities.xcontentProvider && params.capabilities.xfilesProvider) {
 				this.fileSystem = new RemoteFileSystem(this.client);
 			} else {
