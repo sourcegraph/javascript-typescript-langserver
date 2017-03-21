@@ -36,7 +36,7 @@ export async function serve(options: ServeOptions, createLangHandler: (connectio
 			const id = counter++;
 			logger.log(`Connection ${id} accepted`);
 			// This connection listens on the socket
-			const connection = newConnection(socket, socket, options);
+			const connection = newConnection(socket as NodeJS.ReadableStream, socket, options);
 
 			// Override the default exit notification handler so the process is not killed
 			connection.onNotification('exit', () => {

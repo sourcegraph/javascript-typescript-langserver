@@ -3,7 +3,7 @@ import * as ts from 'typescript';
 import { CancellationToken } from 'vscode-jsonrpc';
 import { CompletionItemKind, LogMessageParams, TextDocumentIdentifier, TextDocumentItem } from 'vscode-languageserver';
 import { TextDocumentContentParams, WorkspaceFilesParams } from '../request-type';
-import { TypeScriptService } from '../typescript-service';
+import { TypeScriptService, TypeScriptServiceFactory } from '../typescript-service';
 import chaiAsPromised = require('chai-as-promised');
 chai.use(chaiAsPromised);
 const assert = chai.assert;
@@ -23,11 +23,11 @@ export interface TestContext {
 /**
  * Returns a function that initializes the test context with a TypeScriptService instance and initializes it (to be used in `beforeEach`)
  *
- * @param TypeScriptServiceConstructor The TypeScriptService subclass to instantiate
+ * @param createService A factory that creates the TypeScript service. Allows to test subclasses of TypeScriptService
  * @param files A Map from URI to file content of files that should be available in the workspace
  */
-export const initializeTypeScriptService = (TypeScriptServiceConstructor: typeof TypeScriptService, files: Map<string, string>) => async function (this: TestContext): Promise<void> {
-	this.service = new TypeScriptServiceConstructor({
+export const initializeTypeScriptService = (createService: TypeScriptServiceFactory, files: Map<string, string>) => async function (this: TestContext): Promise<void> {
+	this.service = createService({
 		getTextDocumentContent(params: TextDocumentContentParams, token?: CancellationToken): Promise<TextDocumentItem> {
 			return Promise.resolve(<TextDocumentItem> {
 				uri: params.textDocument.uri,
@@ -63,13 +63,13 @@ export function shutdownTypeScriptService(this: TestContext): Promise<void> {
 /**
  * Describe a TypeScriptService class
  *
- * @param TypeScriptServiceConstructor The TypeScriptService subclass to describe
+ * @param createService Factory function to create the TypeScriptService instance to describe
  */
-export function describeTypeScriptService(TypeScriptServiceConstructor = TypeScriptService) {
+export function describeTypeScriptService(createService: TypeScriptServiceFactory, shutdownService = shutdownTypeScriptService) {
 
 	describe('Workspace without project files', <any> function (this: TestContext) {
 
-		beforeEach(<any> initializeTypeScriptService(TypeScriptServiceConstructor, new Map([
+		beforeEach(<any> initializeTypeScriptService(createService, new Map([
 			['file:///a.ts', 'const abc = 1; console.log(abc);'],
 			['file:///foo/b.ts', [
 				'/* This is class Foo */',
@@ -89,7 +89,7 @@ export function describeTypeScriptService(TypeScriptServiceConstructor = TypeScr
 			].join('\n')]
 		])));
 
-		afterEach(<any> shutdownTypeScriptService);
+		afterEach(<any> shutdownService);
 
 		describe('getDefinition()', <any> function (this: TestContext) {
 			specify('in same file', <any> async function (this: TestContext) {
@@ -302,7 +302,7 @@ export function describeTypeScriptService(TypeScriptServiceConstructor = TypeScr
 
 	describe('Workspace with typings directory', <any> function (this: TestContext) {
 
-		beforeEach(<any> initializeTypeScriptService(TypeScriptServiceConstructor, new Map([
+		beforeEach(<any> initializeTypeScriptService(createService, new Map([
 			['file:///a.ts', "import * as m from 'dep';"],
 			['file:///typings/dep.d.ts', "declare module 'dep' {}"],
 			['file:///src/tsconfig.json', [
@@ -321,7 +321,7 @@ export function describeTypeScriptService(TypeScriptServiceConstructor = TypeScr
 			['file:///src/dir/index.ts', 'import * as m from "dep";']
 		])));
 
-		afterEach(<any> shutdownTypeScriptService);
+		afterEach(<any> shutdownService);
 
 		describe('getDefinition()', <any> function (this: TestContext) {
 			specify('with tsd.d.ts', <any> async function (this: TestContext) {
@@ -403,12 +403,12 @@ export function describeTypeScriptService(TypeScriptServiceConstructor = TypeScr
 
 	describe('Global module', <any> function (this: TestContext) {
 
-		beforeEach(<any> initializeTypeScriptService(TypeScriptServiceConstructor, new Map([
+		beforeEach(<any> initializeTypeScriptService(createService, new Map([
 			['file:///a.ts', 'const rt: GQL.Rt;'],
 			['file:///interfaces.d.ts', 'declare namespace GQL { interface Rt { } }']
 		])));
 
-		afterEach(<any> shutdownTypeScriptService);
+		afterEach(<any> shutdownService);
 
 		specify('getDefinition()', <any> async function (this: TestContext) {
 			const result = await this.service.getDefinition({
@@ -437,7 +437,7 @@ export function describeTypeScriptService(TypeScriptServiceConstructor = TypeScr
 	});
 
 	describe('DefinitelyTyped', <any> function (this: TestContext) {
-		beforeEach(<any> initializeTypeScriptService(TypeScriptServiceConstructor, new Map([
+		beforeEach(<any> initializeTypeScriptService(createService, new Map([
 			['file:///package.json', JSON.stringify({
 				private: true,
 				name: 'definitely-typed',
@@ -527,7 +527,7 @@ export function describeTypeScriptService(TypeScriptServiceConstructor = TypeScr
 			].join('\n')]
 		])));
 
-		afterEach(<any> shutdownTypeScriptService);
+		afterEach(<any> shutdownService);
 
 		describe('getWorkspaceSymbols()', <any> function (this: TestContext) {
 			specify('resolve, with package', <any> async function (this: TestContext) {
@@ -581,7 +581,7 @@ export function describeTypeScriptService(TypeScriptServiceConstructor = TypeScr
 
 	describe('Workspace with root package.json', <any> function (this: TestContext) {
 
-		beforeEach(<any> initializeTypeScriptService(TypeScriptServiceConstructor, new Map([
+		beforeEach(<any> initializeTypeScriptService(createService, new Map([
 			['file:///a.ts', 'class a { foo() { const i = 1;} }'],
 			['file:///foo/b.ts', 'class b { bar: number; baz(): number { return this.bar;}}; function qux() {}'],
 			['file:///c.ts', 'import { x } from "dep/dep";'],
@@ -589,7 +589,7 @@ export function describeTypeScriptService(TypeScriptServiceConstructor = TypeScr
 			['file:///node_modules/dep/dep.ts', 'export var x = 1;']
 		])));
 
-		afterEach(<any> shutdownTypeScriptService);
+		afterEach(<any> shutdownService);
 
 		describe('getWorkspaceSymbols()', <any> function (this: TestContext) {
 			describe('symbol query', <any> function (this: TestContext) {
@@ -973,7 +973,7 @@ export function describeTypeScriptService(TypeScriptServiceConstructor = TypeScr
 
 	describe('Dependency detection', <any> function (this: TestContext) {
 
-		beforeEach(<any> initializeTypeScriptService(TypeScriptServiceConstructor, new Map([
+		beforeEach(<any> initializeTypeScriptService(createService, new Map([
 			['file:///package.json', JSON.stringify({
 				name: 'tslint',
 				version: '4.0.2',
@@ -1010,7 +1010,7 @@ export function describeTypeScriptService(TypeScriptServiceConstructor = TypeScr
 			})]
 		])));
 
-		afterEach(<any> shutdownTypeScriptService);
+		afterEach(<any> shutdownService);
 
 		describe('getDependencies()', <any> function (this: TestContext) {
 			it('should account for all dependencies', <any> async function (this: TestContext) {
@@ -1064,11 +1064,11 @@ export function describeTypeScriptService(TypeScriptServiceConstructor = TypeScr
 	});
 
 	describe('TypeScript library', <any> function (this: TestContext) {
-		beforeEach(<any> initializeTypeScriptService(TypeScriptServiceConstructor, new Map([
+		beforeEach(<any> initializeTypeScriptService(createService, new Map([
 			['file:///a.ts', 'let parameters = [];']
 		])));
 
-		afterEach(<any> shutdownTypeScriptService);
+		afterEach(<any> shutdownService);
 
 		specify('type of parameters should be any[]', <any> async function (this: TestContext) {
 			const result = await this.service.getHover({
@@ -1101,11 +1101,11 @@ export function describeTypeScriptService(TypeScriptServiceConstructor = TypeScr
 
 	describe('Live updates', <any> function (this: TestContext) {
 
-		beforeEach(<any> initializeTypeScriptService(TypeScriptServiceConstructor, new Map([
+		beforeEach(<any> initializeTypeScriptService(createService, new Map([
 			['file:///a.ts', 'let parameters = [];']
 		])));
 
-		afterEach(<any> shutdownTypeScriptService);
+		afterEach(<any> shutdownService);
 
 		specify('hover updates', <any> async function (this: TestContext) {
 
@@ -1190,7 +1190,7 @@ export function describeTypeScriptService(TypeScriptServiceConstructor = TypeScr
 	});
 
 	describe('References and imports', <any> function (this: TestContext) {
-		beforeEach(<any> initializeTypeScriptService(TypeScriptServiceConstructor, new Map([
+		beforeEach(<any> initializeTypeScriptService(createService, new Map([
 			['file:///a.ts', '/// <reference path="b.ts"/>\nnamespace qux {let f : foo;}'],
 			['file:///b.ts', '/// <reference path="foo/c.ts"/>'],
 			['file:///c.ts', 'import * as d from "./foo/d"\nd.bar()'],
@@ -1205,7 +1205,7 @@ export function describeTypeScriptService(TypeScriptServiceConstructor = TypeScr
 			['file:///missing/b.ts', 'namespace t {\n    export interface Bar {\n        id?: number;\n    }}']
 		])));
 
-		afterEach(<any> shutdownTypeScriptService);
+		afterEach(<any> shutdownService);
 
 		describe('getDefinition()', <any> function (this: TestContext) {
 			it('should resolve symbol imported with tripe-slash reference', <any> async function (this: TestContext) {
@@ -1319,7 +1319,7 @@ export function describeTypeScriptService(TypeScriptServiceConstructor = TypeScr
 	});
 
 	describe('TypeScript libraries', <any> function (this: TestContext) {
-		beforeEach(<any> initializeTypeScriptService(TypeScriptServiceConstructor, new Map([
+		beforeEach(<any> initializeTypeScriptService(createService, new Map([
 				['file:///tsconfig.json', JSON.stringify({
 					compilerOptions: {
 						lib: ['es2016', 'dom']
@@ -1328,7 +1328,7 @@ export function describeTypeScriptService(TypeScriptServiceConstructor = TypeScr
 				['file:///a.ts', 'function foo(n: Node): {console.log(n.parentNode, NaN})}']
 		])));
 
-		afterEach(<any> shutdownTypeScriptService);
+		afterEach(<any> shutdownService);
 
 		describe('getHover()', <any> function (this: TestContext) {
 			it('should load local library file', <any> async function (this: TestContext) {
@@ -1443,7 +1443,7 @@ export function describeTypeScriptService(TypeScriptServiceConstructor = TypeScr
 	});
 
 	describe('getCompletions()', <any> function (this: TestContext) {
-		beforeEach(<any> initializeTypeScriptService(TypeScriptServiceConstructor, new Map([
+		beforeEach(<any> initializeTypeScriptService(createService, new Map([
 			['file:///a.ts', [
 				'class A {',
 				'	/** foo doc*/',
@@ -1476,7 +1476,7 @@ export function describeTypeScriptService(TypeScriptServiceConstructor = TypeScr
 			['file:///empty.ts', '']
 		])));
 
-		afterEach(<any> shutdownTypeScriptService);
+		afterEach(<any> shutdownService);
 
 		it('produces completions in the same file', <any> async function (this: TestContext) {
 			const result = await this.service.getCompletions({
@@ -1578,7 +1578,7 @@ export function describeTypeScriptService(TypeScriptServiceConstructor = TypeScr
 
 	describe('Special file names', <any> function (this: TestContext) {
 
-		beforeEach(<any> initializeTypeScriptService(TypeScriptServiceConstructor, new Map([
+		beforeEach(<any> initializeTypeScriptService(createService, new Map([
 			['file:///keywords-in-path/class/constructor/a.ts', 'export function a() {}'],
 			['file:///special-characters-in-path/%40foo/b.ts', 'export function b() {}'],
 			['file:///windows/app/master.ts', '/// <reference path="..\\lib\\master.ts" />\nc();'],
@@ -1586,7 +1586,7 @@ export function describeTypeScriptService(TypeScriptServiceConstructor = TypeScr
 			['file:///windows/lib/slave.ts', 'function c() {}']
 		])));
 
-		afterEach(<any> shutdownTypeScriptService);
+		afterEach(<any> shutdownService);
 
 		it('should accept files with TypeScript keywords in path', <any> async function (this: TestContext) {
 			const result = await this.service.getHover({

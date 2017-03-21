@@ -15,7 +15,7 @@
     "noImplicitThis": true,
     "noUnusedLocals": true,
     "noImplicitAny": true,
-    "strictNullChecks": false
+    "strictNullChecks": true
   },
   "include": [
     "src/**/*.ts"
