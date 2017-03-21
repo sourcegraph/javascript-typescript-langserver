@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { RemoteLanguageClient } from './lang-handler';
+import { FileLogger, StdioLogger } from './logging';
 import { serve, ServeOptions } from './server';
 import { TypeScriptService, TypeScriptServiceOptions } from './typescript-service';
 import * as util from './util';
@@ -16,7 +17,7 @@ program
 	.option('-p, --port [port]', 'specifies LSP port to use (' + defaultLspPort + ')', parseInt)
 	.option('-c, --cluster [num]', 'number of concurrent cluster workers (defaults to number of CPUs, ' + numCPUs + ')', parseInt)
 	.option('-t, --trace', 'print all requests and responses')
-	.option('-l, --logfile [file]', 'also log to this file (in addition to stderr)')
+	.option('-l, --logfile [file]', 'log to this file')
 	.parse(process.argv);
 
 util.setStrict(program.strict);
@@ -28,6 +29,6 @@ const options: ServeOptions & TypeScriptServiceOptions = {
 	lspPort,
 	strict: program.strict,
 	trace: program.trace,
-	logfile: program.logfile
+	logger: program.logfile ? new FileLogger(program.logfile) : new StdioLogger()
 };
 serve(options, connection => new TypeScriptService(new RemoteLanguageClient(connection), options));

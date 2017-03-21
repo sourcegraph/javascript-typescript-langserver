@@ -33,7 +33,7 @@ Run `npm test`.
 * `-s, --strict` enables strict mode where server expects all files to be receives in `didOpen` notification requests
 * `-c, --cluster` specifies number of concurrent cluster workers (defaults to number of CPUs)
 * `-t, --trace` enables printing of all incoming and outgoing messages
-* `-l, --logfile` specifies additional log file to print all messages to
+* `-l, --logfile` specifies log file to print all messages to
 
 ## Supported LSP requests
 

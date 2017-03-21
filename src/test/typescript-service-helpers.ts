@@ -1,7 +1,7 @@
 import * as chai from 'chai';
 import * as ts from 'typescript';
 import { CancellationToken } from 'vscode-jsonrpc';
-import { CompletionItemKind, TextDocumentIdentifier, TextDocumentItem } from 'vscode-languageserver';
+import { CompletionItemKind, LogMessageParams, TextDocumentIdentifier, TextDocumentItem } from 'vscode-languageserver';
 import { TextDocumentContentParams, WorkspaceFilesParams } from '../request-type';
 import { TypeScriptService, TypeScriptServiceFactory } from '../typescript-service';
 import chaiAsPromised = require('chai-as-promised');
@@ -38,6 +38,9 @@ export const initializeTypeScriptService = (createService: TypeScriptServiceFact
 		},
 		getWorkspaceFiles(params: WorkspaceFilesParams, token?: CancellationToken): Promise<TextDocumentIdentifier[]> {
 			return Promise.resolve(Array.from(files.keys()).map(uri => ({ uri })));
+		},
+		logMessage(params: LogMessageParams): void {
+			// noop
 		}
 	});
 	await this.service.initialize({

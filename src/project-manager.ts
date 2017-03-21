@@ -8,6 +8,7 @@ import { Disposable } from 'vscode-languageserver';
 import { CancellationToken, CancellationTokenSource, throwIfCancelledError, throwIfRequested } from './cancellation';
 import * as FileSystem from './fs';
 import { FileSystemUpdater } from './fs';
+import { Logger, NoopLogger } from './logging';
 import * as match from './match-files';
 import * as util from './util';
 
@@ -94,7 +95,7 @@ export class ProjectManager implements Disposable {
 	 * @param strict indicates if we are working in strict mode (VFS) or with a local file system
 	 * @param traceModuleResolution allows to enable module resolution tracing (done by TS compiler)
 	 */
-	constructor(rootPath: string, remoteFs: FileSystem.FileSystem, strict: boolean, traceModuleResolution?: boolean) {
+	constructor(rootPath: string, remoteFs: FileSystem.FileSystem, strict: boolean, traceModuleResolution?: boolean, protected logger: Logger = new NoopLogger()) {
 		this.rootPath = util.toUnixPath(rootPath);
 		this.configs = new Map<string, ProjectConfiguration>();
 		this.localFs = new InMemoryFileSystem(this.rootPath);
@@ -163,7 +164,7 @@ export class ProjectManager implements Disposable {
 				this.refreshConfigurations();
 			});
 			this.ensuredModuleStructure.catch(err => {
-				console.error('Failed to fetch module structure:', err);
+				this.logger.error('Failed to fetch module structure: ', err);
 				this.ensuredModuleStructure = undefined;
 			});
 		}
@@ -241,7 +242,7 @@ export class ProjectManager implements Disposable {
 		});
 		this.ensuredFilesForHoverAndDefinition.set(uri, promise);
 		promise.catch(err => {
-			console.error('Failed to fetch files for hover/definition for uri ', uri, ', error:', err);
+			this.logger.error(`Failed to fetch files for hover/definition for uri ${uri}`, err);
 			this.ensuredFilesForHoverAndDefinition.delete(uri);
 		});
 		return promise;
@@ -292,8 +293,8 @@ export class ProjectManager implements Disposable {
 			.then(() => this.refreshConfigurations());
 
 		this.ensuredAllFiles = promise;
-		promise.catch((err: any) => {
-			console.error('Failed to fetch files for references:', err);
+		promise.catch(err => {
+			this.logger.error('Failed to fetch files for references:', err);
 			this.ensuredAllFiles = undefined;
 		});
 
@@ -474,7 +475,7 @@ export class ProjectManager implements Disposable {
 					throwIfCancelledError(err);
 					throwIfRequested(token);
 					// else log error and continue
-					console.error(`Ensuring file ${path} failed`, err);
+					this.logger.error(`Ensuring file ${path} failed`, err);
 				}
 			}));
 		} finally {
@@ -499,7 +500,7 @@ export class ProjectManager implements Disposable {
 			if (dir === '.') {
 				dir = '';
 			}
-			this.configs.set(dir, new ProjectConfiguration(this.localFs, path_.posix.join('/', dir), this.versions, k, undefined, this.traceModuleResolution));
+			this.configs.set(dir, new ProjectConfiguration(this.localFs, path_.posix.join('/', dir), this.versions, k, undefined, this.traceModuleResolution, this.logger));
 			rootdirs.add(dir);
 		});
 		if (!rootdirs.has('')) {
@@ -510,7 +511,7 @@ export class ProjectManager implements Disposable {
 					allowNonTsExtensions: false,
 					allowJs: true
 				}
-			}, this.traceModuleResolution));
+			}, this.traceModuleResolution, this.logger));
 		}
 	}
 }
@@ -565,7 +566,7 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	 */
 	private versions: Map<string, number>;
 
-	constructor(rootPath: string, options: ts.CompilerOptions, fs: InMemoryFileSystem, expectedFiles: string[], versions: Map<string, number>) {
+	constructor(rootPath: string, options: ts.CompilerOptions, fs: InMemoryFileSystem, expectedFiles: string[], versions: Map<string, number>, private logger: Logger = new NoopLogger()) {
 		this.rootPath = rootPath;
 		this.options = options;
 		this.fs = fs;
@@ -660,7 +661,7 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	}
 
 	error(message: string) {
-		console.error(message);
+		this.logger.error(message);
 	}
 
 }
@@ -713,7 +714,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 */
 	rootNode: FileSystemNode;
 
-	constructor(path: string) {
+	constructor(path: string, private logger: Logger = new NoopLogger()) {
 		this.path = path;
 		this.entries = new Map<string, string>();
 		this.overlay = new Map<string, string>();
@@ -878,7 +879,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	}
 
 	trace(message: string) {
-		console.error(message);
+		this.logger.log(message);
 	}
 }
 
@@ -975,7 +976,7 @@ export class ProjectConfiguration {
 	 * @param configFilePath configuration file path (relative to workspace root)
 	 * @param configContent optional configuration content to use instead of reading configuration file)
 	 */
-	constructor(fs: InMemoryFileSystem, rootFilePath: string, versions: Map<string, number>, configFilePath: string, configContent?: any, traceModuleResolution?: boolean) {
+	constructor(fs: InMemoryFileSystem, rootFilePath: string, versions: Map<string, number>, configFilePath: string, configContent?: any, traceModuleResolution?: boolean, private logger: Logger = new NoopLogger()) {
 		this.fs = fs;
 		this.configFilePath = configFilePath;
 		this.configContent = configContent;
@@ -1072,7 +1073,7 @@ export class ProjectConfiguration {
 			if (!this.configContent) {
 				const jsonConfig = ts.parseConfigFileTextToJson(this.configFilePath, this.fs.readFile(this.configFilePath));
 				if (jsonConfig.error) {
-					console.error('Cannot parse ' + this.configFilePath + ': ' + jsonConfig.error.messageText);
+					this.logger.error('Cannot parse ' + this.configFilePath + ': ' + jsonConfig.error.messageText);
 					return reject(new Error('Cannot parse ' + this.configFilePath + ': ' + jsonConfig.error.messageText));
 				}
 				configObject = jsonConfig.config;
@@ -1105,11 +1106,14 @@ export class ProjectConfiguration {
 			if (this.traceModuleResolution) {
 				options.traceResolution = true;
 			}
-			this.host = new InMemoryLanguageServiceHost(this.fs.path,
+			this.host = new InMemoryLanguageServiceHost(
+				this.fs.path,
 				options,
 				this.fs,
 				expFiles,
-				this.versions);
+				this.versions,
+				this.logger
+			);
 			this.service = ts.createLanguageService(this.host, ts.createDocumentRegistry());
 			this.program = this.service.getProgram();
 			return resolve();
