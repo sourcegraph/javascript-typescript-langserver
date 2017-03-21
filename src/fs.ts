@@ -94,7 +94,7 @@ class ParentUriMemoizationCache extends Map<string | undefined, Promise<void>> {
 			return hit;
 		}
 		if (uri) {
-			for (let parts = url.parse(uri); parts.pathname !== '/'; parts.pathname = path.dirname(parts.pathname)) {
+			for (let parts = url.parse(uri); parts.pathname && parts.pathname !== '/'; parts.pathname = path.dirname(parts.pathname)) {
 				hit = super.get(url.format(parts));
 				if (hit) {
 					return hit;

@@ -80,7 +80,7 @@ export function cancellableMemoize<F extends (...args: any[]) => T, T extends Pr
 		// Check if function has been called with this argument already
 		if (cache.has(key)) {
 			// Return previous result
-			result = cache.get(key);
+			result = cache.get(key)!;
 		} else {
 			// Call function
 			// Pass the linked cancel token
