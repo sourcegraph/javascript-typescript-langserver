@@ -749,7 +749,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	addFile(path: string, content: string) {
 		// Ensure path is relative to rootpath
 		if (path_.posix.isAbsolute(path)) {
-			path = path_.relative(this.path, path);
+			path = path_.posix.relative(this.path, path);
 		}
 		this.entries.set(path, content);
 		let node = this.rootNode;
