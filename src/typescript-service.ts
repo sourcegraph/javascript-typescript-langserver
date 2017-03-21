@@ -46,6 +46,8 @@ export interface TypeScriptServiceOptions {
 	strict?: boolean;
 }
 
+export type TypeScriptServiceFactory = (client: LanguageClientHandler, options?: TypeScriptServiceOptions) => TypeScriptService;
+
 /**
  * TypeScriptService handles incoming requests and return
  * responses. There is a one-to-one-to-one correspondence between TCP
