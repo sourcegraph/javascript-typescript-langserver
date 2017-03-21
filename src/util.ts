@@ -213,7 +213,7 @@ export function symbolDescriptorMatch(query: rt.PartialSymbolDescriptor, sym: rt
 			continue;
 		}
 		if (key === 'package') {
-			if (!sym.package || !packageDescriptorMatch(query.package, sym.package)) {
+			if (!sym.package || !packageDescriptorMatch(query.package as rt.PackageDescriptor, sym.package)) {
 				return false;
 			}
 			continue;

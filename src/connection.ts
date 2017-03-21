@@ -17,7 +17,7 @@ export function newConnection(input: NodeJS.ReadableStream, output: NodeJS.Writa
 
 	const reader = new StreamMessageReader(input);
 
-	let logger: fs_.WriteStream = null;
+	let logger: fs_.WriteStream | null = null;
 	if (trace.trace && trace.logfile) {
 		try {
 			logger = fs_.createWriteStream(trace.logfile, { flags: 'a', encoding: 'utf-8' });
@@ -84,7 +84,7 @@ function dump(message: Message): string {
 	return util.inspect(message);
 }
 
-function doTrace(message: Message, options: TraceOptions, stream: fs_.WriteStream, prefix: string) {
+function doTrace(message: Message, options: TraceOptions, stream: fs_.WriteStream | null, prefix: string) {
 	if (options.trace) {
 		const text = prefix + ' ' + dump(message);
 		console.error(text);

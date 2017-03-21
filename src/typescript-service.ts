@@ -69,14 +69,14 @@ export class TypeScriptService implements LanguageHandler {
 
 	async initialize(params: InitializeParams, token = CancellationToken.None): Promise<InitializeResult> {
 		if (params.rootUri || params.rootPath) {
-			this.root = params.rootPath || util.uri2path(params.rootUri);
+			this.root = params.rootPath || util.uri2path(params.rootUri as string);
 			if (params.capabilities.xcontentProvider && params.capabilities.xfilesProvider) {
 				this.fileSystem = new RemoteFileSystem(this.client);
 			} else {
 				this.fileSystem = new LocalFileSystem(util.uri2path(this.root));
 			}
 			await this.beforeProjectInit();
-			this.projectManager = new pm.ProjectManager(this.root, this.fileSystem, this.options.strict, this.traceModuleResolution);
+			this.projectManager = new pm.ProjectManager(this.root, this.fileSystem, this.options.strict || false, this.traceModuleResolution);
 			// Pre-fetch files in the background
 			// TODO why does ensureAllFiles() fetch less files than ensureFilesForWorkspaceSymbol()?
 			//      (package.json is not fetched)
@@ -340,9 +340,11 @@ export class TypeScriptService implements LanguageHandler {
 		this.projectManager.refreshConfigurations();
 
 		const symQuery = params.symbol ? Object.assign({}, params.symbol) : undefined;
-		symQuery.package = undefined;
-		if (!symQuery.containerKind) {
-			symQuery.containerKind = undefined; // symQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
+		if (symQuery) {
+			symQuery.package = undefined;
+			if (!symQuery.containerKind) {
+				symQuery.containerKind = undefined; // symQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
+			}
 		}
 
 		const config = this.projectManager.getConfiguration(relPkgRoot);
@@ -516,14 +518,14 @@ export class TypeScriptService implements LanguageHandler {
 
 		const sourceFile = this.getSourceFile(configuration, fileName);
 		if (!sourceFile) {
-			return null;
+			return CompletionList.create();
 		}
 
 		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
 		const completions = configuration.getService().getCompletionsAtPosition(fileName, offset);
 
 		if (completions == null) {
-			return null;
+			return CompletionList.create();
 		}
 
 		return CompletionList.create(completions.entries.map(item => {
@@ -1398,7 +1400,7 @@ export class TypeScriptService implements LanguageHandler {
 	private transformReference(root: string, program: ts.Program, includeDeclaration: boolean, ref: ts.ReferenceEntry): AsyncFunction<Location, Error> {
 		return (callback: (err?: Error, result?: Location) => void) => {
 			if (!includeDeclaration && ref.isDefinition) {
-				return callback(null);
+				return callback();
 			}
 			const sourceFile = program.getSourceFile(ref.fileName);
 			if (!sourceFile) {
@@ -1445,8 +1447,10 @@ export class TypeScriptService implements LanguageHandler {
 			} else if (symQuery) {
 				// TODO(beyang): after workspace/symbol extension is accepted into LSP, push this logic upstream to getNavigateToItems
 				const items = config.getService().getNavigateToItems(symQuery.name || '', undefined, undefined, false);
+				const packageName = config.getPackageName();
+				const pd = packageName ? { name: packageName } : undefined;
 				for (const item of items) {
-					const sd = SymbolDescriptor.create(item.kind, item.name, item.containerKind, item.containerName, { name: config.getPackageName() });
+					const sd = SymbolDescriptor.create(item.kind, item.name, item.containerKind, item.containerName, pd);
 					if (!util.symbolDescriptorMatch(symQuery, sd)) {
 						continue;
 					}

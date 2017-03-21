@@ -278,7 +278,7 @@ export class ProjectManager implements Disposable {
 			await this.ensureFiles(filesToEnsure);
 			await this.refreshConfigurations();
 		} catch (e) {
-			(this.ensureFilesForWorkspaceSymbol.cache as Map<undefined, Promise<void>>).clear();
+			this.ensureFilesForWorkspaceSymbol.cache = new WeakMap();
 			throw e;
 		}
 	});
@@ -353,7 +353,7 @@ export class ProjectManager implements Disposable {
 			await Promise.all(filePaths.map(async filePath => {
 				const config = this.getConfiguration(filePath);
 				await config.ensureBasicFiles();
-				const contents = this.getFs().readFile(filePath) || '';
+				const contents = this.getFs().readFile(filePath);
 				const info = ts.preProcessFile(contents, true, true);
 				const compilerOpt = config.getHost().getCompilationSettings();
 				for (const imp of info.importedFiles) {
@@ -651,16 +651,16 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	/**
 	 * @param fileName relative or absolute file path
 	 */
-	getScriptSnapshot(fileName: string): ts.IScriptSnapshot {
-		let entry = this.fs.readFile(fileName);
-		if (entry === undefined) {
+	getScriptSnapshot(fileName: string): ts.IScriptSnapshot | undefined {
+		let exists = this.fs.fileExists(fileName);
+		if (!exists) {
 			fileName = path_.posix.join(this.rootPath, fileName);
-			entry = this.fs.readFile(fileName);
+			exists = this.fs.fileExists(fileName);
 		}
-		if (entry === undefined) {
+		if (!exists) {
 			return undefined;
 		}
-		return ts.ScriptSnapshot.fromString(entry);
+		return ts.ScriptSnapshot.fromString(this.fs.readFile(fileName));
 	}
 
 	getCurrentDirectory(): string {
@@ -761,14 +761,18 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 * @param path file path (both absolute or relative file paths are accepted)
 	 */
 	fileExists(path: string): boolean {
-		return this.readFile(path) !== undefined;
+		return this.readFileImpl(path) !== undefined;
 	}
 
 	/**
 	 * @param path file path (both absolute or relative file paths are accepted)
-	 * @return file's content in the following order (overlay then cache) if any
+	 * @return file's content in the following order (overlay then cache)
 	 */
-	readFile(path: string): string | undefined {
+	readFile(path: string): string {
+		return this.readFileImpl(path) || '';
+	}
+
+	private readFileImpl(path: string): string | undefined {
 		let content = this.overlay.get(path);
 		if (content !== undefined) {
 			return content;
@@ -801,7 +805,10 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 * @param path path to a file relative to project root
 	 */
 	didSave(path: string) {
-		this.addFile(path, this.readFile(path));
+		const content = this.readFileImpl(path);
+		if (content !== undefined) {
+			this.addFile(path, content);
+		}
 	}
 
 	/**

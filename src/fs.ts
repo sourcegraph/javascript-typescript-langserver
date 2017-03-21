@@ -71,7 +71,7 @@ export class LocalFileSystem implements FileSystem {
 		return path.resolve(this.rootPath, uri2path(uri));
 	}
 
-	async getWorkspaceFiles(base?: string): Promise<string[]> {
+	async getWorkspaceFiles(base: string): Promise<string[]> {
 		const files = await new Promise<string[]>((resolve, reject) => {
 			glob(path.join(this.resolveUriToPath(base), '**/*.*'), { nodir: true }, (err, matches) => err ? reject(err) : resolve(matches));
 		});
