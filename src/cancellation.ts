@@ -3,6 +3,43 @@ import { CancellationToken, CancellationTokenSource } from 'vscode-jsonrpc';
 export { CancellationToken, CancellationTokenSource };
 
 /**
+ * Tracks operations that should be cancelled on disposal
+ */
+export class Disposer {
+
+	/**
+	 * CancellationSources for currently running operations
+	 */
+	private sources = new Set<CancellationTokenSource>();
+
+	/**
+	 * Calls the provided function with a new CancelToken that is tracked by the Disposer.
+	 * If `cancelAll()` is called, the provided token will be cancelled.
+	 *
+	 * @param originalToken An input token that will also trigger cancellation
+	 */
+	async trackCancellation<T>(originalToken: CancellationToken, fn: (trackedToken: CancellationToken) => Promise<T>): Promise<T> {
+		const source = new CancellationTokenSource();
+		originalToken.onCancellationRequested(() => source.cancel());
+		this.sources.add(source);
+		try {
+			return await fn(source.token);
+		} finally {
+			this.sources.delete(source);
+		}
+	}
+
+	/**
+	 * Cancels all tracked pending operations. Call this inside `dispose()`
+	 */
+	cancelAll() {
+		for (const source of this.sources) {
+			source.cancel();
+		}
+	}
+}
+
+/**
  * Provides a token that is cancelled as soon as ALL added tokens are cancelled.
  * Useful for memoizing a function, where multiple consumers wait for the result of the same operation,
  * which should only be cancelled if all consumers requested cancellation.
