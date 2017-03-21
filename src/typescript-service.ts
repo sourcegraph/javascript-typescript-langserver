@@ -20,6 +20,7 @@ import {
 	SymbolInformation,
 	TextDocumentPositionParams,
 	TextDocumentSyncKind
+	SignatureHelp
 } from 'vscode-languageserver';
 import { isCancelledError } from './cancellation';
 import { FileSystem, FileSystemUpdater, LocalFileSystem, RemoteFileSystem } from './fs';
@@ -566,6 +567,54 @@ export class TypeScriptService implements LanguageHandler {
 		}));
 	}
 
+	async getSignatureHelp(params: TextDocumentPositionParams): Promise<SignatureHelp> {
+		const uri = util.uri2reluri(params.textDocument.uri, this.root);
+		const line = params.position.line;
+		const column = params.position.character;
+		await this.projectManager.ensureFilesForHoverAndDefinition(uri);
+
+		const fileName: string = util.uri2path(uri);
+		const configuration = this.projectManager.getConfiguration(fileName);
+		await configuration.ensureBasicFiles();
+
+		let sourceFile = this.getSourceFile(configuration, fileName);
+		if (!sourceFile) {
+			return null;
+		}
+		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
+
+		const signatures: ts.SignatureHelpItems = configuration.getService().getSignatureHelpItems(fileName, offset);
+		if (!signatures) {
+			return null;
+		}
+
+		return {
+			signatures: signatures.items.map((item: ts.SignatureHelpItem) => {
+				label: "",
+					documentation: item.documentation,
+						parameters: item.parameters.map((param: ts.SignatureHelpParameter) => {
+							label: param.name,
+								documentation: param.documentation
+						}),
+			}),
+			activeSignature: 0,
+			activeParameter: 0
+		};
+
+		// const contents = [];
+		// contents.push({
+		// 	language: 'typescript',
+		// 	value: ts.displayPartsToString(info.displayParts)
+		// });
+		// let documentation = ts.displayPartsToString(info.documentation);
+		// if (documentation) {
+		// 	contents.push(documentation);
+		// }
+		// const start = ts.getLineAndCharacterOfPosition(sourceFile, info.textSpan.start);
+		// const end = ts.getLineAndCharacterOfPosition(sourceFile, info.textSpan.start + info.textSpan.length);
+
+		// return { contents: contents, range: Range.create(start.line, start.character, end.line, end.character) };
+	}
 	/*
 	 * walkMostAST walks most of the AST (the part that matters for gathering all references)
 	 */
