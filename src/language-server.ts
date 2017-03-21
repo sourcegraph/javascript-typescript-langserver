@@ -17,7 +17,7 @@ program
 	.option('-p, --port [port]', 'specifies LSP port to use (' + defaultLspPort + ')', parseInt)
 	.option('-c, --cluster [num]', 'number of concurrent cluster workers (defaults to number of CPUs, ' + numCPUs + ')', parseInt)
 	.option('-t, --trace', 'print all requests and responses')
-	.option('-l, --logfile [file]', 'also log to this file (in addition to stderr)')
+	.option('-l, --logfile [file]', 'log to this file')
 	.parse(process.argv);
 
 util.setStrict(program.strict);

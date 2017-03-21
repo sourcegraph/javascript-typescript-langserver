@@ -13,7 +13,7 @@ program
 	.version(packageJson.version)
 	.option('-s, --strict', 'enables strict mode')
 	.option('-t, --trace', 'print all requests and responses')
-	.option('-l, --logfile [file]', 'also log to this file (in addition to stderr)')
+	.option('-l, --logfile [file]', 'log to this file')
 	.parse(process.argv);
 
 util.setStrict(program.strict);
