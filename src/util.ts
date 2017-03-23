@@ -63,6 +63,7 @@ export function convertStringtoSymbolKind(kind: string): SymbolKind {
 		case 'array': return SymbolKind.Array;
 		case 'array': return SymbolKind.Array;
 		case 'sourcefile': return SymbolKind.File;
+		case 'alias': return SymbolKind.Variable;
 		default: return SymbolKind.String;
 	}
 }
