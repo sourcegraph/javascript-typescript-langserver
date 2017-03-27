@@ -68,14 +68,14 @@ export class ProjectManager implements Disposable {
 	 * Flag indicating that we fetched module struture (tsconfig.json, jsconfig.json, package.json files) from the remote file system.
 	 * Without having this information we won't be able to split workspace to sub-projects
 	 */
-	private ensuredModuleStructure?: Promise<void>;
+	ensuredModuleStructure?: Promise<void>;
 
 	/**
 	 * Tracks if source file denoted by the given URI is fetched from remote file system and available locally.
 	 * For hover or definition we only need a single file (and maybe its transitive includes/references as reported by TS compiler).
 	 * This map prevents fetching of file content from remote filesystem twice
 	 */
-	private ensuredFilesForHoverAndDefinition = new Map<string, Promise<void>>();
+	ensuredFilesForHoverAndDefinition = new Map<string, Promise<void>>();
 
 	/**
 	 * For references/symbols we need all the source files making workspace so this flag tracks if we already did it
@@ -224,19 +224,17 @@ export class ProjectManager implements Disposable {
 		if (existing) {
 			return existing;
 		}
-
-		const promise = this.ensureModuleStructure().then(() => {
-			// include dependencies up to depth 30
-			const deps = new Set<string>();
-			return this.ensureTransitiveFileDependencies([util.uri2path(uri)], 30, deps).then(() => {
-				return this.createConfigurations();
-			});
-		});
+		const promise = (async () => {
+			try {
+				await this.ensureModuleStructure();
+				// Include dependencies up to depth 30
+				await this.ensureTransitiveFileDependencies([util.uri2path(uri)], 30);
+			} catch (err) {
+				this.ensuredFilesForHoverAndDefinition.delete(uri);
+				throw err;
+			}
+		})();
 		this.ensuredFilesForHoverAndDefinition.set(uri, promise);
-		promise.catch(err => {
-			this.logger.error(`Failed to fetch files for hover/definition for uri ${uri}`, err);
-			this.ensuredFilesForHoverAndDefinition.delete(uri);
-		});
 		return promise;
 	}
 
@@ -322,7 +320,7 @@ export class ProjectManager implements Disposable {
 	 * @param maxDepth stop collecting when reached given recursion level
 	 * @param seen tracks visited files to avoid cycles
 	 */
-	private async ensureTransitiveFileDependencies(filePaths: string[], maxDepth: number, seen: Set<string>): Promise<void> {
+	private async ensureTransitiveFileDependencies(filePaths: string[], maxDepth: number, seen = new Set<string>()): Promise<void> {
 		filePaths = filePaths.filter(f => !seen.has(f));
 		if (filePaths.length === 0) {
 			return Promise.resolve();
@@ -388,7 +386,7 @@ export class ProjectManager implements Disposable {
 		if (config) {
 			return config;
 		}
-		throw new Error('unreachable');
+		throw new Error(`TypeScript config file for ${filePath} not found`);
 	}
 
 	/**
@@ -461,7 +459,7 @@ export class ProjectManager implements Disposable {
 			await Promise.all(iterate(files).map(async path => {
 				throwIfRequested(token);
 				try {
-					await this.updater.ensure(util.path2uri('', path), token);
+					await this.updater.ensure(util.path2uri('', path));
 				} catch (err) {
 					// if cancellation was requested, break out of the loop
 					throwIfCancelledError(err);
@@ -677,15 +675,15 @@ export interface FileSystemNode {
 export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResolutionHost {
 
 	/**
-	 * Contains a Set of all URIs that exist in the workspace.
+	 * Contains a Map of all URIs that exist in the workspace, optionally with a content.
 	 * File contents for URIs in it do not neccessarily have to be fetched already.
-	 *
-	 * TODO: Turn this into a Map<string, string | undefined> and remove entries
 	 */
-	private files = new Set<string>();
+	private files = new Map<string, string | undefined>();
 
 	/**
 	 * Map (relative filepath -> string content) of files fetched from the remote file system. Paths are relative to `this.path`
+	 *
+	 * TODO remove in favor of files
 	 */
 	entries: Map<string, string>;
 
@@ -730,10 +728,30 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 * @param content The optional content
 	 */
 	add(uri: string, content?: string): void {
-		this.files.add(uri);
+		// Make sure not to override existing content with undefined
+		if (this.files.get(uri) === undefined) {
+			this.files.set(uri, content);
+		}
+		// If content is defined, also add to the legacy implementation
+		// TODO consolidate this
 		if (content !== undefined) {
 			this.addFile(util.uri2path(uri), content);
 		}
+	}
+
+	/**
+	 * Returns the file content for the given URI.
+	 * Will throw an Error if no available in-memory.
+	 * Use FileSystemUpdater.ensure() to ensure that the file is available.
+	 *
+	 * TODO take overlay into account
+	 */
+	getContent(uri: string): string {
+		const content = this.files.get(uri);
+		if (content === undefined) {
+			throw new Error(`Content of ${uri} is not available in memory`);
+		}
+		return content;
 	}
 
 	/**
@@ -766,11 +784,12 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	}
 
 	/**
-	 * Tells if a file denoted by the given name exists in the local cache
-	 * @param path file path (both absolute or relative file paths are accepted)
+	 * Tells if a file denoted by the given name exists in the workspace (does not have to be loaded)
+	 *
+	 * @param path File path or URI (both absolute or relative file paths are accepted)
 	 */
 	fileExists(path: string): boolean {
-		return this.readFileIfExists(path) !== undefined;
+		return this.readFileIfExists(path) !== undefined || this.files.has(path) || this.files.has(util.path2uri(this.path, path));
 	}
 
 	/**

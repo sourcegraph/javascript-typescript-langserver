@@ -29,6 +29,9 @@ export interface TestContext {
 export const initializeTypeScriptService = (createService: TypeScriptServiceFactory, files: Map<string, string>) => async function (this: TestContext): Promise<void> {
 	this.service = createService({
 		getTextDocumentContent(params: TextDocumentContentParams, token?: CancellationToken): Promise<TextDocumentItem> {
+			if (!files.has(params.textDocument.uri)) {
+				return Promise.reject(new Error(`Text document ${params.textDocument.uri} does not exist`));
+			}
 			return Promise.resolve(<TextDocumentItem> {
 				uri: params.textDocument.uri,
 				text: files.get(params.textDocument.uri),

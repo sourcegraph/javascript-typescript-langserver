@@ -30,7 +30,6 @@ import {
 	DependencyReference,
 	InitializeParams,
 	PackageInformation,
-	PartialSymbolDescriptor,
 	ReferenceInformation,
 	SymbolDescriptor,
 	SymbolLocationInformation,
@@ -58,7 +57,16 @@ export type TypeScriptServiceFactory = (client: LanguageClientHandler, options?:
 export class TypeScriptService implements LanguageHandler {
 
 	projectManager: pm.ProjectManager;
+
+	/**
+	 * The rootPath as passed to `initialize` or converted from `rootUri`
+	 */
 	root: string;
+
+	/**
+	 * The root URI as passed to `initialize` or converted from `rootPath`
+	 */
+	protected rootUri: string;
 
 	private emptyQueryWorkspaceSymbols: Promise<SymbolInformation[]>; // cached response for empty workspace/symbol query
 	private traceModuleResolution: boolean;
@@ -87,9 +95,10 @@ export class TypeScriptService implements LanguageHandler {
 	async initialize(params: InitializeParams, token = CancellationToken.None): Promise<InitializeResult> {
 		if (params.rootUri || params.rootPath) {
 			this.root = params.rootPath || util.uri2path(params.rootUri!);
+			this.rootUri = params.rootUri || util.path2uri('', params.rootPath!);
 			this.initializeFileSystems(!this.options.strict && !(params.capabilities.xcontentProvider && params.capabilities.xfilesProvider));
 			this.updater = new FileSystemUpdater(this.fileSystem, this.inMemoryFileSystem);
-			this.projectManager = new pm.ProjectManager(this.root, this.inMemoryFileSystem, this.updater, !!this.options.strict, this.traceModuleResolution);
+			this.projectManager = new pm.ProjectManager(this.root, this.inMemoryFileSystem, this.updater, !!this.options.strict, this.traceModuleResolution, this.logger);
 			// Pre-fetch files in the background
 			// TODO why does ensureAllFiles() fetch less files than ensureFilesForWorkspaceSymbol()?
 			//      (package.json is not fetched)
@@ -1442,7 +1451,7 @@ export class TypeScriptService implements LanguageHandler {
 			this.defUri(item.fileName), item.containerName);
 	}
 
-	private async collectWorkspaceSymbols(configs: pm.ProjectConfiguration[], query?: string, symQuery?: PartialSymbolDescriptor): Promise<SymbolInformation[]> {
+	private async collectWorkspaceSymbols(configs: pm.ProjectConfiguration[], query?: string, symQuery?: Partial<SymbolDescriptor>): Promise<SymbolInformation[]> {
 		const configSymbols: SymbolInformation[][] = await Promise.all(configs.map(async config => {
 			const symbols: SymbolInformation[] = [];
 			await config.ensureAllFiles();
