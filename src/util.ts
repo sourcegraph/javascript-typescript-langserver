@@ -208,7 +208,7 @@ export function defInfoToSymbolDescriptor(d: ts.DefinitionInfo): rt.SymbolDescri
 	};
 }
 
-export function symbolDescriptorMatch(query: rt.PartialSymbolDescriptor, sym: rt.SymbolDescriptor): boolean {
+export function symbolDescriptorMatch(query: Partial<rt.SymbolDescriptor>, sym: rt.SymbolDescriptor): boolean {
 	for (const key of Object.keys(query)) {
 		if ((<any> query)[key] === undefined) {
 			continue;

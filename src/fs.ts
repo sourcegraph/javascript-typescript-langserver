@@ -1,11 +1,10 @@
 import * as fs from 'mz/fs';
 import * as path from 'path';
-import { cancellableMemoize, CancellationToken, throwIfRequested } from './cancellation';
+import { CancellationToken } from './cancellation';
 import { LanguageClientHandler } from './lang-handler';
 import glob = require('glob');
 import iterate from 'iterare';
 import Semaphore from 'semaphore-async-await';
-import * as url from 'url';
 import { InMemoryFileSystem } from './project-manager';
 import { path2uri, uri2path } from './util';
 
@@ -77,48 +76,21 @@ export class LocalFileSystem implements FileSystem {
 }
 
 /**
- * Memoization cache that saves URIs and searches parent directories too
- */
-class ParentUriMemoizationCache extends Map<string | undefined, Promise<void>> {
-
-	/**
-	 * Returns the value if the given URI or a parent directory of the URI is in the cache
-	 */
-	get(uri: string | undefined): Promise<void> | undefined {
-		let hit = super.get(uri);
-		if (hit) {
-			return hit;
-		}
-		// Find out if parent folder is being fetched already
-		hit = super.get(undefined);
-		if (hit) {
-			return hit;
-		}
-		if (uri) {
-			for (let parts = url.parse(uri); parts.pathname && parts.pathname !== '/'; parts.pathname = path.dirname(parts.pathname)) {
-				hit = super.get(url.format(parts));
-				if (hit) {
-					return hit;
-				}
-			}
-		}
-		return undefined;
-	}
-
-	/**
-	 * Returns true if the given URI or a parent directory of the URI is in the cache
-	 */
-	has(key: string): boolean {
-		return this.get(key) !== undefined;
-	}
-}
-
-/**
  * Synchronizes a remote file system to an in-memory file system
  *
  * TODO: Implement Disposable with Disposer
  */
 export class FileSystemUpdater {
+
+	/**
+	 * Promise for a pending or fulfilled structure fetch
+	 */
+	private structureFetch?: Promise<void>;
+
+	/**
+	 * Map from URI to Promise of pending or fulfilled content fetch
+	 */
+	private fetches = new Map<string, Promise<void>>();
 
 	/**
 	 * Limits concurrent fetches to not fetch thousands of files in parallel
@@ -132,13 +104,20 @@ export class FileSystemUpdater {
 	 *
 	 * @param uri URI of the file to fetch
 	 */
-	fetch(uri: string, token = CancellationToken.None): Promise<void> {
+	async fetch(uri: string): Promise<void> {
 		// Limit concurrent fetches
-		return this.concurrencyLimit.execute(async () => {
-			throwIfRequested(token);
-			const content = await this.remoteFs.getTextDocumentContent(uri, token);
-			this.inMemoryFs.add(uri, content);
+		const promise = this.concurrencyLimit.execute(async () => {
+			try {
+				const content = await this.remoteFs.getTextDocumentContent(uri);
+				this.inMemoryFs.add(uri, content);
+				this.inMemoryFs.getContent(uri);
+			} catch (err) {
+				this.fetches.delete(uri);
+				throw err;
+			}
 		});
+		this.fetches.set(uri, promise);
+		return promise;
 	}
 
 	/**
@@ -147,27 +126,42 @@ export class FileSystemUpdater {
 	 *
 	 * @param uri URI of the file to ensure
 	 */
-	ensure = cancellableMemoize(this.fetch);
+	ensure(uri: string): Promise<void> {
+		return this.fetches.get(uri) || this.fetch(uri);
+	}
 
 	/**
 	 * Fetches the file/directory structure for the given directory from the remote file system and saves it in the in-memory file system
-	 *
-	 * @param base The base directory which structure will be synced. Defaults to the workspace root
 	 */
-	fetchStructure(base: string, token?: CancellationToken): Promise<void>;
-	fetchStructure(token?: CancellationToken): Promise<void>;
-	async fetchStructure(...args: any[]): Promise<void> {
-		const token: CancellationToken = CancellationToken.is(args[args.length - 1]) ? args.pop() : CancellationToken.None;
-		const base: string | undefined = args[0];
-		const uris = await this.remoteFs.getWorkspaceFiles(base, token);
-		for (const uri of uris) {
-			this.inMemoryFs.add(uri);
-		}
+	fetchStructure(): Promise<void> {
+		const promise = (async () => {
+			try {
+				const uris = await this.remoteFs.getWorkspaceFiles();
+				for (const uri of uris) {
+					this.inMemoryFs.add(uri);
+				}
+			} catch (err) {
+				this.structureFetch = undefined;
+				throw err;
+			}
+		})();
+		this.structureFetch = promise;
+		return promise;
 	}
 
 	/**
 	 * Returns a promise that is resolved as soon as the file/directory structure for the given directory has been synced
 	 * from the remote file system to the in-memory file system (at least once)
 	 */
-	ensureStructure = cancellableMemoize(this.fetchStructure, new ParentUriMemoizationCache());
+	ensureStructure() {
+		return this.structureFetch || this.fetchStructure();
+	}
+
+	/**
+	 * Invalidates the structure fetch cache.
+	 * The next call to `ensureStructure` will do a refetch.
+	 */
+	invalidateStructure() {
+		this.structureFetch = undefined;
+	}
 }
