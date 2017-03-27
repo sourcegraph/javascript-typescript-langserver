@@ -161,7 +161,7 @@ export class ProjectManager implements Disposable {
 	ensureModuleStructure(): Promise<void> {
 		if (!this.ensuredModuleStructure) {
 			this.ensuredModuleStructure = this.refreshFileTree(this.rootPath, true).then(() => {
-				this.refreshConfigurations();
+				this.createConfigurations();
 			});
 			this.ensuredModuleStructure.catch(err => {
 				this.logger.error('Failed to fetch module structure: ', err);
@@ -237,7 +237,7 @@ export class ProjectManager implements Disposable {
 			// include dependencies up to depth 30
 			const deps = new Set<string>();
 			return this.ensureTransitiveFileDependencies([util.uri2path(uri)], 30, deps).then(() => {
-				return this.refreshConfigurations();
+				return this.createConfigurations();
 			});
 		});
 		this.ensuredFilesForHoverAndDefinition.set(uri, promise);
@@ -268,7 +268,7 @@ export class ProjectManager implements Disposable {
 				}
 			}
 			await this.ensureFiles(filesToEnsure);
-			await this.refreshConfigurations();
+			await this.createConfigurations();
 		} catch (e) {
 			this.ensureFilesForWorkspaceSymbol.cache = new WeakMap();
 			throw e;
@@ -290,7 +290,7 @@ export class ProjectManager implements Disposable {
 					.map(uri => util.uri2path(uri))
 					.filter(file => util.isJSTSFile(file))
 			))
-			.then(() => this.refreshConfigurations());
+			.then(() => this.createConfigurations());
 
 		this.ensuredAllFiles = promise;
 		promise.catch(err => {
@@ -454,7 +454,7 @@ export class ProjectManager implements Disposable {
 	 * the remote FS. ensureFiles only syncs unfetched file content
 	 * from remoteFs to localFs. It does not update project
 	 * state. Callers that want to do so after file contents have been
-	 * fetched should call this.refreshConfigurations().
+	 * fetched should call this.createConfigurations().
 	 *
 	 * If one file fetch failed, the error will be caught and logged.
 	 *
@@ -484,10 +484,11 @@ export class ProjectManager implements Disposable {
 	}
 
 	/**
-	 * Detects projects and creates projects denoted by tsconfig.json. Previously detected projects are discarded.
+	 * Detects projects and creates projects denoted by tsconfig.json and jsconfig.json fiels.
+	 * Previously detected projects are NOT discarded.
 	 * If there is no root configuration, adds it to catch all orphan files
 	 */
-	refreshConfigurations() {
+	createConfigurations() {
 		const rootdirs = new Set<string>();
 		this.localFs.entries.forEach((v, k) => {
 			if (!/(^|\/)[tj]sconfig\.json$/.test(k)) {
@@ -500,10 +501,12 @@ export class ProjectManager implements Disposable {
 			if (dir === '.') {
 				dir = '';
 			}
-			this.configs.set(dir, new ProjectConfiguration(this.localFs, path_.posix.join('/', dir), this.versions, k, undefined, this.traceModuleResolution, this.logger));
+			if (!this.configs.has(dir)) {
+				this.configs.set(dir, new ProjectConfiguration(this.localFs, path_.posix.join('/', dir), this.versions, k, undefined, this.traceModuleResolution, this.logger));
+			}
 			rootdirs.add(dir);
 		});
-		if (!rootdirs.has('')) {
+		if (!rootdirs.has('') && !this.configs.has('')) {
 			// collecting all the files in workspace by making fake configuration object
 			this.configs.set('', new ProjectConfiguration(this.localFs, '/', this.versions, '', {
 				compilerOptions: {

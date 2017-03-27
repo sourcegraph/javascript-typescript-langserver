@@ -335,7 +335,7 @@ export class TypeScriptService implements LanguageHandler {
 		const relPkgRoot = pkg.name.slice('@types/'.length);
 		await this.projectManager.refreshFileTree(relPkgRoot, false);
 
-		this.projectManager.refreshConfigurations();
+		this.projectManager.createConfigurations();
 
 		const symQuery = params.symbol ? Object.assign({}, params.symbol) : undefined;
 		if (symQuery) {
