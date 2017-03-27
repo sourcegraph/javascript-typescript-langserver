@@ -52,19 +52,19 @@ export class LSPLogger implements Logger {
 export class StreamLogger {
 	constructor(private outStream: NodeJS.WritableStream, private errStream: NodeJS.WritableStream) {}
 	log(...values: any[]): void {
-		this.outStream.write('LOG  ' + format(values) + '\n');
+		this.outStream.write(chalk.grey('DEBUG ' + format(values) + '\n'));
 	}
 
 	info(...values: any[]): void {
-		this.outStream.write(chalk.bgCyan('INFO') + ' ' + format(values) + '\n');
+		this.outStream.write(chalk.bgCyan('INFO') + '  ' + format(values) + '\n');
 	}
 
 	warn(...values: any[]): void {
-		this.errStream.write(chalk.bgYellow('WARN') + ' ' + format(values) + '\n');
+		this.errStream.write(chalk.bgYellow('WARN') + '  ' + format(values) + '\n');
 	}
 
 	error(...values: any[]): void {
-		this.errStream.write(chalk.bgRed('ERR') + '  ' + format(values) + '\n');
+		this.errStream.write(chalk.bgRed('ERROR') + ' ' + format(values) + '\n');
 	}
 }
 
