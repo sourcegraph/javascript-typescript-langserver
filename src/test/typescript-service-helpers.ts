@@ -751,7 +751,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				assert.deepEqual(result, []);
 			});
 			specify('dependency reference', <any> async function (this: TestContext) {
-				const result = await this.service.getWorkspaceReference({ query: { name: 'x', containerName: '/node_modules/dep/dep' } });
+				const result = await this.service.getWorkspaceReference({ query: { name: 'x', containerName: '' } });
 				assert.deepEqual(result, [{
 					reference: {
 						range: {
@@ -768,7 +768,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					},
 					symbol: {
 						containerKind: '',
-						containerName: '/node_modules/dep/dep',
+						containerName: '',
 						kind: 'var',
 						name: 'x'
 					}
@@ -856,7 +856,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						},
 						symbol: {
 							containerKind: '',
-							containerName: '/node_modules/dep/dep',
+							containerName: '',
 							kind: 'var',
 							name: 'x'
 						}

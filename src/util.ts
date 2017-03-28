@@ -204,7 +204,7 @@ export function defInfoToSymbolDescriptor(d: ts.DefinitionInfo): rt.SymbolDescri
 		kind: d.kind || '',
 		name: stripQuotes(d.name) || '',
 		containerKind: d.containerKind || '',
-		containerName: (d.containerName ? lastDotCmp(stripQuotes(d.containerName)) : '')
+		containerName: (d.containerName ? stripFileInfo(lastDotCmp(stripQuotes(d.containerName))) : '')
 	};
 }
 
@@ -248,4 +248,14 @@ function stripQuotes(s: string): string {
 function lastDotCmp(s: string): string {
 	const cmps = s.split('.');
 	return cmps[cmps.length - 1];
+}
+
+/**
+ * Strips file part (if any) from container name (last component of container path)
+ * For example TS may return the following name: /node_modules/vscode-jsonrpc/lib/cancellation.
+ * We consider that if name contains path separtor then container name is empty
+ * @param containerName
+ */
+function stripFileInfo(containerName: string): string {
+	return toUnixPath(containerName).indexOf('/') < 0 ? containerName : '';
 }
