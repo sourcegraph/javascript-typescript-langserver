@@ -16,7 +16,7 @@ export interface Logger {
  * Formats values to a message by pretty-printing objects
  */
 function format(values: any[]): string {
-	return values.map(value => typeof value === 'string' ? value : inspect(value)).join(' ');
+	return values.map(value => typeof value === 'string' ? value : inspect(value, {depth: Infinity})).join(' ');
 }
 
 /**
