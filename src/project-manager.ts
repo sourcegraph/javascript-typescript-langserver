@@ -189,7 +189,7 @@ export class ProjectManager implements Disposable {
 			if (!moduleStructureOnly || util.isGlobalTSFile(rel) || util.isConfigFile(rel) || util.isPackageJsonFile(rel)) {
 				filesToFetch.push(file);
 			} else if (!this.localFs.fileExists(rel)) {
-				this.localFs.addFile(rel, localFSPlaceholder);
+				this.localFs.add(uri, localFSPlaceholder);
 			}
 		}
 		await this.ensureFiles(filesToFetch);
@@ -480,22 +480,23 @@ export class ProjectManager implements Disposable {
 	 */
 	createConfigurations() {
 		const rootdirs = new Set<string>();
-		this.localFs.entries.forEach((v, k) => {
-			if (!/(^|\/)[tj]sconfig\.json$/.test(k)) {
-				return;
+		for (const uri of this.localFs.uris()) {
+			const relativeFilePath = path_.posix.relative(this.rootPath, util.uri2path(uri));
+			if (!/(^|\/)[tj]sconfig\.json$/.test(relativeFilePath)) {
+				continue;
 			}
-			if (/(^|\/)node_modules\//.test(k)) {
-				return;
+			if (/(^|\/)node_modules\//.test(relativeFilePath)) {
+				continue;
 			}
-			let dir = path_.posix.dirname(k);
+			let dir = path_.posix.dirname(relativeFilePath);
 			if (dir === '.') {
 				dir = '';
 			}
 			if (!this.configs.has(dir)) {
-				this.configs.set(dir, new ProjectConfiguration(this.localFs, path_.posix.join('/', dir), this.versions, k, undefined, this.traceModuleResolution, this.logger));
+				this.configs.set(dir, new ProjectConfiguration(this.localFs, path_.posix.join('/', dir), this.versions, relativeFilePath, undefined, this.traceModuleResolution, this.logger));
 			}
 			rootdirs.add(dir);
-		});
+		}
 		if (!rootdirs.has('') && !this.configs.has('')) {
 			// collecting all the files in workspace by making fake configuration object
 			this.configs.set('', new ProjectConfiguration(this.localFs, '/', this.versions, '', {
@@ -569,7 +570,7 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 		this.filePaths = [];
 		// adding library files from the local file system
 		getTypeScriptLibraries().forEach((content, name) => {
-			this.fs.entries.set(name, content);
+			this.fs.add(util.path2uri(rootPath, name), content);
 		});
 	}
 
@@ -681,14 +682,9 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	private files = new Map<string, string | undefined>();
 
 	/**
-	 * Map (relative filepath -> string content) of files fetched from the remote file system. Paths are relative to `this.path`
-	 *
-	 * TODO remove in favor of files
-	 */
-	entries: Map<string, string>;
-
-	/**
 	 * Map (relative filepath -> string content) of temporary files made while user modifies local file(s).  Paths are relative to `this.path`
+	 *
+	 * TODO make this use URIs too
 	 */
 	overlay: Map<string, string>;
 
@@ -709,7 +705,6 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 
 	constructor(path: string, private logger: Logger = new NoopLogger()) {
 		this.path = path;
-		this.entries = new Map<string, string>();
 		this.overlay = new Map<string, string>();
 		this.rootNode = { file: false, children: new Map<string, FileSystemNode>() };
 	}
@@ -732,10 +727,23 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 		if (this.files.get(uri) === undefined) {
 			this.files.set(uri, content);
 		}
-		// If content is defined, also add to the legacy implementation
-		// TODO consolidate this
-		if (content !== undefined) {
-			this.addFile(util.uri2path(uri), content);
+		// Add to directory tree
+		const filePath = path_.posix.relative(this.path, util.uri2path(uri));
+		const components = filePath.split('/');
+		let node = this.rootNode;
+		for (const [i, component] of components.entries()) {
+			const n = node.children.get(component);
+			if (!n) {
+				if (i < components.length - 1) {
+					const n = { file: false, children: new Map<string, FileSystemNode>() };
+					node.children.set(component, n);
+					node = n;
+				} else {
+					node.children.set(component, { file: true, children: new Map<string, FileSystemNode>() });
+				}
+			} else {
+				node = n;
+			}
 		}
 	}
 
@@ -752,35 +760,6 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 			throw new Error(`Content of ${uri} is not available in memory`);
 		}
 		return content;
-	}
-
-	/**
-	 * Adds file content to a local cache
-	 *
-	 * @param path File path, absolute or relative to rootPath
-	 * @param content File content
-	 */
-	addFile(path: string, content: string) {
-		// Ensure path is relative to rootpath
-		if (path_.posix.isAbsolute(path)) {
-			path = path_.posix.relative(this.path, path);
-		}
-		this.entries.set(path, content);
-		let node = this.rootNode;
-		path.split('/').forEach((component, i, components) => {
-			const n = node.children.get(component);
-			if (!n) {
-				if (i < components.length - 1) {
-					const n = { file: false, children: new Map<string, FileSystemNode>() };
-					node.children.set(component, n);
-					node = n;
-				} else {
-					node.children.set(component, { file: true, children: new Map<string, FileSystemNode>() });
-				}
-			} else {
-				node = n;
-			}
-		});
 	}
 
 	/**
@@ -818,12 +797,15 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 			return content;
 		}
 
-		content = this.entries.get(path);
+		// TODO This assumes that the URI was a file:// URL.
+		//      In reality it could be anything, and the first URI matching the path should be used.
+		//      With the current Map, the search would be O(n), it would require a tree to get O(log(n))
+		content = this.files.get(util.path2uri(this.path, path));
 		if (content !== undefined) {
 			return content;
 		}
 
-		return this.entries.get(rel);
+		return this.files.get(util.path2uri(this.path, path));
 	}
 
 	/**
@@ -841,7 +823,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	didSave(path: string) {
 		const content = this.readFileIfExists(path);
 		if (content !== undefined) {
-			this.addFile(path, content);
+			this.add(util.path2uri('', path), content);
 		}
 	}
 
