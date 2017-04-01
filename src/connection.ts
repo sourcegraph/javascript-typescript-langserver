@@ -62,7 +62,7 @@ export function registerLanguageHandler(connection: IConnection, handler: Langua
 	connection.onDocumentSymbol((params, token) => handler.getDocumentSymbol(params, token));
 	connection.onCompletion((params, token) => handler.getCompletions(params, token));
 	connection.onRequest('textDocument/xdefinition', (params, token) => handler.getXdefinition(params, token));
-	connection.onSignatureHelp((params, token) => handler.getSignatureHelp(params));
+	connection.onSignatureHelp((params, token) => handler.getSignatureHelp(params, token));
 
 	// workspace
 	connection.onWorkspaceSymbol((params, token) => handler.getWorkspaceSymbols(params, token));

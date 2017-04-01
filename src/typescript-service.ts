@@ -17,10 +17,10 @@ import {
 	MarkedString,
 	Range,
 	ReferenceParams,
+	SignatureHelp,
 	SymbolInformation,
 	TextDocumentPositionParams,
 	TextDocumentSyncKind
-	SignatureHelp
 } from 'vscode-languageserver';
 import { isCancelledError } from './cancellation';
 import { FileSystem, FileSystemUpdater, LocalFileSystem, RemoteFileSystem } from './fs';
@@ -114,6 +114,7 @@ export class TypeScriptService implements LanguageHandler {
 				// Tell the client that the server works in FULL text document sync mode
 				textDocumentSync: TextDocumentSyncKind.Full,
 				hoverProvider: true,
+				signatureHelpProvider: true,
 				definitionProvider: true,
 				referencesProvider: true,
 				documentSymbolProvider: true,
@@ -567,7 +568,7 @@ export class TypeScriptService implements LanguageHandler {
 		}));
 	}
 
-	async getSignatureHelp(params: TextDocumentPositionParams): Promise<SignatureHelp> {
+	async getSignatureHelp(params: TextDocumentPositionParams, token = CancellationToken.None): Promise<SignatureHelp> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
@@ -588,15 +589,26 @@ export class TypeScriptService implements LanguageHandler {
 			return null;
 		}
 
+		const signatureInformations = signatures.items.map(item => {
+			const prefix = item.prefixDisplayParts.map(p => p.text).join('');
+			const params = item.parameters.map(p => p.name).join(', ');
+			const suffix = item.suffixDisplayParts.map(p => p.text).join('');
+			return {
+				label: prefix + params + suffix,
+				documentation: item.documentation.map(d => d.text).join('')
+			};
+		});
+		// signatures.items.map((item: ts.SignatureHelpItem) => {
+		// 		label: "",
+		// 		documentation: item.documentation,
+		// 		parameters: item.parameters.map((param: ts.SignatureHelpParameter) => {
+		// 			label: param.name,
+		// 			documentation: param.documentation
+		// 		})
+		// 	}),
+
 		return {
-			signatures: signatures.items.map((item: ts.SignatureHelpItem) => {
-				label: "",
-					documentation: item.documentation,
-						parameters: item.parameters.map((param: ts.SignatureHelpParameter) => {
-							label: param.name,
-								documentation: param.documentation
-						}),
-			}),
+			signatures: signatureInformations,
 			activeSignature: 0,
 			activeParameter: 0
 		};

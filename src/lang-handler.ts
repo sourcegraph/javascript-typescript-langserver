@@ -13,11 +13,11 @@ import {
 	Location,
 	LogMessageParams,
 	ReferenceParams,
+	SignatureHelp,
 	SymbolInformation,
 	TextDocumentIdentifier,
 	TextDocumentItem,
 	TextDocumentPositionParams
-	SignatureHelp
 } from 'vscode-languageserver';
 
 import {
@@ -54,7 +54,7 @@ export interface LanguageHandler {
 	didClose(params: DidCloseTextDocumentParams, token?: CancellationToken): Promise<void>;
 	didSave(params: DidSaveTextDocumentParams, token?: CancellationToken): Promise<void>;
 	getCompletions(params: TextDocumentPositionParams, token?: CancellationToken): Promise<CompletionList>;
-	getSignatureHelp(params: TextDocumentPositionParams): Promise<SignatureHelp>;
+	getSignatureHelp(params: TextDocumentPositionParams, token?: CancellationToken): Promise<SignatureHelp>;
 }
 
 export interface LanguageClientHandler {
