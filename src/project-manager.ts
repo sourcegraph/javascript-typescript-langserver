@@ -1015,11 +1015,19 @@ export class ProjectConfiguration {
 	 * @return package name (project name) of a given project
 	 */
 	getPackageName(): string | null {
-		const pkgJsonFile = path_.posix.join(this.rootFilePath, 'package.json');
-		if (this.fs.fileExists(pkgJsonFile)) {
-			return JSON.parse(this.fs.readFile(pkgJsonFile)).name;
+		// package.json may be located at the upper level as well
+		let currentDir = this.rootFilePath;
+		while (true) {
+			const pkgJsonFile = path_.posix.join(currentDir, 'package.json');
+			if (this.fs.fileExists(pkgJsonFile)) {
+				return JSON.parse(this.fs.readFile(pkgJsonFile)).name;
+			}
+			const parentDir = path_.dirname(currentDir);
+			if (parentDir === '.' || parentDir === '/' || parentDir === currentDir) {
+				return null;
+			}
+			currentDir = parentDir;
 		}
-		return null;
 	}
 
 	/**
