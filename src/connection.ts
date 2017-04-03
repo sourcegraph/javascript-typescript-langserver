@@ -1,3 +1,4 @@
+import * as opentracing from 'opentracing';
 import { DataCallback, Message, StreamMessageReader, StreamMessageWriter } from 'vscode-jsonrpc';
 import { createConnection, IConnection } from 'vscode-languageserver';
 import { LanguageHandler } from './lang-handler';
@@ -48,7 +49,10 @@ export function newConnection(input: NodeJS.ReadableStream, output: NodeJS.Writa
  */
 export function registerLanguageHandler(connection: IConnection, handler: LanguageHandler): void {
 
-	connection.onInitialize((params, token) => handler.initialize(params, token));
+	connection.onInitialize((params, token) => {
+		const span = opentracing.globalTracer().startSpan('initialize');
+		return handler.initialize(params, span, token);
+	});
 	connection.onShutdown(() => handler.shutdown());
 
 	// textDocument

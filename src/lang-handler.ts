@@ -1,3 +1,4 @@
+import * as opentracing from 'opentracing';
 import { CancellationToken } from 'vscode-jsonrpc';
 import {
 	CompletionList,
@@ -18,7 +19,6 @@ import {
 	TextDocumentItem,
 	TextDocumentPositionParams
 } from 'vscode-languageserver';
-
 import {
 	DependencyReference,
 	PackageInformation,
@@ -37,7 +37,7 @@ import {
  * registration method on IConnection.
  */
 export interface LanguageHandler {
-	initialize(params: InitializeParams, token?: CancellationToken): Promise<InitializeResult>;
+	initialize(params: InitializeParams, span: opentracing.Span, token?: CancellationToken): Promise<InitializeResult>;
 	shutdown(): Promise<void>;
 	getDefinition(params: TextDocumentPositionParams, token?: CancellationToken): Promise<Location[]>;
 	getXdefinition(params: TextDocumentPositionParams, token?: CancellationToken): Promise<SymbolLocationInformation[]>;

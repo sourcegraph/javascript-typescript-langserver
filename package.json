@@ -43,6 +43,7 @@
     "iterare": "^0.0.7",
     "lodash": "^4.17.4",
     "mz": "^2.6.0",
+    "opentracing": "^0.13.0",
     "semaphore-async-await": "^1.5.1",
     "typescript": "2.2.1",
     "vscode-jsonrpc": "^3.1.0",

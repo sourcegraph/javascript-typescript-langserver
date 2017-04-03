@@ -4,6 +4,7 @@ import { CancellationToken } from './cancellation';
 import { LanguageClientHandler } from './lang-handler';
 import glob = require('glob');
 import iterate from 'iterare';
+import { Span } from 'opentracing';
 import Semaphore from 'semaphore-async-await';
 import { InMemoryFileSystem } from './project-manager';
 import { path2uri, uri2path } from './util';
@@ -126,8 +127,17 @@ export class FileSystemUpdater {
 	 *
 	 * @param uri URI of the file to ensure
 	 */
-	ensure(uri: string): Promise<void> {
-		return this.fetches.get(uri) || this.fetch(uri);
+	async ensure(uri: string, childOf = new Span()): Promise<void> {
+		const span = childOf.tracer().startSpan('ensure file content', { childOf });
+		span.addTags({ uri });
+		try {
+			return await (this.fetches.get(uri) || this.fetch(uri));
+		} catch (err) {
+			span.setTag('error', true);
+			throw err;
+		} finally {
+			span.finish();
+		}
 	}
 
 	/**

@@ -1,4 +1,5 @@
 import * as async from 'async';
+import { globalTracer, Span } from 'opentracing';
 import * as path_ from 'path';
 import * as ts from 'typescript';
 import { CancellationToken } from 'vscode-jsonrpc';
@@ -92,41 +93,49 @@ export class TypeScriptService implements LanguageHandler {
 		this.logger = new LSPLogger(client);
 	}
 
-	async initialize(params: InitializeParams, token = CancellationToken.None): Promise<InitializeResult> {
-		if (params.rootUri || params.rootPath) {
-			this.root = params.rootPath || util.uri2path(params.rootUri!);
-			this.rootUri = params.rootUri || util.path2uri('', params.rootPath!);
-			this.initializeFileSystems(!this.options.strict && !(params.capabilities.xcontentProvider && params.capabilities.xfilesProvider));
-			this.updater = new FileSystemUpdater(this.fileSystem, this.inMemoryFileSystem);
-			this.projectManager = new pm.ProjectManager(this.root, this.inMemoryFileSystem, this.updater, !!this.options.strict, this.traceModuleResolution, this.logger);
-			// Pre-fetch files in the background
-			// TODO why does ensureAllFiles() fetch less files than ensureFilesForWorkspaceSymbol()?
-			//      (package.json is not fetched)
-			this.projectManager.ensureFilesForWorkspaceSymbol().catch(err => {
-				if (!isCancelledError(err)) {
-					this.logger.error('Background fetching failed ', err);
-				}
-			});
-		}
-		return {
-			capabilities: {
-				// Tell the client that the server works in FULL text document sync mode
-				textDocumentSync: TextDocumentSyncKind.Full,
-				hoverProvider: true,
-				definitionProvider: true,
-				referencesProvider: true,
-				documentSymbolProvider: true,
-				workspaceSymbolProvider: true,
-				xworkspaceReferencesProvider: true,
-				xdefinitionProvider: true,
-				xdependenciesProvider: true,
-				completionProvider: {
-					resolveProvider: false,
-					triggerCharacters: ['.']
-				},
-				xpackagesProvider: true
+	async initialize(params: InitializeParams, parentSpan = new Span(), token = CancellationToken.None): Promise<InitializeResult> {
+		const span = parentSpan.tracer().startSpan('initialize', { childOf: parentSpan });
+		try {
+			if (params.rootUri || params.rootPath) {
+				this.root = params.rootPath || util.uri2path(params.rootUri!);
+				this.rootUri = params.rootUri || util.path2uri('', params.rootPath!);
+				this.initializeFileSystems(!this.options.strict && !(params.capabilities.xcontentProvider && params.capabilities.xfilesProvider));
+				this.updater = new FileSystemUpdater(this.fileSystem, this.inMemoryFileSystem);
+				this.projectManager = new pm.ProjectManager(this.root, this.inMemoryFileSystem, this.updater, !!this.options.strict, this.traceModuleResolution, this.logger);
+				// Pre-fetch files in the background
+				// TODO why does ensureAllFiles() fetch less files than ensureFilesForWorkspaceSymbol()?
+				//      (package.json is not fetched)
+				this.projectManager.ensureFilesForWorkspaceSymbol().catch(err => {
+					if (!isCancelledError(err)) {
+						this.logger.error('Background fetching failed ', err);
+					}
+				});
 			}
-		};
+			return {
+				capabilities: {
+					// Tell the client that the server works in FULL text document sync mode
+					textDocumentSync: TextDocumentSyncKind.Full,
+					hoverProvider: true,
+					definitionProvider: true,
+					referencesProvider: true,
+					documentSymbolProvider: true,
+					workspaceSymbolProvider: true,
+					xworkspaceReferencesProvider: true,
+					xdefinitionProvider: true,
+					xdependenciesProvider: true,
+					completionProvider: {
+						resolveProvider: false,
+						triggerCharacters: ['.']
+					},
+					xpackagesProvider: true
+				}
+			};
+		} catch (err) {
+			span.setTag('error', true);
+			throw err;
+		} finally {
+			span.finish();
+		}
 	}
 
 	/**
