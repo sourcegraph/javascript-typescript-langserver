@@ -724,7 +724,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 */
 	add(uri: string, content?: string): void {
 		// Make sure not to override existing content with undefined
-		if (this.files.get(uri) === undefined) {
+		if (content !== undefined || !this.files.has(uri)) {
 			this.files.set(uri, content);
 		}
 		// Add to directory tree
