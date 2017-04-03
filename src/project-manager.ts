@@ -6,7 +6,6 @@ import * as path_ from 'path';
 import * as ts from 'typescript';
 import { Disposable } from 'vscode-languageserver';
 import { CancellationToken, CancellationTokenSource, throwIfCancelledError, throwIfRequested } from './cancellation';
-import * as FileSystem from './fs';
 import { FileSystemUpdater } from './fs';
 import { Logger, NoopLogger } from './logging';
 import * as match from './match-files';
@@ -45,12 +44,6 @@ export class ProjectManager implements Disposable {
 	private strict: boolean;
 
 	/**
-	 * Remote side of file content provider which may point to either a client (strict mode) or
-	 * to a local file system
-	 */
-	private remoteFs: FileSystem.FileSystem;
-
-	/**
 	 * Local side of file content provider which keeps cache of fetched files
 	 */
 	private localFs: InMemoryFileSystem;
@@ -75,14 +68,14 @@ export class ProjectManager implements Disposable {
 	 * Flag indicating that we fetched module struture (tsconfig.json, jsconfig.json, package.json files) from the remote file system.
 	 * Without having this information we won't be able to split workspace to sub-projects
 	 */
-	private ensuredModuleStructure?: Promise<void>;
+	ensuredModuleStructure?: Promise<void>;
 
 	/**
 	 * Tracks if source file denoted by the given URI is fetched from remote file system and available locally.
 	 * For hover or definition we only need a single file (and maybe its transitive includes/references as reported by TS compiler).
 	 * This map prevents fetching of file content from remote filesystem twice
 	 */
-	private ensuredFilesForHoverAndDefinition = new Map<string, Promise<void>>();
+	ensuredFilesForHoverAndDefinition = new Map<string, Promise<void>>();
 
 	/**
 	 * For references/symbols we need all the source files making workspace so this flag tracks if we already did it
@@ -91,17 +84,16 @@ export class ProjectManager implements Disposable {
 
 	/**
 	 * @param rootPath root path as passed to `initialize`
-	 * @param remoteFS remote side of file content provider, used to fetch content from on demand
+	 * @param inMemoryFileSystem File system that keeps structure and contents in memory
 	 * @param strict indicates if we are working in strict mode (VFS) or with a local file system
 	 * @param traceModuleResolution allows to enable module resolution tracing (done by TS compiler)
 	 */
-	constructor(rootPath: string, remoteFs: FileSystem.FileSystem, strict: boolean, traceModuleResolution?: boolean, protected logger: Logger = new NoopLogger()) {
+	constructor(rootPath: string, inMemoryFileSystem: InMemoryFileSystem, updater: FileSystemUpdater, strict: boolean, traceModuleResolution?: boolean, protected logger: Logger = new NoopLogger()) {
 		this.rootPath = util.toUnixPath(rootPath);
 		this.configs = new Map<string, ProjectConfiguration>();
-		this.localFs = new InMemoryFileSystem(this.rootPath);
-		this.updater = new FileSystemUpdater(remoteFs, this.localFs);
+		this.updater = updater;
+		this.localFs = inMemoryFileSystem;
 		this.versions = new Map<string, number>();
-		this.remoteFs = remoteFs;
 		this.strict = strict;
 		this.traceModuleResolution = traceModuleResolution || false;
 	}
@@ -197,7 +189,7 @@ export class ProjectManager implements Disposable {
 			if (!moduleStructureOnly || util.isGlobalTSFile(rel) || util.isConfigFile(rel) || util.isPackageJsonFile(rel)) {
 				filesToFetch.push(file);
 			} else if (!this.localFs.fileExists(rel)) {
-				this.localFs.addFile(rel, localFSPlaceholder);
+				this.localFs.add(uri, localFSPlaceholder);
 			}
 		}
 		await this.ensureFiles(filesToFetch);
@@ -232,19 +224,17 @@ export class ProjectManager implements Disposable {
 		if (existing) {
 			return existing;
 		}
-
-		const promise = this.ensureModuleStructure().then(() => {
-			// include dependencies up to depth 30
-			const deps = new Set<string>();
-			return this.ensureTransitiveFileDependencies([util.uri2path(uri)], 30, deps).then(() => {
-				return this.createConfigurations();
-			});
-		});
+		const promise = (async () => {
+			try {
+				await this.ensureModuleStructure();
+				// Include dependencies up to depth 30
+				await this.ensureTransitiveFileDependencies([util.uri2path(uri)], 30);
+			} catch (err) {
+				this.ensuredFilesForHoverAndDefinition.delete(uri);
+				throw err;
+			}
+		})();
 		this.ensuredFilesForHoverAndDefinition.set(uri, promise);
-		promise.catch(err => {
-			this.logger.error(`Failed to fetch files for hover/definition for uri ${uri}`, err);
-			this.ensuredFilesForHoverAndDefinition.delete(uri);
-		});
 		return promise;
 	}
 
@@ -330,7 +320,7 @@ export class ProjectManager implements Disposable {
 	 * @param maxDepth stop collecting when reached given recursion level
 	 * @param seen tracks visited files to avoid cycles
 	 */
-	private async ensureTransitiveFileDependencies(filePaths: string[], maxDepth: number, seen: Set<string>): Promise<void> {
+	private async ensureTransitiveFileDependencies(filePaths: string[], maxDepth: number, seen = new Set<string>()): Promise<void> {
 		filePaths = filePaths.filter(f => !seen.has(f));
 		if (filePaths.length === 0) {
 			return Promise.resolve();
@@ -396,7 +386,7 @@ export class ProjectManager implements Disposable {
 		if (config) {
 			return config;
 		}
-		throw new Error('unreachable');
+		throw new Error(`TypeScript config file for ${filePath} not found`);
 	}
 
 	/**
@@ -469,7 +459,7 @@ export class ProjectManager implements Disposable {
 			await Promise.all(iterate(files).map(async path => {
 				throwIfRequested(token);
 				try {
-					await this.updater.ensure(util.path2uri('', path), token);
+					await this.updater.ensure(util.path2uri('', path));
 				} catch (err) {
 					// if cancellation was requested, break out of the loop
 					throwIfCancelledError(err);
@@ -490,22 +480,23 @@ export class ProjectManager implements Disposable {
 	 */
 	createConfigurations() {
 		const rootdirs = new Set<string>();
-		this.localFs.entries.forEach((v, k) => {
-			if (!/(^|\/)[tj]sconfig\.json$/.test(k)) {
-				return;
+		for (const uri of this.localFs.uris()) {
+			const relativeFilePath = path_.posix.relative(this.rootPath, util.uri2path(uri));
+			if (!/(^|\/)[tj]sconfig\.json$/.test(relativeFilePath)) {
+				continue;
 			}
-			if (/(^|\/)node_modules\//.test(k)) {
-				return;
+			if (/(^|\/)node_modules\//.test(relativeFilePath)) {
+				continue;
 			}
-			let dir = path_.posix.dirname(k);
+			let dir = path_.posix.dirname(relativeFilePath);
 			if (dir === '.') {
 				dir = '';
 			}
 			if (!this.configs.has(dir)) {
-				this.configs.set(dir, new ProjectConfiguration(this.localFs, path_.posix.join('/', dir), this.versions, k, undefined, this.traceModuleResolution, this.logger));
+				this.configs.set(dir, new ProjectConfiguration(this.localFs, path_.posix.join('/', dir), this.versions, relativeFilePath, undefined, this.traceModuleResolution, this.logger));
 			}
 			rootdirs.add(dir);
-		});
+		}
 		if (!rootdirs.has('') && !this.configs.has('')) {
 			// collecting all the files in workspace by making fake configuration object
 			this.configs.set('', new ProjectConfiguration(this.localFs, '/', this.versions, '', {
@@ -579,7 +570,7 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 		this.filePaths = [];
 		// adding library files from the local file system
 		getTypeScriptLibraries().forEach((content, name) => {
-			this.fs.entries.set(name, content);
+			this.fs.add(util.path2uri(rootPath, name), content);
 		});
 	}
 
@@ -685,20 +676,15 @@ export interface FileSystemNode {
 export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResolutionHost {
 
 	/**
-	 * Contains a Set of all URIs that exist in the workspace.
+	 * Contains a Map of all URIs that exist in the workspace, optionally with a content.
 	 * File contents for URIs in it do not neccessarily have to be fetched already.
-	 *
-	 * TODO: Turn this into a Map<string, string | undefined> and remove entries
 	 */
-	private files = new Set<string>();
-
-	/**
-	 * Map (relative filepath -> string content) of files fetched from the remote file system. Paths are relative to `this.path`
-	 */
-	entries: Map<string, string>;
+	private files = new Map<string, string | undefined>();
 
 	/**
 	 * Map (relative filepath -> string content) of temporary files made while user modifies local file(s).  Paths are relative to `this.path`
+	 *
+	 * TODO make this use URIs too
 	 */
 	overlay: Map<string, string>;
 
@@ -719,7 +705,6 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 
 	constructor(path: string, private logger: Logger = new NoopLogger()) {
 		this.path = path;
-		this.entries = new Map<string, string>();
 		this.overlay = new Map<string, string>();
 		this.rootNode = { file: false, children: new Map<string, FileSystemNode>() };
 	}
@@ -738,26 +723,15 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 * @param content The optional content
 	 */
 	add(uri: string, content?: string): void {
-		this.files.add(uri);
-		if (content !== undefined) {
-			this.addFile(util.uri2path(uri), content);
+		// Make sure not to override existing content with undefined
+		if (content !== undefined || !this.files.has(uri)) {
+			this.files.set(uri, content);
 		}
-	}
-
-	/**
-	 * Adds file content to a local cache
-	 *
-	 * @param path File path, absolute or relative to rootPath
-	 * @param content File content
-	 */
-	addFile(path: string, content: string) {
-		// Ensure path is relative to rootpath
-		if (path_.posix.isAbsolute(path)) {
-			path = path_.posix.relative(this.path, path);
-		}
-		this.entries.set(path, content);
+		// Add to directory tree
+		const filePath = path_.posix.relative(this.path, util.uri2path(uri));
+		const components = filePath.split('/');
 		let node = this.rootNode;
-		path.split('/').forEach((component, i, components) => {
+		for (const [i, component] of components.entries()) {
 			const n = node.children.get(component);
 			if (!n) {
 				if (i < components.length - 1) {
@@ -770,15 +744,31 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 			} else {
 				node = n;
 			}
-		});
+		}
 	}
 
 	/**
-	 * Tells if a file denoted by the given name exists in the local cache
-	 * @param path file path (both absolute or relative file paths are accepted)
+	 * Returns the file content for the given URI.
+	 * Will throw an Error if no available in-memory.
+	 * Use FileSystemUpdater.ensure() to ensure that the file is available.
+	 *
+	 * TODO take overlay into account
+	 */
+	getContent(uri: string): string {
+		const content = this.files.get(uri);
+		if (content === undefined) {
+			throw new Error(`Content of ${uri} is not available in memory`);
+		}
+		return content;
+	}
+
+	/**
+	 * Tells if a file denoted by the given name exists in the workspace (does not have to be loaded)
+	 *
+	 * @param path File path or URI (both absolute or relative file paths are accepted)
 	 */
 	fileExists(path: string): boolean {
-		return this.readFileIfExists(path) !== undefined;
+		return this.readFileIfExists(path) !== undefined || this.files.has(path) || this.files.has(util.path2uri(this.path, path));
 	}
 
 	/**
@@ -807,12 +797,15 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 			return content;
 		}
 
-		content = this.entries.get(path);
+		// TODO This assumes that the URI was a file:// URL.
+		//      In reality it could be anything, and the first URI matching the path should be used.
+		//      With the current Map, the search would be O(n), it would require a tree to get O(log(n))
+		content = this.files.get(util.path2uri(this.path, path));
 		if (content !== undefined) {
 			return content;
 		}
 
-		return this.entries.get(rel);
+		return this.files.get(util.path2uri(this.path, path));
 	}
 
 	/**
@@ -830,7 +823,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	didSave(path: string) {
 		const content = this.readFileIfExists(path);
 		if (content !== undefined) {
-			this.addFile(path, content);
+			this.add(util.path2uri('', path), content);
 		}
 	}
 

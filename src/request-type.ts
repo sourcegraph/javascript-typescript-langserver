@@ -32,14 +32,6 @@ export interface SymbolDescriptor {
 	package?: PackageDescriptor;
 }
 
-export interface PartialSymbolDescriptor {
-	kind?: string;
-	name?: string;
-	containerKind?: string;
-	containerName?: string;
-	package?: PackageDescriptor;
-}
-
 export namespace SymbolDescriptor {
 	export function create(kind: string, name: string, containerKind: string, containerName: string, pkg?: PackageDescriptor): SymbolDescriptor {
 		return { kind, name, containerKind, containerName, package: pkg };
@@ -60,7 +52,7 @@ export interface WorkspaceSymbolParams {
 	/**
 	 * A set of properties that describe the symbol to look up.
 	 */
-	symbol?: PartialSymbolDescriptor;
+	symbol?: Partial<SymbolDescriptor>;
 
 	/**
 	 * The number of items to which to restrict the results set size.
@@ -74,7 +66,7 @@ export interface WorkspaceSymbolParams {
  * spec).
  */
 export interface WorkspaceReferenceParams {
-	query: PartialSymbolDescriptor;
+	query: Partial<SymbolDescriptor>;
 	hints?: DependencyHints;
 }
 

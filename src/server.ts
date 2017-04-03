@@ -3,7 +3,7 @@ import * as net from 'net';
 import { IConnection } from 'vscode-languageserver';
 import { newConnection, registerLanguageHandler, TraceOptions } from './connection';
 import { LanguageHandler } from './lang-handler';
-import { PrefixedLogger, StdioLogger } from './logging';
+import { Logger, PrefixedLogger, StdioLogger } from './logging';
 
 export interface ServeOptions extends TraceOptions {
 	clusterSize: number;
@@ -11,12 +11,23 @@ export interface ServeOptions extends TraceOptions {
 }
 
 /**
- * serve starts a singleton language server instance that uses a
- * cluster of worker processes to achieve some semblance of
- * parallelism.
+ * Creates a Logger prefixed with master or worker ID
+ *
+ * @param logger An optional logger to wrap, e.g. to write to a logfile. Defaults to STDIO
+ */
+export function createClusterLogger(logger = new StdioLogger()): Logger {
+	return new PrefixedLogger(logger, cluster.isMaster ? 'master' : `wrkr ${cluster.worker.id}`);
+}
+
+/**
+ * Starts up a cluster of worker processes that listen on the same TCP socket.
+ * Crashing workers are restarted automatically.
+ *
+ * @param options
+ * @param createLangHandler Factory function that is called for each new connection
  */
 export async function serve(options: ServeOptions, createLangHandler: (connection: IConnection) => LanguageHandler): Promise<void> {
-	const logger = new PrefixedLogger(options.logger || new StdioLogger(), cluster.isMaster ? 'master' : `wrkr ${cluster.worker.id}`);
+	const logger = options.logger || createClusterLogger();
 	if (options.clusterSize > 1 && cluster.isMaster) {
 		logger.log(`Spawning ${options.clusterSize} workers`);
 		cluster.on('online', worker => {

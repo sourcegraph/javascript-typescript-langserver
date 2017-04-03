@@ -1,10 +1,10 @@
 import * as fs from 'mz/fs';
 import * as path from 'path';
-import { cancellableMemoize, CancellationToken, throwIfRequested } from './cancellation';
+import { CancellationToken } from './cancellation';
 import { LanguageClientHandler } from './lang-handler';
 import glob = require('glob');
+import iterate from 'iterare';
 import Semaphore from 'semaphore-async-await';
-import * as url from 'url';
 import { InMemoryFileSystem } from './project-manager';
 import { path2uri, uri2path } from './util';
 
@@ -15,7 +15,7 @@ export interface FileSystem {
 	 * @param base A URI under which to search, resolved relative to the rootUri
 	 * @return A promise that is fulfilled with an array of URIs
 	 */
-	getWorkspaceFiles(base?: string, token?: CancellationToken): Promise<string[]>;
+	getWorkspaceFiles(base?: string, token?: CancellationToken): Promise<Iterable<string>>;
 
 	/**
 	 * Returns the content of a text document
@@ -34,9 +34,9 @@ export class RemoteFileSystem implements FileSystem {
 	 * The files request is sent from the server to the client to request a list of all files in the workspace or inside the directory of the base parameter, if given.
 	 * A language server can use the result to index files by filtering and doing a content request for each text document of interest.
 	 */
-	async getWorkspaceFiles(base?: string, token = CancellationToken.None): Promise<string[]> {
-		const textDocuments = await this.client.getWorkspaceFiles({ base }, token);
-		return textDocuments.map(textDocument => textDocument.uri);
+	async getWorkspaceFiles(base?: string, token = CancellationToken.None): Promise<Iterable<string>> {
+		return iterate(await this.client.getWorkspaceFiles({ base }, token))
+			.map(textDocument => textDocument.uri);
 	}
 
 	/**
@@ -62,53 +62,16 @@ export class LocalFileSystem implements FileSystem {
 		return path.resolve(this.rootPath, uri2path(uri));
 	}
 
-	async getWorkspaceFiles(base?: string): Promise<string[]> {
+	async getWorkspaceFiles(base?: string): Promise<Iterable<string>> {
 		const pattern = base ? path.posix.join(this.resolveUriToPath(base), '**/*.*') : this.resolveUriToPath('file:///**/*.*');
 		const files = await new Promise<string[]>((resolve, reject) => {
 			glob(pattern, { nodir: true }, (err, matches) => err ? reject(err) : resolve(matches));
 		});
-		return files.map(file => path2uri('', file));
+		return iterate(files).map(file => path2uri('', file));
 	}
 
 	async getTextDocumentContent(uri: string): Promise<string> {
 		return fs.readFile(this.resolveUriToPath(uri), 'utf8');
-	}
-}
-
-/**
- * Memoization cache that saves URIs and searches parent directories too
- */
-class ParentUriMemoizationCache extends Map<string | undefined, Promise<void>> {
-
-	/**
-	 * Returns the value if the given URI or a parent directory of the URI is in the cache
-	 */
-	get(uri: string | undefined): Promise<void> | undefined {
-		let hit = super.get(uri);
-		if (hit) {
-			return hit;
-		}
-		// Find out if parent folder is being fetched already
-		hit = super.get(undefined);
-		if (hit) {
-			return hit;
-		}
-		if (uri) {
-			for (let parts = url.parse(uri); parts.pathname && parts.pathname !== '/'; parts.pathname = path.dirname(parts.pathname)) {
-				hit = super.get(url.format(parts));
-				if (hit) {
-					return hit;
-				}
-			}
-		}
-		return undefined;
-	}
-
-	/**
-	 * Returns true if the given URI or a parent directory of the URI is in the cache
-	 */
-	has(key: string): boolean {
-		return this.get(key) !== undefined;
 	}
 }
 
@@ -118,6 +81,16 @@ class ParentUriMemoizationCache extends Map<string | undefined, Promise<void>> {
  * TODO: Implement Disposable with Disposer
  */
 export class FileSystemUpdater {
+
+	/**
+	 * Promise for a pending or fulfilled structure fetch
+	 */
+	private structureFetch?: Promise<void>;
+
+	/**
+	 * Map from URI to Promise of pending or fulfilled content fetch
+	 */
+	private fetches = new Map<string, Promise<void>>();
 
 	/**
 	 * Limits concurrent fetches to not fetch thousands of files in parallel
@@ -131,13 +104,20 @@ export class FileSystemUpdater {
 	 *
 	 * @param uri URI of the file to fetch
 	 */
-	fetch(uri: string, token = CancellationToken.None): Promise<void> {
+	async fetch(uri: string): Promise<void> {
 		// Limit concurrent fetches
-		return this.concurrencyLimit.execute(async () => {
-			throwIfRequested(token);
-			const content = await this.remoteFs.getTextDocumentContent(uri, token);
-			this.inMemoryFs.add(uri, content);
+		const promise = this.concurrencyLimit.execute(async () => {
+			try {
+				const content = await this.remoteFs.getTextDocumentContent(uri);
+				this.inMemoryFs.add(uri, content);
+				this.inMemoryFs.getContent(uri);
+			} catch (err) {
+				this.fetches.delete(uri);
+				throw err;
+			}
 		});
+		this.fetches.set(uri, promise);
+		return promise;
 	}
 
 	/**
@@ -146,23 +126,42 @@ export class FileSystemUpdater {
 	 *
 	 * @param uri URI of the file to ensure
 	 */
-	ensure = cancellableMemoize(this.fetch);
+	ensure(uri: string): Promise<void> {
+		return this.fetches.get(uri) || this.fetch(uri);
+	}
 
 	/**
 	 * Fetches the file/directory structure for the given directory from the remote file system and saves it in the in-memory file system
-	 *
-	 * @param base The base directory which structure will be synced. Defaults to the workspace root
 	 */
-	async fetchStructure(base?: string, token = CancellationToken.None): Promise<void> {
-		const uris = await this.remoteFs.getWorkspaceFiles(base, token);
-		for (const uri of uris) {
-			this.inMemoryFs.add(uri);
-		}
+	fetchStructure(): Promise<void> {
+		const promise = (async () => {
+			try {
+				const uris = await this.remoteFs.getWorkspaceFiles();
+				for (const uri of uris) {
+					this.inMemoryFs.add(uri);
+				}
+			} catch (err) {
+				this.structureFetch = undefined;
+				throw err;
+			}
+		})();
+		this.structureFetch = promise;
+		return promise;
 	}
 
 	/**
 	 * Returns a promise that is resolved as soon as the file/directory structure for the given directory has been synced
 	 * from the remote file system to the in-memory file system (at least once)
 	 */
-	ensureStructure = cancellableMemoize(this.fetchStructure, new ParentUriMemoizationCache());
+	ensureStructure() {
+		return this.structureFetch || this.fetchStructure();
+	}
+
+	/**
+	 * Invalidates the structure fetch cache.
+	 * The next call to `ensureStructure` will do a refetch.
+	 */
+	invalidateStructure() {
+		this.structureFetch = undefined;
+	}
 }
