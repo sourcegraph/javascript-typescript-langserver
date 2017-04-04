@@ -48,6 +48,7 @@
     "vscode-jsonrpc": "^3.1.0",
     "vscode-languageserver": "^3.1.0",
     "vscode-languageserver-types": "^3.0.3",
+    "vscode-uri": "^1.0.0",
     "yarn": "^0.21.3"
   },
   "devDependencies": {

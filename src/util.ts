@@ -3,6 +3,8 @@ import * as path from 'path';
 
 import * as ts from 'typescript';
 import { Position, Range, SymbolKind } from 'vscode-languageserver';
+import Uri from 'vscode-uri';
+
 import * as rt from './request-type';
 
 let strict = false;
@@ -69,29 +71,21 @@ export function convertStringtoSymbolKind(kind: string): SymbolKind {
 }
 
 export function path2uri(root: string, file: string): string {
-	let ret = 'file://';
-	if (!strict && process.platform === 'win32') {
-		ret += '/';
-	}
 	let p;
 	if (root) {
 		p = resolve(root, file);
 	} else {
 		p = file;
 	}
-	p = toUnixPath(p).split('/').map(encodeURIComponent).join('/');
-	return ret + p;
+	return Uri.file(p).toString();
 }
 
 export function uri2path(uri: string): string {
-	if (uri.startsWith('file://')) {
-		uri = uri.substring('file://'.length);
-		if (process.platform === 'win32') {
-			if (!strict) {
-				uri = uri.substring(1);
-			}
+	if (uri.startsWith('file:')) {
+		uri = toUnixPath(Uri.parse(uri).fsPath);
+		if (!strict && process.platform === 'win32' && uri.charAt(0) === '/') {
+			uri = uri.substring(1);
 		}
-		uri = uri.split('/').map(decodeURIComponent).join('/');
 	}
 	return uri;
 }
