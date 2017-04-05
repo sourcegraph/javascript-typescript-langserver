@@ -580,13 +580,13 @@ export class TypeScriptService implements LanguageHandler {
 
 		let sourceFile = this.getSourceFile(configuration, fileName);
 		if (!sourceFile) {
-			return null;
+			return { signatures: [], activeParameter: 0, activeSignature: 0};
 		}
 		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
 
 		const signatures: ts.SignatureHelpItems = configuration.getService().getSignatureHelpItems(fileName, offset);
 		if (!signatures) {
-			return null;
+			return { signatures: [], activeParameter: 0, activeSignature: 0};
 		}
 
 		const signatureInformations = signatures.items.map(item => {
@@ -598,34 +598,12 @@ export class TypeScriptService implements LanguageHandler {
 				documentation: item.documentation.map(d => d.text).join('')
 			};
 		});
-		// signatures.items.map((item: ts.SignatureHelpItem) => {
-		// 		label: "",
-		// 		documentation: item.documentation,
-		// 		parameters: item.parameters.map((param: ts.SignatureHelpParameter) => {
-		// 			label: param.name,
-		// 			documentation: param.documentation
-		// 		})
-		// 	}),
 
 		return {
 			signatures: signatureInformations,
 			activeSignature: 0,
 			activeParameter: 0
 		};
-
-		// const contents = [];
-		// contents.push({
-		// 	language: 'typescript',
-		// 	value: ts.displayPartsToString(info.displayParts)
-		// });
-		// let documentation = ts.displayPartsToString(info.documentation);
-		// if (documentation) {
-		// 	contents.push(documentation);
-		// }
-		// const start = ts.getLineAndCharacterOfPosition(sourceFile, info.textSpan.start);
-		// const end = ts.getLineAndCharacterOfPosition(sourceFile, info.textSpan.start + info.textSpan.length);
-
-		// return { contents: contents, range: Range.create(start.line, start.character, end.line, end.character) };
 	}
 	/*
 	 * walkMostAST walks most of the AST (the part that matters for gathering all references)

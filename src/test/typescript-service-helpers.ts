@@ -1446,7 +1446,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 	});
 
 	describe('getSignatureHelp()', <any> function (this: TestContext) {
-		beforeEach(<any> initializeTypeScriptService(TypeScriptServiceConstructor, new Map([
+		beforeEach(<any> initializeTypeScriptService(createService, new Map([
 			['file:///a.ts', [
 				'class A {',
 				'	/** foo doc*/',
@@ -1479,7 +1479,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			['file:///empty.ts', '']
 		])));
 
-		afterEach(<any> shutdownTypeScriptService);
+		afterEach(<any> shutdownService);
 
 		it('Provides signature help in the same file', <any> async function (this: TestContext) {
 			const result = await this.service.getSignatureHelp({
@@ -1491,7 +1491,10 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					character: 6
 				}
 			});
-			assert.equal(result.signatures.length, 1)
+			assert.equal(result.signatures.length, 1);
+			const activeSignature = result.signatures[result.activeSignature];
+			assert.equal(activeSignature.label, "bar(): number");
+			assert.equal(activeSignature.documentation, "bar doc");
 		});
 
 	});
