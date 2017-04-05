@@ -34,14 +34,14 @@ describe('fs.ts', () => {
 		});
 
 		describe('getWorkspaceFiles()', () => {
-			it('should fetch all files', async () => {
+			it('should return all files in the workspace', async () => {
 				assert.sameMembers(iterate(await fileSystem.getWorkspaceFiles()).toArray(), [
 					baseUri + 'tweedledee',
 					baseUri + 'tweedledum',
 					baseUri + 'foo/bar.ts'
 				]);
 			});
-			it('should fetch all files under specific root', async () => {
+			it('should return all files under specific root', async () => {
 				assert.sameMembers(iterate(await fileSystem.getWorkspaceFiles(baseUri + 'foo')).toArray(), [
 					baseUri + 'foo/bar.ts'
 				]);
