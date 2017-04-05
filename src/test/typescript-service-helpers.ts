@@ -1496,13 +1496,13 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			assert.equal(result.activeSignature, 0);
 			assert.equal(result.activeParameter, 1);
 
-			assert.equal(activeSignature.label, "baz(num, text): string");
-			assert.equal(activeSignature.documentation, "baz doc");
+			assert.equal(activeSignature.label, 'baz(num, text): string');
+			assert.equal(activeSignature.documentation, 'baz doc');
 			assert.isArray(activeSignature.parameters);
 			if (activeSignature.parameters) {
 				assert.equal(activeSignature.parameters.length, 2);
-				assert.equal(activeSignature.parameters[0].label, "num");
-				assert.equal(activeSignature.parameters[1].label, "text")
+				assert.equal(activeSignature.parameters[0].label, 'num');
+				assert.equal(activeSignature.parameters[1].label, 'text');
 				assert.isUndefined(activeSignature.parameters[0].documentation);
 			}
 		});
@@ -1522,8 +1522,8 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			assert.equal(result.activeSignature, 0);
 			assert.equal(result.activeParameter, 0);
 
-			assert.equal(activeSignature.label, "d(): void");
-			assert.equal(activeSignature.documentation, "d doc");
+			assert.equal(activeSignature.label, 'd(): void');
+			assert.equal(activeSignature.documentation, 'd doc');
 			assert.isDefined(activeSignature.parameters);
 			if (activeSignature.parameters) {
 				assert.equal(activeSignature.parameters.length, 0);
