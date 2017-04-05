@@ -1,75 +1,120 @@
-import * as opentracing from 'opentracing';
-import { DataCallback, Message, StreamMessageReader, StreamMessageWriter } from 'vscode-jsonrpc';
-import { createConnection, IConnection } from 'vscode-languageserver';
-import { LanguageHandler } from './lang-handler';
+import { EventEmitter } from 'events';
+import { camelCase, omit } from 'lodash';
+import { FORMAT_TEXT_MAP, Span, Tracer } from 'opentracing';
+import { ErrorCodes, Message, MessageWriter, StreamMessageReader } from 'vscode-jsonrpc';
+import { isNotificationMessage, isRequestMessage, ResponseMessage } from 'vscode-jsonrpc/lib/messages';
 import { Logger, NoopLogger } from './logging';
+import { TypeScriptService } from './typescript-service';
 
-export interface TraceOptions {
-	logger?: Logger;
-	trace?: boolean;
+/**
+ * Interface for JSON RPC messages with tracing metadata
+ */
+interface HasMeta {
+	meta: object;
 }
 
-export function newConnection(input: NodeJS.ReadableStream, output: NodeJS.WritableStream, options: TraceOptions): IConnection {
+/**
+ * Returns true if the passed argument has a meta field
+ */
+function hasMeta(candidate: any): candidate is HasMeta {
+	return typeof candidate === 'object' && candidate !== null && typeof candidate.meta === 'object';
+}
 
-	const logger = options.logger || new NoopLogger();
+/**
+ * Takes a NodeJS ReadableStream and emits parsed messages received on the stream.
+ * In opposite to StreamMessageReader, supports multiple listeners and is compatible with Observables
+ */
+export class MessageEmitter extends EventEmitter {
 
-	const reader = new StreamMessageReader(input);
-	const listen = reader.listen.bind(reader);
-	reader.listen = (callback: DataCallback) => {
-		listen((message: Message): void => {
-			if (options.trace) {
-				logger.log('-->', message);
-			}
-			callback(message);
+	constructor(input: NodeJS.ReadableStream) {
+		super();
+		const reader = new StreamMessageReader(input);
+		reader.listen(msg => {
+			this.emit('message', msg);
 		});
-	};
+		reader.onError(err => {
+			this.emit('error', err);
+		});
+		reader.onClose(() => {
+			this.emit('close');
+		});
+	}
 
-	const writer = new StreamMessageWriter(output);
-	const write = writer.write.bind(writer);
-	writer.write = (message: Message) => {
-		if (options.trace) {
-			logger.log('<--', message);
-		}
-		write(message);
-	};
-
-	const connection = createConnection(reader, writer);
-
-	// Remove vscode-languageserver's stream listeners that kill the process if the stream is closed
-	input.removeAllListeners('end');
-	input.removeAllListeners('close');
-	output.removeAllListeners('end');
-	output.removeAllListeners('close');
-
-	return connection;
+	on(event: 'message', listener: (message: Message) => void): this;
+	on(event: 'error', listener: (error: Error) => void): this;
+	on(event: 'close', listener: () => void): this;
+	on(event: string, listener: Function): this {
+		return super.on(event, listener);
+	}
 }
 
 /**
  * Registers all method implementations of a LanguageHandler on a connection
+ *
+ * @param messageEmitter MessageEmitter to listen on
+ * @param messageWriter MessageWriter to write to
+ * @param handler TypeScriptService object that contains methods for all methods to be handled
+ * @param logger A logger that all messages will be logged to
+ * @param tracer An opentracing-compatible tracer
  */
-export function registerLanguageHandler(connection: IConnection, handler: LanguageHandler): void {
-
-	connection.onInitialize((params, token) => {
-		const span = opentracing.globalTracer().startSpan('initialize');
-		return handler.initialize(params, span, token);
+export function registerLanguageHandler(
+	messageEmitter: MessageEmitter,
+	messageWriter: MessageWriter,
+	handler: TypeScriptService,
+	logger: Logger = new NoopLogger(),
+	tracer = new Tracer()
+): void {
+	messageEmitter.on('message', async message => {
+		logger.log('-->', message);
+		// Ignore responses
+		if (!isRequestMessage(message) || !isNotificationMessage(message)) {
+			return;
+		}
+		// If message has tracing metadata, extract the span context and create a span for the method call
+		let span: Span | undefined;
+		if (hasMeta(message)) {
+			const context = tracer.extract(FORMAT_TEXT_MAP, message.meta);
+			if (context) {
+				span = tracer.startSpan(message.method, { childOf: context });
+				span.setTag('params', message.params);
+			}
+		}
+		const method = camelCase(message.method);
+		if (isRequestMessage(message) && typeof (handler as any)[method] !== 'function') {
+			// Method not implemented
+			messageWriter.write({
+				jsonrpc: '2.0',
+				id: message.id,
+				error: {
+					code: ErrorCodes.MethodNotFound,
+					message: `Method ${method} not implemented`
+				}
+			} as ResponseMessage);
+		}
+		try {
+			// Call handler method
+			const result = await (handler as any)[method](message.params, span);
+			// If request, send response with result
+			if (isRequestMessage(message)) {
+				messageWriter.write({
+					jsonrpc: '2.0',
+					id: message.id,
+					result
+				} as ResponseMessage);
+			}
+		} catch (err) {
+			// If request, send response with error
+			if (isRequestMessage(message)) {
+				messageWriter.write({
+					jsonrpc: '2.0',
+					id: message.id,
+					error: {
+						message: err.message + '',
+						code: typeof err.code === 'number' ? err.code : ErrorCodes.InternalError,
+						data: omit(err, ['message', 'code'])
+					}
+				} as ResponseMessage);
+			}
+		}
 	});
-	connection.onShutdown(() => handler.shutdown());
-
-	// textDocument
-	connection.onDidOpenTextDocument(params => handler.didOpen(params));
-	connection.onDidChangeTextDocument(params => handler.didChange(params));
-	connection.onDidSaveTextDocument(params => handler.didSave(params));
-	connection.onDidCloseTextDocument(params => handler.didClose(params));
-	connection.onReferences((params, token) => handler.getReferences(params, token));
-	connection.onHover((params, token) => handler.getHover(params, token));
-	connection.onDefinition((params, token) => handler.getDefinition(params, token));
-	connection.onDocumentSymbol((params, token) => handler.getDocumentSymbol(params, token));
-	connection.onCompletion((params, token) => handler.getCompletions(params, token));
-	connection.onRequest('textDocument/xdefinition', (params, token) => handler.getXdefinition(params, token));
-
-	// workspace
-	connection.onWorkspaceSymbol((params, token) => handler.getWorkspaceSymbols(params, token));
-	connection.onRequest('workspace/xreferences', (params, token) => handler.getWorkspaceReference(params, token));
-	connection.onRequest('workspace/xpackages', (params, token) => handler.getPackages(params, token));
-	connection.onRequest('workspace/xdependencies', (params, token) => handler.getDependencies(params, token));
 }

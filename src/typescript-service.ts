@@ -1,8 +1,7 @@
 import * as async from 'async';
-import { globalTracer, Span } from 'opentracing';
+import { Span } from 'opentracing';
 import * as path_ from 'path';
 import * as ts from 'typescript';
-import { CancellationToken } from 'vscode-jsonrpc';
 import {
 	CompletionItem,
 	CompletionItemKind,
@@ -24,7 +23,7 @@ import {
 } from 'vscode-languageserver';
 import { isCancelledError } from './cancellation';
 import { FileSystem, FileSystemUpdater, LocalFileSystem, RemoteFileSystem } from './fs';
-import { LanguageClientHandler, LanguageHandler } from './lang-handler';
+import { RemoteLanguageClient } from './lang-handler';
 import { Logger, LSPLogger } from './logging';
 import * as pm from './project-manager';
 import {
@@ -44,18 +43,21 @@ export interface TypeScriptServiceOptions {
 	strict?: boolean;
 }
 
-export type TypeScriptServiceFactory = (client: LanguageClientHandler, options?: TypeScriptServiceOptions) => TypeScriptService;
+export type TypeScriptServiceFactory = (client: RemoteLanguageClient, options?: TypeScriptServiceOptions) => TypeScriptService;
 
 /**
- * TypeScriptService handles incoming requests and return
- * responses. There is a one-to-one-to-one correspondence between TCP
- * connection, TypeScriptService instance, and language
- * workspace. TypeScriptService caches data from the compiler across
- * requests. The lifetime of the TypeScriptService instance is tied to
- * the lifetime of the TCP connection, so its caches are deleted after
- * the connection is torn down.
+ * Handles incoming requests and return responses. There is a one-to-one-to-one
+ * correspondence between TCP connection, TypeScriptService instance, and
+ * language workspace. TypeScriptService caches data from the compiler across
+ * requests. The lifetime of the TypeScriptService instance is tied to the
+ * lifetime of the TCP connection, so its caches are deleted after the
+ * connection is torn down.
+ *
+ * Methods are camelCase versions of the LSP spec methods and dynamically
+ * dispatched. Methods not to be exposed over JSON RPC are prefixed with an
+ * underscore.
  */
-export class TypeScriptService implements LanguageHandler {
+export class TypeScriptService {
 
 	projectManager: pm.ProjectManager;
 
@@ -89,53 +91,45 @@ export class TypeScriptService implements LanguageHandler {
 	 */
 	protected updater: FileSystemUpdater;
 
-	constructor(protected client: LanguageClientHandler, protected options: TypeScriptServiceOptions = {}) {
+	constructor(protected client: RemoteLanguageClient, protected options: TypeScriptServiceOptions = {}) {
 		this.logger = new LSPLogger(client);
 	}
 
-	async initialize(params: InitializeParams, parentSpan = new Span(), token = CancellationToken.None): Promise<InitializeResult> {
-		const span = parentSpan.tracer().startSpan('initialize', { childOf: parentSpan });
-		try {
-			if (params.rootUri || params.rootPath) {
-				this.root = params.rootPath || util.uri2path(params.rootUri!);
-				this.rootUri = params.rootUri || util.path2uri('', params.rootPath!);
-				this.initializeFileSystems(!this.options.strict && !(params.capabilities.xcontentProvider && params.capabilities.xfilesProvider));
-				this.updater = new FileSystemUpdater(this.fileSystem, this.inMemoryFileSystem);
-				this.projectManager = new pm.ProjectManager(this.root, this.inMemoryFileSystem, this.updater, !!this.options.strict, this.traceModuleResolution, this.logger);
-				// Pre-fetch files in the background
-				// TODO why does ensureAllFiles() fetch less files than ensureFilesForWorkspaceSymbol()?
-				//      (package.json is not fetched)
-				this.projectManager.ensureFilesForWorkspaceSymbol().catch(err => {
-					if (!isCancelledError(err)) {
-						this.logger.error('Background fetching failed ', err);
-					}
-				});
-			}
-			return {
-				capabilities: {
-					// Tell the client that the server works in FULL text document sync mode
-					textDocumentSync: TextDocumentSyncKind.Full,
-					hoverProvider: true,
-					definitionProvider: true,
-					referencesProvider: true,
-					documentSymbolProvider: true,
-					workspaceSymbolProvider: true,
-					xworkspaceReferencesProvider: true,
-					xdefinitionProvider: true,
-					xdependenciesProvider: true,
-					completionProvider: {
-						resolveProvider: false,
-						triggerCharacters: ['.']
-					},
-					xpackagesProvider: true
+	async initialize(params: InitializeParams, childOf = new Span()): Promise<InitializeResult> {
+		if (params.rootUri || params.rootPath) {
+			this.root = params.rootPath || util.uri2path(params.rootUri!);
+			this.rootUri = params.rootUri || util.path2uri('', params.rootPath!);
+			this._initializeFileSystems(!this.options.strict && !(params.capabilities.xcontentProvider && params.capabilities.xfilesProvider));
+			this.updater = new FileSystemUpdater(this.fileSystem, this.inMemoryFileSystem);
+			this.projectManager = new pm.ProjectManager(this.root, this.inMemoryFileSystem, this.updater, !!this.options.strict, this.traceModuleResolution, this.logger);
+			// Pre-fetch files in the background
+			// TODO why does ensureAllFiles() fetch less files than ensureFilesForWorkspaceSymbol()?
+			//      (package.json is not fetched)
+			this.projectManager.ensureFilesForWorkspaceSymbol().catch(err => {
+				if (!isCancelledError(err)) {
+					this.logger.error('Background fetching failed ', err);
 				}
-			};
-		} catch (err) {
-			span.setTag('error', true);
-			throw err;
-		} finally {
-			span.finish();
+			});
 		}
+		return {
+			capabilities: {
+				// Tell the client that the server works in FULL text document sync mode
+				textDocumentSync: TextDocumentSyncKind.Full,
+				hoverProvider: true,
+				definitionProvider: true,
+				referencesProvider: true,
+				documentSymbolProvider: true,
+				workspaceSymbolProvider: true,
+				xworkspaceReferencesProvider: true,
+				xdefinitionProvider: true,
+				xdependenciesProvider: true,
+				completionProvider: {
+					resolveProvider: false,
+					triggerCharacters: ['.']
+				},
+				xpackagesProvider: true
+			}
+		};
 	}
 
 	/**
@@ -144,7 +138,7 @@ export class TypeScriptService implements LanguageHandler {
 	 *
 	 * @param accessDisk Whether the language server is allowed to access the local file system
 	 */
-	protected initializeFileSystems(accessDisk: boolean): void {
+	protected _initializeFileSystems(accessDisk: boolean): void {
 		this.fileSystem = accessDisk ? new LocalFileSystem(util.uri2path(this.root)) : new RemoteFileSystem(this.client);
 		this.inMemoryFileSystem = new pm.InMemoryFileSystem(this.root);
 	}
@@ -153,7 +147,7 @@ export class TypeScriptService implements LanguageHandler {
 		this.projectManager.dispose();
 	}
 
-	async getDefinition(params: TextDocumentPositionParams, token = CancellationToken.None): Promise<Location[]> {
+	async textDocumentDefinition(params: TextDocumentPositionParams, span = new Span()): Promise<Location[]> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
@@ -163,7 +157,7 @@ export class TypeScriptService implements LanguageHandler {
 		const configuration = this.projectManager.getConfiguration(fileName);
 		await configuration.ensureBasicFiles();
 
-		const sourceFile = this.getSourceFile(configuration, fileName);
+		const sourceFile = this._getSourceFile(configuration, fileName);
 		if (!sourceFile) {
 			return [];
 		}
@@ -173,13 +167,13 @@ export class TypeScriptService implements LanguageHandler {
 		const ret = [];
 		if (defs) {
 			for (let def of defs) {
-				const sourceFile = this.getSourceFile(configuration, def.fileName);
+				const sourceFile = this._getSourceFile(configuration, def.fileName);
 				if (!sourceFile) {
 					throw new Error('expected source file "' + def.fileName + '" to exist in configuration');
 				}
 				const start = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start);
 				const end = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start + def.textSpan.length);
-				ret.push(Location.create(this.defUri(def.fileName), {
+				ret.push(Location.create(this._defUri(def.fileName), {
 					start,
 					end
 				}));
@@ -188,7 +182,7 @@ export class TypeScriptService implements LanguageHandler {
 		return ret;
 	}
 
-	async getXdefinition(params: TextDocumentPositionParams, token = CancellationToken.None): Promise<SymbolLocationInformation[]> {
+	async textDocumentXdefinition(params: TextDocumentPositionParams): Promise<SymbolLocationInformation[]> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
@@ -198,7 +192,7 @@ export class TypeScriptService implements LanguageHandler {
 		const configuration = this.projectManager.getConfiguration(fileName);
 		await configuration.ensureBasicFiles();
 
-		const sourceFile = this.getSourceFile(configuration, fileName);
+		const sourceFile = this._getSourceFile(configuration, fileName);
 		if (!sourceFile) {
 			return [];
 		}
@@ -208,13 +202,13 @@ export class TypeScriptService implements LanguageHandler {
 		const ret = [];
 		if (defs) {
 			for (let def of defs) {
-				const sourceFile = this.getSourceFile(configuration, def.fileName);
+				const sourceFile = this._getSourceFile(configuration, def.fileName);
 				if (!sourceFile) {
 					throw new Error('expected source file "' + def.fileName + '" to exist in configuration');
 				}
 				const start = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start);
 				const end = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start + def.textSpan.length);
-				const loc = Location.create(this.defUri(def.fileName), {
+				const loc = Location.create(this._defUri(def.fileName), {
 					start,
 					end
 				});
@@ -227,7 +221,7 @@ export class TypeScriptService implements LanguageHandler {
 		return ret;
 	}
 
-	async getHover(params: TextDocumentPositionParams, token = CancellationToken.None): Promise<Hover> {
+	async textDocumentHover(params: TextDocumentPositionParams): Promise<Hover> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
@@ -237,7 +231,7 @@ export class TypeScriptService implements LanguageHandler {
 		const configuration = this.projectManager.getConfiguration(fileName);
 		await configuration.ensureBasicFiles();
 
-		let sourceFile = this.getSourceFile(configuration, fileName);
+		let sourceFile = this._getSourceFile(configuration, fileName);
 		if (!sourceFile) {
 			throw new Error(`Unknown text document ${params.textDocument.uri}`);
 		}
@@ -260,7 +254,7 @@ export class TypeScriptService implements LanguageHandler {
 		return { contents, range: Range.create(start.line, start.character, end.line, end.character) };
 	}
 
-	async getReferences(params: ReferenceParams, token = CancellationToken.None): Promise<Location[]> {
+	async textDocumentReferences(params: ReferenceParams): Promise<Location[]> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
@@ -271,7 +265,7 @@ export class TypeScriptService implements LanguageHandler {
 		const configuration = this.projectManager.getConfiguration(fileName);
 		await configuration.ensureAllFiles();
 
-		const sourceFile = this.getSourceFile(configuration, fileName);
+		const sourceFile = this._getSourceFile(configuration, fileName);
 		if (!sourceFile) {
 			return [];
 		}
@@ -283,7 +277,7 @@ export class TypeScriptService implements LanguageHandler {
 
 		if (refs) {
 			for (let ref of refs) {
-				tasks.push(this.transformReference(this.root,
+				tasks.push(this._transformReference(this.root,
 					configuration.getProgram(),
 					params.context && params.context.includeDeclaration,
 					ref));
@@ -296,7 +290,7 @@ export class TypeScriptService implements LanguageHandler {
 		});
 	}
 
-	async getWorkspaceSymbols(params: WorkspaceSymbolParams, token = CancellationToken.None): Promise<SymbolInformation[]> {
+	async workspaceSymbol(params: WorkspaceSymbolParams): Promise<SymbolInformation[]> {
 		const query = params.query;
 		const symQuery = params.symbol ? Object.assign({}, params.symbol) : undefined;
 		if (symQuery && symQuery.package) {
@@ -305,7 +299,7 @@ export class TypeScriptService implements LanguageHandler {
 		const limit = params.limit;
 
 		if (symQuery) {
-			const dtRes = await this.getWorkspaceSymbolsDefinitelyTyped(params);
+			const dtRes = await this._workspaceSymbolDefinitelyTyped(params);
 			if (dtRes) {
 				return dtRes;
 			}
@@ -336,14 +330,14 @@ export class TypeScriptService implements LanguageHandler {
 				configs = this.projectManager.getConfigurations();
 			}
 		}
-		const itemsPromise = this.collectWorkspaceSymbols(configs, query, symQuery);
+		const itemsPromise = this._collectWorkspaceSymbols(configs, query, symQuery);
 		if (!query && !symQuery) {
 			this.emptyQueryWorkspaceSymbols = itemsPromise;
 		}
 		return (await itemsPromise).slice(0, limit);
 	}
 
-	async getWorkspaceSymbolsDefinitelyTyped(params: WorkspaceSymbolParams, token = CancellationToken.None): Promise<SymbolInformation[] | null> {
+	protected async _workspaceSymbolDefinitelyTyped(params: WorkspaceSymbolParams): Promise<SymbolInformation[] | null> {
 		try {
 			await this.projectManager.ensureFiles(['/package.json']);
 		} catch (e) {
@@ -377,28 +371,28 @@ export class TypeScriptService implements LanguageHandler {
 		}
 
 		const config = this.projectManager.getConfiguration(relPkgRoot);
-		const itemsPromise = this.collectWorkspaceSymbols([config], params.query, symQuery);
+		const itemsPromise = this._collectWorkspaceSymbols([config], params.query, symQuery);
 		return (await itemsPromise).slice(0, params.limit);
 	}
 
-	async getDocumentSymbol(params: DocumentSymbolParams, token = CancellationToken.None): Promise<SymbolInformation[]> {
+	async textDocumentDocumentSymbol(params: DocumentSymbolParams): Promise<SymbolInformation[]> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		await this.projectManager.ensureFilesForHoverAndDefinition(uri);
 		const fileName = util.uri2path(uri);
 
 		const config = this.projectManager.getConfiguration(uri);
 		await config.ensureBasicFiles();
-		const sourceFile = this.getSourceFile(config, fileName);
+		const sourceFile = this._getSourceFile(config, fileName);
 		if (!sourceFile) {
 			return [];
 		}
 		const tree = config.getService().getNavigationTree(fileName);
 		const result: SymbolInformation[] = [];
-		this.flattenNavigationTreeItem(tree, null, sourceFile, result);
+		this._flattenNavigationTreeItem(tree, null, sourceFile, result);
 		return Promise.resolve(result);
 	}
 
-	async getWorkspaceReference(params: WorkspaceReferenceParams, token = CancellationToken.None): Promise<ReferenceInformation[]> {
+	async workspaceXreferences(params: WorkspaceReferenceParams): Promise<ReferenceInformation[]> {
 		const refInfo: ReferenceInformation[] = [];
 
 		await this.projectManager.ensureAllFiles();
@@ -418,7 +412,7 @@ export class TypeScriptService implements LanguageHandler {
 					continue;
 				}
 
-				this.walkMostAST(source, node => {
+				this._walkMostAST(source, node => {
 					switch (node.kind) {
 						case ts.SyntaxKind.Identifier: { // include all matching refs at the node
 							const defs = config.getService().getDefinitionAtPosition(source.fileName, node.pos + 1);
@@ -433,7 +427,7 @@ export class TypeScriptService implements LanguageHandler {
 								const start = ts.getLineAndCharacterOfPosition(source, node.pos);
 								const end = ts.getLineAndCharacterOfPosition(source, node.end);
 								const loc = {
-									uri: this.defUri(source.fileName),
+									uri: this._defUri(source.fileName),
 									range: {
 										start,
 										end
@@ -459,7 +453,7 @@ export class TypeScriptService implements LanguageHandler {
 		return refInfo;
 	}
 
-	async getPackages(params = {}, token = CancellationToken.None): Promise<PackageInformation[]> {
+	async workspaceXpackages(params = {}): Promise<PackageInformation[]> {
 		await this.projectManager.ensureModuleStructure();
 
 		const pkgFiles: string[] = [];
@@ -502,7 +496,7 @@ export class TypeScriptService implements LanguageHandler {
 		return pkgs;
 	}
 
-	async getDependencies(params = {}, token = CancellationToken.None): Promise<DependencyReference[]> {
+	async workspaceXdependencies(params = {}): Promise<DependencyReference[]> {
 		await this.projectManager.ensureModuleStructure();
 
 		const pkgFiles: string[] = [];
@@ -534,7 +528,7 @@ export class TypeScriptService implements LanguageHandler {
 		return deps;
 	}
 
-	async getCompletions(params: TextDocumentPositionParams, token = CancellationToken.None): Promise<CompletionList> {
+	async textDocumentCompletion(params: TextDocumentPositionParams): Promise<CompletionList> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
@@ -545,7 +539,7 @@ export class TypeScriptService implements LanguageHandler {
 		const configuration = this.projectManager.getConfiguration(fileName);
 		await configuration.ensureBasicFiles();
 
-		const sourceFile = this.getSourceFile(configuration, fileName);
+		const sourceFile = this._getSourceFile(configuration, fileName);
 		if (!sourceFile) {
 			return CompletionList.create();
 		}
@@ -578,7 +572,7 @@ export class TypeScriptService implements LanguageHandler {
 	/*
 	 * walkMostAST walks most of the AST (the part that matters for gathering all references)
 	 */
-	private walkMostAST(node: ts.Node, visit: (node: ts.Node) => void) {
+	private _walkMostAST(node: ts.Node, visit: (node: ts.Node) => void) {
 		visit(node);
 		const children: ts.Node[] = [];
 		switch (node.kind) {
@@ -1363,19 +1357,19 @@ export class TypeScriptService implements LanguageHandler {
 		}
 		for (const child of children) {
 			if (child) {
-				this.walkMostAST(child, visit);
+				this._walkMostAST(child, visit);
 			}
 		}
 	}
 
-	didOpen(params: DidOpenTextDocumentParams): Promise<void> {
+	textDocumentDidOpen(params: DidOpenTextDocumentParams): Promise<void> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		return this.projectManager.ensureFilesForHoverAndDefinition(uri).then(() => {
 			this.projectManager.didOpen(util.uri2path(uri), params.textDocument.text);
 		});
 	}
 
-	async didChange(params: DidChangeTextDocumentParams): Promise<void> {
+	async textDocumentDidChange(params: DidChangeTextDocumentParams): Promise<void> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		let text = null;
 		params.contentChanges.forEach(change => {
@@ -1390,14 +1384,14 @@ export class TypeScriptService implements LanguageHandler {
 		this.projectManager.didChange(util.uri2path(uri), text);
 	}
 
-	didSave(params: DidSaveTextDocumentParams): Promise<void> {
+	textDocumentDidSave(params: DidSaveTextDocumentParams): Promise<void> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		return this.projectManager.ensureFilesForHoverAndDefinition(uri).then(() => {
 			this.projectManager.didSave(util.uri2path(uri));
 		});
 	}
 
-	didClose(params: DidCloseTextDocumentParams): Promise<void> {
+	textDocumentDidClose(params: DidCloseTextDocumentParams): Promise<void> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		return this.projectManager.ensureFilesForHoverAndDefinition(uri).then(() => {
 			this.projectManager.didClose(util.uri2path(uri));
@@ -1409,7 +1403,7 @@ export class TypeScriptService implements LanguageHandler {
 	 * @param configuration project configuration
 	 * @param fileName file name to fetch source file for or create it
 	 */
-	private getSourceFile(configuration: pm.ProjectConfiguration, fileName: string): ts.SourceFile | null {
+	private _getSourceFile(configuration: pm.ProjectConfiguration, fileName: string): ts.SourceFile | null {
 		const sourceFile = configuration.getProgram().getSourceFile(fileName);
 		if (sourceFile) {
 			return sourceFile;
@@ -1426,7 +1420,7 @@ export class TypeScriptService implements LanguageHandler {
 	/**
 	 * Produces async function that converts ReferenceEntry object to Location
 	 */
-	private transformReference(root: string, program: ts.Program, includeDeclaration: boolean, ref: ts.ReferenceEntry): AsyncFunction<Location, Error> {
+	private _transformReference(root: string, program: ts.Program, includeDeclaration: boolean, ref: ts.ReferenceEntry): AsyncFunction<Location, Error> {
 		return (callback: (err?: Error, result?: Location) => void) => {
 			if (!includeDeclaration && ref.isDefinition) {
 				return callback();
@@ -1447,7 +1441,7 @@ export class TypeScriptService implements LanguageHandler {
 	/**
 	 * transformNavItem transforms a NavigateToItem instance to a SymbolInformation instance
 	 */
-	private transformNavItem(root: string, program: ts.Program, item: ts.NavigateToItem): SymbolInformation {
+	private _transformNavItem(root: string, program: ts.Program, item: ts.NavigateToItem): SymbolInformation {
 		const sourceFile = program.getSourceFile(item.fileName);
 		if (!sourceFile) {
 			throw new Error('source file "' + item.fileName + '" does not exist');
@@ -1457,17 +1451,17 @@ export class TypeScriptService implements LanguageHandler {
 		return SymbolInformation.create(item.name,
 			util.convertStringtoSymbolKind(item.kind),
 			Range.create(start.line, start.character, end.line, end.character),
-			this.defUri(item.fileName), item.containerName);
+			this._defUri(item.fileName), item.containerName);
 	}
 
-	private async collectWorkspaceSymbols(configs: pm.ProjectConfiguration[], query?: string, symQuery?: Partial<SymbolDescriptor>): Promise<SymbolInformation[]> {
+	private async _collectWorkspaceSymbols(configs: pm.ProjectConfiguration[], query?: string, symQuery?: Partial<SymbolDescriptor>): Promise<SymbolInformation[]> {
 		const configSymbols: SymbolInformation[][] = await Promise.all(configs.map(async config => {
 			const symbols: SymbolInformation[] = [];
 			await config.ensureAllFiles();
 			if (query) {
 				const items = config.getService().getNavigateToItems(query, undefined, undefined, false);
 				for (const item of items) {
-					const si = this.transformNavItem(this.root, config.getProgram(), item);
+					const si = this._transformNavItem(this.root, config.getProgram(), item);
 					if (!util.isLocalUri(si.location.uri)) {
 						continue;
 					}
@@ -1483,14 +1477,14 @@ export class TypeScriptService implements LanguageHandler {
 					if (!util.symbolDescriptorMatch(symQuery, sd)) {
 						continue;
 					}
-					const si = this.transformNavItem(this.root, config.getProgram(), item);
+					const si = this._transformNavItem(this.root, config.getProgram(), item);
 					if (!util.isLocalUri(si.location.uri)) {
 						continue;
 					}
 					symbols.push(si);
 				}
 			} else {
-				Array.prototype.push.apply(symbols, this.getNavigationTreeItems(config));
+				Array.prototype.push.apply(symbols, this._getNavigationTreeItems(config));
 			}
 			return symbols;
 		}));
@@ -1509,7 +1503,7 @@ export class TypeScriptService implements LanguageHandler {
 	 * Transforms definition's file name to URI. If definition belongs to TypeScript library,
 	 * returns git://github.com/Microsoft/TypeScript URL, otherwise returns file:// one
 	 */
-	private defUri(filePath: string): string {
+	private _defUri(filePath: string): string {
 		filePath = util.toUnixPath(filePath);
 		if (pm.getTypeScriptLibraries().has(filePath)) {
 			return 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/' + path_.basename(filePath);
@@ -1520,7 +1514,7 @@ export class TypeScriptService implements LanguageHandler {
 	/**
 	 * Fetches up to limit navigation bar items from given project, flattens them
 	 */
-	private getNavigationTreeItems(configuration: pm.ProjectConfiguration, limit?: number): SymbolInformation[] {
+	private _getNavigationTreeItems(configuration: pm.ProjectConfiguration, limit?: number): SymbolInformation[] {
 		const result: SymbolInformation[] = [];
 		const libraries = pm.getTypeScriptLibraries();
 		for (const sourceFile of configuration.getProgram().getSourceFiles().sort((a, b) => a.fileName.localeCompare(b.fileName))) {
@@ -1535,7 +1529,7 @@ export class TypeScriptService implements LanguageHandler {
 				this.logger.error('could not get navigation tree for file', sourceFile.fileName);
 				continue;
 			}
-			this.flattenNavigationTreeItem(tree, null, sourceFile, result, limit);
+			this._flattenNavigationTreeItem(tree, null, sourceFile, result, limit);
 			if (limit && result.length >= limit) {
 				break;
 			}
@@ -1547,16 +1541,16 @@ export class TypeScriptService implements LanguageHandler {
 	 * Flattens navigation tree by transforming it to one-dimensional array.
 	 * Some items (source files, modules) may be excluded
 	 */
-	private flattenNavigationTreeItem(item: ts.NavigationTree, parent: ts.NavigationTree | null, sourceFile: ts.SourceFile, result: SymbolInformation[], limit?: number) {
+	private _flattenNavigationTreeItem(item: ts.NavigationTree, parent: ts.NavigationTree | null, sourceFile: ts.SourceFile, result: SymbolInformation[], limit?: number) {
 		if (!limit || result.length < limit) {
 			const acceptable = TypeScriptService.isAcceptableNavigationTreeItem(item);
 			if (acceptable) {
-				result.push(this.transformNavigationTreeItem(item, parent, sourceFile));
+				result.push(this._transformNavigationTreeItem(item, parent, sourceFile));
 			}
 			if (item.childItems) {
 				let i = 0;
 				while (i < item.childItems.length && (!limit || result.length < limit)) {
-					this.flattenNavigationTreeItem(item.childItems[i], acceptable ? item : null, sourceFile, result, limit);
+					this._flattenNavigationTreeItem(item.childItems[i], acceptable ? item : null, sourceFile, result, limit);
 					i++;
 				}
 			}
@@ -1566,14 +1560,14 @@ export class TypeScriptService implements LanguageHandler {
 	/**
 	 * Transforms NavigationTree to SymbolInformation
 	 */
-	private transformNavigationTreeItem(item: ts.NavigationTree, parent: ts.NavigationTree | null, sourceFile: ts.SourceFile): SymbolInformation {
+	private _transformNavigationTreeItem(item: ts.NavigationTree, parent: ts.NavigationTree | null, sourceFile: ts.SourceFile): SymbolInformation {
 		const span = item.spans[0];
 		let start = ts.getLineAndCharacterOfPosition(sourceFile, span.start);
 		let end = ts.getLineAndCharacterOfPosition(sourceFile, span.start + span.length);
 		return SymbolInformation.create(item.text,
 			util.convertStringtoSymbolKind(item.kind),
 			Range.create(start.line, start.character, end.line, end.character),
-			this.defUri(sourceFile.fileName), parent ? parent.text : '');
+			this._defUri(sourceFile.fileName), parent ? parent.text : '');
 	}
 
 	/**

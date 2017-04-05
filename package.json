@@ -33,6 +33,7 @@
     "watch": "tsc -w"
   },
   "dependencies": {
+    "@reactivex/rxjs": "^5.3.0",
     "async": "^2.1.5",
     "bluebird": "^3.4.7",
     "chai": "^3.4.34",

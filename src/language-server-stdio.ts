@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
-import { newConnection, registerLanguageHandler } from './connection';
+import { StreamMessageWriter } from 'vscode-jsonrpc';
+import { isNotificationMessage } from 'vscode-jsonrpc/lib/messages';
+import { MessageEmitter, registerLanguageHandler } from './connection';
 import { RemoteLanguageClient } from './lang-handler';
 import { FileLogger, StderrLogger } from './logging';
 import { TypeScriptService } from './typescript-service';
@@ -17,11 +19,25 @@ program
 	.parse(process.argv);
 
 util.setStrict(program.strict);
-const connection = newConnection(process.stdin, process.stdout, {
-	trace: program.trace,
-	logger: program.logfile ? new FileLogger(program.logfile) : new StderrLogger()
+
+const logger = program.logfile ? new FileLogger(program.logfile) : new StderrLogger();
+
+const messageEmitter = new MessageEmitter(process.stdin);
+const messageWriter = new StreamMessageWriter(process.stdout);
+const remoteClient = new RemoteLanguageClient(messageEmitter, messageWriter);
+const service = new TypeScriptService(remoteClient, { strict: program.strict });
+
+// Add an exit notification handler to kill the process
+messageEmitter.on('message', message => {
+	if (isNotificationMessage(message) && message.method === 'exit') {
+		logger.log(`Exit notification`);
+		process.exit(0);
+	}
 });
-registerLanguageHandler(connection, new TypeScriptService(new RemoteLanguageClient(connection), {
-	strict: program.strict
-}));
-connection.listen();
+
+registerLanguageHandler(
+	messageEmitter,
+	messageWriter,
+	service,
+	program.trace ? logger : undefined
+);

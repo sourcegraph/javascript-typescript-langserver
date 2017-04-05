@@ -1,6 +1,7 @@
 import * as fs_ from 'fs';
 import iterate from 'iterare';
 import { memoize } from 'lodash';
+import { Span } from 'opentracing';
 import * as os from 'os';
 import * as path_ from 'path';
 import * as ts from 'typescript';
@@ -219,23 +220,33 @@ export class ProjectManager implements Disposable {
 	 *
 	 * @param uri target file URI
 	 */
-	ensureFilesForHoverAndDefinition(uri: string): Promise<void> {
-		const existing = this.ensuredFilesForHoverAndDefinition.get(uri);
-		if (existing) {
-			return existing;
-		}
-		const promise = (async () => {
-			try {
-				await this.ensureModuleStructure();
-				// Include dependencies up to depth 30
-				await this.ensureTransitiveFileDependencies([util.uri2path(uri)], 30);
-			} catch (err) {
-				this.ensuredFilesForHoverAndDefinition.delete(uri);
-				throw err;
+	async ensureFilesForHoverAndDefinition(uri: string, childOf = new Span()): Promise<void> {
+		const span = childOf.tracer().startSpan('ensureFilesForHoverAndDefinition', { childOf });
+		span.addTags({ uri });
+		try {
+			const existing = this.ensuredFilesForHoverAndDefinition.get(uri);
+			if (existing) {
+				return existing;
 			}
-		})();
-		this.ensuredFilesForHoverAndDefinition.set(uri, promise);
-		return promise;
+			const promise = (async () => {
+				try {
+					await this.ensureModuleStructure();
+					// Include dependencies up to depth 30
+					await this.ensureTransitiveFileDependencies([util.uri2path(uri)], 30);
+				} catch (err) {
+					this.ensuredFilesForHoverAndDefinition.delete(uri);
+					throw err;
+				}
+			})();
+			this.ensuredFilesForHoverAndDefinition.set(uri, promise);
+			await promise;
+		} catch (err) {
+			span.setTag('error', true);
+			span.log({ 'event': 'error', 'error.object': err });
+			throw err;
+		} finally {
+			span.finish();
+		}
 	}
 
 	/**

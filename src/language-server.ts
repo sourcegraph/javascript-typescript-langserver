@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { RemoteLanguageClient } from './lang-handler';
 import { FileLogger, StdioLogger } from './logging';
 import { serve, ServeOptions } from './server';
 import { TypeScriptService, TypeScriptServiceOptions } from './typescript-service';
@@ -28,7 +27,8 @@ const options: ServeOptions & TypeScriptServiceOptions = {
 	clusterSize,
 	lspPort,
 	strict: program.strict,
-	trace: program.trace,
+	logMessages: program.trace,
 	logger: program.logfile ? new FileLogger(program.logfile) : new StdioLogger()
 };
-serve(options, connection => new TypeScriptService(new RemoteLanguageClient(connection), options));
+
+serve(options, client => new TypeScriptService(client, options));
