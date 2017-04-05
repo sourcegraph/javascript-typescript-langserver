@@ -24,7 +24,7 @@ describe('fs.ts', () => {
 			await fs.mkdir(path.join(temporaryDir, 'foo'));
 			await fs.writeFile(path.join(temporaryDir, 'tweedledee'), 'hi');
 			await fs.writeFile(path.join(temporaryDir, 'tweedledum'), 'bye');
-			await fs.writeFile(path.join(temporaryDir, 'foo', 'bar'), 'baz');
+			await fs.writeFile(path.join(temporaryDir, 'foo', 'bar.ts'), 'baz');
 			fileSystem = new LocalFileSystem(toUnixPath(temporaryDir));
 		});
 		after(async () => {
@@ -38,20 +38,20 @@ describe('fs.ts', () => {
 				assert.sameMembers(iterate(await fileSystem.getWorkspaceFiles()).toArray(), [
 					baseUri + 'tweedledee',
 					baseUri + 'tweedledum',
-					baseUri + 'foo/bar'
+					baseUri + 'foo/bar.ts'
 				]);
 			});
 			it('should fetch all files under specific root', async () => {
 				assert.sameMembers(iterate(await fileSystem.getWorkspaceFiles(baseUri + 'foo')).toArray(), [
-					baseUri + 'foo/bar'
+					baseUri + 'foo/bar.ts'
 				]);
 			});
 		});
 		describe('getTextDocumentContent()', () => {
-			it('should read files denoted by relative path', async () => {
+			it('should read files denoted by relative URI', async () => {
 				assert.equal(await fileSystem.getTextDocumentContent('tweedledee'), 'hi');
 			});
-			it('should read files denoted by absolute path', async () => {
+			it('should read files denoted by absolute URI', async () => {
 				assert.equal(await fileSystem.getTextDocumentContent(baseUri + 'tweedledee'), 'hi');
 			});
 		});
