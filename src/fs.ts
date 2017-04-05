@@ -130,7 +130,7 @@ export class FileSystemUpdater {
 	 * @param childOf A parent span for tracing
 	 */
 	async ensure(uri: string, childOf = new Span()): Promise<void> {
-		const span = childOf.tracer().startSpan('ensure file content', { childOf });
+		const span = childOf.tracer().startSpan('Ensure file content', { childOf });
 		span.addTags({ uri });
 		try {
 			return await (this.fetches.get(uri) || this.fetch(uri));
@@ -150,7 +150,7 @@ export class FileSystemUpdater {
 	 */
 	fetchStructure(childOf = new Span()): Promise<void> {
 		const promise = (async () => {
-			const span = childOf.tracer().startSpan('fetch structure', { childOf });
+			const span = childOf.tracer().startSpan('Fetch workspace structure', { childOf });
 			try {
 				const uris = await this.remoteFs.getWorkspaceFiles();
 				for (const uri of uris) {
@@ -176,7 +176,7 @@ export class FileSystemUpdater {
 	 * @param childOf A parent span for tracing
 	 */
 	async ensureStructure(childOf = new Span()) {
-		const span = childOf.tracer().startSpan('ensure structure', { childOf });
+		const span = childOf.tracer().startSpan('Ensure workspace structure', { childOf });
 		try {
 			return await this.structureFetch || this.fetchStructure();
 		} catch (err) {

@@ -221,7 +221,7 @@ export class ProjectManager implements Disposable {
 	 * @param uri target file URI
 	 */
 	async ensureFilesForHoverAndDefinition(uri: string, childOf = new Span()): Promise<void> {
-		const span = childOf.tracer().startSpan('ensureFilesForHoverAndDefinition', { childOf });
+		const span = childOf.tracer().startSpan('Ensure files for hover and definition', { childOf });
 		span.addTags({ uri });
 		try {
 			const existing = this.ensuredFilesForHoverAndDefinition.get(uri);
@@ -330,49 +330,60 @@ export class ProjectManager implements Disposable {
 	 * @param filePaths files to process (both absolute and relative paths are accepted)
 	 * @param maxDepth stop collecting when reached given recursion level
 	 * @param seen tracks visited files to avoid cycles
+	 * @param childOf OpenTracing parent span for tracing
 	 */
-	private async ensureTransitiveFileDependencies(filePaths: string[], maxDepth: number, seen = new Set<string>()): Promise<void> {
-		filePaths = filePaths.filter(f => !seen.has(f));
-		if (filePaths.length === 0) {
-			return Promise.resolve();
-		}
-		filePaths.forEach(f => seen.add(f));
+	private async ensureTransitiveFileDependencies(filePaths: string[], maxDepth: number, seen = new Set<string>(), childOf = new Span()): Promise<void> {
+		const span = childOf.tracer().startSpan('Ensure transitive file imports', { childOf });
+		span.setTag('filePaths', filePaths.join(', '));
+		try {
+			filePaths = filePaths.filter(f => !seen.has(f));
+			if (filePaths.length === 0) {
+				return Promise.resolve();
+			}
+			filePaths.forEach(f => seen.add(f));
 
-		const absFilePaths = filePaths.map(f => util.toUnixPath(util.resolve(this.rootPath, f)));
-		await this.ensureFiles(absFilePaths);
+			const absFilePaths = filePaths.map(f => util.toUnixPath(util.resolve(this.rootPath, f)));
+			await this.ensureFiles(absFilePaths);
 
-		if (maxDepth > 0) {
-			const importPaths = new Set<string>();
-			await Promise.all(filePaths.map(async filePath => {
-				const config = this.getConfiguration(filePath);
-				await config.ensureBasicFiles();
-				const contents = this.getFs().readFile(filePath);
-				const info = ts.preProcessFile(contents, true, true);
-				const compilerOpt = config.getHost().getCompilationSettings();
-				for (const imp of info.importedFiles) {
-					const resolved = ts.resolveModuleName(util.toUnixPath(imp.fileName), filePath, compilerOpt, config.moduleResolutionHost());
-					if (!resolved || !resolved.resolvedModule) {
-						// This means we didn't find a file defining
-						// the module. It could still exist as an
-						// ambient module, which is why we fetch
-						// global*.d.ts files.
-						continue;
+			if (maxDepth > 0) {
+				const importPaths = new Set<string>();
+				await Promise.all(filePaths.map(async filePath => {
+					const config = this.getConfiguration(filePath);
+					await config.ensureBasicFiles();
+					const contents = this.getFs().readFile(filePath);
+					const info = ts.preProcessFile(contents, true, true);
+					const compilerOpt = config.getHost().getCompilationSettings();
+					for (const imp of info.importedFiles) {
+						const resolved = ts.resolveModuleName(util.toUnixPath(imp.fileName), filePath, compilerOpt, config.moduleResolutionHost());
+						if (!resolved || !resolved.resolvedModule) {
+							// This means we didn't find a file defining
+							// the module. It could still exist as an
+							// ambient module, which is why we fetch
+							// global*.d.ts files.
+							continue;
+						}
+						importPaths.add(resolved.resolvedModule.resolvedFileName);
 					}
-					importPaths.add(resolved.resolvedModule.resolvedFileName);
-				}
-				const resolver = !this.strict && os.platform() === 'win32' ? path_ : path_.posix;
-				for (const ref of info.referencedFiles) {
-					// Resolving triple slash references relative to current file
-					// instead of using module resolution host because it behaves
-					// differently in "nodejs" mode
-					const refFilePath = util.toUnixPath(path_.relative(this.rootPath,
-						resolver.resolve(this.rootPath,
-							resolver.dirname(filePath),
-							util.toUnixPath(ref.fileName))));
-					importPaths.add(refFilePath);
-				}
-			}));
-			await this.ensureTransitiveFileDependencies(Array.from(importPaths), maxDepth - 1, seen);
+					const resolver = !this.strict && os.platform() === 'win32' ? path_ : path_.posix;
+					for (const ref of info.referencedFiles) {
+						// Resolving triple slash references relative to current file
+						// instead of using module resolution host because it behaves
+						// differently in "nodejs" mode
+						const refFilePath = util.toUnixPath(path_.relative(this.rootPath,
+							resolver.resolve(this.rootPath,
+								resolver.dirname(filePath),
+								util.toUnixPath(ref.fileName))));
+						importPaths.add(refFilePath);
+					}
+				}));
+				await this.ensureTransitiveFileDependencies(Array.from(importPaths), maxDepth - 1, seen, span);
+			}
+		} catch (err) {
+			span.setTag('error', true);
+			span.log({ 'event': 'error', 'error.object': err });
+			throw err;
+		} finally {
+			span.finish();
 		}
 	}
 

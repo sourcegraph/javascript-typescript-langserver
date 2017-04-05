@@ -95,7 +95,7 @@ export class TypeScriptService {
 		this.logger = new LSPLogger(client);
 	}
 
-	async initialize(params: InitializeParams, childOf = new Span()): Promise<InitializeResult> {
+	async initialize(params: InitializeParams, span = new Span()): Promise<InitializeResult> {
 		if (params.rootUri || params.rootPath) {
 			this.root = params.rootPath || util.uri2path(params.rootUri!);
 			this.rootUri = params.rootUri || util.path2uri('', params.rootPath!);
@@ -143,7 +143,7 @@ export class TypeScriptService {
 		this.inMemoryFileSystem = new pm.InMemoryFileSystem(this.root);
 	}
 
-	async shutdown(): Promise<void> {
+	async shutdown(params = {}, span = new Span()): Promise<void> {
 		this.projectManager.dispose();
 	}
 
@@ -151,7 +151,7 @@ export class TypeScriptService {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
-		await this.projectManager.ensureFilesForHoverAndDefinition(uri);
+		await this.projectManager.ensureFilesForHoverAndDefinition(uri, span);
 
 		const fileName: string = util.uri2path(uri);
 		const configuration = this.projectManager.getConfiguration(fileName);
@@ -182,11 +182,11 @@ export class TypeScriptService {
 		return ret;
 	}
 
-	async textDocumentXdefinition(params: TextDocumentPositionParams): Promise<SymbolLocationInformation[]> {
+	async textDocumentXdefinition(params: TextDocumentPositionParams, span = new Span()): Promise<SymbolLocationInformation[]> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
-		await this.projectManager.ensureFilesForHoverAndDefinition(uri);
+		await this.projectManager.ensureFilesForHoverAndDefinition(uri, span);
 
 		const fileName: string = util.uri2path(uri);
 		const configuration = this.projectManager.getConfiguration(fileName);
@@ -221,11 +221,11 @@ export class TypeScriptService {
 		return ret;
 	}
 
-	async textDocumentHover(params: TextDocumentPositionParams): Promise<Hover> {
+	async textDocumentHover(params: TextDocumentPositionParams, span = new Span()): Promise<Hover> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
-		await this.projectManager.ensureFilesForHoverAndDefinition(uri);
+		await this.projectManager.ensureFilesForHoverAndDefinition(uri, span);
 
 		const fileName: string = util.uri2path(uri);
 		const configuration = this.projectManager.getConfiguration(fileName);
@@ -254,7 +254,7 @@ export class TypeScriptService {
 		return { contents, range: Range.create(start.line, start.character, end.line, end.character) };
 	}
 
-	async textDocumentReferences(params: ReferenceParams): Promise<Location[]> {
+	async textDocumentReferences(params: ReferenceParams, span = new Span()): Promise<Location[]> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
@@ -290,7 +290,7 @@ export class TypeScriptService {
 		});
 	}
 
-	async workspaceSymbol(params: WorkspaceSymbolParams): Promise<SymbolInformation[]> {
+	async workspaceSymbol(params: WorkspaceSymbolParams, span = new Span()): Promise<SymbolInformation[]> {
 		const query = params.query;
 		const symQuery = params.symbol ? Object.assign({}, params.symbol) : undefined;
 		if (symQuery && symQuery.package) {
@@ -375,9 +375,9 @@ export class TypeScriptService {
 		return (await itemsPromise).slice(0, params.limit);
 	}
 
-	async textDocumentDocumentSymbol(params: DocumentSymbolParams): Promise<SymbolInformation[]> {
+	async textDocumentDocumentSymbol(params: DocumentSymbolParams, span = new Span()): Promise<SymbolInformation[]> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		await this.projectManager.ensureFilesForHoverAndDefinition(uri);
+		await this.projectManager.ensureFilesForHoverAndDefinition(uri, span);
 		const fileName = util.uri2path(uri);
 
 		const config = this.projectManager.getConfiguration(uri);
@@ -392,7 +392,7 @@ export class TypeScriptService {
 		return Promise.resolve(result);
 	}
 
-	async workspaceXreferences(params: WorkspaceReferenceParams): Promise<ReferenceInformation[]> {
+	async workspaceXreferences(params: WorkspaceReferenceParams, span = new Span()): Promise<ReferenceInformation[]> {
 		const refInfo: ReferenceInformation[] = [];
 
 		await this.projectManager.ensureAllFiles();
@@ -453,7 +453,7 @@ export class TypeScriptService {
 		return refInfo;
 	}
 
-	async workspaceXpackages(params = {}): Promise<PackageInformation[]> {
+	async workspaceXpackages(params = {}, span = new Span()): Promise<PackageInformation[]> {
 		await this.projectManager.ensureModuleStructure();
 
 		const pkgFiles: string[] = [];
@@ -496,7 +496,7 @@ export class TypeScriptService {
 		return pkgs;
 	}
 
-	async workspaceXdependencies(params = {}): Promise<DependencyReference[]> {
+	async workspaceXdependencies(params = {}, span = new Span()): Promise<DependencyReference[]> {
 		await this.projectManager.ensureModuleStructure();
 
 		const pkgFiles: string[] = [];
@@ -528,13 +528,13 @@ export class TypeScriptService {
 		return deps;
 	}
 
-	async textDocumentCompletion(params: TextDocumentPositionParams): Promise<CompletionList> {
+	async textDocumentCompletion(params: TextDocumentPositionParams, span = new Span()): Promise<CompletionList> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
 		const fileName: string = util.uri2path(uri);
 
-		await this.projectManager.ensureFilesForHoverAndDefinition(uri);
+		await this.projectManager.ensureFilesForHoverAndDefinition(uri, span);
 
 		const configuration = this.projectManager.getConfiguration(fileName);
 		await configuration.ensureBasicFiles();
