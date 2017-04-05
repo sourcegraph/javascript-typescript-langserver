@@ -225,6 +225,7 @@ export class ProjectManager implements Disposable {
 		span.addTags({ uri });
 		try {
 			const existing = this.ensuredFilesForHoverAndDefinition.get(uri);
+			span.setTag('fresh', !existing);
 			if (existing) {
 				return existing;
 			}
@@ -333,7 +334,7 @@ export class ProjectManager implements Disposable {
 	 * @param childOf OpenTracing parent span for tracing
 	 */
 	private async ensureTransitiveFileDependencies(filePaths: string[], maxDepth: number, seen = new Set<string>(), childOf = new Span()): Promise<void> {
-		const span = childOf.tracer().startSpan('Ensure transitive file imports', { childOf });
+		const span = childOf.tracer().startSpan('Ensure file imports', { childOf });
 		span.setTag('filePaths', filePaths.join(', '));
 		try {
 			filePaths = filePaths.filter(f => !seen.has(f));
