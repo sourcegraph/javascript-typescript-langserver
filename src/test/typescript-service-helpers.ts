@@ -2,6 +2,7 @@ import * as chai from 'chai';
 import * as ts from 'typescript';
 import { CancellationToken } from 'vscode-jsonrpc';
 import { CompletionItemKind, LogMessageParams, TextDocumentIdentifier, TextDocumentItem } from 'vscode-languageserver';
+import { SymbolKind } from 'vscode-languageserver-types';
 import { TextDocumentContentParams, WorkspaceFilesParams } from '../request-type';
 import { TypeScriptService, TypeScriptServiceFactory } from '../typescript-service';
 import chaiAsPromised = require('chai-as-promised');
@@ -539,7 +540,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					limit: 10
 				});
 				assert.deepEqual(result, [{
-					kind: 15,
+					kind: SymbolKind.Variable,
 					location: {
 						range: {
 							end: {
@@ -562,7 +563,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					limit: 10
 				});
 				assert.deepEqual(result, [{
-					kind: 15,
+					kind: SymbolKind.Variable,
 					location: {
 						range: {
 							end: {
@@ -602,7 +603,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						limit: 10
 					});
 					assert.deepEqual(result, [{
-						kind: 5,
+						kind: SymbolKind.Class,
 						location: {
 							range: {
 								end: {
@@ -625,7 +626,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						limit: 10
 					});
 					assert.deepEqual(result, [{
-						kind: 5,
+						kind: SymbolKind.Class,
 						location: {
 							range: {
 								end: {
@@ -648,7 +649,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						limit: 10
 					});
 					assert.deepEqual(result, [{
-						kind: 5,
+						kind: SymbolKind.Class,
 						location: {
 							range: {
 								end: {
@@ -673,7 +674,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						limit: 10
 					});
 					assert.deepEqual(result, [{
-						kind: 5,
+						kind: SymbolKind.Class,
 						location: {
 							range: {
 								end: {
