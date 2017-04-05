@@ -134,7 +134,11 @@ export function registerLanguageHandler(
 					// Finish span
 					span.finish();
 					// Delete subscription from Map
-					subscriptions.delete(message.id);
+					// Make sure to not run this before subscription.set() was called
+					// (in case the Observable is synchronous)
+					process.nextTick(() => {
+						subscriptions.delete(message.id);
+					});
 				})
 				.subscribe(result => {
 					// Send result
