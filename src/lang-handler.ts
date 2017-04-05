@@ -46,6 +46,7 @@ export class RemoteLanguageClient {
 			this.logger.log('<--', message);
 			// Send request
 			this.output.write(message);
+			let receivedResponse = false;
 			// Subscribe to message events
 			const messageSub = Observable.fromEvent<Message>(this.input, 'message')
 				// Find response message with the correct ID
@@ -53,6 +54,7 @@ export class RemoteLanguageClient {
 				.take(1)
 				// Emit result or error
 				.map((msg: ResponseMessage): any => {
+					receivedResponse = true;
 					if (msg.error) {
 						throw Object.assign(new Error(msg.error.message), msg.error);
 					}
@@ -62,10 +64,12 @@ export class RemoteLanguageClient {
 				.subscribe(subscriber);
 			// Handler for unsubscribe()
 			return () => {
-				// Unsubscribe message event subscription
+				// Unsubscribe message event subscription (removes listener)
 				messageSub.unsubscribe();
-				// Send LSP $/cancelRequest to client
-				this.notify('$/cancelRequest', { id });
+				if (!receivedResponse) {
+					// Send LSP $/cancelRequest to client
+					this.notify('$/cancelRequest', { id });
+				}
 			};
 		});
 	}

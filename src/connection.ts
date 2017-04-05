@@ -1,3 +1,4 @@
+import { Observable, Subscription } from '@reactivex/rxjs';
 import { EventEmitter } from 'events';
 import { camelCase, omit } from 'lodash';
 import { FORMAT_TEXT_MAP, Span, Tracer } from 'opentracing';
@@ -19,6 +20,13 @@ interface HasMeta {
  */
 function hasMeta(candidate: any): candidate is HasMeta {
 	return typeof candidate === 'object' && candidate !== null && typeof candidate.meta === 'object' && candidate.meta !== null;
+}
+
+/**
+ * Returns true if the passed argument is an object with a `.then()` method
+ */
+function isPromiseLike(candidate: any): candidate is PromiseLike<any> {
+	return typeof candidate === 'object' && candidate !== null && typeof candidate.then === 'function';
 }
 
 /**
@@ -66,14 +74,27 @@ export function registerLanguageHandler(
 	logger: Logger = new NoopLogger(),
 	tracer = new Tracer()
 ): void {
+	/** Tracks Subscriptions for results to unsubscribe them on $/cancelRequest */
+	const subscriptions = new Map<string | number, Subscription>();
 	messageEmitter.on('message', async message => {
 		logger.log('-->', message);
 		// Ignore responses
 		if (!isRequestMessage(message) && !isNotificationMessage(message)) {
 			return;
 		}
+		if (message.method === '$/cancelRequest' && isNotificationMessage(message)) {
+			// Cancel another request by unsubscribing from the Observable
+			const subscription = subscriptions.get(message.params.id);
+			if (!subscription) {
+				logger.error(`$/cancelRequest for unknown request ID ${message.params.id}`);
+				return;
+			}
+			subscription.unsubscribe();
+			subscriptions.delete(message.params.id);
+			return;
+		}
 		// If message is request and has tracing metadata, extract the span context and create a span for the method call
-		let span: Span | undefined;
+		let span = new Span();
 		if (hasMeta(message) && isRequestMessage(message)) {
 			const context = tracer.extract(FORMAT_TEXT_MAP, message.meta);
 			if (context) {
@@ -93,40 +114,57 @@ export function registerLanguageHandler(
 				}
 			} as ResponseMessage);
 		}
-		try {
-			// Call handler method
-			const result = await (handler as any)[method](message.params, span);
-			// If request, send response with result
-			if (isRequestMessage(message)) {
-				messageWriter.write({
-					jsonrpc: '2.0',
-					id: message.id,
-					result
-				} as ResponseMessage);
-			}
-		} catch (err) {
-			if (span) {
-				// Set error on span
-				span.setTag('error', true);
-				span.log({ 'event': 'error', 'error.object': err });
-			}
-			// If request, send response with error
-			if (isRequestMessage(message)) {
-				messageWriter.write({
-					jsonrpc: '2.0',
-					id: message.id,
-					error: {
-						message: err.message + '',
-						code: typeof err.code === 'number' ? err.code : ErrorCodes.InternalError,
-						data: omit(err, ['message', 'code'])
-					}
-				} as ResponseMessage);
-			}
-		} finally {
-			if (span) {
-				// Finish span
-				span.finish();
-			}
+		// Call handler method with params and span
+		const returnValue = (handler as any)[method](message.params, span);
+		// Convert return value to Observable that emits a single item, the result (or an error)
+		let observable: Observable<any>;
+		if (returnValue instanceof Observable) {
+			observable = returnValue.take(1);
+		} else if (isPromiseLike(returnValue)) {
+			// Convert Promise to Observable
+			observable = Observable.from(returnValue);
+		} else {
+			// Convert synchronous value to Observable
+			observable = Observable.of(returnValue);
+		}
+		if (isRequestMessage(message)) {
+			// If request, subscribe to result and send a response
+			const subscription = observable
+				.finally(() => {
+					// Finish span
+					span.finish();
+					// Delete subscription from Map
+					subscriptions.delete(message.id);
+				})
+				.subscribe(result => {
+					// Send result
+					messageWriter.write({
+						jsonrpc: '2.0',
+						id: message.id,
+						result
+					} as ResponseMessage);
+				}, err => {
+					// Send error response
+					messageWriter.write({
+						jsonrpc: '2.0',
+						id: message.id,
+						error: {
+							message: err.message + '',
+							code: typeof err.code === 'number' ? err.code : ErrorCodes.InternalError,
+							data: omit(err, ['message', 'code'])
+						}
+					} as ResponseMessage);
+					// Set error on span
+					span.setTag('error', true);
+					span.log({ 'event': 'error', 'error.object': err });
+				});
+			// Save subscription for $/cancelRequest
+			subscriptions.set(message.id, subscription);
+		} else {
+			// For notifications, still subscribe and log potential error
+			observable.subscribe(undefined, err => {
+				logger.error(`Handle ${method}:`, err);
+			});
 		}
 	});
 }
