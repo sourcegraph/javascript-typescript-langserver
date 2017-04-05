@@ -91,6 +91,14 @@ export function registerLanguageHandler(
 			}
 			subscription.unsubscribe();
 			subscriptions.delete(message.params.id);
+			messageWriter.write({
+				jsonrpc: '2.0',
+				id: message.params.id,
+				error: {
+					message: 'Request cancelled',
+					code: ErrorCodes.RequestCancelled
+				}
+			} as ResponseMessage);
 			return;
 		}
 		// If message is request and has tracing metadata, extract the span context and create a span for the method call
@@ -113,6 +121,7 @@ export function registerLanguageHandler(
 					message: `Method ${method} not implemented`
 				}
 			} as ResponseMessage);
+			return;
 		}
 		// Call handler method with params and span
 		const returnValue = (handler as any)[method](message.params, span);
