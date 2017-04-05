@@ -167,4 +167,18 @@ export function registerLanguageHandler(
 			});
 		}
 	});
+	// On stream close, shutdown handler
+	messageEmitter.on('close', () => {
+		if (!handler.shutdownCalled) {
+			logger.error('Stream was closed without shutdown notification');
+			Observable.from(handler.shutdown()).subscribe(undefined, err => logger.error('Shutdown:', err));
+		}
+	});
+	// On stream error, shutdown handler
+	messageEmitter.on('error', err => {
+		if (!handler.shutdownCalled) {
+			logger.error('Stream:', err);
+			Observable.from(handler.shutdown()).subscribe(undefined, err => logger.error('Shutdown:', err));
+		}
+	});
 }
