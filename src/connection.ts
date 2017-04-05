@@ -11,14 +11,14 @@ import { TypeScriptService } from './typescript-service';
  * Interface for JSON RPC messages with tracing metadata
  */
 interface HasMeta {
-	meta: object;
+	meta: { [key: string]: any };
 }
 
 /**
  * Returns true if the passed argument has a meta field
  */
 function hasMeta(candidate: any): candidate is HasMeta {
-	return typeof candidate === 'object' && candidate !== null && typeof candidate.meta === 'object';
+	return typeof candidate === 'object' && candidate !== null && typeof candidate.meta === 'object' && candidate.meta !== null;
 }
 
 /**
