@@ -44,7 +44,7 @@ export class RemoteFileSystem implements FileSystem {
 	 * The content request is sent from the server to the client to request the current content of any text document. This allows language servers to operate without accessing the file system directly.
 	 */
 	async getTextDocumentContent(uri: string): Promise<string> {
-		const textDocument = await this.client.textDocumentContent({ textDocument: { uri } });
+		const textDocument = await this.client.textDocumentXcontent({ textDocument: { uri } });
 		return textDocument.text;
 	}
 }

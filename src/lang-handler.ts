@@ -90,7 +90,7 @@ export class RemoteLanguageClient {
 	 * The content request is sent from a server to a client to request the
 	 * current content of a text document identified by the URI
 	 */
-	textDocumentContent(params: TextDocumentContentParams): Promise<TextDocumentItem> {
+	textDocumentXcontent(params: TextDocumentContentParams): Promise<TextDocumentItem> {
 		return this.request('textDocument/xcontent', params).toPromise();
 	}
 
