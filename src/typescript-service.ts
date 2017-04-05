@@ -601,8 +601,6 @@ export class TypeScriptService implements LanguageHandler {
 			return SignatureInformation.create(prefix + params + suffix, ts.displayPartsToString(item.documentation), ...parameters);
 		});
 
-		// TODO: use signature.argumentCount and argumentIndex here
-
 		return {
 			signatures: signatureInformations,
 			activeSignature: signatures.selectedItemIndex,
