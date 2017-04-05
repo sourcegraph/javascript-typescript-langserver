@@ -1454,16 +1454,16 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				'	/** bar doc*/',
 				'    bar(): number { return 1; }',
 				'	/** baz doc*/',
-				'    baz(): string { return ""; }',
+				'    baz(num: number): string { return ""; }',
 				'	/** qux doc*/',
 				'    qux: number;',
 				'}',
 				'const a = new A();',
-				'a.bar()'
+				'a.baz()'
 			].join('\n')],
 			['file:///uses-import.ts', [
 				'import * as i from "./import"',
-				'i.'
+				'i.d()'
 			].join('\n')],
 			['file:///import.ts', '/** d doc*/ export function d() {}'],
 			['file:///uses-reference.ts', [
@@ -1493,8 +1493,38 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			});
 			assert.equal(result.signatures.length, 1);
 			const activeSignature = result.signatures[result.activeSignature];
-			assert.equal(activeSignature.label, "bar(): number");
-			assert.equal(activeSignature.documentation, "bar doc");
+			assert.equal(result.activeSignature, 0);
+			assert.equal(result.activeParameter, 0);
+
+			assert.equal(activeSignature.label, "baz(num): string");
+			assert.equal(activeSignature.documentation, "baz doc");
+			assert.isArray(activeSignature.parameters);
+			if (activeSignature.parameters) {
+				assert.equal(activeSignature.parameters.length, 1);
+				assert.equal(activeSignature.parameters[0].label, "num");
+				assert.isUndefined(activeSignature.parameters[0].documentation);
+			}
+		});
+
+		it('Provides signature help from imported symbols', <any> async function (this: TestContext) {
+			const result = await this.service.getSignatureHelp({
+				textDocument: {
+					uri: 'file:///uses-import.ts'
+				},
+				position: {
+					line: 1,
+					character: 4
+				}
+			});
+			assert.equal(result.signatures.length, 1);
+			// const activeSignature = result.signatures[result.activeSignature];
+			assert.equal(result.activeSignature, 0);
+			assert.equal(result.activeParameter, 0);
+
+			// assert.equal(activeSignature.label, "d(): string");
+			// assert.equal(activeSignature.documentation, "d doc");
+			// assert.isUndefined(activeSignature.parameters);
+			
 		});
 
 	});

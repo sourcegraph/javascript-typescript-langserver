@@ -15,9 +15,11 @@ import {
 	InitializeResult,
 	Location,
 	MarkedString,
+	ParameterInformation,
 	Range,
 	ReferenceParams,
 	SignatureHelp,
+	SignatureInformation,
 	SymbolInformation,
 	TextDocumentPositionParams,
 	TextDocumentSyncKind
@@ -593,10 +595,10 @@ export class TypeScriptService implements LanguageHandler {
 			const prefix = item.prefixDisplayParts.map(p => p.text).join('');
 			const params = item.parameters.map(p => p.name).join(', ');
 			const suffix = item.suffixDisplayParts.map(p => p.text).join('');
-			return {
-				label: prefix + params + suffix,
-				documentation: item.documentation.map(d => d.text).join('')
-			};
+			const parameters = item.parameters.map(p => { 
+				return ParameterInformation.create(p.name, p.documentation.map(d => d.text).join('')); 
+			});
+			return SignatureInformation.create(prefix + params + suffix, item.documentation.map(d => d.text).join(''), ...parameters)
 		});
 
 		return {
