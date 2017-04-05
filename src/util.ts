@@ -3,9 +3,12 @@ import * as path from 'path';
 
 import * as ts from 'typescript';
 import { Position, Range, SymbolKind } from 'vscode-languageserver';
+import {Logger } from './logging';
 import * as rt from './request-type';
 
 let strict = false;
+
+let logger: Logger | null = null;
 
 /**
  * Toggles "strict" flag, affects how we are parsing/generating URLs.
@@ -13,6 +16,10 @@ let strict = false;
  */
 export function setStrict(value: boolean) {
 	strict = value;
+}
+
+export function setLogger(value: Logger) {
+	logger = value;
 }
 
 export function formEmptyRange(): Range {
@@ -91,7 +98,14 @@ export function uri2path(uri: string): string {
 				uri = uri.substring(1);
 			}
 		}
-		uri = uri.split('/').map(decodeURIComponent).join('/');
+		try {
+			uri = uri.split('/').map(decodeURIComponent).join('/');
+		} catch (e) {
+			if (logger != null) {
+				logger.log('URI ERROR AT', uri, new Error().stack);
+			}
+			throw e;
+		}
 	}
 	return uri;
 }

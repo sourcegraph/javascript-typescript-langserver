@@ -23,12 +23,14 @@ program
 util.setStrict(program.strict);
 const lspPort = program.port || defaultLspPort;
 const clusterSize = program.cluster || numCPUs;
+const logger = program.logfile ? new FileLogger(program.logfile) : new StdioLogger();
+util.setLogger(logger);
 
 const options: ServeOptions & TypeScriptServiceOptions = {
 	clusterSize,
 	lspPort,
 	strict: program.strict,
 	trace: program.trace,
-	logger: program.logfile ? new FileLogger(program.logfile) : new StdioLogger()
+	logger
 };
 serve(options, connection => new TypeScriptService(new RemoteLanguageClient(connection), options));

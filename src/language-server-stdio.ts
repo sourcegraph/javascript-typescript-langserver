@@ -17,9 +17,11 @@ program
 	.parse(process.argv);
 
 util.setStrict(program.strict);
+const logger = program.logfile ? new FileLogger(program.logfile) : new StderrLogger();
+util.setLogger(logger);
 const connection = newConnection(process.stdin, process.stdout, {
 	trace: program.trace,
-	logger: program.logfile ? new FileLogger(program.logfile) : new StderrLogger()
+	logger
 });
 registerLanguageHandler(connection, new TypeScriptService(new RemoteLanguageClient(connection), {
 	strict: program.strict
