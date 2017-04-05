@@ -592,19 +592,23 @@ export class TypeScriptService implements LanguageHandler {
 		}
 
 		const signatureInformations = signatures.items.map(item => {
-			const prefix = item.prefixDisplayParts.map(p => p.text).join('');
+			ts.displayPartsToString
+			const prefix = ts.displayPartsToString(item.prefixDisplayParts)
 			const params = item.parameters.map(p => p.name).join(', ');
-			const suffix = item.suffixDisplayParts.map(p => p.text).join('');
-			const parameters = item.parameters.map(p => { 
-				return ParameterInformation.create(p.name, p.documentation.map(d => d.text).join('')); 
+			const suffix = ts.displayPartsToString(item.suffixDisplayParts);
+			
+			const parameters = item.parameters.map(p => {
+				return ParameterInformation.create(p.name, ts.displayPartsToString(p.documentation)); 
 			});
-			return SignatureInformation.create(prefix + params + suffix, item.documentation.map(d => d.text).join(''), ...parameters)
+			return SignatureInformation.create(prefix + params + suffix, ts.displayPartsToString(item.documentation), ...parameters)
 		});
+
+		// TODO: use signature.argumentCount and argumentIndex here
 
 		return {
 			signatures: signatureInformations,
-			activeSignature: 0,
-			activeParameter: 0
+			activeSignature: signatures.selectedItemIndex,
+			activeParameter: signatures.argumentIndex
 		};
 	}
 	/*

@@ -1454,12 +1454,12 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				'	/** bar doc*/',
 				'    bar(): number { return 1; }',
 				'	/** baz doc*/',
-				'    baz(num: number): string { return ""; }',
+				'    baz(num: number, text: string): string { return ""; }',
 				'	/** qux doc*/',
 				'    qux: number;',
 				'}',
 				'const a = new A();',
-				'a.baz()'
+				'a.baz(32, sd)'
 			].join('\n')],
 			['file:///uses-import.ts', [
 				'import * as i from "./import"',
@@ -1481,27 +1481,28 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		afterEach(<any> shutdownService);
 
-		it('Provides signature help in the same file', <any> async function (this: TestContext) {
+		it('Provides signature help with parameters in the same file', <any> async function (this: TestContext) {
 			const result = await this.service.getSignatureHelp({
 				textDocument: {
 					uri: 'file:///a.ts'
 				},
 				position: {
 					line: 11,
-					character: 6
+					character: 11
 				}
 			});
 			assert.equal(result.signatures.length, 1);
 			const activeSignature = result.signatures[result.activeSignature];
 			assert.equal(result.activeSignature, 0);
-			assert.equal(result.activeParameter, 0);
+			assert.equal(result.activeParameter, 1);
 
-			assert.equal(activeSignature.label, "baz(num): string");
+			assert.equal(activeSignature.label, "baz(num, text): string");
 			assert.equal(activeSignature.documentation, "baz doc");
 			assert.isArray(activeSignature.parameters);
 			if (activeSignature.parameters) {
-				assert.equal(activeSignature.parameters.length, 1);
+				assert.equal(activeSignature.parameters.length, 2);
 				assert.equal(activeSignature.parameters[0].label, "num");
+				assert.equal(activeSignature.parameters[1].label, "text")
 				assert.isUndefined(activeSignature.parameters[0].documentation);
 			}
 		});
@@ -1517,14 +1518,16 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}
 			});
 			assert.equal(result.signatures.length, 1);
-			// const activeSignature = result.signatures[result.activeSignature];
+			const activeSignature = result.signatures[result.activeSignature];
 			assert.equal(result.activeSignature, 0);
 			assert.equal(result.activeParameter, 0);
 
-			// assert.equal(activeSignature.label, "d(): string");
-			// assert.equal(activeSignature.documentation, "d doc");
-			// assert.isUndefined(activeSignature.parameters);
-			
+			assert.equal(activeSignature.label, "d(): void");
+			assert.equal(activeSignature.documentation, "d doc");
+			assert.isDefined(activeSignature.parameters);
+			if (activeSignature.parameters) {
+				assert.equal(activeSignature.parameters.length, 0);
+			}
 		});
 
 	});
