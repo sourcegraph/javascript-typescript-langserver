@@ -6,7 +6,7 @@ import glob = require('glob');
 import iterate from 'iterare';
 import Semaphore from 'semaphore-async-await';
 import { InMemoryFileSystem } from './project-manager';
-import { path2uri, toUnixPath, uri2path } from './util';
+import { normalizeDir, path2uri, toUnixPath, uri2path } from './util';
 
 export interface FileSystem {
 	/**
@@ -64,10 +64,11 @@ export class LocalFileSystem implements FileSystem {
 
 	async getWorkspaceFiles(base?: string): Promise<Iterable<string>> {
 		const root = base ? this.resolveUriToPath(base) : this.rootPath;
+		const baseUri = path2uri('', normalizeDir(root)) + '/';
 		const files = await new Promise<string[]>((resolve, reject) => {
 			glob('*', { cwd: root, nodir: true, matchBase: true }, (err, matches) => err ? reject(err) : resolve(matches));
 		});
-		return iterate(files).map(file => path2uri('', file));
+		return iterate(files).map(file => baseUri + file);
 	}
 
 	async getTextDocumentContent(uri: string): Promise<string> {

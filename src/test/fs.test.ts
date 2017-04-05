@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as rimraf from 'rimraf';
 import * as temp from 'temp';
 import { LocalFileSystem } from '../fs';
-import { toUnixPath } from '../util';
+import { path2uri, toUnixPath } from '../util';
 import chaiAsPromised = require('chai-as-promised');
 chai.use(chaiAsPromised);
 const assert = chai.assert;
@@ -14,10 +14,13 @@ describe('fs.ts', () => {
 	describe('LocalFileSystem', () => {
 		let temporaryDir: string;
 		let fileSystem: LocalFileSystem;
+		let baseUri: string;
+
 		before(async () => {
 			temporaryDir = await new Promise<string>((resolve, reject) => {
 				temp.mkdir('local-fs', (err: Error, dirPath: string) => err ? reject(err) : resolve(dirPath));
 			});
+			baseUri = path2uri('', temporaryDir) + '/';
 			await fs.mkdir(path.join(temporaryDir, 'foo'));
 			await fs.writeFile(path.join(temporaryDir, 'tweedledee'), 'hi');
 			await fs.writeFile(path.join(temporaryDir, 'tweedledum'), 'bye');
@@ -33,23 +36,23 @@ describe('fs.ts', () => {
 		describe('getWorkspaceFiles()', () => {
 			it('should fetch all files', async () => {
 				assert.sameMembers(iterate(await fileSystem.getWorkspaceFiles()).toArray(), [
-					'file://tweedledee',
-					'file://tweedledum',
-					'file://foo/bar'
+					baseUri + 'tweedledee',
+					baseUri + 'tweedledum',
+					baseUri + 'foo/bar'
 				]);
 			});
 			it('should fetch all files under specific root', async () => {
-				assert.sameMembers(iterate(await fileSystem.getWorkspaceFiles('file://foo')).toArray(), [
-					'file://bar'
+				assert.sameMembers(iterate(await fileSystem.getWorkspaceFiles(baseUri + 'foo')).toArray(), [
+					baseUri + 'foo/bar'
 				]);
 			});
 		});
 		describe('getTextDocumentContent()', () => {
 			it('should read files denoted by relative path', async () => {
-				assert.equal(await fileSystem.getTextDocumentContent('file://tweedledee'), 'hi');
+				assert.equal(await fileSystem.getTextDocumentContent('tweedledee'), 'hi');
 			});
 			it('should read files denoted by absolute path', async () => {
-				assert.equal(await fileSystem.getTextDocumentContent('file://' + path.posix.join(toUnixPath(temporaryDir), 'tweedledee')), 'hi');
+				assert.equal(await fileSystem.getTextDocumentContent(baseUri + 'tweedledee'), 'hi');
 			});
 		});
 	});
