@@ -1445,6 +1445,57 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		});
 	});
 
+	describe('getSignatureHelp()', <any> function (this: TestContext) {
+		beforeEach(<any> initializeTypeScriptService(TypeScriptServiceConstructor, new Map([
+			['file:///a.ts', [
+				'class A {',
+				'	/** foo doc*/',
+				'    foo() {}',
+				'	/** bar doc*/',
+				'    bar(): number { return 1; }',
+				'	/** baz doc*/',
+				'    baz(): string { return ""; }',
+				'	/** qux doc*/',
+				'    qux: number;',
+				'}',
+				'const a = new A();',
+				'a.bar()'
+			].join('\n')],
+			['file:///uses-import.ts', [
+				'import * as i from "./import"',
+				'i.'
+			].join('\n')],
+			['file:///import.ts', '/** d doc*/ export function d() {}'],
+			['file:///uses-reference.ts', [
+				'/// <reference path="reference.ts" />',
+				'let z : foo.'
+			].join('\n')],
+			['file:///reference.ts', [
+				'namespace foo {',
+				'	/** bar doc*/',
+				'	export interface bar {}',
+				'}'
+			].join('\n')],
+			['file:///empty.ts', '']
+		])));
+
+		afterEach(<any> shutdownTypeScriptService);
+
+		it('Provides signature help in the same file', <any> async function (this: TestContext) {
+			const result = await this.service.getSignatureHelp({
+				textDocument: {
+					uri: 'file:///a.ts'
+				},
+				position: {
+					line: 11,
+					character: 6
+				}
+			});
+			assert.equal(result.signatures.length, 1)
+		});
+
+	});
+
 	describe('getCompletions()', <any> function (this: TestContext) {
 		beforeEach(<any> initializeTypeScriptService(createService, new Map([
 			['file:///a.ts', [
