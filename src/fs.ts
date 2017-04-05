@@ -68,7 +68,7 @@ export class LocalFileSystem implements FileSystem {
 		const files = await new Promise<string[]>((resolve, reject) => {
 			glob('*', { cwd: root, nodir: true, matchBase: true }, (err, matches) => err ? reject(err) : resolve(matches));
 		});
-		return iterate(files).map(file => baseUri + file);
+		return iterate(files).map(file => baseUri + file.split('/').map(encodeURIComponent).join('/'));
 	}
 
 	async getTextDocumentContent(uri: string): Promise<string> {
