@@ -7,7 +7,7 @@ import iterate from 'iterare';
 import { Span } from 'opentracing';
 import Semaphore from 'semaphore-async-await';
 import { InMemoryFileSystem } from './project-manager';
-import { path2uri, uri2path } from './util';
+import { normalizeDir, path2uri, toUnixPath, uri2path } from './util';
 
 export interface FileSystem {
 	/**
@@ -60,15 +60,16 @@ export class LocalFileSystem implements FileSystem {
 	 * Converts the URI to an absolute path
 	 */
 	protected resolveUriToPath(uri: string): string {
-		return path.resolve(this.rootPath, uri2path(uri));
+		return toUnixPath(path.resolve(this.rootPath, uri2path(uri)));
 	}
 
 	async getWorkspaceFiles(base?: string): Promise<Iterable<string>> {
-		const pattern = base ? path.posix.join(this.resolveUriToPath(base), '**/*.*') : this.resolveUriToPath('file:///**/*.*');
+		const root = base ? this.resolveUriToPath(base) : this.rootPath;
+		const baseUri = path2uri('', normalizeDir(root)) + '/';
 		const files = await new Promise<string[]>((resolve, reject) => {
-			glob(pattern, { nodir: true }, (err, matches) => err ? reject(err) : resolve(matches));
+			glob('*', { cwd: root, nodir: true, matchBase: true }, (err, matches) => err ? reject(err) : resolve(matches));
 		});
-		return iterate(files).map(file => path2uri('', file));
+		return iterate(files).map(file => baseUri + file);
 	}
 
 	async getTextDocumentContent(uri: string): Promise<string> {
