@@ -22,9 +22,12 @@ describe('fs.ts', () => {
 			});
 			baseUri = path2uri('', temporaryDir) + '/';
 			await fs.mkdir(path.join(temporaryDir, 'foo'));
+			await fs.mkdir(path.join(temporaryDir, '@types'));
+			await fs.mkdir(path.join(temporaryDir, '@types', 'diff'));
 			await fs.writeFile(path.join(temporaryDir, 'tweedledee'), 'hi');
 			await fs.writeFile(path.join(temporaryDir, 'tweedledum'), 'bye');
 			await fs.writeFile(path.join(temporaryDir, 'foo', 'bar.ts'), 'baz');
+			await fs.writeFile(path.join(temporaryDir, '@types', 'diff', 'index.d.ts'), 'baz');
 			fileSystem = new LocalFileSystem(toUnixPath(temporaryDir));
 		});
 		after(async () => {
@@ -38,7 +41,8 @@ describe('fs.ts', () => {
 				assert.sameMembers(iterate(await fileSystem.getWorkspaceFiles()).toArray(), [
 					baseUri + 'tweedledee',
 					baseUri + 'tweedledum',
-					baseUri + 'foo/bar.ts'
+					baseUri + 'foo/bar.ts',
+					baseUri + '%40types/diff/index.d.ts'
 				]);
 			});
 			it('should return all files under specific root', async () => {
