@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 import { camelCase, omit } from 'lodash';
 import { FORMAT_TEXT_MAP, Span, Tracer } from 'opentracing';
+import { inspect } from 'util';
 import { ErrorCodes, Message, MessageWriter, StreamMessageReader } from 'vscode-jsonrpc';
 import { isNotificationMessage, isRequestMessage, ResponseMessage } from 'vscode-jsonrpc/lib/messages';
 import { Logger, NoopLogger } from './logging';
@@ -38,6 +39,7 @@ export class MessageEmitter extends EventEmitter {
 		reader.onClose(() => {
 			this.emit('close');
 		});
+		this.setMaxListeners(Infinity);
 	}
 
 	on(event: 'message', listener: (message: Message) => void): this;
@@ -67,16 +69,16 @@ export function registerLanguageHandler(
 	messageEmitter.on('message', async message => {
 		logger.log('-->', message);
 		// Ignore responses
-		if (!isRequestMessage(message) || !isNotificationMessage(message)) {
+		if (!isRequestMessage(message) && !isNotificationMessage(message)) {
 			return;
 		}
-		// If message has tracing metadata, extract the span context and create a span for the method call
+		// If message is request and has tracing metadata, extract the span context and create a span for the method call
 		let span: Span | undefined;
-		if (hasMeta(message)) {
+		if (hasMeta(message) && isRequestMessage(message)) {
 			const context = tracer.extract(FORMAT_TEXT_MAP, message.meta);
 			if (context) {
-				span = tracer.startSpan(message.method, { childOf: context });
-				span.setTag('params', message.params);
+				span = tracer.startSpan('Handle ' + message.method, { childOf: context });
+				span.setTag('params', inspect(message.params));
 			}
 		}
 		const method = camelCase(message.method);
@@ -103,6 +105,11 @@ export function registerLanguageHandler(
 				} as ResponseMessage);
 			}
 		} catch (err) {
+			if (span) {
+				// Set error on span
+				span.setTag('error', true);
+				span.log({ 'event': 'error', 'error.object': err });
+			}
 			// If request, send response with error
 			if (isRequestMessage(message)) {
 				messageWriter.write({
@@ -114,6 +121,11 @@ export function registerLanguageHandler(
 						data: omit(err, ['message', 'code'])
 					}
 				} as ResponseMessage);
+			}
+		} finally {
+			if (span) {
+				// Finish span
+				span.finish();
 			}
 		}
 	});
