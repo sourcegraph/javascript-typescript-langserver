@@ -63,7 +63,9 @@ export class LocalFileSystem implements FileSystem {
 	}
 
 	async getWorkspaceFiles(base?: string): Promise<Iterable<string>> {
-		const root = this.resolveUriToPath(base || this.rootPath);
+		// alexsaveliev: even if no base provided, still need to call resolveUriToPath
+		// which may be overloaded
+		const root = this.resolveUriToPath(base || path2uri('', this.rootPath));
 		const baseUri = path2uri('', normalizeDir(root)) + '/';
 		const files = await new Promise<string[]>((resolve, reject) => {
 			glob('*', { cwd: root, nodir: true, matchBase: true }, (err, matches) => err ? reject(err) : resolve(matches));
