@@ -27,12 +27,14 @@ export interface RemoteLanguageClientOptions {
  */
 export class RemoteLanguageClient {
 
-	/**
-	 * The next request ID to use
-	 */
+	/** The next request ID to use */
 	private idCounter = 1;
 
+	/** Whether to log all messages or not */
+	private logMessages: boolean;
+
 	private logger: Logger;
+
 
 	/**
 	 * @param input MessageEmitter to listen on for responses
@@ -40,6 +42,7 @@ export class RemoteLanguageClient {
 	 */
 	constructor(private input: MessageEmitter, private output: MessageWriter, options: RemoteLanguageClientOptions = {}) {
 		this.logger = options.logger || new NoopLogger();
+		this.logMessages = !!options.logMessages;
 	}
 
 	/**
@@ -54,7 +57,9 @@ export class RemoteLanguageClient {
 			// Generate a request ID
 			const id = this.idCounter++;
 			const message: RequestMessage = { jsonrpc: '2.0', method, id, params };
-			this.logger.log('<--', message);
+			if (this.logMessages) {
+				this.logger.log('<--', message);
+			}
 			// Send request
 			this.output.write(message);
 			let receivedResponse = false;
@@ -93,7 +98,9 @@ export class RemoteLanguageClient {
 	 */
 	private notify(method: string, params: any[] | { [attr: string]: any }): void {
 		const message: NotificationMessage = { jsonrpc: '2.0', method, params };
-		this.logger.log('<--', message);
+		if (this.logMessages) {
+			this.logger.log('<--', message);
+		}
 		this.output.write(message);
 	}
 

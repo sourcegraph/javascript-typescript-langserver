@@ -109,27 +109,29 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 			} as ResponseMessage);
 			return;
 		}
-		// If message is request and has tracing metadata, extract the span context and create a span for the method call
-		let span = new Span();
-		if (hasMeta(message) && isRequestMessage(message)) {
-			const context = tracer.extract(FORMAT_TEXT_MAP, message.meta);
-			if (context) {
-				span = tracer.startSpan('Handle ' + message.method, { childOf: context });
-				span.setTag('params', inspect(message.params));
-			}
-		}
 		const method = camelCase(message.method);
-		if (isRequestMessage(message) && typeof (handler as any)[method] !== 'function') {
-			// Method not implemented
-			messageWriter.write({
-				jsonrpc: '2.0',
-				id: message.id,
-				error: {
-					code: ErrorCodes.MethodNotFound,
-					message: `Method ${method} not implemented`
+		let span = new Span();
+		if (isRequestMessage(message)) {
+			// If message is request and has tracing metadata, extract the span context and create a span for the method call
+			if (hasMeta(message)) {
+				const context = tracer.extract(FORMAT_TEXT_MAP, message.meta);
+				if (context) {
+					span = tracer.startSpan('Handle ' + message.method, { childOf: context });
+					span.setTag('params', inspect(message.params));
 				}
-			} as ResponseMessage);
-			return;
+			}
+			if (typeof (handler as any)[method] !== 'function') {
+				// Method not implemented
+				messageWriter.write({
+					jsonrpc: '2.0',
+					id: message.id,
+					error: {
+						code: ErrorCodes.MethodNotFound,
+						message: `Method ${method} not implemented`
+					}
+				} as ResponseMessage);
+				return;
+			}
 		}
 		// Call handler method with params and span
 		const returnValue = (handler as any)[method](message.params, span);
