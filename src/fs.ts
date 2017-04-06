@@ -1,9 +1,10 @@
 import * as fs from 'mz/fs';
 import * as path from 'path';
 import { CancellationToken } from './cancellation';
-import { LanguageClientHandler } from './lang-handler';
+import { RemoteLanguageClient } from './lang-handler';
 import glob = require('glob');
 import iterate from 'iterare';
+import { Span } from 'opentracing';
 import Semaphore from 'semaphore-async-await';
 import { InMemoryFileSystem } from './project-manager';
 import { normalizeDir, path2uri, toUnixPath, uri2path } from './util';
@@ -28,22 +29,22 @@ export interface FileSystem {
 
 export class RemoteFileSystem implements FileSystem {
 
-	constructor(private client: LanguageClientHandler) {}
+	constructor(private client: RemoteLanguageClient) {}
 
 	/**
 	 * The files request is sent from the server to the client to request a list of all files in the workspace or inside the directory of the base parameter, if given.
 	 * A language server can use the result to index files by filtering and doing a content request for each text document of interest.
 	 */
-	async getWorkspaceFiles(base?: string, token = CancellationToken.None): Promise<Iterable<string>> {
-		return iterate(await this.client.getWorkspaceFiles({ base }, token))
+	async getWorkspaceFiles(base?: string): Promise<Iterable<string>> {
+		return iterate(await this.client.workspaceXfiles({ base }))
 			.map(textDocument => textDocument.uri);
 	}
 
 	/**
 	 * The content request is sent from the server to the client to request the current content of any text document. This allows language servers to operate without accessing the file system directly.
 	 */
-	async getTextDocumentContent(uri: string, token = CancellationToken.None): Promise<string> {
-		const textDocument = await this.client.getTextDocumentContent({ textDocument: { uri } }, token);
+	async getTextDocumentContent(uri: string): Promise<string> {
+		const textDocument = await this.client.textDocumentXcontent({ textDocument: { uri } });
 		return textDocument.text;
 	}
 }
@@ -105,8 +106,9 @@ export class FileSystemUpdater {
 	 * Fetches the file content for the given URI and adds the content to the in-memory file system
 	 *
 	 * @param uri URI of the file to fetch
+	 * @param childOf A parent span for tracing
 	 */
-	async fetch(uri: string): Promise<void> {
+	async fetch(uri: string, childOf = new Span()): Promise<void> {
 		// Limit concurrent fetches
 		const promise = this.concurrencyLimit.execute(async () => {
 			try {
@@ -127,16 +129,30 @@ export class FileSystemUpdater {
 	 * This function cannot be cancelled because multiple callers get the result of the same operation.
 	 *
 	 * @param uri URI of the file to ensure
+	 * @param childOf A parent span for tracing
 	 */
-	ensure(uri: string): Promise<void> {
-		return this.fetches.get(uri) || this.fetch(uri);
+	async ensure(uri: string, childOf = new Span()): Promise<void> {
+		const span = childOf.tracer().startSpan('Ensure file content', { childOf });
+		span.addTags({ uri });
+		try {
+			return await (this.fetches.get(uri) || this.fetch(uri, span));
+		} catch (err) {
+			span.setTag('error', true);
+			span.log({ 'event': 'error', 'error.object': err });
+			throw err;
+		} finally {
+			span.finish();
+		}
 	}
 
 	/**
 	 * Fetches the file/directory structure for the given directory from the remote file system and saves it in the in-memory file system
+	 *
+	 * @param childOf A parent span for tracing
 	 */
-	fetchStructure(): Promise<void> {
+	fetchStructure(childOf = new Span()): Promise<void> {
 		const promise = (async () => {
+			const span = childOf.tracer().startSpan('Fetch workspace structure', { childOf });
 			try {
 				const uris = await this.remoteFs.getWorkspaceFiles();
 				for (const uri of uris) {
@@ -144,7 +160,11 @@ export class FileSystemUpdater {
 				}
 			} catch (err) {
 				this.structureFetch = undefined;
+				span.setTag('error', true);
+				span.log({ 'event': 'error', 'error.object': err });
 				throw err;
+			} finally {
+				span.finish();
 			}
 		})();
 		this.structureFetch = promise;
@@ -154,9 +174,20 @@ export class FileSystemUpdater {
 	/**
 	 * Returns a promise that is resolved as soon as the file/directory structure for the given directory has been synced
 	 * from the remote file system to the in-memory file system (at least once)
+	 *
+	 * @param childOf A parent span for tracing
 	 */
-	ensureStructure() {
-		return this.structureFetch || this.fetchStructure();
+	async ensureStructure(childOf = new Span()) {
+		const span = childOf.tracer().startSpan('Ensure workspace structure', { childOf });
+		try {
+			return await (this.structureFetch || this.fetchStructure(span));
+		} catch (err) {
+			span.setTag('error', true);
+			span.log({ 'event': 'error', 'error.object': err });
+			throw err;
+		} finally {
+			span.finish();
+		}
 	}
 
 	/**
