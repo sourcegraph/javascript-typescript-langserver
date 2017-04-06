@@ -20,12 +20,10 @@ program
 	.parse(process.argv);
 
 util.setStrict(program.strict);
-const lspPort = program.port || defaultLspPort;
-const clusterSize = program.cluster || numCPUs;
 
 const options: ServeOptions & TypeScriptServiceOptions = {
-	clusterSize,
-	lspPort,
+	clusterSize: program.cluster || numCPUs,
+	lspPort: program.port || defaultLspPort,
 	strict: program.strict,
 	logMessages: program.trace,
 	logger: program.logfile ? new FileLogger(program.logfile) : new StdioLogger()

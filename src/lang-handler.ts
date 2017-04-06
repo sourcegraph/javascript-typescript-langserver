@@ -13,6 +13,14 @@ import {
 	WorkspaceFilesParams
 } from './request-type';
 
+export interface RemoteLanguageClientOptions {
+
+	logger?: Logger;
+
+	/** Whether to log all JSON RPC messages to the passed logger */
+	logMessages?: boolean;
+}
+
 /**
  * Provides an interface to call methods on the remote client.
  * Methods are named after the camelCase version of the LSP method name
@@ -24,12 +32,15 @@ export class RemoteLanguageClient {
 	 */
 	private idCounter = 1;
 
+	private logger: Logger;
+
 	/**
 	 * @param input MessageEmitter to listen on for responses
 	 * @param output MessageWriter to write requests/notifications to
-	 * @param logger Logger all outgoing messages will be logged to (if set)
 	 */
-	constructor(private input: MessageEmitter, private output: MessageWriter, private logger: Logger = new NoopLogger()) {}
+	constructor(private input: MessageEmitter, private output: MessageWriter, options: RemoteLanguageClientOptions = {}) {
+		this.logger = options.logger || new NoopLogger();
+	}
 
 	/**
 	 * Sends a Request

@@ -21,11 +21,16 @@ program
 util.setStrict(program.strict);
 
 const logger = program.logfile ? new FileLogger(program.logfile) : new StderrLogger();
+const options = {
+	strict: program.strict,
+	logMessages: program.trace,
+	logger
+};
 
 const messageEmitter = new MessageEmitter(process.stdin);
 const messageWriter = new StreamMessageWriter(process.stdout);
-const remoteClient = new RemoteLanguageClient(messageEmitter, messageWriter);
-const service = new TypeScriptService(remoteClient, { strict: program.strict });
+const remoteClient = new RemoteLanguageClient(messageEmitter, messageWriter, options);
+const service = new TypeScriptService(remoteClient, options);
 
 // Add an exit notification handler to kill the process
 messageEmitter.on('message', message => {
@@ -35,9 +40,4 @@ messageEmitter.on('message', message => {
 	}
 });
 
-registerLanguageHandler(
-	messageEmitter,
-	messageWriter,
-	service,
-	program.trace ? logger : undefined
-);
+registerLanguageHandler(messageEmitter, messageWriter, service, options);

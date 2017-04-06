@@ -58,26 +58,34 @@ export class MessageEmitter extends EventEmitter {
 	}
 }
 
+export interface RegisterLanguageHandlerOptions {
+
+	/** A logger that all messages will be logged to */
+	logger?: Logger;
+
+ 	/** An opentracing-compatible tracer */
+	tracer?: Tracer;
+
+	/** Whether to log all messages */
+	logMessages?: boolean;
+}
+
 /**
  * Registers all method implementations of a LanguageHandler on a connection
  *
  * @param messageEmitter MessageEmitter to listen on
  * @param messageWriter MessageWriter to write to
  * @param handler TypeScriptService object that contains methods for all methods to be handled
- * @param logger A logger that all messages will be logged to
- * @param tracer An opentracing-compatible tracer
  */
-export function registerLanguageHandler(
-	messageEmitter: MessageEmitter,
-	messageWriter: MessageWriter,
-	handler: TypeScriptService,
-	logger: Logger = new NoopLogger(),
-	tracer = new Tracer()
-): void {
+export function registerLanguageHandler(messageEmitter: MessageEmitter, messageWriter: MessageWriter, handler: TypeScriptService, options: RegisterLanguageHandlerOptions = {}): void {
+	const logger = options.logger || new NoopLogger();
+	const tracer = options.tracer || new Tracer();
 	/** Tracks Subscriptions for results to unsubscribe them on $/cancelRequest */
 	const subscriptions = new Map<string | number, Subscription>();
 	messageEmitter.on('message', async message => {
-		logger.log('-->', message);
+		if (options.logMessages) {
+			logger.log('-->', message);
+		}
 		// Ignore responses
 		if (!isRequestMessage(message) && !isNotificationMessage(message)) {
 			return;

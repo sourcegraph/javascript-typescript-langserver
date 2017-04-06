@@ -58,15 +58,14 @@ export function serve(options: ServeOptions, createLangHandler = (remoteClient: 
 			cluster.fork();
 		}
 	} else {
-		logger.info(`Listening for incoming LSP connections on ${options.lspPort}`);
 		let counter = 1;
-		let server = net.createServer(socket => {
+		const server = net.createServer(socket => {
 			const id = counter++;
 			logger.log(`Connection ${id} accepted`);
 
 			const messageEmitter = new MessageEmitter(socket as NodeJS.ReadableStream);
 			const messageWriter = new StreamMessageWriter(socket);
-			const remoteClient = new RemoteLanguageClient(messageEmitter, messageWriter);
+			const remoteClient = new RemoteLanguageClient(messageEmitter, messageWriter, options);
 
 			// Add exit notification handler to close the socket on exit
 			messageEmitter.on('message', message => {
@@ -77,15 +76,11 @@ export function serve(options: ServeOptions, createLangHandler = (remoteClient: 
 				}
 			});
 
-			registerLanguageHandler(
-				messageEmitter,
-				messageWriter,
-				createLangHandler(remoteClient),
-				options.logMessages ? logger : undefined,
-				options.tracer
-			);
+			registerLanguageHandler(messageEmitter, messageWriter, createLangHandler(remoteClient), options);
 		});
 
-		server.listen(options.lspPort);
+		server.listen(options.lspPort, () => {
+			logger.info(`Listening for incoming LSP connections on ${options.lspPort}`);
+		});
 	}
 }
