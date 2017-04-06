@@ -133,9 +133,9 @@ export class FileSystemUpdater {
 	 */
 	async ensure(uri: string, childOf = new Span()): Promise<void> {
 		const span = childOf.tracer().startSpan('Ensure file content', { childOf });
-		span.addTags({ uri, fresh: !this.fetches.has(uri) });
+		span.addTags({ uri });
 		try {
-			return await (this.fetches.get(uri) || this.fetch(uri));
+			return await (this.fetches.get(uri) || this.fetch(uri, span));
 		} catch (err) {
 			span.setTag('error', true);
 			span.log({ 'event': 'error', 'error.object': err });
@@ -179,9 +179,8 @@ export class FileSystemUpdater {
 	 */
 	async ensureStructure(childOf = new Span()) {
 		const span = childOf.tracer().startSpan('Ensure workspace structure', { childOf });
-		span.setTag('fresh', !this.structureFetch);
 		try {
-			return await (this.structureFetch || this.fetchStructure());
+			return await (this.structureFetch || this.fetchStructure(span));
 		} catch (err) {
 			span.setTag('error', true);
 			span.log({ 'event': 'error', 'error.object': err });

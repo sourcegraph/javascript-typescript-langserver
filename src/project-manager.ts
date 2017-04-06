@@ -225,7 +225,6 @@ export class ProjectManager implements Disposable {
 		span.addTags({ uri });
 		try {
 			const existing = this.ensuredFilesForHoverAndDefinition.get(uri);
-			span.setTag('fresh', !existing);
 			if (existing) {
 				return existing;
 			}
