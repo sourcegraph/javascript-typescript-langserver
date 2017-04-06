@@ -1,79 +1,128 @@
-import { CancellationToken } from 'vscode-jsonrpc';
+import { Observable } from '@reactivex/rxjs';
+import { MessageWriter } from 'vscode-jsonrpc';
+import { isReponseMessage, Message, NotificationMessage, RequestMessage, ResponseMessage } from 'vscode-jsonrpc/lib/messages';
 import {
-	CompletionList,
-	DidChangeTextDocumentParams,
-	DidCloseTextDocumentParams,
-	DidOpenTextDocumentParams,
-	DidSaveTextDocumentParams,
-	DocumentSymbolParams,
-	Hover,
-	IConnection,
-	InitializeParams,
-	InitializeResult,
-	Location,
 	LogMessageParams,
-	ReferenceParams,
-	SymbolInformation,
 	TextDocumentIdentifier,
-	TextDocumentItem,
-	TextDocumentPositionParams
+	TextDocumentItem
 } from 'vscode-languageserver';
-
+import { MessageEmitter } from './connection';
+import { Logger, NoopLogger } from './logging';
 import {
-	DependencyReference,
-	PackageInformation,
-	ReferenceInformation,
-	SymbolLocationInformation,
 	TextDocumentContentParams,
-	WorkspaceFilesParams,
-	WorkspaceReferenceParams,
-	WorkspaceSymbolParams
+	WorkspaceFilesParams
 } from './request-type';
 
+export interface RemoteLanguageClientOptions {
+
+	logger?: Logger;
+
+	/** Whether to log all JSON RPC messages to the passed logger */
+	logMessages?: boolean;
+}
+
 /**
- * LanguageHandler handles LSP requests. It includes a handler method
- * for each LSP method that this language server supports. Each
- * handler method should be registered to the corresponding
- * registration method on IConnection.
+ * Provides an interface to call methods on the remote client.
+ * Methods are named after the camelCase version of the LSP method name
  */
-export interface LanguageHandler {
-	initialize(params: InitializeParams, token?: CancellationToken): Promise<InitializeResult>;
-	shutdown(): Promise<void>;
-	getDefinition(params: TextDocumentPositionParams, token?: CancellationToken): Promise<Location[]>;
-	getXdefinition(params: TextDocumentPositionParams, token?: CancellationToken): Promise<SymbolLocationInformation[]>;
-	getHover(params: TextDocumentPositionParams, token?: CancellationToken): Promise<Hover>;
-	getReferences(params: ReferenceParams, token?: CancellationToken): Promise<Location[]>;
-	getWorkspaceSymbols(params: WorkspaceSymbolParams, token?: CancellationToken): Promise<SymbolInformation[]>;
-	getDocumentSymbol(params: DocumentSymbolParams, token?: CancellationToken): Promise<SymbolInformation[]>;
-	getWorkspaceReference(params: WorkspaceReferenceParams, token?: CancellationToken): Promise<ReferenceInformation[]>;
-	getPackages(params?: {}, token?: CancellationToken): Promise<PackageInformation[]>;
-	getDependencies(params?: {}, token?: CancellationToken): Promise<DependencyReference[]>;
-	didOpen(params: DidOpenTextDocumentParams, token?: CancellationToken): Promise<void>;
-	didChange(params: DidChangeTextDocumentParams, token?: CancellationToken): Promise<void>;
-	didClose(params: DidCloseTextDocumentParams, token?: CancellationToken): Promise<void>;
-	didSave(params: DidSaveTextDocumentParams, token?: CancellationToken): Promise<void>;
-	getCompletions(params: TextDocumentPositionParams, token?: CancellationToken): Promise<CompletionList>;
-}
+export class RemoteLanguageClient {
 
-export interface LanguageClientHandler {
-	getTextDocumentContent(params: TextDocumentContentParams, token?: CancellationToken): Promise<TextDocumentItem>;
-	getWorkspaceFiles(params: WorkspaceFilesParams, token?: CancellationToken): Promise<TextDocumentIdentifier[]>;
-	logMessage(params: LogMessageParams): void;
-}
+	/** The next request ID to use */
+	private idCounter = 1;
 
-export class RemoteLanguageClient implements LanguageClientHandler {
+	/** Whether to log all messages or not */
+	private logMessages: boolean;
 
-	constructor(private connection: IConnection) {}
+	private logger: Logger;
 
-	getTextDocumentContent(params: TextDocumentContentParams, token = CancellationToken.None): Promise<TextDocumentItem> {
-		return Promise.resolve(this.connection.sendRequest('textDocument/xcontent', params, token));
+	/**
+	 * @param input MessageEmitter to listen on for responses
+	 * @param output MessageWriter to write requests/notifications to
+	 */
+	constructor(private input: MessageEmitter, private output: MessageWriter, options: RemoteLanguageClientOptions = {}) {
+		this.logger = options.logger || new NoopLogger();
+		this.logMessages = !!options.logMessages;
 	}
 
-	getWorkspaceFiles(params: WorkspaceFilesParams, token = CancellationToken.None): Promise<TextDocumentIdentifier[]> {
-		return Promise.resolve(this.connection.sendRequest('workspace/xfiles', params, token));
+	/**
+	 * Sends a Request
+	 *
+	 * @param method The method to call
+	 * @param params The params to pass to the method
+	 * @return Emits the value of the result field or the error
+	 */
+	private request(method: string, params: any[] | { [attr: string]: any }): Observable<any> {
+		return new Observable<any>(subscriber => {
+			// Generate a request ID
+			const id = this.idCounter++;
+			const message: RequestMessage = { jsonrpc: '2.0', method, id, params };
+			if (this.logMessages) {
+				this.logger.log('<--', message);
+			}
+			// Send request
+			this.output.write(message);
+			let receivedResponse = false;
+			// Subscribe to message events
+			const messageSub = Observable.fromEvent<Message>(this.input, 'message')
+				// Find response message with the correct ID
+				.filter(msg => isReponseMessage(msg) && msg.id === id)
+				.take(1)
+				// Emit result or error
+				.map((msg: ResponseMessage): any => {
+					receivedResponse = true;
+					if (msg.error) {
+						throw Object.assign(new Error(msg.error.message), msg.error);
+					}
+					return msg.result;
+				})
+				// Forward events to subscriber
+				.subscribe(subscriber);
+			// Handler for unsubscribe()
+			return () => {
+				// Unsubscribe message event subscription (removes listener)
+				messageSub.unsubscribe();
+				if (!receivedResponse) {
+					// Send LSP $/cancelRequest to client
+					this.notify('$/cancelRequest', { id });
+				}
+			};
+		});
 	}
 
-	logMessage(params: LogMessageParams): void {
-		this.connection.sendNotification('window/logMessage', params);
+	/**
+	 * Sends a Notification
+	 *
+	 * @param method The method to notify
+	 * @param params The params to pass to the method
+	 */
+	private notify(method: string, params: any[] | { [attr: string]: any }): void {
+		const message: NotificationMessage = { jsonrpc: '2.0', method, params };
+		if (this.logMessages) {
+			this.logger.log('<--', message);
+		}
+		this.output.write(message);
+	}
+
+	/**
+	 * The content request is sent from a server to a client to request the
+	 * current content of a text document identified by the URI
+	 */
+	textDocumentXcontent(params: TextDocumentContentParams): Promise<TextDocumentItem> {
+		return this.request('textDocument/xcontent', params).toPromise();
+	}
+
+	/**
+	 * Returns a list of all files in a directory
+	 */
+	workspaceXfiles(params: WorkspaceFilesParams): Promise<TextDocumentIdentifier[]> {
+		return this.request('workspace/xfiles', params).toPromise();
+	}
+
+	/**
+	 * The log message notification is sent from the server to the client to ask
+	 * the client to log a particular message.
+	 */
+	windowLogMessage(params: LogMessageParams): void {
+		this.notify('window/logMessage', params);
 	}
 }

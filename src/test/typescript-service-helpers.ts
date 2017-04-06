@@ -3,6 +3,7 @@ import * as ts from 'typescript';
 import { CancellationToken } from 'vscode-jsonrpc';
 import { CompletionItemKind, LogMessageParams, TextDocumentIdentifier, TextDocumentItem } from 'vscode-languageserver';
 import { SymbolKind } from 'vscode-languageserver-types';
+import { RemoteLanguageClient } from '../lang-handler';
 import { TextDocumentContentParams, WorkspaceFilesParams } from '../request-type';
 import { TypeScriptService, TypeScriptServiceFactory } from '../typescript-service';
 import chaiAsPromised = require('chai-as-promised');
@@ -29,7 +30,7 @@ export interface TestContext {
  */
 export const initializeTypeScriptService = (createService: TypeScriptServiceFactory, files: Map<string, string>) => async function (this: TestContext): Promise<void> {
 	this.service = createService({
-		getTextDocumentContent(params: TextDocumentContentParams, token?: CancellationToken): Promise<TextDocumentItem> {
+		textDocumentXcontent(params: TextDocumentContentParams, token?: CancellationToken): Promise<TextDocumentItem> {
 			if (!files.has(params.textDocument.uri)) {
 				return Promise.reject(new Error(`Text document ${params.textDocument.uri} does not exist`));
 			}
@@ -40,13 +41,13 @@ export const initializeTypeScriptService = (createService: TypeScriptServiceFact
 				languageId: ''
 			});
 		},
-		getWorkspaceFiles(params: WorkspaceFilesParams, token?: CancellationToken): Promise<TextDocumentIdentifier[]> {
+		workspaceXfiles(params: WorkspaceFilesParams, token?: CancellationToken): Promise<TextDocumentIdentifier[]> {
 			return Promise.resolve(Array.from(files.keys()).map(uri => ({ uri })));
 		},
-		logMessage(params: LogMessageParams): void {
+		windowLogMessage(params: LogMessageParams): void {
 			// noop
 		}
-	});
+	} as RemoteLanguageClient);
 	await this.service.initialize({
 		processId: process.pid,
 		rootUri: 'file:///',
@@ -95,9 +96,9 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		afterEach(<any> shutdownService);
 
-		describe('getDefinition()', <any> function (this: TestContext) {
+		describe('textDocumentDefinition()', <any> function (this: TestContext) {
 			specify('in same file', <any> async function (this: TestContext) {
-				const result = await this.service.getDefinition({
+				const result = await this.service.textDocumentDefinition({
 					textDocument: {
 						uri: 'file:///a.ts'
 					},
@@ -121,7 +122,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]);
 			});
 			specify('on keyword (non-null)', <any> async function (this: TestContext) {
-				const result = await this.service.getDefinition({
+				const result = await this.service.textDocumentDefinition({
 					textDocument: {
 						uri: 'file:///a.ts'
 					},
@@ -133,7 +134,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				assert.deepEqual(result, []);
 			});
 			specify('in other file', <any> async function (this: TestContext) {
-				const result = await this.service.getDefinition({
+				const result = await this.service.textDocumentDefinition({
 					textDocument: {
 						uri: 'file:///foo/c.ts'
 					},
@@ -157,9 +158,9 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]);
 			});
 		});
-		describe('getXdefinition()', <any> function (this: TestContext) {
+		describe('textDocumentXdefinition()', <any> function (this: TestContext) {
 			specify('on interface field reference', <any> async function (this: TestContext) {
-				const result = await this.service.getXdefinition({
+				const result = await this.service.textDocumentXdefinition({
 					textDocument: {
 						uri: 'file:///e.ts'
 					},
@@ -191,7 +192,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]);
 			});
 			specify('in same file', <any> async function (this: TestContext) {
-				const result = await this.service.getXdefinition({
+				const result = await this.service.textDocumentXdefinition({
 					textDocument: {
 						uri: 'file:///a.ts'
 					},
@@ -223,9 +224,9 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]);
 			});
 		});
-		describe('getHover()', <any> function (this: TestContext) {
+		describe('textDocumentHover()', <any> function (this: TestContext) {
 			specify('in same file', <any> async function (this: TestContext) {
-				const result = await this.service.getHover({
+				const result = await this.service.textDocumentHover({
 					textDocument: {
 						uri: 'file:///a.ts'
 					},
@@ -252,7 +253,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				});
 			});
 			specify('in other file', <any> async function (this: TestContext) {
-				const result = await this.service.getHover({
+				const result = await this.service.textDocumentHover({
 					textDocument: {
 						uri: 'file:///foo/c.ts'
 					},
@@ -279,7 +280,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				});
 			});
 			specify('over keyword (non-null)', <any> async function (this: TestContext) {
-				const result = await this.service.getHover({
+				const result = await this.service.textDocumentHover({
 					textDocument: {
 						uri: 'file:///a.ts'
 					},
@@ -291,7 +292,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				assert.deepEqual(result, { contents: [] });
 			});
 			specify('over non-existent file', <any> function (this: TestContext) {
-				return assert.isRejected(this.service.getHover({
+				return assert.isRejected(this.service.textDocumentHover({
 					textDocument: {
 						uri: 'file:///foo/a.ts'
 					},
@@ -327,9 +328,9 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		afterEach(<any> shutdownService);
 
-		describe('getDefinition()', <any> function (this: TestContext) {
+		describe('textDocumentDefinition()', <any> function (this: TestContext) {
 			specify('with tsd.d.ts', <any> async function (this: TestContext) {
-				const result = await this.service.getDefinition({
+				const result = await this.service.textDocumentDefinition({
 					textDocument: {
 						uri: 'file:///src/dir/index.ts'
 					},
@@ -354,7 +355,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			});
 			describe('on file in project root', <any> function (this: TestContext) {
 				specify('on import alias', <any> async function (this: TestContext) {
-					const result = await this.service.getDefinition({
+					const result = await this.service.textDocumentDefinition({
 						textDocument: {
 							uri: 'file:///a.ts'
 						},
@@ -378,7 +379,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					}]);
 				});
 				specify('on module name', <any> async function (this: TestContext) {
-					const result = await this.service.getDefinition({
+					const result = await this.service.textDocumentDefinition({
 						textDocument: {
 							uri: 'file:///a.ts'
 						},
@@ -414,8 +415,8 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		afterEach(<any> shutdownService);
 
-		specify('getDefinition()', <any> async function (this: TestContext) {
-			const result = await this.service.getDefinition({
+		specify('textDocumentDefinition()', <any> async function (this: TestContext) {
+			const result = await this.service.textDocumentDefinition({
 				textDocument: {
 					uri: 'file:///a.ts'
 				},
@@ -533,9 +534,9 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		afterEach(<any> shutdownService);
 
-		describe('getWorkspaceSymbols()', <any> function (this: TestContext) {
+		describe('workspaceSymbol()', <any> function (this: TestContext) {
 			specify('resolve, with package', <any> async function (this: TestContext) {
-				const result = await this.service.getWorkspaceSymbols({
+				const result = await this.service.workspaceSymbol({
 					symbol: { name: 'resolveCallback', package: { name: '@types/resolve' } },
 					limit: 10
 				});
@@ -558,7 +559,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]);
 			});
 			specify('resolve, with package, empty containerKind', <any> async function (this: TestContext) {
-				const result = await this.service.getWorkspaceSymbols({
+				const result = await this.service.workspaceSymbol({
 					symbol: { name: 'resolveCallback', containerKind: '', package: { name: '@types/resolve' } },
 					limit: 10
 				});
@@ -595,10 +596,10 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		afterEach(<any> shutdownService);
 
-		describe('getWorkspaceSymbols()', <any> function (this: TestContext) {
+		describe('workspaceSymbol()', <any> function (this: TestContext) {
 			describe('symbol query', <any> function (this: TestContext) {
 				specify('with package', <any> async function (this: TestContext) {
-					const result = await this.service.getWorkspaceSymbols({
+					const result = await this.service.workspaceSymbol({
 						symbol: { name: 'a', kind: 'class', package: { name: 'mypkg' } },
 						limit: 10
 					});
@@ -621,7 +622,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					}]);
 				});
 				specify('with package, with package version (ignored)', <any> async function (this: TestContext) {
-					const result = await this.service.getWorkspaceSymbols({
+					const result = await this.service.workspaceSymbol({
 						symbol: { name: 'a', kind: 'class', package: { name: 'mypkg', version: '203940234' } },
 						limit: 10
 					});
@@ -644,7 +645,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					}]);
 				});
 				specify('for a', <any> async function (this: TestContext) {
-					const result = await this.service.getWorkspaceSymbols({
+					const result = await this.service.workspaceSymbol({
 						symbol: { name: 'a' },
 						limit: 10
 					});
@@ -669,7 +670,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			});
 			describe('text query', <any> function (this: TestContext) {
 				specify('for a', <any> async function (this: TestContext) {
-					const result = await this.service.getWorkspaceSymbols({
+					const result = await this.service.workspaceSymbol({
 						query: 'a',
 						limit: 10
 					});
@@ -692,7 +693,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					}]);
 				});
 				specify('with wrong package', <any> async function (this: TestContext) {
-					const result = await this.service.getWorkspaceSymbols({
+					const result = await this.service.workspaceSymbol({
 						symbol: { name: 'a', kind: 'class', package: { name: 'not-mypkg' } },
 						limit: 10
 					});
@@ -701,9 +702,9 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			});
 		});
 
-		describe('getWorkspaceReference()', <any> function (this: TestContext) {
+		describe('workspaceXreferences()', <any> function (this: TestContext) {
 			specify('"foo"', <any> async function (this: TestContext) {
-				const result = await this.service.getWorkspaceReference({ query: { name: 'foo', kind: 'method', containerName: 'a' } });
+				const result = await this.service.workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' } });
 				assert.deepEqual(result, [{
 					symbol: {
 						containerKind: '',
@@ -727,7 +728,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]);
 			});
 			specify('"foo", with hint', <any> async function (this: TestContext) {
-				const result = await this.service.getWorkspaceReference({ query: { name: 'foo', kind: 'method', containerName: 'a' }, hints: { dependeePackageName: 'mypkg' } });
+				const result = await this.service.workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' }, hints: { dependeePackageName: 'mypkg' } });
 				assert.deepEqual(result, [{
 					symbol: {
 						containerKind: '',
@@ -751,11 +752,11 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]);
 			});
 			specify('"foo", with hint, not found', <any> async function (this: TestContext) {
-				const result = await this.service.getWorkspaceReference({ query: { name: 'foo', kind: 'method', containerName: 'a' }, hints: { dependeePackageName: 'NOT-mypkg' } });
+				const result = await this.service.workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' }, hints: { dependeePackageName: 'NOT-mypkg' } });
 				assert.deepEqual(result, []);
 			});
 			specify('dependency reference', <any> async function (this: TestContext) {
-				const result = await this.service.getWorkspaceReference({ query: { name: 'x', containerName: '' } });
+				const result = await this.service.workspaceXreferences({ query: { name: 'x', containerName: '' } });
 				assert.deepEqual(result, [{
 					reference: {
 						range: {
@@ -779,7 +780,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]);
 			});
 			specify('all references', <any> async function (this: TestContext) {
-				const result = await this.service.getWorkspaceReference({ query: {} });
+				const result = await this.service.workspaceXreferences({ query: {} });
 				assert.deepEqual(result, [
 					{
 						symbol: {
@@ -1016,9 +1017,9 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		afterEach(<any> shutdownService);
 
-		describe('getDependencies()', <any> function (this: TestContext) {
+		describe('workspaceXdependencies()', <any> function (this: TestContext) {
 			it('should account for all dependencies', <any> async function (this: TestContext) {
-				const result = await this.service.getDependencies();
+				const result = await this.service.workspaceXdependencies();
 				assert.deepEqual(result, [
 					{ attributes: { name: 'babel-code-frame', version: '^6.16.0' }, hints: { dependeePackageName: 'tslint' } },
 					{ attributes: { name: 'findup-sync', version: '~0.3.0' }, hints: { dependeePackageName: 'tslint' } },
@@ -1033,9 +1034,9 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				]);
 			});
 		});
-		describe('getPackages()', <any> function (this: TestContext) {
+		describe('workspaceXpackages()', <any> function (this: TestContext) {
 			it('should accournt for all packages', <any> async function (this: TestContext) {
-				const result = await this.service.getPackages();
+				const result = await this.service.workspaceXpackages();
 				assert.deepEqual(result, [{
 					package: {
 						name: 'tslint',
@@ -1075,7 +1076,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		afterEach(<any> shutdownService);
 
 		specify('type of parameters should be any[]', <any> async function (this: TestContext) {
-			const result = await this.service.getHover({
+			const result = await this.service.textDocumentHover({
 				textDocument: {
 					uri: 'file:///a.ts'
 				},
@@ -1134,7 +1135,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}
 			};
 
-			assert.deepEqual(await this.service.getHover(hoverParams), {
+			assert.deepEqual(await this.service.textDocumentHover(hoverParams), {
 				range,
 				contents: [{
 					language: 'typescript',
@@ -1142,7 +1143,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]
 			});
 
-			await this.service.didOpen({
+			await this.service.textDocumentDidOpen({
 				textDocument: {
 					uri: 'file:///a.ts',
 					languageId: 'typescript',
@@ -1151,7 +1152,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}
 			});
 
-			assert.deepEqual(await this.service.getHover(hoverParams), {
+			assert.deepEqual(await this.service.textDocumentHover(hoverParams), {
 				range,
 				contents: [{
 					language: 'typescript',
@@ -1159,7 +1160,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]
 			});
 
-			await this.service.didChange({
+			await this.service.textDocumentDidChange({
 				textDocument: {
 					uri: 'file:///a.ts',
 					version: 2
@@ -1169,7 +1170,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]
 			});
 
-			assert.deepEqual(await this.service.getHover(hoverParams), {
+			assert.deepEqual(await this.service.textDocumentHover(hoverParams), {
 				range,
 				contents: [{
 					language: 'typescript',
@@ -1177,13 +1178,13 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]
 			});
 
-			await this.service.didClose({
+			await this.service.textDocumentDidClose({
 				textDocument: {
 					uri: 'file:///a.ts'
 				}
 			});
 
-			assert.deepEqual(await this.service.getHover(hoverParams), {
+			assert.deepEqual(await this.service.textDocumentHover(hoverParams), {
 				range,
 				contents: [{
 					language: 'typescript',
@@ -1211,9 +1212,9 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		afterEach(<any> shutdownService);
 
-		describe('getDefinition()', <any> function (this: TestContext) {
+		describe('textDocumentDefinition()', <any> function (this: TestContext) {
 			it('should resolve symbol imported with tripe-slash reference', <any> async function (this: TestContext) {
-				const result = await this.service.getDefinition({
+				const result = await this.service.textDocumentDefinition({
 					textDocument: {
 						uri: 'file:///a.ts'
 					},
@@ -1245,7 +1246,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]);
 			});
 			it('should resolve symbol imported with import statement', <any> async function (this: TestContext) {
-				const result = await this.service.getDefinition({
+				const result = await this.service.textDocumentDefinition({
 					textDocument: {
 						uri: 'file:///c.ts'
 					},
@@ -1269,7 +1270,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]);
 			});
 			it('should resolve definition with missing reference', <any> async function (this: TestContext) {
-				const result = await this.service.getDefinition({
+				const result = await this.service.textDocumentDefinition({
 					textDocument: {
 						uri: 'file:///missing/a.ts'
 					},
@@ -1296,7 +1297,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				// This test passes only because we expect no response from LSP server
 				// for definition located in file references with depth 3 or more (a -> b -> c -> d (...))
 				// This test will fail once we'll increase (or remove) depth limit
-				const result = await this.service.getDefinition({
+				const result = await this.service.textDocumentDefinition({
 					textDocument: {
 						uri: 'file:///deeprefs/a.ts'
 					},
@@ -1334,9 +1335,9 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		afterEach(<any> shutdownService);
 
-		describe('getHover()', <any> function (this: TestContext) {
+		describe('textDocumentHover()', <any> function (this: TestContext) {
 			it('should load local library file', <any> async function (this: TestContext) {
-				const result = await this.service.getHover({
+				const result = await this.service.textDocumentHover({
 					textDocument: {
 						uri: 'file:///a.ts'
 					},
@@ -1387,7 +1388,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				});
 			});
 			it('should resolve TS libraries to github URL', <any> async function (this: TestContext) {
-				assert.deepEqual(await this.service.getDefinition({
+				assert.deepEqual(await this.service.textDocumentDefinition({
 					textDocument: {
 						uri: 'file:///a.ts'
 					},
@@ -1421,7 +1422,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					}
 				}]);
 
-				assert.deepEqual(await this.service.getDefinition({
+				assert.deepEqual(await this.service.textDocumentDefinition({
 					textDocument: {
 						uri: 'file:///a.ts'
 					},
@@ -1446,7 +1447,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		});
 	});
 
-	describe('getCompletions()', <any> function (this: TestContext) {
+	describe('textDocumentCompletion()', <any> function (this: TestContext) {
 		beforeEach(<any> initializeTypeScriptService(createService, new Map([
 			['file:///a.ts', [
 				'class A {',
@@ -1483,7 +1484,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		afterEach(<any> shutdownService);
 
 		it('produces completions in the same file', <any> async function (this: TestContext) {
-			const result = await this.service.getCompletions({
+			const result = await this.service.textDocumentCompletion({
 				textDocument: {
 					uri: 'file:///a.ts'
 				},
@@ -1525,7 +1526,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			]);
 		});
 		it('produces completions for imported symbols', <any> async function (this: TestContext) {
-			const result = await this.service.getCompletions({
+			const result = await this.service.textDocumentCompletion({
 				textDocument: {
 					uri: 'file:///uses-import.ts'
 				},
@@ -1546,7 +1547,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			});
 		});
 		it('produces completions for referenced symbols', <any> async function (this: TestContext) {
-			const result = await this.service.getCompletions({
+			const result = await this.service.textDocumentCompletion({
 				textDocument: {
 					uri: 'file:///uses-reference.ts'
 				},
@@ -1567,7 +1568,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			});
 		});
 		it('produces completions for empty files', <any> async function (this: TestContext) {
-			const result = await this.service.getCompletions({
+			const result = await this.service.textDocumentCompletion({
 				textDocument: {
 					uri: 'file:///empty.ts'
 				},
@@ -1593,7 +1594,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		afterEach(<any> shutdownService);
 
 		it('should accept files with TypeScript keywords in path', <any> async function (this: TestContext) {
-			const result = await this.service.getHover({
+			const result = await this.service.textDocumentHover({
 				textDocument: {
 					uri: 'file:///keywords-in-path/class/constructor/a.ts'
 				},
@@ -1620,7 +1621,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			});
 		});
 		it('should accept files with special characters in path', <any> async function (this: TestContext) {
-			const result = await this.service.getHover({
+			const result = await this.service.textDocumentHover({
 				textDocument: {
 					uri: 'file:///special-characters-in-path/@foo/b.ts'
 				},
@@ -1647,7 +1648,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			});
 		});
 		it('should handle Windows-style paths in triple slash references', <any> async function (this: TestContext) {
-			const result = await this.service.getDefinition({
+			const result = await this.service.textDocumentDefinition({
 				textDocument: {
 					uri: 'file:///windows/app/master.ts'
 				},
