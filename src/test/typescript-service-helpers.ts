@@ -1495,12 +1495,12 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					character: 0
 				}
 			});
-			assert.equal(result.signatures.length, 0);
 			// TODO: activeSignature and activeParameter should allow undefined according to protocol.md
-			// assert.isUndefined(result.activeSignature);
-			// assert.isUndefined(result.activeParameter);
-			assert.equal(result.activeSignature, 0);
-			assert.equal(result.activeParameter, 0);
+			assert.deepEqual(result, {
+				signatures: [],
+				activeSignature: 0,
+				activeParameter: 0
+			});
 		});
 
 		it('Provides signature help with parameters in the same file', <any> async function (this: TestContext) {
@@ -1513,22 +1513,23 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					character: 11
 				}
 			});
-			assert.equal(result.signatures.length, 1);
-			const activeSignature = result.signatures[result.activeSignature];
-			assert.equal(result.activeSignature, 0);
-			assert.equal(result.activeParameter, 1);
-
-			assert.equal(activeSignature.label, 'baz(num, text): string');
-			assert.equal(activeSignature.documentation, 'The Baz function');
-			assert.isArray(activeSignature.parameters);
-			if (activeSignature.parameters) {
-				assert.equal(activeSignature.parameters.length, 2);
-				assert.equal(activeSignature.parameters[0].label, 'num');
-				assert.equal(activeSignature.parameters[0].documentation, 'Number parameter');
-
-				assert.equal(activeSignature.parameters[1].label, 'text');
-				assert.equal(activeSignature.parameters[1].documentation, 'Text parameter');
-			}
+			assert.deepEqual(result, {
+				signatures: [
+					{
+						label: 'baz(num, text): string',
+						documentation: 'The Baz function',
+						parameters: [{
+							label: 'num',
+							documentation: 'Number parameter'
+						}, {
+							label: 'text',
+							documentation: 'Text parameter'
+						}]
+					}
+				],
+				activeSignature: 0,
+				activeParameter: 1
+			});
 		});
 
 		it('Provides signature help from imported symbols', <any> async function (this: TestContext) {
@@ -1543,15 +1544,11 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			});
 			assert.equal(result.signatures.length, 1);
 			const activeSignature = result.signatures[result.activeSignature];
-			assert.equal(result.activeSignature, 0);
-			assert.equal(result.activeParameter, 0);
-
-			assert.equal(activeSignature.label, 'd(): void');
-			assert.equal(activeSignature.documentation, 'd doc');
-			assert.isDefined(activeSignature.parameters);
-			if (activeSignature.parameters) {
-				assert.equal(activeSignature.parameters.length, 0);
-			}
+			assert.deepEqual(activeSignature, {
+				label: 'd(): void',
+				documentation: 'd doc',
+				parameters: []
+			});
 		});
 
 	});
