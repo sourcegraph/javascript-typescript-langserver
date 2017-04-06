@@ -91,11 +91,6 @@ export class TypeScriptService {
 	 */
 	protected updater: FileSystemUpdater;
 
-	/**
-	 * Set to true when shutdown is called
-	 */
-	shutdownCalled = false;
-
 	constructor(protected client: RemoteLanguageClient, protected options: TypeScriptServiceOptions = {}) {
 		this.logger = new LSPLogger(client);
 	}
@@ -149,7 +144,6 @@ export class TypeScriptService {
 	}
 
 	async shutdown(params = {}, span = new Span()): Promise<void> {
-		this.shutdownCalled = true;
 		this.projectManager.dispose();
 	}
 

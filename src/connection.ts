@@ -50,10 +50,19 @@ export class MessageEmitter extends EventEmitter {
 		this.setMaxListeners(Infinity);
 	}
 
+	/* istanbul ignore next */
 	on(event: 'message', listener: (message: Message) => void): this;
 	on(event: 'error', listener: (error: Error) => void): this;
 	on(event: 'close', listener: () => void): this;
 	on(event: string, listener: Function): this {
+		return super.on(event, listener);
+	}
+
+	/* istanbul ignore next */
+	once(event: 'message', listener: (message: Message) => void): this;
+	once(event: 'error', listener: (error: Error) => void): this;
+	once(event: 'close', listener: () => void): this;
+	once(event: string, listener: Function): this {
 		return super.on(event, listener);
 	}
 }
@@ -82,6 +91,8 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 	const tracer = options.tracer || new Tracer();
 	/** Tracks Subscriptions for results to unsubscribe them on $/cancelRequest */
 	const subscriptions = new Map<string | number, Subscription>();
+	/** Whether shutdown was already called by the client */
+	let shutdownCalled = false;
 	messageEmitter.on('message', async message => {
 		if (options.logMessages) {
 			logger.log('-->', message);
@@ -90,7 +101,9 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 		if (!isRequestMessage(message) && !isNotificationMessage(message)) {
 			return;
 		}
-		if (message.method === '$/cancelRequest' && isNotificationMessage(message)) {
+		if (message.method === 'shutdown') {
+			shutdownCalled = true;
+		} else if (message.method === '$/cancelRequest' && isNotificationMessage(message)) {
 			// Cancel another request by unsubscribing from the Observable
 			const subscription = subscriptions.get(message.params.id);
 			if (!subscription) {
@@ -191,17 +204,19 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 		}
 	});
 	// On stream close, shutdown handler
-	messageEmitter.on('close', () => {
-		if (!handler.shutdownCalled) {
+	messageEmitter.once('close', () => {
+		if (!shutdownCalled) {
+			shutdownCalled = true;
 			logger.error('Stream was closed without shutdown notification');
-			Observable.from(handler.shutdown()).subscribe(undefined, err => logger.error('Shutdown:', err));
+			handler.shutdown();
 		}
 	});
 	// On stream error, shutdown handler
-	messageEmitter.on('error', err => {
-		if (!handler.shutdownCalled) {
+	messageEmitter.once('error', err => {
+		if (!shutdownCalled) {
+			shutdownCalled = true;
 			logger.error('Stream:', err);
-			Observable.from(handler.shutdown()).subscribe(undefined, err => logger.error('Shutdown:', err));
+			handler.shutdown();
 		}
 	});
 }
