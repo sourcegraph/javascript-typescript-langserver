@@ -231,7 +231,7 @@ export class ProjectManager implements Disposable {
 				try {
 					await this.ensureModuleStructure();
 					// Include dependencies up to depth 30
-					await this.ensureTransitiveFileDependencies(util.uri2path(uri), 30, undefined, span);
+					await this.ensureTransitiveFileDependencies(uri, 30, undefined, span);
 				} catch (err) {
 					this.ensuredFilesForHoverAndDefinition.delete(uri);
 					throw err;
@@ -326,24 +326,25 @@ export class ProjectManager implements Disposable {
 	 * - files referenced by the given file
 	 * - files included by the given file
 	 *
-	 * @param filePaths files to process (both absolute and relative paths are accepted)
+	 * @param uri File to process
 	 * @param maxDepth stop collecting when reached given recursion level
 	 * @param seen tracks visited files to avoid cycles
 	 * @param childOf OpenTracing parent span for tracing
 	 */
-	private async ensureTransitiveFileDependencies(filePath: string, maxDepth: number, seen = new Set<string>(), childOf = new Span()): Promise<void> {
+	private async ensureTransitiveFileDependencies(uri: string, maxDepth: number, seen = new Set<string>(), childOf = new Span()): Promise<void> {
 		const span = childOf.tracer().startSpan('Ensure file imports', { childOf });
-		span.addTags({ filePath, maxDepth });
+		span.addTags({ uri, maxDepth });
 		try {
-			seen.add(filePath);
+			seen.add(uri);
 
-			await this.updater.ensure(util.path2uri(this.rootPath, filePath), span);
+			await this.updater.ensure(uri, span);
 
 			if (maxDepth > 0) {
+				const filePath = util.uri2path(uri);
 				const importPaths = new Set<string>();
 				const config = this.getConfiguration(filePath);
 				await config.ensureBasicFiles();
-				const contents = this.getFs().readFile(filePath);
+				const contents = this.localFs.getContent(uri);
 				const info = ts.preProcessFile(contents, true, true);
 				const compilerOpt = config.getHost().getCompilationSettings();
 				for (const imp of info.importedFiles) {

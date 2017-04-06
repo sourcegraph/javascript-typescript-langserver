@@ -159,7 +159,7 @@ export class TypeScriptService {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
-		await this.projectManager.ensureFilesForHoverAndDefinition(uri, span);
+		await this.projectManager.ensureFilesForHoverAndDefinition(params.textDocument.uri, span);
 
 		const fileName: string = util.uri2path(uri);
 		const configuration = this.projectManager.getConfiguration(fileName);
@@ -194,7 +194,7 @@ export class TypeScriptService {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
-		await this.projectManager.ensureFilesForHoverAndDefinition(uri, span);
+		await this.projectManager.ensureFilesForHoverAndDefinition(params.textDocument.uri, span);
 
 		const fileName: string = util.uri2path(uri);
 		const configuration = this.projectManager.getConfiguration(fileName);
@@ -233,7 +233,7 @@ export class TypeScriptService {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
-		await this.projectManager.ensureFilesForHoverAndDefinition(uri, span);
+		await this.projectManager.ensureFilesForHoverAndDefinition(params.textDocument.uri, span);
 
 		const fileName: string = util.uri2path(uri);
 		const configuration = this.projectManager.getConfiguration(fileName);
@@ -263,12 +263,10 @@ export class TypeScriptService {
 	}
 
 	async textDocumentReferences(params: ReferenceParams, span = new Span()): Promise<Location[]> {
-		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		const line = params.position.line;
-		const column = params.position.character;
-		const fileName: string = util.uri2path(uri);
 
-		await this.projectManager.ensureFilesForReferences(uri);
+		const fileName = util.uri2path(params.textDocument.uri);
+
+		await this.projectManager.ensureFilesForReferences(params.textDocument.uri);
 
 		const configuration = this.projectManager.getConfiguration(fileName);
 		await configuration.ensureAllFiles();
@@ -278,7 +276,7 @@ export class TypeScriptService {
 			return [];
 		}
 
-		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
+		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
 		const refs = configuration.getService().getReferencesAtPosition(fileName, offset);
 
 		const tasks: AsyncFunction<Location, Error>[] = [];
@@ -385,7 +383,7 @@ export class TypeScriptService {
 
 	async textDocumentDocumentSymbol(params: DocumentSymbolParams, span = new Span()): Promise<SymbolInformation[]> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		await this.projectManager.ensureFilesForHoverAndDefinition(uri, span);
+		await this.projectManager.ensureFilesForHoverAndDefinition(params.textDocument.uri, span);
 		const fileName = util.uri2path(uri);
 
 		const config = this.projectManager.getConfiguration(uri);
@@ -542,7 +540,7 @@ export class TypeScriptService {
 		const column = params.position.character;
 		const fileName: string = util.uri2path(uri);
 
-		await this.projectManager.ensureFilesForHoverAndDefinition(uri, span);
+		await this.projectManager.ensureFilesForHoverAndDefinition(params.textDocument.uri, span);
 
 		const configuration = this.projectManager.getConfiguration(fileName);
 		await configuration.ensureBasicFiles();
@@ -578,24 +576,22 @@ export class TypeScriptService {
 	}
 
 	async textDocumentSignatureHelp(params: TextDocumentPositionParams, span = new Span()): Promise<SignatureHelp> {
-		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		const line = params.position.line;
-		const column = params.position.character;
-		await this.projectManager.ensureFilesForHoverAndDefinition(uri, span);
 
-		const fileName: string = util.uri2path(uri);
-		const configuration = this.projectManager.getConfiguration(fileName);
+		await this.projectManager.ensureFilesForHoverAndDefinition(params.textDocument.uri, span);
+
+		const filePath = util.uri2path(params.textDocument.uri);
+		const configuration = this.projectManager.getConfiguration(filePath);
 		await configuration.ensureBasicFiles();
 
-		const sourceFile = this._getSourceFile(configuration, fileName);
+		const sourceFile = this._getSourceFile(configuration, filePath);
 		if (!sourceFile) {
-			throw new Error('expected source file "' + fileName + '" to exist in configuration');
+			throw new Error(`expected source file ${filePath} to exist in configuration`);
 		}
-		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
+		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
 
-		const signatures: ts.SignatureHelpItems = configuration.getService().getSignatureHelpItems(fileName, offset);
+		const signatures: ts.SignatureHelpItems = configuration.getService().getSignatureHelpItems(filePath, offset);
 		if (!signatures) {
-			return { signatures: [], activeParameter: 0, activeSignature: 0};
+			return { signatures: [], activeParameter: 0, activeSignature: 0 };
 		}
 
 		const signatureInformations = signatures.items.map(item => {
@@ -1407,11 +1403,10 @@ export class TypeScriptService {
 		}
 	}
 
-	textDocumentDidOpen(params: DidOpenTextDocumentParams): Promise<void> {
+	async textDocumentDidOpen(params: DidOpenTextDocumentParams): Promise<void> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		return this.projectManager.ensureFilesForHoverAndDefinition(uri).then(() => {
-			this.projectManager.didOpen(util.uri2path(uri), params.textDocument.text);
-		});
+		await this.projectManager.ensureFilesForHoverAndDefinition(params.textDocument.uri);
+		this.projectManager.didOpen(util.uri2path(uri), params.textDocument.text);
 	}
 
 	async textDocumentDidChange(params: DidChangeTextDocumentParams): Promise<void> {
@@ -1436,11 +1431,10 @@ export class TypeScriptService {
 		});
 	}
 
-	textDocumentDidClose(params: DidCloseTextDocumentParams): Promise<void> {
+	async textDocumentDidClose(params: DidCloseTextDocumentParams): Promise<void> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		return this.projectManager.ensureFilesForHoverAndDefinition(uri).then(() => {
-			this.projectManager.didClose(util.uri2path(uri));
-		});
+		await this.projectManager.ensureFilesForHoverAndDefinition(params.textDocument.uri);
+		this.projectManager.didClose(util.uri2path(uri));
 	}
 
 	/**
