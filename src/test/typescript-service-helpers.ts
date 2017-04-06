@@ -1453,7 +1453,11 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				'    foo() {}',
 				'	/** bar doc*/',
 				'    bar(): number { return 1; }',
-				'	/** baz doc*/',
+				'	/** ',
+				'     * The Baz function',
+				'     * @param num Number parameter',
+				'     * @param text Text parameter',
+				'	  */',
 				'    baz(num: number, text: string): string { return ""; }',
 				'	/** qux doc*/',
 				'    qux: number;',
@@ -1481,13 +1485,31 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		afterEach(<any> shutdownService);
 
+		it('Provides a valid empty response when no signature is found', <any> async function (this: TestContext) {
+			const result = await this.service.getSignatureHelp({
+				textDocument: {
+					uri: 'file:///a.ts'
+				},
+				position: {
+					line: 0,
+					character: 0
+				}
+			});
+			assert.equal(result.signatures.length, 0);
+			// TODO: activeSignature and activeParameter should allow undefined according to protocol.md
+			// assert.isUndefined(result.activeSignature);
+			// assert.isUndefined(result.activeParameter);
+			assert.equal(result.activeSignature, 0);
+			assert.equal(result.activeParameter, 0);
+		});
+
 		it('Provides signature help with parameters in the same file', <any> async function (this: TestContext) {
 			const result = await this.service.getSignatureHelp({
 				textDocument: {
 					uri: 'file:///a.ts'
 				},
 				position: {
-					line: 11,
+					line: 15,
 					character: 11
 				}
 			});
@@ -1497,13 +1519,15 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			assert.equal(result.activeParameter, 1);
 
 			assert.equal(activeSignature.label, 'baz(num, text): string');
-			assert.equal(activeSignature.documentation, 'baz doc');
+			assert.equal(activeSignature.documentation, 'The Baz function');
 			assert.isArray(activeSignature.parameters);
 			if (activeSignature.parameters) {
 				assert.equal(activeSignature.parameters.length, 2);
 				assert.equal(activeSignature.parameters[0].label, 'num');
+				assert.equal(activeSignature.parameters[0].documentation, 'Number parameter');
+
 				assert.equal(activeSignature.parameters[1].label, 'text');
-				assert.isUndefined(activeSignature.parameters[0].documentation);
+				assert.equal(activeSignature.parameters[1].documentation, 'Text parameter');
 			}
 		});
 
