@@ -116,7 +116,9 @@ export class TypeScriptService implements LanguageHandler {
 				// Tell the client that the server works in FULL text document sync mode
 				textDocumentSync: TextDocumentSyncKind.Full,
 				hoverProvider: true,
-				signatureHelpProvider: true,
+				signatureHelpProvider: {
+					triggerCharacters: ['(', ',']
+				},
 				definitionProvider: true,
 				referencesProvider: true,
 				documentSymbolProvider: true,
