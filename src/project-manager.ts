@@ -233,7 +233,7 @@ export class ProjectManager implements Disposable {
 				try {
 					await this.ensureModuleStructure();
 					// Include dependencies up to depth 30
-					await this.ensureTransitiveFileDependencies([util.uri2path(uri)], 30);
+					await this.ensureTransitiveFileDependencies([util.uri2path(uri)], 30, undefined, span);
 				} catch (err) {
 					this.ensuredFilesForHoverAndDefinition.delete(uri);
 					throw err;
