@@ -35,7 +35,6 @@ export class RemoteLanguageClient {
 
 	private logger: Logger;
 
-
 	/**
 	 * @param input MessageEmitter to listen on for responses
 	 * @param output MessageWriter to write requests/notifications to
