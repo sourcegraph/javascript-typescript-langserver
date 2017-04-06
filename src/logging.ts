@@ -30,19 +30,35 @@ export class LSPLogger implements Logger {
 	constructor(private client: RemoteLanguageClient) {}
 
 	log(...values: any[]): void {
-		this.client.windowLogMessage({ type: MessageType.Log, message: format(values) });
+		try {
+			this.client.windowLogMessage({ type: MessageType.Log, message: format(values) });
+		} catch (err) {
+			// ignore
+		}
 	}
 
 	info(...values: any[]): void {
-		this.client.windowLogMessage({ type: MessageType.Info, message: format(values) });
+		try {
+			this.client.windowLogMessage({ type: MessageType.Info, message: format(values) });
+		} catch (err) {
+			// ignore
+		}
 	}
 
 	warn(...values: any[]): void {
-		this.client.windowLogMessage({ type: MessageType.Warning, message: format(values) });
+		try {
+			this.client.windowLogMessage({ type: MessageType.Warning, message: format(values) });
+		} catch (err) {
+			// ignore
+		}
 	}
 
 	error(...values: any[]): void {
-		this.client.windowLogMessage({ type: MessageType.Error, message: format(values) });
+		try {
+			this.client.windowLogMessage({ type: MessageType.Error, message: format(values) });
+		} catch (err) {
+			// ignore
+		}
 	}
 }
 
@@ -52,19 +68,35 @@ export class LSPLogger implements Logger {
 export class StreamLogger {
 	constructor(private outStream: NodeJS.WritableStream, private errStream: NodeJS.WritableStream) {}
 	log(...values: any[]): void {
-		this.outStream.write(chalk.grey('DEBUG ' + format(values) + '\n'));
+		try {
+			this.outStream.write(chalk.grey('DEBUG ' + format(values) + '\n'));
+		} catch (err) {
+			// ignore
+		}
 	}
 
 	info(...values: any[]): void {
-		this.outStream.write(chalk.bgCyan('INFO') + '  ' + format(values) + '\n');
+		try {
+			this.outStream.write(chalk.bgCyan('INFO') + '  ' + format(values) + '\n');
+		} catch (err) {
+			// ignore
+		}
 	}
 
 	warn(...values: any[]): void {
-		this.errStream.write(chalk.bgYellow('WARN') + '  ' + format(values) + '\n');
+		try {
+			this.errStream.write(chalk.bgYellow('WARN') + '  ' + format(values) + '\n');
+		} catch (err) {
+			// ignore
+		}
 	}
 
 	error(...values: any[]): void {
-		this.errStream.write(chalk.bgRed('ERROR') + ' ' + format(values) + '\n');
+		try {
+			this.errStream.write(chalk.bgRed('ERROR') + ' ' + format(values) + '\n');
+		} catch (err) {
+			// ignore
+		}
 	}
 }
 
