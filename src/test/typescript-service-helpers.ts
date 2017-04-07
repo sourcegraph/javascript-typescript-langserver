@@ -1497,7 +1497,6 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					character: 0
 				}
 			});
-			// TODO: activeSignature and activeParameter should allow undefined according to protocol.md
 			assert.deepEqual(result, {
 				signatures: [],
 				activeSignature: 0,
