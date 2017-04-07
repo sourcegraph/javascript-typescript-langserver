@@ -590,10 +590,6 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 		this.versions = versions;
 		this.projectVersion = 1;
 		this.filePaths = [];
-		// adding library files from the local file system
-		getTypeScriptLibraries().forEach((content, name) => {
-			this.fs.add(util.path2uri(rootPath, name), content);
-		});
 	}
 
 	/**
@@ -698,6 +694,11 @@ export interface FileSystemNode {
 export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResolutionHost {
 
 	/**
+	 * Contains in-memory map (path => content) for all TypeScript libraries
+	 */
+	private typeScriptLibraries = new Map<string, string>();
+
+	/**
 	 * Contains a Map of all URIs that exist in the workspace, optionally with a content.
 	 * File contents for URIs in it do not neccessarily have to be fetched already.
 	 */
@@ -729,6 +730,25 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 		this.path = path;
 		this.overlay = new Map<string, string>();
 		this.rootNode = { file: false, children: new Map<string, FileSystemNode>() };
+		// adding library files from the local file system
+		this.initTypeScriptLibraries();
+	}
+
+	isTypeScriptLibrary(path: string): boolean {
+		return this.typeScriptLibraries.has(util.toUnixPath(path));
+	}
+
+	/**
+	 * Collects TypeScript library files
+	 */
+	private initTypeScriptLibraries() {
+		const librariesRoot = path_.dirname(ts.getDefaultLibFilePath({ target: ts.ScriptTarget.ES2015 }));
+		fs_.readdirSync(librariesRoot).forEach(file => {
+			const fullPath = path_.join(librariesRoot, file);
+			if (fs_.statSync(fullPath).isFile()) {
+				this.typeScriptLibraries.set(util.toUnixPath(fullPath), fs_.readFileSync(fullPath).toString());
+			}
+		});
 	}
 
 	/**
@@ -777,7 +797,10 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 * TODO take overlay into account
 	 */
 	getContent(uri: string): string {
-		const content = this.files.get(uri);
+		let content = this.files.get(uri);
+		if (content === undefined) {
+			content = this.typeScriptLibraries.get(util.uri2path(uri));
+		}
 		if (content === undefined) {
 			throw new Error(`Content of ${uri} is not available in memory`);
 		}
@@ -808,6 +831,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 * If there is no such file, returns undefined
 	 */
 	private readFileIfExists(path: string): string | undefined {
+
 		let content = this.overlay.get(path);
 		if (content !== undefined) {
 			return content;
@@ -827,7 +851,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 			return content;
 		}
 
-		return this.files.get(util.path2uri(this.path, path));
+		return this.typeScriptLibraries.get(path);
 	}
 
 	/**
@@ -1222,25 +1246,3 @@ export const skipDir: Error = {
 	name: 'WALK_FN_SKIP_DIR',
 	message: ''
 };
-
-/**
- * TypeScript library files fetched from the local file system (bundled TS)
- */
-let tsLibraries: Map<string, string>;
-
-/**
- * Fetches TypeScript library files from local file system
- */
-export function getTypeScriptLibraries(): Map<string, string> {
-	if (!tsLibraries) {
-		tsLibraries = new Map<string, string>();
-		const path = path_.dirname(ts.getDefaultLibFilePath({ target: ts.ScriptTarget.ES2015 }));
-		fs_.readdirSync(path).forEach(file => {
-			const fullPath = path_.join(path, file);
-			if (fs_.statSync(fullPath).isFile()) {
-				tsLibraries.set(util.toUnixPath(fullPath), fs_.readFileSync(fullPath).toString());
-			}
-		});
-	}
-	return tsLibraries;
-}

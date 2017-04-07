@@ -1504,8 +1504,7 @@ export class TypeScriptService {
 	 * returns git://github.com/Microsoft/TypeScript URL, otherwise returns file:// one
 	 */
 	private _defUri(filePath: string): string {
-		filePath = util.toUnixPath(filePath);
-		if (pm.getTypeScriptLibraries().has(filePath)) {
+		if (this.projectManager.getFs().isTypeScriptLibrary(filePath)) {
 			return 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/' + path_.basename(filePath);
 		}
 		return util.path2uri(this.root, filePath);
@@ -1516,10 +1515,9 @@ export class TypeScriptService {
 	 */
 	private _getNavigationTreeItems(configuration: pm.ProjectConfiguration, limit?: number): SymbolInformation[] {
 		const result: SymbolInformation[] = [];
-		const libraries = pm.getTypeScriptLibraries();
 		for (const sourceFile of configuration.getProgram().getSourceFiles().sort((a, b) => a.fileName.localeCompare(b.fileName))) {
 			// excluding navigation items from TypeScript libraries
-			if (libraries.has(util.toUnixPath(sourceFile.fileName))) {
+			if (this.projectManager.getFs().isTypeScriptLibrary(sourceFile.fileName)) {
 				continue;
 			}
 			let tree;
