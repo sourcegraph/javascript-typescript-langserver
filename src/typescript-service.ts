@@ -149,8 +149,9 @@ export class TypeScriptService {
 		this.inMemoryFileSystem = new pm.InMemoryFileSystem(this.root);
 	}
 
-	async shutdown(params = {}, span = new Span()): Promise<void> {
+	async shutdown(params = {}, span = new Span()): Promise<null> {
 		this.projectManager.dispose();
+		return null;
 	}
 
 	async textDocumentDefinition(params: TextDocumentPositionParams, span = new Span()): Promise<Location[]> {
