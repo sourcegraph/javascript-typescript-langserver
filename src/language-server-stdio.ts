@@ -1,11 +1,10 @@
 #!/usr/bin/env node
 
-import { StreamMessageWriter } from 'vscode-jsonrpc';
 import { isNotificationMessage } from 'vscode-jsonrpc/lib/messages';
-import { MessageEmitter, registerLanguageHandler } from './connection';
+import { MessageEmitter, MessageLogOptions, MessageWriter, registerLanguageHandler, RegisterLanguageHandlerOptions } from './connection';
 import { RemoteLanguageClient } from './lang-handler';
 import { FileLogger, StderrLogger } from './logging';
-import { TypeScriptService } from './typescript-service';
+import { TypeScriptService, TypeScriptServiceOptions } from './typescript-service';
 import * as util from './util';
 
 const packageJson = require('../package.json');
@@ -21,15 +20,15 @@ program
 util.setStrict(program.strict);
 
 const logger = program.logfile ? new FileLogger(program.logfile) : new StderrLogger();
-const options = {
+const options: TypeScriptServiceOptions & MessageLogOptions & RegisterLanguageHandlerOptions = {
 	strict: program.strict,
 	logMessages: program.trace,
 	logger
 };
 
-const messageEmitter = new MessageEmitter(process.stdin);
-const messageWriter = new StreamMessageWriter(process.stdout);
-const remoteClient = new RemoteLanguageClient(messageEmitter, messageWriter, options);
+const messageEmitter = new MessageEmitter(process.stdin, options);
+const messageWriter = new MessageWriter(process.stdout, options);
+const remoteClient = new RemoteLanguageClient(messageEmitter, messageWriter);
 const service = new TypeScriptService(remoteClient, options);
 
 // Add an exit notification handler to kill the process
