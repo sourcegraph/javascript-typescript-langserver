@@ -1447,6 +1447,115 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		});
 	});
 
+	describe('textDocumentSignatureHelp()', <any> function (this: TestContext) {
+		beforeEach(<any> initializeTypeScriptService(createService, new Map([
+			['file:///a.ts', [
+				'class A {',
+				'	/** foo doc*/',
+				'    foo() {}',
+				'	/** bar doc*/',
+				'    bar(): number { return 1; }',
+				'	/** ',
+				'     * The Baz function',
+				'     * @param num Number parameter',
+				'     * @param text Text parameter',
+				'	  */',
+				'    baz(num: number, text: string): string { return ""; }',
+				'	/** qux doc*/',
+				'    qux: number;',
+				'}',
+				'const a = new A();',
+				'a.baz(32, sd)'
+			].join('\n')],
+			['file:///uses-import.ts', [
+				'import * as i from "./import"',
+				'i.d()'
+			].join('\n')],
+			['file:///import.ts', '/** d doc*/ export function d() {}'],
+			['file:///uses-reference.ts', [
+				'/// <reference path="reference.ts" />',
+				'let z : foo.'
+			].join('\n')],
+			['file:///reference.ts', [
+				'namespace foo {',
+				'	/** bar doc*/',
+				'	export interface bar {}',
+				'}'
+			].join('\n')],
+			['file:///empty.ts', '']
+		])));
+
+		afterEach(<any> shutdownService);
+
+		it('should provide a valid empty response when no signature is found', <any> async function (this: TestContext) {
+			const result = await this.service.textDocumentSignatureHelp({
+				textDocument: {
+					uri: 'file:///a.ts'
+				},
+				position: {
+					line: 0,
+					character: 0
+				}
+			});
+			assert.deepEqual(result, {
+				signatures: [],
+				activeSignature: 0,
+				activeParameter: 0
+			});
+		});
+
+		it('should provide signature help with parameters in the same file', <any> async function (this: TestContext) {
+			const result = await this.service.textDocumentSignatureHelp({
+				textDocument: {
+					uri: 'file:///a.ts'
+				},
+				position: {
+					line: 15,
+					character: 11
+				}
+			});
+			assert.deepEqual(result, {
+				signatures: [
+					{
+						label: 'baz(num: number, text: string): string',
+						documentation: 'The Baz function',
+						parameters: [{
+							label: 'num: number',
+							documentation: 'Number parameter'
+						}, {
+							label: 'text: string',
+							documentation: 'Text parameter'
+						}]
+					}
+				],
+				activeSignature: 0,
+				activeParameter: 1
+			});
+		});
+
+		it('should provide signature help from imported symbols', <any> async function (this: TestContext) {
+			const result = await this.service.textDocumentSignatureHelp({
+				textDocument: {
+					uri: 'file:///uses-import.ts'
+				},
+				position: {
+					line: 1,
+					character: 4
+				}
+			});
+			assert.deepEqual(result, {
+				activeSignature: 0,
+				activeParameter: 0,
+				signatures: [{
+					label: 'd(): void',
+					documentation: 'd doc',
+					parameters: []
+				}]
+			});
+		});
+
+	});
+
 	describe('textDocumentCompletion()', <any> function (this: TestContext) {
 		beforeEach(<any> initializeTypeScriptService(createService, new Map([
 			['file:///a.ts', [

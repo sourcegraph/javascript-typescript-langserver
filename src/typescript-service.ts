@@ -15,8 +15,11 @@ import {
 	InitializeResult,
 	Location,
 	MarkedString,
+	ParameterInformation,
 	Range,
 	ReferenceParams,
+	SignatureHelp,
+	SignatureInformation,
 	SymbolInformation,
 	TextDocumentPositionParams,
 	TextDocumentSyncKind
@@ -117,6 +120,9 @@ export class TypeScriptService {
 				// Tell the client that the server works in FULL text document sync mode
 				textDocumentSync: TextDocumentSyncKind.Full,
 				hoverProvider: true,
+				signatureHelpProvider: {
+					triggerCharacters: ['(', ',']
+				},
 				definitionProvider: true,
 				referencesProvider: true,
 				documentSymbolProvider: true,
@@ -571,6 +577,43 @@ export class TypeScriptService {
 		}));
 	}
 
+	async textDocumentSignatureHelp(params: TextDocumentPositionParams, span = new Span()): Promise<SignatureHelp> {
+		const uri = util.uri2reluri(params.textDocument.uri, this.root);
+		const line = params.position.line;
+		const column = params.position.character;
+		await this.projectManager.ensureFilesForHoverAndDefinition(uri, span);
+
+		const fileName: string = util.uri2path(uri);
+		const configuration = this.projectManager.getConfiguration(fileName);
+		await configuration.ensureBasicFiles();
+
+		const sourceFile = this._getSourceFile(configuration, fileName);
+		if (!sourceFile) {
+			throw new Error('expected source file "' + fileName + '" to exist in configuration');
+		}
+		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
+
+		const signatures: ts.SignatureHelpItems = configuration.getService().getSignatureHelpItems(fileName, offset);
+		if (!signatures) {
+			return { signatures: [], activeParameter: 0, activeSignature: 0};
+		}
+
+		const signatureInformations = signatures.items.map(item => {
+			const prefix = ts.displayPartsToString(item.prefixDisplayParts);
+			const params = item.parameters.map(p => ts.displayPartsToString(p.displayParts)).join(', ');
+			const suffix = ts.displayPartsToString(item.suffixDisplayParts);
+			const parameters = item.parameters.map(p => {
+				return ParameterInformation.create(ts.displayPartsToString(p.displayParts), ts.displayPartsToString(p.documentation));
+			});
+			return SignatureInformation.create(prefix + params + suffix, ts.displayPartsToString(item.documentation), ...parameters);
+		});
+
+		return {
+			signatures: signatureInformations,
+			activeSignature: signatures.selectedItemIndex,
+			activeParameter: signatures.argumentIndex
+		};
+	}
 	/*
 	 * walkMostAST walks most of the AST (the part that matters for gathering all references)
 	 */
