@@ -3,9 +3,9 @@ import { Observable } from '@reactivex/rxjs';
 import { EventEmitter } from 'events';
 import { Span } from 'opentracing';
 import * as sinon from 'sinon';
-import { Event, MessageWriter } from 'vscode-jsonrpc';
+import { PassThrough } from 'stream';
 import { ErrorCodes } from 'vscode-jsonrpc';
-import { MessageEmitter, registerLanguageHandler } from '../connection';
+import { MessageEmitter, MessageWriter, registerLanguageHandler } from '../connection';
 import { NoopLogger } from '../logging';
 import { TypeScriptService } from '../typescript-service';
 
@@ -15,11 +15,9 @@ describe('connection', () => {
 			const handler: TypeScriptService = Object.create(TypeScriptService.prototype);
 			const emitter = new EventEmitter();
 			const writer = {
-				write: sinon.spy(),
-				onError: Event.None,
-				onClose: Event.None
+				write: sinon.spy()
 			};
-			registerLanguageHandler(emitter as MessageEmitter, writer as MessageWriter, handler as TypeScriptService);
+			registerLanguageHandler(emitter as MessageEmitter, writer as any as MessageWriter, handler as TypeScriptService);
 			const params = [1, 1];
 			emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'whatever', params });
 			await new Promise(resolve => setTimeout(resolve, 0));
@@ -30,11 +28,9 @@ describe('connection', () => {
 			const handler = { _privateMethod: sinon.spy() };
 			const emitter = new EventEmitter();
 			const writer = {
-				write: sinon.spy(),
-				onError: Event.None,
-				onClose: Event.None
+				write: sinon.spy()
 			};
-			registerLanguageHandler(emitter as MessageEmitter, writer as MessageWriter, handler as any as TypeScriptService);
+			registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as any);
 			const params = [1, 1];
 			emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params });
 			sinon.assert.notCalled(handler._privateMethod);
@@ -47,11 +43,9 @@ describe('connection', () => {
 			const hoverStub = sinon.stub(handler, 'textDocumentHover').returns(Promise.resolve(2));
 			const emitter = new EventEmitter();
 			const writer = {
-				write: sinon.spy(),
-				onError: Event.None,
-				onClose: Event.None
+				write: sinon.spy()
 			};
-			registerLanguageHandler(emitter as MessageEmitter, writer as MessageWriter, handler as TypeScriptService);
+			registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as TypeScriptService);
 			const params = [1, 1];
 			emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params });
 			sinon.assert.calledOnce(hoverStub);
@@ -66,11 +60,9 @@ describe('connection', () => {
 			};
 			const emitter = new EventEmitter();
 			const writer = {
-				write: sinon.spy(),
-				onError: Event.None,
-				onClose: Event.None
+				write: sinon.spy()
 			};
-			registerLanguageHandler(emitter as MessageEmitter, writer as MessageWriter, handler as any);
+			registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as any);
 			emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'exit' });
 			await new Promise(resolve => setTimeout(resolve, 0));
 			sinon.assert.notCalled(handler.exit);
@@ -82,11 +74,9 @@ describe('connection', () => {
 			};
 			const emitter = new EventEmitter();
 			const writer = {
-				write: sinon.spy(),
-				onError: Event.None,
-				onClose: Event.None
+				write: sinon.spy()
 			};
-			registerLanguageHandler(emitter as MessageEmitter, writer as MessageWriter, handler as any);
+			registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as any);
 			emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'whatever', result: 123 });
 			await new Promise(resolve => setTimeout(resolve, 0));
 			sinon.assert.notCalled(handler.whatever);
@@ -97,13 +87,11 @@ describe('connection', () => {
 			};
 			const emitter = new EventEmitter();
 			const writer = {
-				write: sinon.spy(),
-				onError: Event.None,
-				onClose: Event.None
+				write: sinon.spy()
 			};
 			const logger = new NoopLogger() as NoopLogger & { error: sinon.SinonStub };
 			sinon.stub(logger, 'error');
-			registerLanguageHandler(emitter as MessageEmitter, writer as MessageWriter, handler as any, { logger });
+			registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as any, { logger });
 			emitter.emit('message', { jsonrpc: '2.0', id: 1 });
 			await new Promise(resolve => setTimeout(resolve, 0));
 			sinon.assert.calledOnce(logger.error);
@@ -113,11 +101,9 @@ describe('connection', () => {
 			const hoverStub = sinon.stub(handler, 'textDocumentHover').returns(Observable.of(2));
 			const emitter = new EventEmitter();
 			const writer = {
-				write: sinon.spy(),
-				onError: Event.None,
-				onClose: Event.None
+				write: sinon.spy()
 			};
-			registerLanguageHandler(emitter as MessageEmitter, writer as MessageWriter, handler as TypeScriptService);
+			registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as TypeScriptService);
 			const params = [1, 1];
 			emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params });
 			sinon.assert.calledOnce(hoverStub);
@@ -134,11 +120,9 @@ describe('connection', () => {
 			})));
 			const emitter = new EventEmitter();
 			const writer = {
-				write: sinon.spy(),
-				onError: Event.None,
-				onClose: Event.None
+				write: sinon.spy()
 			};
-			registerLanguageHandler(emitter as MessageEmitter, writer as MessageWriter, handler as TypeScriptService);
+			registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as TypeScriptService);
 			const params = [1, 1];
 			emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params });
 			sinon.assert.calledOnce(hoverStub);
@@ -160,11 +144,9 @@ describe('connection', () => {
 			const hoverStub = sinon.stub(handler, 'textDocumentHover').returns(2);
 			const emitter = new EventEmitter();
 			const writer = {
-				write: sinon.spy(),
-				onError: Event.None,
-				onClose: Event.None
+				write: sinon.spy()
 			};
-			registerLanguageHandler(emitter as MessageEmitter, writer as MessageWriter, handler as TypeScriptService);
+			registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as TypeScriptService);
 			const params = [1, 1];
 			emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params });
 			sinon.assert.calledOnce(hoverStub);
@@ -178,11 +160,9 @@ describe('connection', () => {
 			const hoverStub = sinon.stub(handler, 'textDocumentHover').returns(Observable.of(2));
 			const emitter = new EventEmitter();
 			const writer = {
-				write: sinon.spy(),
-				onError: Event.None,
-				onClose: Event.None
+				write: sinon.spy()
 			};
-			registerLanguageHandler(emitter as MessageEmitter, writer as MessageWriter, handler as TypeScriptService);
+			registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as TypeScriptService);
 			const params = [1, 1];
 			emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params });
 			sinon.assert.calledOnce(hoverStub);
@@ -197,11 +177,9 @@ describe('connection', () => {
 			const hoverStub = sinon.stub(handler, 'textDocumentHover').returns(new Observable(subscriber => unsubscribeHandler));
 			const emitter = new EventEmitter();
 			const writer = {
-				write: sinon.spy(),
-				onError: Event.None,
-				onClose: Event.None
+				write: sinon.spy()
 			};
-			registerLanguageHandler(emitter as MessageEmitter, writer as MessageWriter, handler as TypeScriptService);
+			registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as TypeScriptService);
 			const params = [1, 1];
 			emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params });
 			sinon.assert.calledOnce(hoverStub);
@@ -220,11 +198,9 @@ describe('connection', () => {
 				};
 				const emitter = new EventEmitter();
 				const writer = {
-					write: sinon.spy(),
-					onError: Event.None,
-					onClose: Event.None
+					write: sinon.spy()
 				};
-				registerLanguageHandler(emitter as MessageEmitter, writer as MessageWriter, handler as any as TypeScriptService);
+				registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as any);
 				emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
 				await new Promise(resolve => setTimeout(resolve, 0));
 				sinon.assert.calledOnce(handler.initialize);
@@ -238,11 +214,9 @@ describe('connection', () => {
 				};
 				const emitter = new EventEmitter();
 				const writer = {
-					write: sinon.spy(),
-					onError: Event.None,
-					onClose: Event.None
+					write: sinon.spy()
 				};
-				registerLanguageHandler(emitter as MessageEmitter, writer as MessageWriter, handler as any as TypeScriptService);
+				registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as any);
 				emitter.emit(event);
 				sinon.assert.notCalled(handler.shutdown);
 			});
@@ -253,11 +227,9 @@ describe('connection', () => {
 				};
 				const emitter = new EventEmitter();
 				const writer = {
-					write: sinon.spy(),
-					onError: Event.None,
-					onClose: Event.None
+					write: sinon.spy()
 				};
-				registerLanguageHandler(emitter as MessageEmitter, writer as MessageWriter, handler as any as TypeScriptService);
+				registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as any);
 				emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'shutdown', params: {} });
 				await new Promise(resolve => setTimeout(resolve, 0));
 				sinon.assert.calledOnce(handler.shutdown);
@@ -265,5 +237,43 @@ describe('connection', () => {
 				sinon.assert.calledOnce(handler.shutdown);
 			});
 		}
+	});
+	describe('MessageEmitter', () => {
+		it('should log messages if enabled', async () => {
+			const logger = new NoopLogger() as NoopLogger & { log: sinon.SinonStub };
+			sinon.stub(logger, 'log');
+			const emitter = new MessageEmitter(new PassThrough(), { logMessages: true, logger });
+			emitter.emit('message', { jsonrpc: '2.0', method: 'whatever' });
+			await new Promise(resolve => setTimeout(resolve, 0));
+			sinon.assert.calledOnce(logger.log);
+			sinon.assert.calledWith(logger.log, '-->');
+		});
+		it('should not log messages if disabled', async () => {
+			const logger = new NoopLogger() as NoopLogger & { log: sinon.SinonStub };
+			sinon.stub(logger, 'log');
+			const emitter = new MessageEmitter(new PassThrough(), { logMessages: false, logger });
+			emitter.emit('message', { jsonrpc: '2.0', method: 'whatever' });
+			await new Promise(resolve => setTimeout(resolve, 0));
+			sinon.assert.notCalled(logger.log);
+		});
+	});
+	describe('MessageWriter', () => {
+		it('should log messages if enabled', async () => {
+			const logger = new NoopLogger() as NoopLogger & { log: sinon.SinonStub };
+			sinon.stub(logger, 'log');
+			const writer = new MessageWriter(new PassThrough(), { logMessages: true, logger });
+			writer.write({ jsonrpc: '2.0', method: 'whatever' });
+			await new Promise(resolve => setTimeout(resolve, 0));
+			sinon.assert.calledOnce(logger.log);
+			sinon.assert.calledWith(logger.log, '<--');
+		});
+		it('should not log messages if disabled', async () => {
+			const logger = new NoopLogger() as NoopLogger & { log: sinon.SinonStub };
+			sinon.stub(logger, 'log');
+			const writer = new MessageWriter(new PassThrough(), { logMessages: false, logger });
+			writer.write({ jsonrpc: '2.0', method: 'whatever' });
+			await new Promise(resolve => setTimeout(resolve, 0));
+			sinon.assert.notCalled(logger.log);
+		});
 	});
 });

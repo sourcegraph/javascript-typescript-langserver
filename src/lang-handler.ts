@@ -1,25 +1,15 @@
 import { Observable } from '@reactivex/rxjs';
-import { MessageWriter } from 'vscode-jsonrpc';
 import { isReponseMessage, Message, NotificationMessage, RequestMessage, ResponseMessage } from 'vscode-jsonrpc/lib/messages';
 import {
 	LogMessageParams,
 	TextDocumentIdentifier,
 	TextDocumentItem
 } from 'vscode-languageserver';
-import { MessageEmitter } from './connection';
-import { Logger, NoopLogger } from './logging';
+import { MessageEmitter, MessageWriter } from './connection';
 import {
 	TextDocumentContentParams,
 	WorkspaceFilesParams
 } from './request-type';
-
-export interface RemoteLanguageClientOptions {
-
-	logger?: Logger;
-
-	/** Whether to log all JSON RPC messages to the passed logger */
-	logMessages?: boolean;
-}
 
 /**
  * Provides an interface to call methods on the remote client.
@@ -30,19 +20,11 @@ export class RemoteLanguageClient {
 	/** The next request ID to use */
 	private idCounter = 1;
 
-	/** Whether to log all messages or not */
-	private logMessages: boolean;
-
-	private logger: Logger;
-
 	/**
 	 * @param input MessageEmitter to listen on for responses
 	 * @param output MessageWriter to write requests/notifications to
 	 */
-	constructor(private input: MessageEmitter, private output: MessageWriter, options: RemoteLanguageClientOptions = {}) {
-		this.logger = options.logger || new NoopLogger();
-		this.logMessages = !!options.logMessages;
-	}
+	constructor(private input: MessageEmitter, private output: MessageWriter) {}
 
 	/**
 	 * Sends a Request
@@ -56,9 +38,6 @@ export class RemoteLanguageClient {
 			// Generate a request ID
 			const id = this.idCounter++;
 			const message: RequestMessage = { jsonrpc: '2.0', method, id, params };
-			if (this.logMessages) {
-				this.logger.log('<--', message);
-			}
 			// Send request
 			this.output.write(message);
 			let receivedResponse = false;
@@ -97,9 +76,6 @@ export class RemoteLanguageClient {
 	 */
 	private notify(method: string, params: any[] | { [attr: string]: any }): void {
 		const message: NotificationMessage = { jsonrpc: '2.0', method, params };
-		if (this.logMessages) {
-			this.logger.log('<--', message);
-		}
 		this.output.write(message);
 	}
 
