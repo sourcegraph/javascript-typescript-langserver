@@ -61,8 +61,8 @@ export const initializeTypeScriptService = (createService: TypeScriptServiceFact
 /**
  * Shuts the TypeScriptService down (to be used in `afterEach()`)
  */
-export function shutdownTypeScriptService(this: TestContext): Promise<null> {
-	return this.service.shutdown();
+export async function shutdownTypeScriptService(this: TestContext): Promise<void> {
+	await this.service.shutdown();
 }
 
 /**
