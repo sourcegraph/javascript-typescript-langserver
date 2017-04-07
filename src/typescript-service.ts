@@ -25,6 +25,7 @@ import { isCancelledError } from './cancellation';
 import { FileSystem, FileSystemUpdater, LocalFileSystem, RemoteFileSystem } from './fs';
 import { RemoteLanguageClient } from './lang-handler';
 import { Logger, LSPLogger } from './logging';
+import { InMemoryFileSystem, isTypeScriptLibrary, skipDir, walkInMemoryFs } from './memfs';
 import * as pm from './project-manager';
 import {
 	DependencyReference,
@@ -84,7 +85,7 @@ export class TypeScriptService {
 	/**
 	 * Holds file contents and workspace structure in memory
 	 */
-	protected inMemoryFileSystem: pm.InMemoryFileSystem;
+	protected inMemoryFileSystem: InMemoryFileSystem;
 
 	/**
 	 * Syncs the remote file system with the in-memory file system
@@ -140,7 +141,7 @@ export class TypeScriptService {
 	 */
 	protected _initializeFileSystems(accessDisk: boolean): void {
 		this.fileSystem = accessDisk ? new LocalFileSystem(util.uri2path(this.root)) : new RemoteFileSystem(this.client);
-		this.inMemoryFileSystem = new pm.InMemoryFileSystem(this.root);
+		this.inMemoryFileSystem = new InMemoryFileSystem(this.root);
 	}
 
 	async shutdown(params = {}, span = new Span()): Promise<null> {
@@ -458,9 +459,9 @@ export class TypeScriptService {
 		await this.projectManager.ensureModuleStructure();
 
 		const pkgFiles: string[] = [];
-		pm.walkInMemoryFs(this.projectManager.getFs(), '/', (path: string, isdir: boolean): Error | void => {
+		walkInMemoryFs(this.projectManager.getFs(), '/', (path: string, isdir: boolean): Error | void => {
 			if (isdir && path_.basename(path) === 'node_modules') {
-				return pm.skipDir;
+				return skipDir;
 			}
 			if (isdir) {
 				return;
@@ -501,9 +502,9 @@ export class TypeScriptService {
 		await this.projectManager.ensureModuleStructure();
 
 		const pkgFiles: string[] = [];
-		pm.walkInMemoryFs(this.projectManager.getFs(), '/', (path: string, isdir: boolean): Error | void => {
+		walkInMemoryFs(this.projectManager.getFs(), '/', (path: string, isdir: boolean): Error | void => {
 			if (isdir && path_.basename(path) === 'node_modules') {
-				return pm.skipDir;
+				return skipDir;
 			}
 			if (isdir) {
 				return;
@@ -1505,8 +1506,7 @@ export class TypeScriptService {
 	 * returns git://github.com/Microsoft/TypeScript URL, otherwise returns file:// one
 	 */
 	private _defUri(filePath: string): string {
-		filePath = util.toUnixPath(filePath);
-		if (pm.getTypeScriptLibraries().has(filePath)) {
+		if (isTypeScriptLibrary(filePath)) {
 			return 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/' + path_.basename(filePath);
 		}
 		return util.path2uri(this.root, filePath);
@@ -1517,10 +1517,9 @@ export class TypeScriptService {
 	 */
 	private _getNavigationTreeItems(configuration: pm.ProjectConfiguration, limit?: number): SymbolInformation[] {
 		const result: SymbolInformation[] = [];
-		const libraries = pm.getTypeScriptLibraries();
 		for (const sourceFile of configuration.getProgram().getSourceFiles().sort((a, b) => a.fileName.localeCompare(b.fileName))) {
 			// excluding navigation items from TypeScript libraries
-			if (libraries.has(util.toUnixPath(sourceFile.fileName))) {
+			if (isTypeScriptLibrary(sourceFile.fileName)) {
 				continue;
 			}
 			let tree;
