@@ -4,7 +4,7 @@ import { camelCase, omit } from 'lodash';
 import { FORMAT_TEXT_MAP, Span, Tracer } from 'opentracing';
 import { inspect } from 'util';
 import { ErrorCodes, Message, StreamMessageReader as VSCodeStreamMessageReader, StreamMessageWriter as VSCodeStreamMessageWriter } from 'vscode-jsonrpc';
-import { isNotificationMessage, isRequestMessage, NotificationMessage, RequestMessage, ResponseMessage } from 'vscode-jsonrpc/lib/messages';
+import { isNotificationMessage, isReponseMessage, isRequestMessage, NotificationMessage, RequestMessage, ResponseMessage } from 'vscode-jsonrpc/lib/messages';
 import { Logger, NoopLogger } from './logging';
 import { TypeScriptService } from './typescript-service';
 
@@ -156,31 +156,42 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 
 	messageEmitter.on('message', async message => {
 		// Ignore responses
-		if (!isRequestMessage(message) && !isNotificationMessage(message)) {
+		if (isReponseMessage(message)) {
 			return;
 		}
-		if (message.method === 'initialize') {
-			initialized = true;
-		} else if (message.method === 'shutdown') {
-			initialized = false;
-		} else if (message.method === '$/cancelRequest' && isNotificationMessage(message)) {
-			// Cancel another request by unsubscribing from the Observable
-			const subscription = subscriptions.get(message.params.id);
-			if (!subscription) {
-				logger.error(`$/cancelRequest for unknown request ID ${message.params.id}`);
-				return;
-			}
-			subscription.unsubscribe();
-			subscriptions.delete(message.params.id);
-			messageWriter.write({
-				jsonrpc: '2.0',
-				id: message.params.id,
-				error: {
-					message: 'Request cancelled',
-					code: ErrorCodes.RequestCancelled
-				}
-			});
+		if (!isRequestMessage(message) && !isNotificationMessage(message)) {
+			logger.error('Received invalid message:', message);
 			return;
+		}
+		switch (message.method) {
+			case 'initialize':
+				initialized = true;
+				break;
+			case 'shutdown':
+				initialized = false;
+				break;
+			case 'exit':
+				// Ignore exit notification, it's not the responsibility of the TypeScriptService to handle it,
+				// but the TCP / STDIO server which needs to close the socket or kill the process
+				return;
+			case '$/cancelRequest':
+				// Cancel another request by unsubscribing from the Observable
+				const subscription = subscriptions.get(message.params.id);
+				if (!subscription) {
+					logger.error(`$/cancelRequest for unknown request ID ${message.params.id}`);
+					return;
+				}
+				subscription.unsubscribe();
+				subscriptions.delete(message.params.id);
+				messageWriter.write({
+					jsonrpc: '2.0',
+					id: message.params.id,
+					error: {
+						message: 'Request cancelled',
+						code: ErrorCodes.RequestCancelled
+					}
+				});
+				return;
 		}
 		const method = camelCase(message.method);
 		let span = new Span();
@@ -246,7 +257,7 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 						id: message.id,
 						error: {
 							message: err.message + '',
-							code: typeof err.code === 'number' ? err.code : ErrorCodes.InternalError,
+							code: typeof err.code === 'number' ? err.code : ErrorCodes.UnknownErrorCode,
 							data: omit(err, ['message', 'code'])
 						}
 					});

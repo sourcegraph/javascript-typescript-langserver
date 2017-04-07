@@ -54,6 +54,48 @@ describe('connection', () => {
 			sinon.assert.calledOnce(writer.write);
 			sinon.assert.calledWithExactly(writer.write, sinon.match({ jsonrpc: '2.0', id: 1, result: 2 }));
 		});
+		it('should ignore exit notifications', async () => {
+			const handler = {
+				exit: sinon.spy()
+			};
+			const emitter = new EventEmitter();
+			const writer = {
+				write: sinon.spy()
+			};
+			registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as any);
+			emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'exit' });
+			await new Promise(resolve => setTimeout(resolve, 0));
+			sinon.assert.notCalled(handler.exit);
+			sinon.assert.notCalled(writer.write);
+		});
+		it('should ignore responses', async () => {
+			const handler = {
+				whatever: sinon.spy()
+			};
+			const emitter = new EventEmitter();
+			const writer = {
+				write: sinon.spy()
+			};
+			registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as any);
+			emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'whatever', result: 123 });
+			await new Promise(resolve => setTimeout(resolve, 0));
+			sinon.assert.notCalled(handler.whatever);
+		});
+		it('should log invalid messages', async () => {
+			const handler = {
+				whatever: sinon.spy()
+			};
+			const emitter = new EventEmitter();
+			const writer = {
+				write: sinon.spy()
+			};
+			const logger = new NoopLogger() as NoopLogger & { error: sinon.SinonStub };
+			sinon.stub(logger, 'error');
+			registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as any, { logger });
+			emitter.emit('message', { jsonrpc: '2.0', id: 1 });
+			await new Promise(resolve => setTimeout(resolve, 0));
+			sinon.assert.calledOnce(logger.error);
+		});
 		it('should call a handler on request and send the result of the returned Observable', async () => {
 			const handler: TypeScriptService = Object.create(TypeScriptService.prototype);
 			const hoverStub = sinon.stub(handler, 'textDocumentHover').returns(Observable.of(2));
@@ -158,11 +200,11 @@ describe('connection', () => {
 				const writer = {
 					write: sinon.spy()
 				};
-				registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as any as TypeScriptService);
+				registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as any);
 				emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
 				await new Promise(resolve => setTimeout(resolve, 0));
 				sinon.assert.calledOnce(handler.initialize);
-				emitter.emit('close');
+				emitter.emit(event);
 				sinon.assert.calledOnce(handler.shutdown);
 			});
 			it(`should not call shutdown on ${event} if the service was not initialized`, async () => {
@@ -174,9 +216,25 @@ describe('connection', () => {
 				const writer = {
 					write: sinon.spy()
 				};
-				registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as any as TypeScriptService);
-				emitter.emit('close');
+				registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as any);
+				emitter.emit(event);
 				sinon.assert.notCalled(handler.shutdown);
+			});
+			it(`should not call shutdown again on ${event} if shutdown was already called`, async () => {
+				const handler = {
+					initialize: sinon.stub(),
+					shutdown: sinon.stub()
+				};
+				const emitter = new EventEmitter();
+				const writer = {
+					write: sinon.spy()
+				};
+				registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as any);
+				emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'shutdown', params: {} });
+				await new Promise(resolve => setTimeout(resolve, 0));
+				sinon.assert.calledOnce(handler.shutdown);
+				emitter.emit(event);
+				sinon.assert.calledOnce(handler.shutdown);
 			});
 		}
 	});
