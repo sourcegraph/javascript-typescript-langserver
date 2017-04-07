@@ -195,7 +195,7 @@ describe('connection', () => {
 				emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
 				await new Promise(resolve => setTimeout(resolve, 0));
 				sinon.assert.calledOnce(handler.initialize);
-				emitter.emit('close');
+				emitter.emit(event);
 				sinon.assert.calledOnce(handler.shutdown);
 			});
 			it(`should not call shutdown on ${event} if the service was not initialized`, async () => {
@@ -210,8 +210,25 @@ describe('connection', () => {
 					onClose: Event.None
 				};
 				registerLanguageHandler(emitter as MessageEmitter, writer as MessageWriter, handler as any as TypeScriptService);
-				emitter.emit('close');
+				emitter.emit(event);
 				sinon.assert.notCalled(handler.shutdown);
+			});
+			it(`should not call shutdown again on ${event} if shutdown was already called`, async () => {
+				const handler = {
+					initialize: sinon.stub(),
+					shutdown: sinon.stub()
+				};
+				const emitter = new EventEmitter();
+				const writer = {
+					write: sinon.spy(),
+					onError: Event.None,
+					onClose: Event.None
+				};
+				registerLanguageHandler(emitter as MessageEmitter, writer as MessageWriter, handler as any as TypeScriptService);
+				emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'shutdown', params: {} });
+				sinon.assert.calledOnce(handler.shutdown);
+				emitter.emit(event);
+				sinon.assert.calledOnce(handler.shutdown);
 			});
 		}
 	});
