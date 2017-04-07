@@ -4,7 +4,7 @@ import { camelCase, omit } from 'lodash';
 import { FORMAT_TEXT_MAP, Span, Tracer } from 'opentracing';
 import { inspect } from 'util';
 import { ErrorCodes, Message, MessageWriter, StreamMessageReader } from 'vscode-jsonrpc';
-import { isNotificationMessage, isRequestMessage, ResponseMessage } from 'vscode-jsonrpc/lib/messages';
+import { isNotificationMessage, isReponseMessage, isRequestMessage, ResponseMessage } from 'vscode-jsonrpc/lib/messages';
 import { Logger, NoopLogger } from './logging';
 import { TypeScriptService } from './typescript-service';
 
@@ -106,7 +106,11 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 			logger.log('-->', message);
 		}
 		// Ignore responses
+		if (isReponseMessage(message)) {
+			return;
+		}
 		if (!isRequestMessage(message) && !isNotificationMessage(message)) {
+			logger.error('Received invalid message:', message);
 			return;
 		}
 		switch (message.method) {
@@ -203,7 +207,7 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 						id: message.id,
 						error: {
 							message: err.message + '',
-							code: typeof err.code === 'number' ? err.code : ErrorCodes.InternalError,
+							code: typeof err.code === 'number' ? err.code : ErrorCodes.UnknownErrorCode,
 							data: omit(err, ['message', 'code'])
 						}
 					} as ResponseMessage);
