@@ -163,18 +163,38 @@ describe('connection', () => {
 			sinon.assert.calledOnce(writer.write);
 			sinon.assert.calledWithExactly(writer.write, sinon.match({ jsonrpc: '2.0', id: 1, error: { code: ErrorCodes.RequestCancelled } }));
 		});
-		it('should call shutdown when the stream is closed unexpectedly', async () => {
-			const handler: TypeScriptService = Object.create(TypeScriptService.prototype);
-			const shutdownStub = sinon.stub(handler, 'shutdown');
+		it('should call shutdown if the service was initialized and the stream is closed unexpectedly', async () => {
+			const handler = {
+				initialize: sinon.stub(),
+				shutdown: sinon.stub()
+			};
 			const emitter = new EventEmitter();
 			const writer = {
 				write: sinon.spy(),
 				onError: Event.None,
 				onClose: Event.None
 			};
-			registerLanguageHandler(emitter as MessageEmitter, writer as MessageWriter, handler as TypeScriptService);
+			registerLanguageHandler(emitter as MessageEmitter, writer as MessageWriter, handler as any as TypeScriptService);
+			emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
+			await new Promise(resolve => setTimeout(resolve, 0));
+			sinon.assert.calledOnce(handler.initialize);
 			emitter.emit('close');
-			sinon.assert.calledOnce(shutdownStub);
+			sinon.assert.calledOnce(handler.shutdown);
+		});
+		it('should not call shutdown if the service was not initialized', async () => {
+			const handler = {
+				initialize: sinon.stub(),
+				shutdown: sinon.stub()
+			};
+			const emitter = new EventEmitter();
+			const writer = {
+				write: sinon.spy(),
+				onError: Event.None,
+				onClose: Event.None
+			};
+			registerLanguageHandler(emitter as MessageEmitter, writer as MessageWriter, handler as any as TypeScriptService);
+			emitter.emit('close');
+			sinon.assert.notCalled(handler.shutdown);
 		});
 	});
 });

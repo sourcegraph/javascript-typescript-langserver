@@ -87,12 +87,20 @@ export interface RegisterLanguageHandlerOptions {
  * @param handler TypeScriptService object that contains methods for all methods to be handled
  */
 export function registerLanguageHandler(messageEmitter: MessageEmitter, messageWriter: MessageWriter, handler: TypeScriptService, options: RegisterLanguageHandlerOptions = {}): void {
+
 	const logger = options.logger || new NoopLogger();
 	const tracer = options.tracer || new Tracer();
+
 	/** Tracks Subscriptions for results to unsubscribe them on $/cancelRequest */
 	const subscriptions = new Map<string | number, Subscription>();
-	/** Whether shutdown was already called by the client */
-	let shutdownCalled = false;
+
+	/**
+	 * Whether the handler is in an initialized state.
+	 * `initialize` sets this to true, `shutdown` to false.
+	 * Used to determine whether a manual `shutdown` call is needed on error/close
+	 */
+	let initialized = false;
+
 	messageEmitter.on('message', async message => {
 		if (options.logMessages) {
 			logger.log('-->', message);
@@ -101,8 +109,10 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 		if (!isRequestMessage(message) && !isNotificationMessage(message)) {
 			return;
 		}
-		if (message.method === 'shutdown') {
-			shutdownCalled = true;
+		if (message.method === 'initialize') {
+			initialized = true;
+		} else if (message.method === 'shutdown') {
+			initialized = false;
 		} else if (message.method === '$/cancelRequest' && isNotificationMessage(message)) {
 			// Cancel another request by unsubscribing from the Observable
 			const subscription = subscriptions.get(message.params.id);
@@ -203,18 +213,20 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 			});
 		}
 	});
-	// On stream close, shutdown handler
+
+	// On stream close, shutdown handler if it was initialized
 	messageEmitter.once('close', () => {
-		if (!shutdownCalled) {
-			shutdownCalled = true;
+		if (initialized) {
+			initialized = false;
 			logger.error('Stream was closed without shutdown notification');
 			handler.shutdown();
 		}
 	});
-	// On stream error, shutdown handler
+
+	// On stream error, shutdown handler if it was initialized
 	messageEmitter.once('error', err => {
-		if (!shutdownCalled) {
-			shutdownCalled = true;
+		if (initialized) {
+			initialized = false;
 			logger.error('Stream:', err);
 			handler.shutdown();
 		}
