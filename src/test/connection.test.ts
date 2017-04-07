@@ -59,6 +59,23 @@ describe('connection', () => {
 			sinon.assert.calledOnce(writer.write);
 			sinon.assert.calledWithExactly(writer.write, sinon.match({ jsonrpc: '2.0', id: 1, result: 2 }));
 		});
+		it('should ignore exit notifications', async () => {
+			const handler = {
+				exit: sinon.spy()
+			};
+			const emitter = new EventEmitter();
+			const writer = {
+				write: sinon.spy(),
+				onError: Event.None,
+				onClose: Event.None
+			};
+			registerLanguageHandler(emitter as MessageEmitter, writer as MessageWriter, handler as any);
+			const params = [1, 1];
+			emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'exit', params });
+			await new Promise(resolve => setTimeout(resolve, 0));
+			sinon.assert.notCalled(handler.exit);
+			sinon.assert.notCalled(writer.write);
+		});
 		it('should call a handler on request and send the result of the returned Observable', async () => {
 			const handler: TypeScriptService = Object.create(TypeScriptService.prototype);
 			const hoverStub = sinon.stub(handler, 'textDocumentHover').returns(Observable.of(2));

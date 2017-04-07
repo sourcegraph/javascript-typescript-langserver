@@ -109,28 +109,35 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 		if (!isRequestMessage(message) && !isNotificationMessage(message)) {
 			return;
 		}
-		if (message.method === 'initialize') {
-			initialized = true;
-		} else if (message.method === 'shutdown') {
-			initialized = false;
-		} else if (message.method === '$/cancelRequest' && isNotificationMessage(message)) {
-			// Cancel another request by unsubscribing from the Observable
-			const subscription = subscriptions.get(message.params.id);
-			if (!subscription) {
-				logger.error(`$/cancelRequest for unknown request ID ${message.params.id}`);
+		switch (message.method) {
+			case 'initialize':
+				initialized = true;
+				break;
+			case 'shutdown':
+				initialized = false;
+				break;
+			case 'exit':
+				// Ignore exit notification, it's not the responsibility of the TypeScriptService to handle it,
+				// but the TCP / STDIO server which needs to close the socket or kill the process
 				return;
-			}
-			subscription.unsubscribe();
-			subscriptions.delete(message.params.id);
-			messageWriter.write({
-				jsonrpc: '2.0',
-				id: message.params.id,
-				error: {
-					message: 'Request cancelled',
-					code: ErrorCodes.RequestCancelled
+			case '$/cancelRequest':
+				// Cancel another request by unsubscribing from the Observable
+				const subscription = subscriptions.get(message.params.id);
+				if (!subscription) {
+					logger.error(`$/cancelRequest for unknown request ID ${message.params.id}`);
+					return;
 				}
-			} as ResponseMessage);
-			return;
+				subscription.unsubscribe();
+				subscriptions.delete(message.params.id);
+				messageWriter.write({
+					jsonrpc: '2.0',
+					id: message.params.id,
+					error: {
+						message: 'Request cancelled',
+						code: ErrorCodes.RequestCancelled
+					}
+				} as ResponseMessage);
+				return;
 		}
 		const method = camelCase(message.method);
 		let span = new Span();

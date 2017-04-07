@@ -148,10 +148,6 @@ export class TypeScriptService {
 		return null;
 	}
 
-	async exit(params = {}, span = new Span()): Promise<void> {
-		// noop
-	}
-
 	async textDocumentDefinition(params: TextDocumentPositionParams, span = new Span()): Promise<Location[]> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
