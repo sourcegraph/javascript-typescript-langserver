@@ -2,7 +2,7 @@
   "name": "javascript-typescript-langserver",
   "homepage": "https://github.com/sourcegraph/javascript-typescript-langserver",
   "author": "Sourcegraph",
-  "version": "2.0.0-pre.9",
+  "version": "2.0.0-pre.13",
   "license": "Apache-2.0",
   "description": "Implementation of the Language Server Protocol for JavaScript and TypeScript",
   "keywords": [
@@ -33,6 +33,7 @@
     "watch": "tsc -w"
   },
   "dependencies": {
+    "@reactivex/rxjs": "^5.3.0",
     "async": "^2.1.5",
     "bluebird": "^3.4.7",
     "chai": "^3.4.34",
@@ -43,6 +44,7 @@
     "iterare": "^0.0.7",
     "lodash": "^4.17.4",
     "mz": "^2.6.0",
+    "opentracing": "felixfbecker/opentracing-javascript#d42e8ac50e3555ca1a9a006bee0fd5856a838a47",
     "semaphore-async-await": "^1.5.1",
     "typescript": "2.2.1",
     "vscode-jsonrpc": "^3.1.0",
