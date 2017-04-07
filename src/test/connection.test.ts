@@ -197,6 +197,32 @@ describe('connection', () => {
 				emitter.emit('close');
 				sinon.assert.notCalled(handler.shutdown);
 			});
+			it(`should log requests and responses`, async () => {
+				const handler = {
+					initialize: sinon.stub(),
+					shutdown: sinon.stub()
+				};
+				const emitter = new EventEmitter();
+				const writer = {
+					write: sinon.stub(),
+					onError: Event.None,
+					onClose: Event.None
+				};
+				const logger = {
+					log: sinon.spy(),
+					info: sinon.stub(),
+					warn: sinon.stub(),
+					error: sinon.stub()
+				};
+				registerLanguageHandler(emitter as MessageEmitter,
+					writer as MessageWriter,
+					handler as any as TypeScriptService,
+					{ logMessages: true, logger });
+				const params = [1, 1];
+				emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params });
+				await new Promise(resolve => setTimeout(resolve, 0));
+				sinon.assert.calledTwice(logger.log);
+			});
 		}
 	});
 });

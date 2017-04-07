@@ -30,6 +30,20 @@ function isPromiseLike(candidate: any): candidate is PromiseLike<any> {
 }
 
 /**
+ * Writes message to a given writer, logs it if options require message logging
+ * @param message message object to write
+ * @param writer writer to use
+ * @param options options (used to determine if message should also be logged)
+ * @param logger logger to log message to (if options require message logging)
+ */
+function write(message: ResponseMessage, writer: MessageWriter, options: RegisterLanguageHandlerOptions, logger: Logger) {
+	if (options.logMessages) {
+		logger.log('<--', message);
+	}
+	writer.write(message);
+}
+
+/**
  * Takes a NodeJS ReadableStream and emits parsed messages received on the stream.
  * In opposite to StreamMessageReader, supports multiple listeners and is compatible with Observables
  */
@@ -122,14 +136,14 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 			}
 			subscription.unsubscribe();
 			subscriptions.delete(message.params.id);
-			messageWriter.write({
+			write({
 				jsonrpc: '2.0',
 				id: message.params.id,
 				error: {
 					message: 'Request cancelled',
 					code: ErrorCodes.RequestCancelled
 				}
-			} as ResponseMessage);
+			} as ResponseMessage, messageWriter, options, logger);
 			return;
 		}
 		const method = camelCase(message.method);
@@ -145,14 +159,14 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 			}
 			if (typeof (handler as any)[method] !== 'function') {
 				// Method not implemented
-				messageWriter.write({
+				write({
 					jsonrpc: '2.0',
 					id: message.id,
 					error: {
 						code: ErrorCodes.MethodNotFound,
 						message: `Method ${method} not implemented`
 					}
-				} as ResponseMessage);
+				} as ResponseMessage, messageWriter, options, logger);
 				return;
 			}
 		}
@@ -184,14 +198,14 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 				})
 				.subscribe(result => {
 					// Send result
-					messageWriter.write({
+					write({
 						jsonrpc: '2.0',
 						id: message.id,
 						result
-					} as ResponseMessage);
+					} as ResponseMessage, messageWriter, options, logger);
 				}, err => {
 					// Send error response
-					messageWriter.write({
+					write({
 						jsonrpc: '2.0',
 						id: message.id,
 						error: {
@@ -199,7 +213,7 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 							code: typeof err.code === 'number' ? err.code : ErrorCodes.InternalError,
 							data: omit(err, ['message', 'code'])
 						}
-					} as ResponseMessage);
+					} as ResponseMessage, messageWriter, options, logger);
 					// Set error on span
 					span.setTag('error', true);
 					span.log({ 'event': 'error', 'error.object': err });
