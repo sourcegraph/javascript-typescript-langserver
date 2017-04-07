@@ -70,8 +70,7 @@ describe('connection', () => {
 				onClose: Event.None
 			};
 			registerLanguageHandler(emitter as MessageEmitter, writer as MessageWriter, handler as any);
-			const params = [1, 1];
-			emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'exit', params });
+			emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'exit' });
 			await new Promise(resolve => setTimeout(resolve, 0));
 			sinon.assert.notCalled(handler.exit);
 			sinon.assert.notCalled(writer.write);
