@@ -3,8 +3,8 @@ import { EventEmitter } from 'events';
 import { camelCase, omit } from 'lodash';
 import { FORMAT_TEXT_MAP, Span, Tracer } from 'opentracing';
 import { inspect } from 'util';
-import { ErrorCodes, Message, MessageWriter, StreamMessageReader } from 'vscode-jsonrpc';
-import { isNotificationMessage, isRequestMessage, ResponseMessage } from 'vscode-jsonrpc/lib/messages';
+import { ErrorCodes, Message, StreamMessageReader as VSCodeStreamMessageReader, StreamMessageWriter as VSCodeStreamMessageWriter } from 'vscode-jsonrpc';
+import { isNotificationMessage, isRequestMessage, NotificationMessage, RequestMessage, ResponseMessage } from 'vscode-jsonrpc/lib/messages';
 import { Logger, NoopLogger } from './logging';
 import { TypeScriptService } from './typescript-service';
 
@@ -29,18 +29,12 @@ function isPromiseLike(candidate: any): candidate is PromiseLike<any> {
 	return typeof candidate === 'object' && candidate !== null && typeof candidate.then === 'function';
 }
 
-/**
- * Writes message to a given writer, logs it if options require message logging
- * @param message message object to write
- * @param writer writer to use
- * @param options options (used to determine if message should also be logged)
- * @param logger logger to log message to (if options require message logging)
- */
-function write(message: ResponseMessage, writer: MessageWriter, options: RegisterLanguageHandlerOptions, logger: Logger) {
-	if (options.logMessages) {
-		logger.log('<--', message);
-	}
-	writer.write(message);
+export interface MessageLogOptions {
+	/** Logger to use */
+	logger?: Logger;
+
+	/** Whether to log all messages */
+	logMessages?: boolean;
 }
 
 /**
@@ -49,9 +43,10 @@ function write(message: ResponseMessage, writer: MessageWriter, options: Registe
  */
 export class MessageEmitter extends EventEmitter {
 
-	constructor(input: NodeJS.ReadableStream) {
+	constructor(input: NodeJS.ReadableStream, options: MessageLogOptions = {}) {
 		super();
-		const reader = new StreamMessageReader(input);
+		const reader = new VSCodeStreamMessageReader(input);
+		// Forward events
 		reader.listen(msg => {
 			this.emit('message', msg);
 		});
@@ -62,35 +57,79 @@ export class MessageEmitter extends EventEmitter {
 			this.emit('close');
 		});
 		this.setMaxListeners(Infinity);
+		// Register message listener to log messages if configured
+		if (options.logMessages && options.logger) {
+			const logger = options.logger;
+			this.on('message', message => {
+				logger.log('-->', message);
+			});
+		}
 	}
 
-	/* istanbul ignore next */
+	/** Emitted when a new JSON RPC message was received on the input stream */
 	on(event: 'message', listener: (message: Message) => void): this;
+	/** Emitted when the underlying input stream emitted an error */
 	on(event: 'error', listener: (error: Error) => void): this;
+	/** Emitted when the underlying input stream was closed */
 	on(event: 'close', listener: () => void): this;
+	/* istanbul ignore next */
 	on(event: string, listener: Function): this {
 		return super.on(event, listener);
 	}
 
-	/* istanbul ignore next */
+	/** Emitted when a new JSON RPC message was received on the input stream */
 	once(event: 'message', listener: (message: Message) => void): this;
+	/** Emitted when the underlying input stream emitted an error */
 	once(event: 'error', listener: (error: Error) => void): this;
+	/** Emitted when the underlying input stream was closed */
 	once(event: 'close', listener: () => void): this;
+	/* istanbul ignore next */
 	once(event: string, listener: Function): this {
 		return super.on(event, listener);
 	}
 }
 
+/**
+ * Wraps vscode-jsonrpcs StreamMessageWriter to support logging messages,
+ * decouple our code from the vscode-jsonrpc module and provide a more
+ * consistent event API
+ */
+export class MessageWriter {
+
+	private logger: Logger;
+	private logMessages: boolean;
+	private vscodeWriter: VSCodeStreamMessageWriter;
+
+	/**
+	 * @param output The output stream to write to (e.g. STDOUT or a socket)
+	 * @param options
+	 */
+	constructor(output: NodeJS.WritableStream, options: MessageLogOptions = {}) {
+		this.vscodeWriter = new VSCodeStreamMessageWriter(output);
+		this.logger = options.logger || new NoopLogger();
+		this.logMessages = !!options.logMessages;
+	}
+
+	/**
+	 * Writes a JSON RPC message to the output stream.
+	 * Logs it if configured
+	 *
+	 * @param message A complete JSON RPC message object
+	 */
+	write(message: RequestMessage | NotificationMessage | ResponseMessage): void {
+		if (this.logMessages) {
+			this.logger.log('<--', message);
+		}
+		this.vscodeWriter.write(message);
+	}
+}
+
 export interface RegisterLanguageHandlerOptions {
 
-	/** A logger that all messages will be logged to */
 	logger?: Logger;
 
  	/** An opentracing-compatible tracer */
 	tracer?: Tracer;
-
-	/** Whether to log all messages */
-	logMessages?: boolean;
 }
 
 /**
@@ -116,9 +155,6 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 	let initialized = false;
 
 	messageEmitter.on('message', async message => {
-		if (options.logMessages) {
-			logger.log('-->', message);
-		}
 		// Ignore responses
 		if (!isRequestMessage(message) && !isNotificationMessage(message)) {
 			return;
@@ -136,14 +172,14 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 			}
 			subscription.unsubscribe();
 			subscriptions.delete(message.params.id);
-			write({
+			messageWriter.write({
 				jsonrpc: '2.0',
 				id: message.params.id,
 				error: {
 					message: 'Request cancelled',
 					code: ErrorCodes.RequestCancelled
 				}
-			} as ResponseMessage, messageWriter, options, logger);
+			});
 			return;
 		}
 		const method = camelCase(message.method);
@@ -159,14 +195,14 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 			}
 			if (typeof (handler as any)[method] !== 'function') {
 				// Method not implemented
-				write({
+				messageWriter.write({
 					jsonrpc: '2.0',
 					id: message.id,
 					error: {
 						code: ErrorCodes.MethodNotFound,
 						message: `Method ${method} not implemented`
 					}
-				} as ResponseMessage, messageWriter, options, logger);
+				});
 				return;
 			}
 		}
@@ -198,14 +234,14 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 				})
 				.subscribe(result => {
 					// Send result
-					write({
+					messageWriter.write({
 						jsonrpc: '2.0',
 						id: message.id,
 						result
-					} as ResponseMessage, messageWriter, options, logger);
+					});
 				}, err => {
 					// Send error response
-					write({
+					messageWriter.write({
 						jsonrpc: '2.0',
 						id: message.id,
 						error: {
@@ -213,7 +249,7 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 							code: typeof err.code === 'number' ? err.code : ErrorCodes.InternalError,
 							data: omit(err, ['message', 'code'])
 						}
-					} as ResponseMessage, messageWriter, options, logger);
+					});
 					// Set error on span
 					span.setTag('error', true);
 					span.log({ 'event': 'error', 'error.object': err });
