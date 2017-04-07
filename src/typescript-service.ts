@@ -25,7 +25,7 @@ import { isCancelledError } from './cancellation';
 import { FileSystem, FileSystemUpdater, LocalFileSystem, RemoteFileSystem } from './fs';
 import { RemoteLanguageClient } from './lang-handler';
 import { Logger, LSPLogger } from './logging';
-import { InMemoryFileSystem, skipDir, walkInMemoryFs } from './memfs';
+import { InMemoryFileSystem, isTypeScriptLibrary, skipDir, walkInMemoryFs } from './memfs';
 import * as pm from './project-manager';
 import {
 	DependencyReference,
@@ -1506,7 +1506,7 @@ export class TypeScriptService {
 	 * returns git://github.com/Microsoft/TypeScript URL, otherwise returns file:// one
 	 */
 	private _defUri(filePath: string): string {
-		if (this.projectManager.getFs().isTypeScriptLibrary(filePath)) {
+		if (isTypeScriptLibrary(filePath)) {
 			return 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/' + path_.basename(filePath);
 		}
 		return util.path2uri(this.root, filePath);
@@ -1519,7 +1519,7 @@ export class TypeScriptService {
 		const result: SymbolInformation[] = [];
 		for (const sourceFile of configuration.getProgram().getSourceFiles().sort((a, b) => a.fileName.localeCompare(b.fileName))) {
 			// excluding navigation items from TypeScript libraries
-			if (this.projectManager.getFs().isTypeScriptLibrary(sourceFile.fileName)) {
+			if (isTypeScriptLibrary(sourceFile.fileName)) {
 				continue;
 			}
 			let tree;

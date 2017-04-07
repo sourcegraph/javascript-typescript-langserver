@@ -52,10 +52,6 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 		this.rootNode = { file: false, children: new Map<string, FileSystemNode>() };
 	}
 
-	isTypeScriptLibrary(path: string): boolean {
-		return getTypeScriptLibraries().has(util.toUnixPath(path));
-	}
-
 	/**
 	 * Returns an IterableIterator for all URIs known to exist in the workspace (content loaded or not)
 	 */
@@ -104,7 +100,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	getContent(uri: string): string {
 		let content = this.files.get(uri);
 		if (content === undefined) {
-			content = getTypeScriptLibraries().get(util.uri2path(uri));
+			content = typeScriptLibraries.get(util.uri2path(uri));
 		}
 		if (content === undefined) {
 			throw new Error(`Content of ${uri} is not available in memory`);
@@ -156,7 +152,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 			return content;
 		}
 
-		return getTypeScriptLibraries().get(path);
+		return typeScriptLibraries.get(path);
 	}
 
 	/**
@@ -260,23 +256,25 @@ export function walkInMemoryFs(fs: InMemoryFileSystem, rootdir: string, walkfn: 
 /**
  * TypeScript library files fetched from the local file system (bundled TS)
  */
-let tsLibraries: Map<string, string>;
+export const typeScriptLibraries: Map<string, string> = new Map<string, string>();
 
 /**
- * Fetches TypeScript library files from local file system
+ * Fetching TypeScript library files from local file system
  */
-export function getTypeScriptLibraries(): Map<string, string> {
-	if (!tsLibraries) {
-		tsLibraries = new Map<string, string>();
-		const path = path_.dirname(ts.getDefaultLibFilePath({ target: ts.ScriptTarget.ES2015 }));
-		fs_.readdirSync(path).forEach(file => {
-			const fullPath = path_.join(path, file);
-			if (fs_.statSync(fullPath).isFile()) {
-				tsLibraries.set(util.toUnixPath(fullPath), fs_.readFileSync(fullPath).toString());
-			}
-		});
+const path = path_.dirname(ts.getDefaultLibFilePath({ target: ts.ScriptTarget.ES2015 }));
+fs_.readdirSync(path).forEach(file => {
+	const fullPath = path_.join(path, file);
+	if (fs_.statSync(fullPath).isFile()) {
+		typeScriptLibraries.set(util.toUnixPath(fullPath), fs_.readFileSync(fullPath).toString());
 	}
-	return tsLibraries;
+});
+
+/**
+ * @param path file path
+ * @return true if given file belongs to bundled TypeScript libraries
+ */
+export function isTypeScriptLibrary(path: string): boolean {
+	return typeScriptLibraries.has(util.toUnixPath(path));
 }
 
 /**
