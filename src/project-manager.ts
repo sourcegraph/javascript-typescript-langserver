@@ -1,3 +1,4 @@
+import { Observable } from '@reactivex/rxjs';
 import iterate from 'iterare';
 import { memoize } from 'lodash';
 import { Span } from 'opentracing';
@@ -86,7 +87,7 @@ export class ProjectManager implements Disposable {
 	/**
 	 * A URI Map from file to files referenced by the file, so files only need to be pre-processed once
 	 */
-	private referencedFiles = new Map<string, Promise<Iterable<string>>>();
+	private referencedFiles = new Map<string, Observable<string>>();
 
 	/**
 	 * @param rootPath root path as passed to `initialize`
@@ -236,8 +237,7 @@ export class ProjectManager implements Disposable {
 			const promise = (async () => {
 				try {
 					await this.ensureModuleStructure();
-					// Include dependencies up to depth 30
-					await this.ensureReferencedFiles(uri, 30, undefined, span);
+					await this.ensureReferencedFiles(uri, undefined, undefined, span).toPromise();
 				} catch (err) {
 					this.ensuredFilesForHoverAndDefinition.delete(uri);
 					throw err;
@@ -332,36 +332,41 @@ export class ProjectManager implements Disposable {
 	 * - files referenced by the given file
 	 * - files included by the given file
 	 *
+	 * The return values of this method are not cached, but those of the file fetching and file processing are.
+	 *
 	 * @param uri File to process
-	 * @param maxDepth stop collecting when reached given recursion level
-	 * @param seen tracks visited files to avoid cycles
+	 * @param maxDepth Stop collecting when reached given recursion level
+	 * @param ignore Tracks visited files to prevent cycles
 	 * @param childOf OpenTracing parent span for tracing
+	 * @return Observable of file URIs ensured
 	 */
-	async ensureReferencedFiles(uri: string, maxDepth = 30, seen = new Set<string>(), childOf = new Span()): Promise<void> {
+	ensureReferencedFiles(uri: string, maxDepth = 30, ignore = new Set<string>(), childOf = new Span()): Observable<string> {
 		const span = childOf.tracer().startSpan('Ensure referenced files', { childOf });
 		span.addTags({ uri, maxDepth });
-		try {
-			seen.add(uri);
-			if (maxDepth > 0) {
-				const referencedUris = await this.resolveReferencedFiles(uri);
-				await Promise.all(
-					iterate(referencedUris).map(async referencedUri => {
-						try {
-							await this.ensureReferencedFiles(referencedUri, maxDepth - 1, seen, span);
-						} catch (err) {
-							// Continue even if an import wasn't found
-							this.logger.error('Error ensuring transitive referenced files: ', err);
-						}
+		ignore.add(uri);
+		return (maxDepth === 0 ? Observable.empty<string>() : this.resolveReferencedFiles(uri))
+			// Prevent cycles
+			.filter(referencedUri => !ignore.has(referencedUri))
+			// Call method recursively with one less dep level
+			// Don't pass span, because the recursive call would create way to many spans
+			.mergeMap(referencedUri =>
+				this.ensureReferencedFiles(referencedUri, maxDepth - 1, ignore)
+					// Continue even if an import wasn't found
+					.catch(err => {
+						this.logger.error(`Error resolving file references for ${uri}:`, err);
+						return [];
 					})
-				);
-			}
-		} catch (err) {
-			span.setTag('error', true);
-			span.log({ 'event': 'error', 'error.object': err });
-			throw err;
-		} finally {
-			span.finish();
-		}
+			)
+			// Log errors to span
+			.catch(err => {
+				span.setTag('error', true);
+				span.log({ 'event': 'error', 'error.object': err });
+				throw err;
+			})
+			// Finish span
+			.finally(() => {
+				span.finish();
+			});
 	}
 
 	/**
@@ -372,64 +377,68 @@ export class ProjectManager implements Disposable {
 	 * @param span OpenTracing span to pass to child operations
 	 * @return URIs of files referenced by the file
 	 */
-	private async resolveReferencedFiles(uri: string, span = new Span()): Promise<Iterable<string>> { // TODO return Observable<string>
-		let promise = this.referencedFiles.get(uri);
-		if (promise) {
-			return promise;
+	private resolveReferencedFiles(uri: string, span = new Span()): Observable<string> {
+		let observable = this.referencedFiles.get(uri);
+		if (observable) {
+			return observable;
 		}
-		promise = (async () => {
-			try {
-				const parts = url.parse(uri);
-				if (!parts.pathname) {
-					throw new Error(`Invalid URI ${uri}`);
-				}
-				// TypeScript works with file paths, not URIs
-				const filePath = parts.pathname.split('/').map(decodeURIComponent).join('/');
-				await this.updater.ensure(uri, span);
+		const parts = url.parse(uri);
+		if (!parts.pathname) {
+			return Observable.throw(new Error(`Invalid URI ${uri}`));
+		}
+		// TypeScript works with file paths, not URIs
+		const filePath = parts.pathname.split('/').map(decodeURIComponent).join('/');
+		observable = Observable.from(this.updater.ensure(uri, span))
+			.mergeMap(() => {
 				const config = this.getConfiguration(filePath);
-				await config.ensureBasicFiles();
-				const contents = this.localFs.getContent(uri);
-				const info = ts.preProcessFile(contents, true, true);
-				const compilerOpt = config.getHost().getCompilationSettings();
-				// TODO remove platform-specific behavior here, the host OS is not coupled to the client OS
-				const resolver = !this.strict && os.platform() === 'win32' ? path_ : path_.posix;
-				// Iterate imported files
-				return iterate(info.importedFiles)
-					.map(importedFile => ts.resolveModuleName(util.toUnixPath(importedFile.fileName), filePath, compilerOpt, config.moduleResolutionHost()))
-					// false means we didn't find a file defining the module. It
-					// could still exist as an ambient module, which is why we
-					// fetch global*.d.ts files.
-					.filter(resolved => !!(resolved && resolved.resolvedModule))
-					// Use same scheme, slashes, host for referenced URI as input file
-					.map(resolved => url.format({ ...parts, pathname: resolved.resolvedModule!.resolvedFileName, search: undefined, hash: undefined }))
-					// Concatenate URIs of referenced files
-					.concat(
-						iterate(info.referencedFiles)
-							.map(ref => {
+				// TODO remove this mergeMap when ensureBasicFiles becomes sync
+				return Observable.from(config.ensureBasicFiles())
+					.mergeMap(() => {
+						const contents = this.localFs.getContent(uri);
+						const info = ts.preProcessFile(contents, true, true);
+						const compilerOpt = config.getHost().getCompilationSettings();
+						// TODO remove platform-specific behavior here, the host OS is not coupled to the client OS
+						const resolver = !this.strict && os.platform() === 'win32' ? path_ : path_.posix;
+						// Iterate imported files
+						return Observable.merge(
+							// References with `import`
+							Observable.from(info.importedFiles)
+								.map(importedFile => ts.resolveModuleName(util.toUnixPath(importedFile.fileName), filePath, compilerOpt, config.moduleResolutionHost()))
+								// false means we didn't find a file defining the module. It
+								// could still exist as an ambient module, which is why we
+								// fetch global*.d.ts files.
+								.filter(resolved => !!(resolved && resolved.resolvedModule))
+								.map(resolved => resolved.resolvedModule!.resolvedFileName),
+							// References with `<reference path="..."/>`
+							Observable.from(info.referencedFiles)
 								// Resolve triple slash references relative to current file
 								// instead of using module resolution host because it behaves
 								// differently in "nodejs" mode
-								const refFilePath = util.toUnixPath(
+								.map(referencedFile => util.toUnixPath(
 									path_.relative(
 										this.rootPath,
 										resolver.resolve(
 											this.rootPath,
 											resolver.dirname(filePath),
-											util.toUnixPath(ref.fileName)
+											util.toUnixPath(referencedFile.fileName)
 										)
 									)
-								);
-								// Use same scheme, slashes, host for referenced URI as input file
-								return url.format({ ...parts, pathname: refFilePath, search: undefined, hash: undefined });
-							})
-					);
-			} catch (err) {
+								))
+						);
+					});
+			})
+			// Use same scheme, slashes, host for referenced URI as input file
+			.map(filePath => url.format({ ...parts, pathname: filePath, search: undefined, hash: undefined }))
+			// Don't cache errors
+			.catch(err => {
 				this.referencedFiles.delete(uri);
 				throw err;
-			}
-		})();
-		this.referencedFiles.set(uri, promise);
-		return promise;
+			})
+			// Make sure all subscribers get the same values
+			.publishReplay()
+			.refCount();
+		this.referencedFiles.set(uri, observable);
+		return observable;
 	}
 
 	/**
