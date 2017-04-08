@@ -4,6 +4,7 @@ import { Span } from 'opentracing';
 import * as os from 'os';
 import * as path_ from 'path';
 import * as ts from 'typescript';
+import * as url from 'url';
 import { Disposable } from 'vscode-languageserver';
 import { CancellationToken, CancellationTokenSource, throwIfCancelledError, throwIfRequested } from './cancellation';
 import { FileSystemUpdater } from './fs';
@@ -81,6 +82,11 @@ export class ProjectManager implements Disposable {
 	 * For references/symbols we need all the source files making workspace so this flag tracks if we already did it
 	 */
 	private ensuredAllFiles?: Promise<void>;
+
+	/**
+	 * A URI Map from file to files referenced by the file, so files only need to be pre-processed once
+	 */
+	private referencedFiles = new Map<string, Promise<Iterable<string>>>();
 
 	/**
 	 * @param rootPath root path as passed to `initialize`
@@ -231,7 +237,7 @@ export class ProjectManager implements Disposable {
 				try {
 					await this.ensureModuleStructure();
 					// Include dependencies up to depth 30
-					await this.ensureTransitiveFileDependencies(uri, 30, undefined, span);
+					await this.ensureReferencedFiles(uri, 30, undefined, span);
 				} catch (err) {
 					this.ensuredFilesForHoverAndDefinition.delete(uri);
 					throw err;
@@ -331,17 +337,56 @@ export class ProjectManager implements Disposable {
 	 * @param seen tracks visited files to avoid cycles
 	 * @param childOf OpenTracing parent span for tracing
 	 */
-	private async ensureTransitiveFileDependencies(uri: string, maxDepth: number, seen = new Set<string>(), childOf = new Span()): Promise<void> {
-		const span = childOf.tracer().startSpan('Ensure file imports', { childOf });
+	async ensureReferencedFiles(uri: string, maxDepth = 30, seen = new Set<string>(), childOf = new Span()): Promise<void> {
+		const span = childOf.tracer().startSpan('Ensure referenced files', { childOf });
 		span.addTags({ uri, maxDepth });
 		try {
 			seen.add(uri);
-
-			await this.updater.ensure(uri, span);
-
 			if (maxDepth > 0) {
-				const filePath = util.uri2path(uri);
-				const importPaths = new Set<string>();
+				const referencedUris = await this.resolveReferencedFiles(uri);
+				await Promise.all(
+					iterate(referencedUris).map(async referencedUri => {
+						try {
+							await this.ensureReferencedFiles(referencedUri, maxDepth - 1, seen, span);
+						} catch (err) {
+							// Continue even if an import wasn't found
+							this.logger.error('Error ensuring transitive referenced files: ', err);
+						}
+					})
+				);
+			}
+		} catch (err) {
+			span.setTag('error', true);
+			span.log({ 'event': 'error', 'error.object': err });
+			throw err;
+		} finally {
+			span.finish();
+		}
+	}
+
+	/**
+	 * Returns the files that are referenced from a given file.
+	 * If the file has already been processed, returns a cached value.
+	 *
+	 * @param uri URI of the file to process
+	 * @param span OpenTracing span to pass to child operations
+	 * @return URIs of files referenced by the file
+	 */
+	private async resolveReferencedFiles(uri: string, span = new Span()): Promise<Iterable<string>> { // TODO return Observable<string>
+		let promise = this.referencedFiles.get(uri);
+		if (promise) {
+			return promise;
+		}
+		promise = (async () => {
+			try {
+				const referencedFiles = new Set<string>();
+				const parts = url.parse(uri);
+				if (!parts.pathname) {
+					throw new Error(`Invalid URI ${uri}`);
+				}
+				// TypeScript works with file paths, not URIs
+				const filePath = parts.pathname.split('/').map(decodeURIComponent).join('/');
+				await this.updater.ensure(uri, span);
 				const config = this.getConfiguration(filePath);
 				await config.ensureBasicFiles();
 				const contents = this.localFs.getContent(uri);
@@ -356,37 +401,36 @@ export class ProjectManager implements Disposable {
 						// global*.d.ts files.
 						continue;
 					}
-					importPaths.add(resolved.resolvedModule.resolvedFileName);
+					// Use same scheme, slashes, host for referenced URI as input file
+					referencedFiles.add(url.format({ ...parts, pathname: resolved.resolvedModule.resolvedFileName, search: undefined, hash: undefined }));
 				}
+				// TODO remove platform-specific behavior here, the host OS is not coupled to the client OS
 				const resolver = !this.strict && os.platform() === 'win32' ? path_ : path_.posix;
 				for (const ref of info.referencedFiles) {
-					// Resolving triple slash references relative to current file
+					// Resolve triple slash references relative to current file
 					// instead of using module resolution host because it behaves
 					// differently in "nodejs" mode
-					const refFilePath = util.toUnixPath(path_.relative(this.rootPath,
-						resolver.resolve(this.rootPath,
-							resolver.dirname(filePath),
-							util.toUnixPath(ref.fileName))));
-					importPaths.add(refFilePath);
+					const refFilePath = util.toUnixPath(
+						path_.relative(
+							this.rootPath,
+							resolver.resolve(
+								this.rootPath,
+								resolver.dirname(filePath),
+								util.toUnixPath(ref.fileName)
+							)
+						)
+					);
+					// Use same scheme, slashes, host for referenced URI as input file
+					referencedFiles.add(url.format({ ...parts, pathname: refFilePath, search: undefined, hash: undefined }));
 				}
-				await Promise.all(
-					iterate(importPaths).map(async importPath => {
-						try {
-							await this.ensureTransitiveFileDependencies(importPath, maxDepth - 1, seen, span);
-						} catch (err) {
-							// Continue even if an import wasn't found
-							this.logger.error('Error ensuring transitive file imports: ', err);
-						}
-					})
-				);
+				return referencedFiles;
+			} catch (err) {
+				this.referencedFiles.delete(uri);
+				throw err;
 			}
-		} catch (err) {
-			span.setTag('error', true);
-			span.log({ 'event': 'error', 'error.object': err });
-			throw err;
-		} finally {
-			span.finish();
-		}
+		})();
+		this.referencedFiles.set(uri, promise);
+		return promise;
 	}
 
 	/**
