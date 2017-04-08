@@ -73,13 +73,6 @@ export class ProjectManager implements Disposable {
 	ensuredModuleStructure?: Promise<void>;
 
 	/**
-	 * Tracks if source file denoted by the given URI is fetched from remote file system and available locally.
-	 * For hover or definition we only need a single file (and maybe its transitive includes/references as reported by TS compiler).
-	 * This map prevents fetching of file content from remote filesystem twice
-	 */
-	ensuredFilesForHoverAndDefinition = new Map<string, Promise<void>>();
-
-	/**
 	 * For references/symbols we need all the source files making workspace so this flag tracks if we already did it
 	 */
 	private ensuredAllFiles?: Promise<void>;
@@ -204,7 +197,7 @@ export class ProjectManager implements Disposable {
 		// require re-fetching of dependency files (but not for
 		// workspace/symbol and textDocument/references, because those
 		// should not be affected by new external modules)
-		this.ensuredFilesForHoverAndDefinition.clear();
+		this.referencedFiles.clear();
 
 		// require re-parsing of projects whose file set may have been affected
 		for (let [dir, config] of this.configs) {
@@ -213,44 +206,6 @@ export class ProjectManager implements Disposable {
 			if (dir.startsWith(rootPath + '/') || rootPath.startsWith(dir + '/') || rootPath === dir) {
 				config.reset();
 			}
-		}
-	}
-
-	/**
-	 * Ensures that all the files needed to produce hover and definitions for a given
-	 * source file URI were fetched from the remote file system. Set of the needed files includes:
-	 * - file itself
-	 * - file's includes and dependencies (transitive) reported by TS compiler up to depth 30
-	 * There is no need to fetch/parse/compile all the workspace files to produce hover of a symbol in the file F because
-	 * definition of this symbol must be in one of files references by F or its dependencies
-	 *
-	 * @param uri target file URI
-	 */
-	async ensureFilesForHoverAndDefinition(uri: string, childOf = new Span()): Promise<void> {
-		const span = childOf.tracer().startSpan('Ensure files for hover and definition', { childOf });
-		span.addTags({ uri });
-		try {
-			const existing = this.ensuredFilesForHoverAndDefinition.get(uri);
-			if (existing) {
-				return existing;
-			}
-			const promise = (async () => {
-				try {
-					await this.ensureModuleStructure();
-					await this.ensureReferencedFiles(uri, undefined, undefined, span).toPromise();
-				} catch (err) {
-					this.ensuredFilesForHoverAndDefinition.delete(uri);
-					throw err;
-				}
-			})();
-			this.ensuredFilesForHoverAndDefinition.set(uri, promise);
-			await promise;
-		} catch (err) {
-			span.setTag('error', true);
-			span.log({ 'event': 'error', 'error.object': err });
-			throw err;
-		} finally {
-			span.finish();
 		}
 	}
 

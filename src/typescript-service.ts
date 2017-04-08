@@ -159,7 +159,10 @@ export class TypeScriptService {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
-		await this.projectManager.ensureFilesForHoverAndDefinition(params.textDocument.uri, span);
+
+		// Fetch files needed to resolve definition
+		await this.projectManager.ensureModuleStructure();
+		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
 
 		const fileName: string = util.uri2path(uri);
 		const configuration = this.projectManager.getConfiguration(fileName);
@@ -191,12 +194,12 @@ export class TypeScriptService {
 	}
 
 	async textDocumentXdefinition(params: TextDocumentPositionParams, span = new Span()): Promise<SymbolLocationInformation[]> {
-		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		const line = params.position.line;
-		const column = params.position.character;
-		await this.projectManager.ensureFilesForHoverAndDefinition(params.textDocument.uri, span);
 
-		const fileName: string = util.uri2path(uri);
+		// Ensure files needed to resolve SymbolLocationInformation are fetched
+		await this.projectManager.ensureModuleStructure();
+		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
+
+		const fileName: string = util.uri2path(params.textDocument.uri);
 		const configuration = this.projectManager.getConfiguration(fileName);
 		await configuration.ensureBasicFiles();
 
@@ -205,7 +208,7 @@ export class TypeScriptService {
 			return [];
 		}
 
-		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
+		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
 		const defs: ts.DefinitionInfo[] = configuration.getService().getDefinitionAtPosition(fileName, offset);
 		const ret = [];
 		if (defs) {
@@ -230,12 +233,12 @@ export class TypeScriptService {
 	}
 
 	async textDocumentHover(params: TextDocumentPositionParams, span = new Span()): Promise<Hover> {
-		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		const line = params.position.line;
-		const column = params.position.character;
-		await this.projectManager.ensureFilesForHoverAndDefinition(params.textDocument.uri, span);
 
-		const fileName: string = util.uri2path(uri);
+		// Ensure files needed to resolve hover are fetched
+		await this.projectManager.ensureModuleStructure();
+		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
+
+		const fileName: string = util.uri2path(params.textDocument.uri);
 		const configuration = this.projectManager.getConfiguration(fileName);
 		await configuration.ensureBasicFiles();
 
@@ -243,7 +246,7 @@ export class TypeScriptService {
 		if (!sourceFile) {
 			throw new Error(`Unknown text document ${params.textDocument.uri}`);
 		}
-		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
+		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
 		const info = configuration.getService().getQuickInfoAtPosition(fileName, offset);
 		if (!info) {
 			return { contents: [] };
@@ -382,11 +385,14 @@ export class TypeScriptService {
 	}
 
 	async textDocumentDocumentSymbol(params: DocumentSymbolParams, span = new Span()): Promise<SymbolInformation[]> {
-		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		await this.projectManager.ensureFilesForHoverAndDefinition(params.textDocument.uri, span);
-		const fileName = util.uri2path(uri);
 
-		const config = this.projectManager.getConfiguration(uri);
+		// Ensure files needed to resolve symbols are fetched
+		await this.projectManager.ensureModuleStructure();
+		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
+
+		const fileName = util.uri2path(params.textDocument.uri);
+
+		const config = this.projectManager.getConfiguration(fileName);
 		await config.ensureBasicFiles();
 		const sourceFile = this._getSourceFile(config, fileName);
 		if (!sourceFile) {
@@ -535,12 +541,12 @@ export class TypeScriptService {
 	}
 
 	async textDocumentCompletion(params: TextDocumentPositionParams, span = new Span()): Promise<CompletionList> {
-		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		const line = params.position.line;
-		const column = params.position.character;
-		const fileName: string = util.uri2path(uri);
 
-		await this.projectManager.ensureFilesForHoverAndDefinition(params.textDocument.uri, span);
+		// Ensure files needed to suggest completions are fetched
+		await this.projectManager.ensureModuleStructure();
+		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
+
+		const fileName: string = util.uri2path(params.textDocument.uri);
 
 		const configuration = this.projectManager.getConfiguration(fileName);
 		await configuration.ensureBasicFiles();
@@ -550,7 +556,7 @@ export class TypeScriptService {
 			return CompletionList.create();
 		}
 
-		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
+		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
 		const completions = configuration.getService().getCompletionsAtPosition(fileName, offset);
 
 		if (completions == null) {
@@ -577,7 +583,9 @@ export class TypeScriptService {
 
 	async textDocumentSignatureHelp(params: TextDocumentPositionParams, span = new Span()): Promise<SignatureHelp> {
 
-		await this.projectManager.ensureFilesForHoverAndDefinition(params.textDocument.uri, span);
+		// Ensure files needed to resolve signature are fetched
+		await this.projectManager.ensureModuleStructure();
+		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
 
 		const filePath = util.uri2path(params.textDocument.uri);
 		const configuration = this.projectManager.getConfiguration(filePath);
@@ -1405,7 +1413,11 @@ export class TypeScriptService {
 
 	async textDocumentDidOpen(params: DidOpenTextDocumentParams): Promise<void> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		await this.projectManager.ensureFilesForHoverAndDefinition(params.textDocument.uri);
+
+		// Ensure files needed for most operations are fetched
+		await this.projectManager.ensureModuleStructure();
+		await this.projectManager.ensureReferencedFiles(params.textDocument.uri).toPromise();
+
 		this.projectManager.didOpen(util.uri2path(uri), params.textDocument.text);
 	}
 
@@ -1424,16 +1436,25 @@ export class TypeScriptService {
 		this.projectManager.didChange(util.uri2path(uri), text);
 	}
 
-	textDocumentDidSave(params: DidSaveTextDocumentParams): Promise<void> {
+	async textDocumentDidSave(params: DidSaveTextDocumentParams): Promise<void> {
+
+		// Ensure files needed to suggest completions are fetched
+		await this.projectManager.ensureModuleStructure();
+		await this.projectManager.ensureReferencedFiles(params.textDocument.uri).toPromise();
+
+		// TODO don't use "relative" URI
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		return this.projectManager.ensureFilesForHoverAndDefinition(uri).then(() => {
-			this.projectManager.didSave(util.uri2path(uri));
-		});
+		this.projectManager.didSave(util.uri2path(uri));
 	}
 
 	async textDocumentDidClose(params: DidCloseTextDocumentParams): Promise<void> {
+
+		// Ensure files needed to suggest completions are fetched
+		await this.projectManager.ensureModuleStructure();
+		await this.projectManager.ensureReferencedFiles(params.textDocument.uri).toPromise();
+
+		// TODO don't use "relative" URI
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		await this.projectManager.ensureFilesForHoverAndDefinition(params.textDocument.uri);
 		this.projectManager.didClose(util.uri2path(uri));
 	}
 
