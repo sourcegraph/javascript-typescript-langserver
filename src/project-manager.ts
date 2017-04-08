@@ -379,7 +379,6 @@ export class ProjectManager implements Disposable {
 		}
 		promise = (async () => {
 			try {
-				const referencedFiles = new Set<string>();
 				const parts = url.parse(uri);
 				if (!parts.pathname) {
 					throw new Error(`Invalid URI ${uri}`);
@@ -392,38 +391,38 @@ export class ProjectManager implements Disposable {
 				const contents = this.localFs.getContent(uri);
 				const info = ts.preProcessFile(contents, true, true);
 				const compilerOpt = config.getHost().getCompilationSettings();
-				for (const imp of info.importedFiles) {
-					const resolved = ts.resolveModuleName(util.toUnixPath(imp.fileName), filePath, compilerOpt, config.moduleResolutionHost());
-					if (!resolved || !resolved.resolvedModule) {
-						// This means we didn't find a file defining
-						// the module. It could still exist as an
-						// ambient module, which is why we fetch
-						// global*.d.ts files.
-						continue;
-					}
-					// Use same scheme, slashes, host for referenced URI as input file
-					referencedFiles.add(url.format({ ...parts, pathname: resolved.resolvedModule.resolvedFileName, search: undefined, hash: undefined }));
-				}
 				// TODO remove platform-specific behavior here, the host OS is not coupled to the client OS
 				const resolver = !this.strict && os.platform() === 'win32' ? path_ : path_.posix;
-				for (const ref of info.referencedFiles) {
-					// Resolve triple slash references relative to current file
-					// instead of using module resolution host because it behaves
-					// differently in "nodejs" mode
-					const refFilePath = util.toUnixPath(
-						path_.relative(
-							this.rootPath,
-							resolver.resolve(
-								this.rootPath,
-								resolver.dirname(filePath),
-								util.toUnixPath(ref.fileName)
-							)
-						)
-					);
+				// Iterate imported files
+				return iterate(info.importedFiles)
+					.map(importedFile => ts.resolveModuleName(util.toUnixPath(importedFile.fileName), filePath, compilerOpt, config.moduleResolutionHost()))
+					// false means we didn't find a file defining the module. It
+					// could still exist as an ambient module, which is why we
+					// fetch global*.d.ts files.
+					.filter(resolved => !!(resolved && resolved.resolvedModule))
 					// Use same scheme, slashes, host for referenced URI as input file
-					referencedFiles.add(url.format({ ...parts, pathname: refFilePath, search: undefined, hash: undefined }));
-				}
-				return referencedFiles;
+					.map(resolved => url.format({ ...parts, pathname: resolved.resolvedModule!.resolvedFileName, search: undefined, hash: undefined }))
+					// Concatenate URIs of referenced files
+					.concat(
+						iterate(info.referencedFiles)
+							.map(ref => {
+								// Resolve triple slash references relative to current file
+								// instead of using module resolution host because it behaves
+								// differently in "nodejs" mode
+								const refFilePath = util.toUnixPath(
+									path_.relative(
+										this.rootPath,
+										resolver.resolve(
+											this.rootPath,
+											resolver.dirname(filePath),
+											util.toUnixPath(ref.fileName)
+										)
+									)
+								);
+								// Use same scheme, slashes, host for referenced URI as input file
+								return url.format({ ...parts, pathname: refFilePath, search: undefined, hash: undefined });
+							})
+					);
 			} catch (err) {
 				this.referencedFiles.delete(uri);
 				throw err;
