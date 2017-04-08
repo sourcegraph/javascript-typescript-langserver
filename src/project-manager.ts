@@ -325,6 +325,19 @@ export class ProjectManager implements Disposable {
 	}
 
 	/**
+	 * Invalidates a cache entry for `resolveReferencedFiles` (e.g. because the file changed)
+	 *
+	 * @param uri The URI that referenced files should be invalidated for. If not given, all entries are invalidated
+	 */
+	invalidateReferencedFiles(uri?: string): void {
+		if (uri) {
+			this.referencedFiles.delete(uri);
+		} else {
+			this.referencedFiles.clear();
+		}
+	}
+
+	/**
 	 * Returns the files that are referenced from a given file.
 	 * If the file has already been processed, returns a cached value.
 	 *
