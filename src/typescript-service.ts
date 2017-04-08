@@ -166,7 +166,7 @@ export class TypeScriptService {
 
 		const fileName: string = util.uri2path(uri);
 		const configuration = this.projectManager.getConfiguration(fileName);
-		await configuration.ensureBasicFiles();
+		configuration.ensureBasicFiles();
 
 		const sourceFile = this._getSourceFile(configuration, fileName);
 		if (!sourceFile) {
@@ -201,7 +201,7 @@ export class TypeScriptService {
 
 		const fileName: string = util.uri2path(params.textDocument.uri);
 		const configuration = this.projectManager.getConfiguration(fileName);
-		await configuration.ensureBasicFiles();
+		configuration.ensureBasicFiles();
 
 		const sourceFile = this._getSourceFile(configuration, fileName);
 		if (!sourceFile) {
@@ -240,7 +240,7 @@ export class TypeScriptService {
 
 		const fileName: string = util.uri2path(params.textDocument.uri);
 		const configuration = this.projectManager.getConfiguration(fileName);
-		await configuration.ensureBasicFiles();
+		configuration.ensureBasicFiles();
 
 		const sourceFile = this._getSourceFile(configuration, fileName);
 		if (!sourceFile) {
@@ -272,7 +272,7 @@ export class TypeScriptService {
 		await this.projectManager.ensureFilesForReferences(params.textDocument.uri);
 
 		const configuration = this.projectManager.getConfiguration(fileName);
-		await configuration.ensureAllFiles();
+		configuration.ensureAllFiles();
 
 		const sourceFile = this._getSourceFile(configuration, fileName);
 		if (!sourceFile) {
@@ -393,7 +393,7 @@ export class TypeScriptService {
 		const fileName = util.uri2path(params.textDocument.uri);
 
 		const config = this.projectManager.getConfiguration(fileName);
-		await config.ensureBasicFiles();
+		config.ensureBasicFiles();
 		const sourceFile = this._getSourceFile(config, fileName);
 		if (!sourceFile) {
 			return [];
@@ -415,7 +415,7 @@ export class TypeScriptService {
 				return;
 			}
 
-			await config.ensureAllFiles();
+			config.ensureAllFiles();
 
 			const files = config.getService().getProgram().getSourceFiles().sort((a, b) => a.fileName.localeCompare(b.fileName));
 			for (const source of files) {
@@ -549,7 +549,7 @@ export class TypeScriptService {
 		const fileName: string = util.uri2path(params.textDocument.uri);
 
 		const configuration = this.projectManager.getConfiguration(fileName);
-		await configuration.ensureBasicFiles();
+		configuration.ensureBasicFiles();
 
 		const sourceFile = this._getSourceFile(configuration, fileName);
 		if (!sourceFile) {
@@ -589,7 +589,7 @@ export class TypeScriptService {
 
 		const filePath = util.uri2path(params.textDocument.uri);
 		const configuration = this.projectManager.getConfiguration(filePath);
-		await configuration.ensureBasicFiles();
+		configuration.ensureBasicFiles();
 
 		const sourceFile = this._getSourceFile(configuration, filePath);
 		if (!sourceFile) {
@@ -1515,9 +1515,9 @@ export class TypeScriptService {
 	}
 
 	private async _collectWorkspaceSymbols(configs: pm.ProjectConfiguration[], query?: string, symQuery?: Partial<SymbolDescriptor>): Promise<SymbolInformation[]> {
-		const configSymbols: SymbolInformation[][] = await Promise.all(configs.map(async config => {
+		const configSymbols: SymbolInformation[][] = configs.map(config => {
 			const symbols: SymbolInformation[] = [];
-			await config.ensureAllFiles();
+			config.ensureAllFiles();
 			if (query) {
 				const items = config.getService().getNavigateToItems(query, undefined, undefined, false);
 				for (const item of items) {
@@ -1547,7 +1547,7 @@ export class TypeScriptService {
 				Array.prototype.push.apply(symbols, this._getNavigationTreeItems(config));
 			}
 			return symbols;
-		}));
+		});
 		const symbols: SymbolInformation[] = [];
 		for (const cs of configSymbols) {
 			Array.prototype.push.apply(symbols, cs);

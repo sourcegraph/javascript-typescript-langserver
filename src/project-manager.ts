@@ -359,41 +359,38 @@ export class ProjectManager implements Disposable {
 		observable = Observable.from(this.updater.ensure(uri, span))
 			.mergeMap(() => {
 				const config = this.getConfiguration(filePath);
-				// TODO remove this mergeMap when ensureBasicFiles becomes sync
-				return Observable.from(config.ensureBasicFiles())
-					.mergeMap(() => {
-						const contents = this.localFs.getContent(uri);
-						const info = ts.preProcessFile(contents, true, true);
-						const compilerOpt = config.getHost().getCompilationSettings();
-						// TODO remove platform-specific behavior here, the host OS is not coupled to the client OS
-						const resolver = !this.strict && os.platform() === 'win32' ? path_ : path_.posix;
-						// Iterate imported files
-						return Observable.merge(
-							// References with `import`
-							Observable.from(info.importedFiles)
-								.map(importedFile => ts.resolveModuleName(util.toUnixPath(importedFile.fileName), filePath, compilerOpt, config.moduleResolutionHost()))
-								// false means we didn't find a file defining the module. It
-								// could still exist as an ambient module, which is why we
-								// fetch global*.d.ts files.
-								.filter(resolved => !!(resolved && resolved.resolvedModule))
-								.map(resolved => resolved.resolvedModule!.resolvedFileName),
-							// References with `<reference path="..."/>`
-							Observable.from(info.referencedFiles)
-								// Resolve triple slash references relative to current file
-								// instead of using module resolution host because it behaves
-								// differently in "nodejs" mode
-								.map(referencedFile => util.toUnixPath(
-									path_.relative(
-										this.rootPath,
-										resolver.resolve(
-											this.rootPath,
-											resolver.dirname(filePath),
-											util.toUnixPath(referencedFile.fileName)
-										)
-									)
-								))
-						);
-					});
+				config.ensureBasicFiles();
+				const contents = this.localFs.getContent(uri);
+				const info = ts.preProcessFile(contents, true, true);
+				const compilerOpt = config.getHost().getCompilationSettings();
+				// TODO remove platform-specific behavior here, the host OS is not coupled to the client OS
+				const resolver = !this.strict && os.platform() === 'win32' ? path_ : path_.posix;
+				// Iterate imported files
+				return Observable.merge(
+					// References with `import`
+					Observable.from(info.importedFiles)
+						.map(importedFile => ts.resolveModuleName(util.toUnixPath(importedFile.fileName), filePath, compilerOpt, config.moduleResolutionHost()))
+						// false means we didn't find a file defining the module. It
+						// could still exist as an ambient module, which is why we
+						// fetch global*.d.ts files.
+						.filter(resolved => !!(resolved && resolved.resolvedModule))
+						.map(resolved => resolved.resolvedModule!.resolvedFileName),
+					// References with `<reference path="..."/>`
+					Observable.from(info.referencedFiles)
+						// Resolve triple slash references relative to current file
+						// instead of using module resolution host because it behaves
+						// differently in "nodejs" mode
+						.map(referencedFile => util.toUnixPath(
+							path_.relative(
+								this.rootPath,
+								resolver.resolve(
+									this.rootPath,
+									resolver.dirname(filePath),
+									util.toUnixPath(referencedFile.fileName)
+								)
+							)
+						))
+				);
 			})
 			// Use same scheme, slashes, host for referenced URI as input file
 			.map(filePath => url.format({ ...parts, pathname: filePath.split(/[\\\/]/).map(encodeURIComponent).join('/'), search: undefined, hash: undefined }))
@@ -452,10 +449,9 @@ export class ProjectManager implements Disposable {
 		let version = this.versions.get(filePath) || 0;
 		this.versions.set(filePath, ++version);
 		const config = this.getConfiguration(filePath);
-		config.ensureConfigFile().then(() => {
-			config.getHost().incProjectVersion();
-			config.syncProgram();
-		});
+		config.ensureConfigFile();
+		config.getHost().incProjectVersion();
+		config.syncProgram();
 	}
 
 	/**
@@ -468,10 +464,9 @@ export class ProjectManager implements Disposable {
 		let version = this.versions.get(filePath) || 0;
 		this.versions.set(filePath, ++version);
 		const config = this.getConfiguration(filePath);
-		config.ensureConfigFile().then(() => {
-			config.getHost().incProjectVersion();
-			config.syncProgram();
-		});
+		config.ensureConfigFile();
+		config.getHost().incProjectVersion();
+		config.syncProgram();
 	}
 
 	/**
@@ -792,9 +787,9 @@ export class ProjectConfiguration {
 	 * that of the underlying files.
 	 */
 	reset(): void {
-		this.initialized = undefined;
-		this.ensuredBasicFiles = undefined;
-		this.ensuredAllFiles = undefined;
+		this.initialized = false;
+		this.ensuredBasicFiles = false;
+		this.ensuredAllFiles = false;
 		this.service = undefined;
 		this.program = undefined;
 		this.host = undefined;
@@ -859,132 +854,127 @@ export class ProjectConfiguration {
 		this.program = this.getService().getProgram();
 	}
 
-	private initialized?: Promise<void>;
+	private initialized = false;
 
 	/**
 	 * Initializes (sub)project by parsing configuration and making proper internal objects
 	 */
-	private init(): Promise<void> {
+	private init(): void {
 		if (this.initialized) {
-			return this.initialized;
+			return;
 		}
-		this.initialized = new Promise<void>((resolve, reject) => {
-			let configObject;
-			if (!this.configContent) {
-				const jsonConfig = ts.parseConfigFileTextToJson(this.configFilePath, this.fs.readFile(this.configFilePath));
-				if (jsonConfig.error) {
-					this.logger.error('Cannot parse ' + this.configFilePath + ': ' + jsonConfig.error.messageText);
-					return reject(new Error('Cannot parse ' + this.configFilePath + ': ' + jsonConfig.error.messageText));
-				}
-				configObject = jsonConfig.config;
-			} else {
-				configObject = this.configContent;
+		let configObject;
+		if (!this.configContent) {
+			const jsonConfig = ts.parseConfigFileTextToJson(this.configFilePath, this.fs.readFile(this.configFilePath));
+			if (jsonConfig.error) {
+				this.logger.error('Cannot parse ' + this.configFilePath + ': ' + jsonConfig.error.messageText);
+				throw new Error('Cannot parse ' + this.configFilePath + ': ' + jsonConfig.error.messageText);
 			}
-			let dir = path_.posix.dirname(this.configFilePath);
-			if (dir === '.') {
-				dir = '';
-			}
-			const base = dir || this.fs.path;
-			const configParseResult = ts.parseJsonConfigFileContent(configObject, this.fs, base);
-			const expFiles = configParseResult.fileNames;
+			configObject = jsonConfig.config;
+		} else {
+			configObject = this.configContent;
+		}
+		let dir = path_.posix.dirname(this.configFilePath);
+		if (dir === '.') {
+			dir = '';
+		}
+		const base = dir || this.fs.path;
+		const configParseResult = ts.parseJsonConfigFileContent(configObject, this.fs, base);
+		const expFiles = configParseResult.fileNames;
 
-			// Add globals that might exist in dependencies
-			const nodeModulesDir = path_.posix.join(base, 'node_modules');
-			const err = walkInMemoryFs(this.fs, nodeModulesDir, (path, isdir) => {
-				if (!isdir && util.isGlobalTSFile(path)) {
-					expFiles.push(path);
-				}
-			});
-			if (err) {
-				return reject(err);
+		// Add globals that might exist in dependencies
+		const nodeModulesDir = path_.posix.join(base, 'node_modules');
+		const err = walkInMemoryFs(this.fs, nodeModulesDir, (path, isdir) => {
+			if (!isdir && util.isGlobalTSFile(path)) {
+				expFiles.push(path);
 			}
-
-			const options = configParseResult.options;
-			if (/(^|\/)jsconfig\.json$/.test(this.configFilePath)) {
-				options.allowJs = true;
-			}
-			if (this.traceModuleResolution) {
-				options.traceResolution = true;
-			}
-			this.host = new InMemoryLanguageServiceHost(
-				this.fs.path,
-				options,
-				this.fs,
-				expFiles,
-				this.versions,
-				this.logger
-			);
-			this.service = ts.createLanguageService(this.host, ts.createDocumentRegistry());
-			this.program = this.service.getProgram();
-			return resolve();
 		});
-		return this.initialized;
+		if (err) {
+			throw err;
+		}
+
+		const options = configParseResult.options;
+		if (/(^|\/)jsconfig\.json$/.test(this.configFilePath)) {
+			options.allowJs = true;
+		}
+		if (this.traceModuleResolution) {
+			options.traceResolution = true;
+		}
+		this.host = new InMemoryLanguageServiceHost(
+			this.fs.path,
+			options,
+			this.fs,
+			expFiles,
+			this.versions,
+			this.logger
+		);
+		this.service = ts.createLanguageService(this.host, ts.createDocumentRegistry());
+		this.program = this.service.getProgram();
+		this.initialized = true;
 	}
 
 	/**
 	 * Ensures we are ready to process files from a given sub-project
 	 */
-	ensureConfigFile(): Promise<void> {
-		return this.init();
+	ensureConfigFile(): void {
+		this.init();
 	}
 
-	private ensuredBasicFiles?: Promise<void>;
+	private ensuredBasicFiles = false;
 
 	/**
-	 * Ensures we fetched basic files (global TS files, dependencies, declarations)
+	 * Ensures we added basic files (global TS files, dependencies, declarations)
 	 */
-	async ensureBasicFiles(): Promise<void> {
+	ensureBasicFiles(): void {
 		if (this.ensuredBasicFiles) {
-			return this.ensuredBasicFiles;
+			return;
 		}
 
-		this.ensuredBasicFiles = this.init().then(() => {
-			let changed = false;
-			for (const fileName of (this.getHost().expectedFilePaths || [])) {
-				if (util.isGlobalTSFile(fileName) || (!util.isDependencyFile(fileName) && util.isDeclarationFile(fileName))) {
-					const sourceFile = this.getProgram().getSourceFile(fileName);
-					if (!sourceFile) {
-						this.getHost().addFile(fileName);
-						changed = true;
-					}
-				}
-			}
-			if (changed) {
-				// requery program object to synchonize LanguageService's data
-				this.program = this.getService().getProgram();
-			}
-		});
-		return this.ensuredBasicFiles;
-	}
-
-	private ensuredAllFiles?: Promise<void>;
-
-	/**
-	 * Ensures we fetched all project's source file (as were defined in tsconfig.json)
-	 */
-	async ensureAllFiles(): Promise<void> {
-		if (this.ensuredAllFiles) {
-			return this.ensuredAllFiles;
-		}
-
-		this.ensuredAllFiles = this.init().then(() => {
-			if (this.getHost().complete) {
-				return;
-			}
-			let changed = false;
-			for (const fileName of (this.getHost().expectedFilePaths || [])) {
+		this.init();
+		let changed = false;
+		for (const fileName of (this.getHost().expectedFilePaths || [])) {
+			if (util.isGlobalTSFile(fileName) || (!util.isDependencyFile(fileName) && util.isDeclarationFile(fileName))) {
 				const sourceFile = this.getProgram().getSourceFile(fileName);
 				if (!sourceFile) {
 					this.getHost().addFile(fileName);
 					changed = true;
 				}
 			}
-			if (changed) {
-				// requery program object to synchonize LanguageService's data
-				this.program = this.getService().getProgram();
+		}
+		if (changed) {
+			// requery program object to synchonize LanguageService's data
+			this.program = this.getService().getProgram();
+		}
+		this.ensuredBasicFiles = true;
+	}
+
+	private ensuredAllFiles = false;
+
+	/**
+	 * Ensures we added all project's source file (as were defined in tsconfig.json)
+	 */
+	ensureAllFiles(): void {
+		if (this.ensuredAllFiles) {
+			return;
+		}
+
+		this.init();
+		if (this.getHost().complete) {
+			return;
+		}
+		let changed = false;
+		for (const fileName of (this.getHost().expectedFilePaths || [])) {
+			const sourceFile = this.getProgram().getSourceFile(fileName);
+			if (!sourceFile) {
+				this.getHost().addFile(fileName);
+				changed = true;
 			}
-			this.getHost().complete = true;
-		});
-		return this.ensuredAllFiles;
+		}
+		if (changed) {
+			// requery program object to synchonize LanguageService's data
+			this.program = this.getService().getProgram();
+		}
+		this.getHost().complete = true;
+		this.ensuredAllFiles = true;
 	}
 }
