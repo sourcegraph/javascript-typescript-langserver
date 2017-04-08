@@ -64,7 +64,7 @@ class CancellationTokenLink {
 export function cancellableMemoize<F extends (...args: any[]) => T, T extends Promise<any>, K>(func: F, cache = new Map<K, T>()): F {
 	// Track tokens consumers provide
 	const tokenLinks = new Map<K, CancellationTokenLink>();
-	const memoized: F = <any> function (this: any, ...args: any[]) {
+	const memoized: F = function (this: any, ...args: any[]) {
 		const key = args[0];
 		// Get or create CancellationTokenLink for the given first parameter
 		let tokenLink = tokenLinks.get(key);
@@ -85,16 +85,16 @@ export function cancellableMemoize<F extends (...args: any[]) => T, T extends Pr
 			// Call function
 			// Pass the linked cancel token
 			args.push(tokenLink.token);
-			result = <T> (<T> func.apply(this, args)).catch(err => {
+			result = (func.apply(this, args) as T).catch(err => {
 				// Don't cache rejected promises
 				cache.delete(key);
 				throw err;
-			});
+			}) as T;
 			// Save result
 			cache.set(key, result);
 		}
 		return result;
-	};
+	} as any;
 	return memoized;
 }
 

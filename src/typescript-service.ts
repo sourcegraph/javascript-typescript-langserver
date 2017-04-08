@@ -174,7 +174,7 @@ export class TypeScriptService {
 		const defs: ts.DefinitionInfo[] = configuration.getService().getDefinitionAtPosition(fileName, offset);
 		const ret = [];
 		if (defs) {
-			for (let def of defs) {
+			for (const def of defs) {
 				const sourceFile = this._getSourceFile(configuration, def.fileName);
 				if (!sourceFile) {
 					throw new Error('expected source file "' + def.fileName + '" to exist in configuration');
@@ -209,7 +209,7 @@ export class TypeScriptService {
 		const defs: ts.DefinitionInfo[] = configuration.getService().getDefinitionAtPosition(fileName, offset);
 		const ret = [];
 		if (defs) {
-			for (let def of defs) {
+			for (const def of defs) {
 				const sourceFile = this._getSourceFile(configuration, def.fileName);
 				if (!sourceFile) {
 					throw new Error('expected source file "' + def.fileName + '" to exist in configuration');
@@ -239,7 +239,7 @@ export class TypeScriptService {
 		const configuration = this.projectManager.getConfiguration(fileName);
 		await configuration.ensureBasicFiles();
 
-		let sourceFile = this._getSourceFile(configuration, fileName);
+		const sourceFile = this._getSourceFile(configuration, fileName);
 		if (!sourceFile) {
 			throw new Error(`Unknown text document ${params.textDocument.uri}`);
 		}
@@ -252,7 +252,7 @@ export class TypeScriptService {
 			language: 'typescript',
 			value: ts.displayPartsToString(info.displayParts)
 		}];
-		let documentation = ts.displayPartsToString(info.documentation);
+		const documentation = ts.displayPartsToString(info.documentation);
 		if (documentation) {
 			contents.push(documentation);
 		}
@@ -284,7 +284,7 @@ export class TypeScriptService {
 		const tasks: AsyncFunction<Location, Error>[] = [];
 
 		if (refs) {
-			for (let ref of refs) {
+			for (const ref of refs) {
 				tasks.push(this._transformReference(this.root,
 					configuration.getProgram(),
 					params.context && params.context.includeDeclaration,
@@ -1474,8 +1474,8 @@ export class TypeScriptService {
 			if (!sourceFile) {
 				return callback(new Error('source file "' + ref.fileName + '" does not exist'));
 			}
-			let start = ts.getLineAndCharacterOfPosition(sourceFile, ref.textSpan.start);
-			let end = ts.getLineAndCharacterOfPosition(sourceFile, ref.textSpan.start + ref.textSpan.length);
+			const start = ts.getLineAndCharacterOfPosition(sourceFile, ref.textSpan.start);
+			const end = ts.getLineAndCharacterOfPosition(sourceFile, ref.textSpan.start + ref.textSpan.length);
 			callback(undefined, Location.create(util.path2uri(root, ref.fileName), {
 				start,
 				end
@@ -1491,8 +1491,8 @@ export class TypeScriptService {
 		if (!sourceFile) {
 			throw new Error('source file "' + item.fileName + '" does not exist');
 		}
-		let start = ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start);
-		let end = ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start + item.textSpan.length);
+		const start = ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start);
+		const end = ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start + item.textSpan.length);
 		return SymbolInformation.create(item.name,
 			util.convertStringtoSymbolKind(item.kind),
 			Range.create(start.line, start.character, end.line, end.character),
@@ -1605,8 +1605,8 @@ export class TypeScriptService {
 	 */
 	private _transformNavigationTreeItem(item: ts.NavigationTree, parent: ts.NavigationTree | null, sourceFile: ts.SourceFile): SymbolInformation {
 		const span = item.spans[0];
-		let start = ts.getLineAndCharacterOfPosition(sourceFile, span.start);
-		let end = ts.getLineAndCharacterOfPosition(sourceFile, span.start + span.length);
+		const start = ts.getLineAndCharacterOfPosition(sourceFile, span.start);
+		const end = ts.getLineAndCharacterOfPosition(sourceFile, span.start + span.length);
 		return SymbolInformation.create(item.text,
 			util.convertStringtoSymbolKind(item.kind),
 			Range.create(start.line, start.character, end.line, end.character),

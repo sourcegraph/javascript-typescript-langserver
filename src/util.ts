@@ -135,19 +135,19 @@ export function resolve(root: string, file: string): string {
 	}
 
 }
-let jstsPattern = /\.[tj]sx?$/;
+const jstsPattern = /\.[tj]sx?$/;
 
 export function isJSTSFile(filename: string): boolean {
 	return jstsPattern.test(filename);
 }
 
-let jstsConfigPattern = /(^|\/)[tj]sconfig\.json$/;
+const jstsConfigPattern = /(^|\/)[tj]sconfig\.json$/;
 
 export function isConfigFile(filename: string): boolean {
 	return jstsConfigPattern.test(filename);
 }
 
-let packageJsonPattern = /(^|\/)package\.json$/;
+const packageJsonPattern = /(^|\/)package\.json$/;
 
 export function isPackageJsonFile(filename: string): boolean {
 	return packageJsonPattern.test(filename);
@@ -221,7 +221,7 @@ export function defInfoToSymbolDescriptor(d: ts.DefinitionInfo): rt.SymbolDescri
 
 export function symbolDescriptorMatch(query: Partial<rt.SymbolDescriptor>, sym: rt.SymbolDescriptor): boolean {
 	for (const key of Object.keys(query)) {
-		if ((<any> query)[key] === undefined) {
+		if ((query as any)[key] === undefined) {
 			continue;
 		}
 		if (key === 'package') {
@@ -230,7 +230,7 @@ export function symbolDescriptorMatch(query: Partial<rt.SymbolDescriptor>, sym: 
 			}
 			continue;
 		}
-		if ((<any> query)[key] !== (<any> sym)[key]) {
+		if ((query as any)[key] !== (sym as any)[key]) {
 			return false;
 		}
 	}
@@ -239,10 +239,10 @@ export function symbolDescriptorMatch(query: Partial<rt.SymbolDescriptor>, sym: 
 
 function packageDescriptorMatch(query: rt.PackageDescriptor, sym: rt.PackageDescriptor): boolean {
 	for (const key of Object.keys(query)) {
-		if ((<any> query)[key] === undefined) {
+		if ((query as any)[key] === undefined) {
 			continue;
 		}
-		if ((<any> query)[key] !== (<any> sym)[key]) {
+		if ((query as any)[key] !== (sym as any)[key]) {
 			return false;
 		}
 	}

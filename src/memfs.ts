@@ -11,7 +11,7 @@ import * as util from './util';
 export interface FileSystemNode {
 	file: boolean;
 	children: Map<string, FileSystemNode>;
-};
+}
 
 /**
  * In-memory file system, can be served as a ParseConfigHost (thus allowing listing files that belong to project based on tsconfig.json options)
