@@ -396,7 +396,7 @@ export class ProjectManager implements Disposable {
 					});
 			})
 			// Use same scheme, slashes, host for referenced URI as input file
-			.map(filePath => url.format({ ...parts, pathname: filePath, search: undefined, hash: undefined }))
+			.map(filePath => url.format({ ...parts, pathname: filePath.split(/[\\\/]/).map(encodeURIComponent).join('/'), search: undefined, hash: undefined }))
 			// Don't cache errors
 			.catch(err => {
 				this.referencedFiles.delete(uri);
