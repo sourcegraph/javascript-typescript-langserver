@@ -4,8 +4,16 @@ export interface InitializeParams extends vscode.InitializeParams {
 	capabilities: ClientCapabilities;
 }
 
-export interface ClientCapabilities {
+export interface ClientCapabilities extends vscode.ClientCapabilities {
+
+	/**
+	 * The client provides support for workspace/xfiles.
+	 */
 	xfilesProvider?: boolean;
+
+	/**
+	 * The client provides support for textDocument/xcontent.
+	 */
 	xcontentProvider?: boolean;
 }
 
@@ -17,13 +25,31 @@ export interface ServerCapabilities extends vscode.ServerCapabilities {
 }
 
 export interface TextDocumentContentParams {
+
+	/**
+	 * The text document to receive the content for.
+	 */
 	textDocument: vscode.TextDocumentIdentifier;
 }
 
 export interface WorkspaceFilesParams {
+
+	/**
+	 * The URI of a directory to search.
+	 * Can be relative to the rootPath.
+	 * If not given, defaults to rootPath.
+	 */
 	base?: string;
 }
 
+/**
+ * Represents information about a programming construct that can be used to identify and locate the
+ * construct's symbol. The identification does not have to be unique, but it should be as unique as
+ * possible. It is up to the language server to define the schema of this object.
+ *
+ * In contrast to `SymbolInformation`, `SymbolDescriptor` includes more concrete, language-specific,
+ * metadata about the symbol.
+ */
 export interface SymbolDescriptor {
 	kind: string;
 	name: string;
@@ -44,9 +70,9 @@ export namespace SymbolDescriptor {
  * If both properties are set, the requirements are AND'd.
  */
 export interface WorkspaceSymbolParams {
-    /**
-     * A non-empty query string.
-     */
+	/**
+	 * A non-empty query string.
+	 */
 	query?: string;
 
 	/**
@@ -66,21 +92,46 @@ export interface WorkspaceSymbolParams {
  * spec).
  */
 export interface WorkspaceReferenceParams {
+
+	/**
+	 * Metadata about the symbol that is being searched for.
+	 */
 	query: Partial<SymbolDescriptor>;
+
+	/**
+	 * Hints provides optional hints about where the language server should look in order to find
+	 * the symbol (this is an optimization). It is up to the language server to define the schema of
+	 * this object.
+	 */
 	hints?: DependencyHints;
 }
 
 export interface SymbolLocationInformation {
+
+	/**
+	 * The location where the symbol is defined, if any
+	 */
 	location?: vscode.Location;
+
+	/**
+	 * Metadata about the symbol that can be used to identify or locate its definition.
+	 */
 	symbol: SymbolDescriptor;
 }
 
-/*
- * ReferenceInformation enapsulates the metadata for a symbol
- * reference in code.
+/**
+ * Represents information about a reference to programming constructs like variables, classes,
+ * interfaces, etc.
  */
 export interface ReferenceInformation {
+	 /**
+	  * The location in the workspace where the `symbol` is referenced.
+	  */
 	reference: vscode.Location;
+
+	/**
+	 * Metadata about the symbol that can be used to identify or locate its definition.
+	 */
 	symbol: SymbolDescriptor;
 }
 

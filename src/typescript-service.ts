@@ -100,6 +100,23 @@ export class TypeScriptService {
 		this.logger = new LSPLogger(client);
 	}
 
+	/**
+	 * The initialize request is sent as the first request from the client to the server. If the
+	 * server receives request or notification before the `initialize` request it should act as
+	 * follows:
+	 *
+	 * - for a request the respond should be errored with `code: -32002`. The message can be picked by
+	 * the server.
+	 * - notifications should be dropped, except for the exit notification. This will allow the exit a
+	 * server without an initialize request.
+	 *
+	 * Until the server has responded to the `initialize` request with an `InitializeResult` the
+	 * client must not sent any additional requests or notifications to the server.
+	 *
+	 * During the `initialize` request the server is allowed to sent the notifications
+	 * `window/showMessage`, `window/logMessage` and `telemetry/event` as well as the
+	 * `window/showMessageRequest` request to the client.
+	 */
 	async initialize(params: InitializeParams, span = new Span()): Promise<InitializeResult> {
 		if (params.rootUri || params.rootPath) {
 			this.root = params.rootPath || util.uri2path(params.rootUri!);
@@ -147,11 +164,20 @@ export class TypeScriptService {
 		this.inMemoryFileSystem = new InMemoryFileSystem(this.root);
 	}
 
+	/**
+	 * The shutdown request is sent from the client to the server. It asks the server to shut down,
+	 * but to not exit (otherwise the response might not be delivered correctly to the client).
+	 * There is a separate exit notification that asks the server to exit.
+	 */
 	async shutdown(params = {}, span = new Span()): Promise<null> {
 		this.projectManager.dispose();
 		return null;
 	}
 
+	/**
+	 * The goto definition request is sent from the client to the server to resolve the definition
+	 * location of a symbol at a given text document position.
+	 */
 	async textDocumentDefinition(params: TextDocumentPositionParams, span = new Span()): Promise<Location[]> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
@@ -227,6 +253,10 @@ export class TypeScriptService {
 		return ret;
 	}
 
+	/**
+	 * The hover request is sent from the client to the server to request hover information at a
+	 * given text document position.
+	 */
 	async textDocumentHover(params: TextDocumentPositionParams, span = new Span()): Promise<Hover> {
 
 		// Ensure files needed to resolve hover are fetched
@@ -259,6 +289,10 @@ export class TypeScriptService {
 		return { contents, range: Range.create(start.line, start.character, end.line, end.character) };
 	}
 
+	/**
+	 * The references request is sent from the client to the server to resolve project-wide
+	 * references for the symbol denoted by the given text document position.
+	 */
 	async textDocumentReferences(params: ReferenceParams, span = new Span()): Promise<Location[]> {
 
 		// Ensure all files were fetched to collect all references
@@ -293,6 +327,11 @@ export class TypeScriptService {
 		});
 	}
 
+	/**
+	 * The workspace symbol request is sent from the client to the server to list project-wide
+	 * symbols matching the query string. The text document parameter specifies the active document
+	 * at time of the query. This can be used to rank or limit results.
+	 */
 	async workspaceSymbol(params: WorkspaceSymbolParams, span = new Span()): Promise<SymbolInformation[]> {
 		const query = params.query;
 		const symQuery = params.symbol ? Object.assign({}, params.symbol) : undefined;
@@ -378,6 +417,10 @@ export class TypeScriptService {
 		return (await itemsPromise).slice(0, params.limit);
 	}
 
+	/**
+	 * The document symbol request is sent from the client to the server to list all symbols found
+	 * in a given text document.
+	 */
 	async textDocumentDocumentSymbol(params: DocumentSymbolParams, span = new Span()): Promise<SymbolInformation[]> {
 
 		// Ensure files needed to resolve symbols are fetched
@@ -397,6 +440,10 @@ export class TypeScriptService {
 		return Promise.resolve(result);
 	}
 
+	/**
+	 * The workspace references request is sent from the client to the server to locate project-wide
+	 * references to a symbol given its description / metadata.
+	 */
 	async workspaceXreferences(params: WorkspaceReferenceParams, span = new Span()): Promise<ReferenceInformation[]> {
 		const refInfo: ReferenceInformation[] = [];
 
@@ -533,6 +580,19 @@ export class TypeScriptService {
 		return deps;
 	}
 
+	/**
+	 * The Completion request is sent from the client to the server to compute completion items at a
+	 * given cursor position. Completion items are presented in the
+	 * [IntelliSense](https://code.visualstudio.com/docs/editor/editingevolved#_intellisense) user
+	 * interface. If computing full completion items is expensive, servers can additionally provide
+	 * a handler for the completion item resolve request ('completionItem/resolve'). This request is
+	 * sent when a completion item is selected in the user interface. A typically use case is for
+	 * example: the 'textDocument/completion' request doesn't fill in the `documentation` property
+	 * for returned completion items since it is expensive to compute. When the item is selected in
+	 * the user interface then a 'completionItem/resolve' request is sent with the selected
+	 * completion item as a param. The returned completion item should have the documentation
+	 * property filled in.
+	 */
 	async textDocumentCompletion(params: TextDocumentPositionParams, span = new Span()): Promise<CompletionList> {
 
 		// Ensure files needed to suggest completions are fetched
@@ -573,6 +633,10 @@ export class TypeScriptService {
 		}));
 	}
 
+	/**
+	 * The signature help request is sent from the client to the server to request signature
+	 * information at a given cursor position.
+	 */
 	async textDocumentSignatureHelp(params: TextDocumentPositionParams, span = new Span()): Promise<SignatureHelp> {
 
 		// Ensure files needed to resolve signature are fetched
@@ -1402,6 +1466,11 @@ export class TypeScriptService {
 		}
 	}
 
+	/**
+	 * The document open notification is sent from the client to the server to signal newly opened
+	 * text documents. The document's truth is now managed by the client and the server must not try
+	 * to read the document's truth using the document's uri.
+	 */
 	async textDocumentDidOpen(params: DidOpenTextDocumentParams): Promise<void> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 
@@ -1411,6 +1480,11 @@ export class TypeScriptService {
 		this.projectManager.didOpen(util.uri2path(uri), params.textDocument.text);
 	}
 
+	/**
+	 * The document change notification is sent from the client to the server to signal changes to a
+	 * text document. In 2.0 the shape of the params has changed to include proper version numbers
+	 * and language ids.
+	 */
 	async textDocumentDidChange(params: DidChangeTextDocumentParams): Promise<void> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		let text = null;
@@ -1426,6 +1500,10 @@ export class TypeScriptService {
 		this.projectManager.didChange(util.uri2path(uri), text);
 	}
 
+	/**
+	 * The document save notification is sent from the client to the server when the document was
+	 * saved in the client.
+	 */
 	async textDocumentDidSave(params: DidSaveTextDocumentParams): Promise<void> {
 
 		// Ensure files needed to suggest completions are fetched
@@ -1436,6 +1514,11 @@ export class TypeScriptService {
 		this.projectManager.didSave(util.uri2path(uri));
 	}
 
+	/**
+	 * The document close notification is sent from the client to the server when the document got
+	 * closed in the client. The document's truth now exists where the document's uri points to
+	 * (e.g. if the document's uri is a file uri the truth now exists on disk).
+	 */
 	async textDocumentDidClose(params: DidCloseTextDocumentParams): Promise<void> {
 
 		// Ensure files needed to suggest completions are fetched
