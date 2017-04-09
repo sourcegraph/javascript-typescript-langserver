@@ -70,7 +70,7 @@ export class ProjectManager implements Disposable {
 	 * Flag indicating that we fetched module struture (tsconfig.json, jsconfig.json, package.json files) from the remote file system.
 	 * Without having this information we won't be able to split workspace to sub-projects
 	 */
-	ensuredModuleStructure?: Promise<void>;
+	private ensuredModuleStructure?: Promise<void>;
 
 	/**
 	 * For references/symbols we need all the source files making workspace so this flag tracks if we already did it
@@ -134,79 +134,46 @@ export class ProjectManager implements Disposable {
 	 * Sub-project is mainly a folder which contains tsconfig.json, jsconfig.json, package.json,
 	 * or a root folder which serves as a fallback
 	 */
-	getConfigurations(): ProjectConfiguration[] {
-		const ret: ProjectConfiguration[] = [];
-		this.configs.forEach((v, k) => {
-			ret.push(v);
-		});
-		return ret;
+	configurations(): IterableIterator<ProjectConfiguration> {
+		return this.configs.values();
 	}
 
 	/**
-	 * ensureModuleStructure ensures that the module structure of the
-	 * project exists in localFs. TypeScript/JavaScript module
-	 * structure is determined by [jt]sconfig.json, filesystem layout,
-	 * global*.d.ts files. For performance reasons, we only read in
-	 * the contents of some files and store "var dummy_0ff1bd;" as the
-	 * contents of all other files.
+	 * Ensures that the module structure of the project exists in memory.
+	 * TypeScript/JavaScript module structure is determined by [jt]sconfig.json,
+	 * filesystem layout, global*.d.ts and package.json files.
+	 * Then creates new ProjectConfigurations, resets existing and invalidates file references.
 	 */
 	ensureModuleStructure(): Promise<void> {
-		if (!this.ensuredModuleStructure) {
-			this.ensuredModuleStructure = this.refreshFileTree(this.rootPath, true).then(() => {
-				this.createConfigurations();
-			});
-			this.ensuredModuleStructure.catch(err => {
-				this.logger.error('Failed to fetch module structure: ', err);
-				this.ensuredModuleStructure = undefined;
-			});
+		if (this.ensuredModuleStructure) {
+			return this.ensuredModuleStructure;
 		}
+		this.ensuredModuleStructure = (async () => {
+			await this.updater.ensureStructure();
+			// Ensure content of all all global .d.ts, [tj]sconfig.json, package.json files
+			await Promise.all(
+				iterate(this.localFs.uris())
+					.filter(uri => util.isGlobalTSFile(uri) || util.isConfigFile(uri) || util.isPackageJsonFile(uri))
+					.map(uri => this.updater.ensure(uri))
+			);
+			// Scan for [tj]sconfig.json files
+			this.createConfigurations();
+			// Reset all compilation state
+			// TODO utilize incremental compilation instead
+			for (const config of this.configs.values()) {
+				config.reset();
+			}
+			// Require re-processing of file references
+			this.invalidateReferencedFiles();
+		})();
 		return this.ensuredModuleStructure;
 	}
 
 	/**
-	 * refreshFileTree refreshes the local in-memory filesytem's (this.localFs) files under the
-	 * specified path (root) with the contents of the remote filesystem (this.remoteFs). It will
-	 * also reset the ProjectConfigurations that are affected by the refreshed files.
-	 *
-	 * If moduleStructureOnly is true, then only files related to module structure (package.json,
-	 * tsconfig.json, etc.) will be refreshed.
-	 *
-	 * This method is public because a ProjectManager instance assumes there are no changes made to
-	 * the remote filesystem structure after initialization. If such changes are made, it is
-	 * necessary to call this method to alert the ProjectManager instance of the change.
-	 *
-	 * @param rootPath root path
-	 * @param moduleStructureOnly indicates if we need to fetch only configuration files such as tsconfig.json,
-	 * jsconfig.json or package.json (otherwise we want to fetch them plus source files)
+	 * Causes the next call of `ensureModuleStructure` to re-ensure module structure
 	 */
-	async refreshFileTree(rootPath: string, moduleStructureOnly: boolean): Promise<void> {
-		rootPath = util.normalizeDir(rootPath);
-		const filesToFetch: string[] = [];
-		await this.updater.fetchStructure();
-		for (const uri of this.localFs.uris()) {
-			const file = util.uri2path(uri);
-			const rel = path_.posix.relative(this.rootPath, util.toUnixPath(file));
-			if (!moduleStructureOnly || util.isGlobalTSFile(rel) || util.isConfigFile(rel) || util.isPackageJsonFile(rel)) {
-				filesToFetch.push(file);
-			} else if (!this.localFs.fileExists(rel)) {
-				this.localFs.add(uri, localFSPlaceholder);
-			}
-		}
-		await this.ensureFiles(filesToFetch);
-
-		// require re-fetching of dependency files (but not for
-		// workspace/symbol and textDocument/references, because those
-		// should not be affected by new external modules)
-		this.referencedFiles.clear();
-
-		// require re-parsing of projects whose file set may have been affected
-		for (let [dir, config] of this.configs) {
-			dir = util.normalizeDir(dir);
-
-			if (dir.startsWith(rootPath + '/') || rootPath.startsWith(dir + '/') || rootPath === dir) {
-				config.reset();
-			}
-		}
+	invalidateModuleStructure(): void {
+		this.ensuredModuleStructure = undefined;
 	}
 
 	/**
@@ -299,7 +266,9 @@ export class ProjectManager implements Disposable {
 		const span = childOf.tracer().startSpan('Ensure referenced files', { childOf });
 		span.addTags({ uri, maxDepth });
 		ignore.add(uri);
-		return (maxDepth === 0 ? Observable.empty<string>() : this.resolveReferencedFiles(uri))
+		return Observable.from(this.ensureModuleStructure())
+			// If max depth was reached, don't go any further
+			.mergeMap(() => maxDepth === 0 ? [] : this.resolveReferencedFiles(uri))
 			// Prevent cycles
 			.filter(referencedUri => !ignore.has(referencedUri))
 			// Call method recursively with one less dep level
@@ -694,8 +663,6 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	}
 
 }
-
-const localFSPlaceholder = 'var dummy_0ff1bd;';
 
 /**
  * ProjectConfiguration instances track the compiler configuration (as

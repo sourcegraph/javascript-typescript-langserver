@@ -1,4 +1,5 @@
 import * as async from 'async';
+import iterate from 'iterare';
 import { Span } from 'opentracing';
 import * as path_ from 'path';
 import * as ts from 'typescript';
@@ -161,7 +162,6 @@ export class TypeScriptService {
 		const column = params.position.character;
 
 		// Fetch files needed to resolve definition
-		await this.projectManager.ensureModuleStructure();
 		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
 
 		const fileName: string = util.uri2path(uri);
@@ -196,7 +196,6 @@ export class TypeScriptService {
 	async textDocumentXdefinition(params: TextDocumentPositionParams, span = new Span()): Promise<SymbolLocationInformation[]> {
 
 		// Ensure files needed to resolve SymbolLocationInformation are fetched
-		await this.projectManager.ensureModuleStructure();
 		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
 
 		const fileName: string = util.uri2path(params.textDocument.uri);
@@ -235,7 +234,6 @@ export class TypeScriptService {
 	async textDocumentHover(params: TextDocumentPositionParams, span = new Span()): Promise<Hover> {
 
 		// Ensure files needed to resolve hover are fetched
-		await this.projectManager.ensureModuleStructure();
 		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
 
 		const fileName: string = util.uri2path(params.textDocument.uri);
@@ -326,7 +324,7 @@ export class TypeScriptService {
 		let configs;
 		if (symQuery && symQuery.package && symQuery.package.name) {
 			configs = [];
-			for (const config of this.projectManager.getConfigurations()) {
+			for (const config of this.projectManager.configurations()) {
 				if (config.getPackageName() === symQuery.package.name) {
 					configs.push(config);
 				}
@@ -336,7 +334,7 @@ export class TypeScriptService {
 			if (rootConfig) {  // if there's a root configuration, it includes all files
 				configs = [rootConfig];
 			} else {
-				configs = this.projectManager.getConfigurations();
+				configs = this.projectManager.configurations();
 			}
 		}
 		const itemsPromise = this._collectWorkspaceSymbols(configs, query, symQuery);
@@ -367,9 +365,7 @@ export class TypeScriptService {
 			return null;
 		}
 		const relPkgRoot = pkg.name.slice('@types/'.length);
-		await this.projectManager.refreshFileTree(relPkgRoot, false);
-
-		this.projectManager.createConfigurations();
+		await this.projectManager.ensureModuleStructure();
 
 		const symQuery = params.symbol ? Object.assign({}, params.symbol) : undefined;
 		if (symQuery) {
@@ -387,7 +383,6 @@ export class TypeScriptService {
 	async textDocumentDocumentSymbol(params: DocumentSymbolParams, span = new Span()): Promise<SymbolInformation[]> {
 
 		// Ensure files needed to resolve symbols are fetched
-		await this.projectManager.ensureModuleStructure();
 		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
 
 		const fileName = util.uri2path(params.textDocument.uri);
@@ -409,8 +404,8 @@ export class TypeScriptService {
 
 		await this.projectManager.ensureAllFiles();
 
-		const configs = this.projectManager.getConfigurations();
-		await Promise.all(configs.map(async config => {
+		const configs = this.projectManager.configurations();
+		await Promise.all(iterate(configs).map(async config => {
 			if (params.hints && params.hints.dependeePackageName && params.hints.dependeePackageName !== config.getPackageName()) {
 				return;
 			}
@@ -543,7 +538,6 @@ export class TypeScriptService {
 	async textDocumentCompletion(params: TextDocumentPositionParams, span = new Span()): Promise<CompletionList> {
 
 		// Ensure files needed to suggest completions are fetched
-		await this.projectManager.ensureModuleStructure();
 		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
 
 		const fileName: string = util.uri2path(params.textDocument.uri);
@@ -584,7 +578,6 @@ export class TypeScriptService {
 	async textDocumentSignatureHelp(params: TextDocumentPositionParams, span = new Span()): Promise<SignatureHelp> {
 
 		// Ensure files needed to resolve signature are fetched
-		await this.projectManager.ensureModuleStructure();
 		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
 
 		const filePath = util.uri2path(params.textDocument.uri);
@@ -1415,7 +1408,6 @@ export class TypeScriptService {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 
 		// Ensure files needed for most operations are fetched
-		await this.projectManager.ensureModuleStructure();
 		await this.projectManager.ensureReferencedFiles(params.textDocument.uri).toPromise();
 
 		this.projectManager.didOpen(util.uri2path(uri), params.textDocument.text);
@@ -1439,7 +1431,6 @@ export class TypeScriptService {
 	async textDocumentDidSave(params: DidSaveTextDocumentParams): Promise<void> {
 
 		// Ensure files needed to suggest completions are fetched
-		await this.projectManager.ensureModuleStructure();
 		await this.projectManager.ensureReferencedFiles(params.textDocument.uri).toPromise();
 
 		// TODO don't use "relative" URI
@@ -1450,7 +1441,6 @@ export class TypeScriptService {
 	async textDocumentDidClose(params: DidCloseTextDocumentParams): Promise<void> {
 
 		// Ensure files needed to suggest completions are fetched
-		await this.projectManager.ensureModuleStructure();
 		await this.projectManager.ensureReferencedFiles(params.textDocument.uri).toPromise();
 
 		// TODO don't use "relative" URI
@@ -1514,44 +1504,43 @@ export class TypeScriptService {
 			this._defUri(item.fileName), item.containerName);
 	}
 
-	private async _collectWorkspaceSymbols(configs: pm.ProjectConfiguration[], query?: string, symQuery?: Partial<SymbolDescriptor>): Promise<SymbolInformation[]> {
-		const configSymbols: SymbolInformation[][] = configs.map(config => {
-			const symbols: SymbolInformation[] = [];
-			config.ensureAllFiles();
-			if (query) {
-				const items = config.getService().getNavigateToItems(query, undefined, undefined, false);
-				for (const item of items) {
-					const si = this._transformNavItem(this.root, config.getProgram(), item);
-					if (!util.isLocalUri(si.location.uri)) {
-						continue;
+	private async _collectWorkspaceSymbols(configs: Iterable<pm.ProjectConfiguration>, query?: string, symQuery?: Partial<SymbolDescriptor>): Promise<SymbolInformation[]> {
+		const symbols = iterate(configs)
+			.map(config => {
+				const symbols: SymbolInformation[] = [];
+				config.ensureAllFiles();
+				if (query) {
+					const items = config.getService().getNavigateToItems(query, undefined, undefined, false);
+					for (const item of items) {
+						const si = this._transformNavItem(this.root, config.getProgram(), item);
+						if (!util.isLocalUri(si.location.uri)) {
+							continue;
+						}
+						symbols.push(si);
 					}
-					symbols.push(si);
+				} else if (symQuery) {
+					// TODO(beyang): after workspace/symbol extension is accepted into LSP, push this logic upstream to getNavigateToItems
+					const items = config.getService().getNavigateToItems(symQuery.name || '', undefined, undefined, false);
+					const packageName = config.getPackageName();
+					const pd = packageName ? { name: packageName } : undefined;
+					for (const item of items) {
+						const sd = SymbolDescriptor.create(item.kind, item.name, item.containerKind, item.containerName, pd);
+						if (!util.symbolDescriptorMatch(symQuery, sd)) {
+							continue;
+						}
+						const si = this._transformNavItem(this.root, config.getProgram(), item);
+						if (!util.isLocalUri(si.location.uri)) {
+							continue;
+						}
+						symbols.push(si);
+					}
+				} else {
+					Array.prototype.push.apply(symbols, this._getNavigationTreeItems(config));
 				}
-			} else if (symQuery) {
-				// TODO(beyang): after workspace/symbol extension is accepted into LSP, push this logic upstream to getNavigateToItems
-				const items = config.getService().getNavigateToItems(symQuery.name || '', undefined, undefined, false);
-				const packageName = config.getPackageName();
-				const pd = packageName ? { name: packageName } : undefined;
-				for (const item of items) {
-					const sd = SymbolDescriptor.create(item.kind, item.name, item.containerKind, item.containerName, pd);
-					if (!util.symbolDescriptorMatch(symQuery, sd)) {
-						continue;
-					}
-					const si = this._transformNavItem(this.root, config.getProgram(), item);
-					if (!util.isLocalUri(si.location.uri)) {
-						continue;
-					}
-					symbols.push(si);
-				}
-			} else {
-				Array.prototype.push.apply(symbols, this._getNavigationTreeItems(config));
-			}
-			return symbols;
-		});
-		const symbols: SymbolInformation[] = [];
-		for (const cs of configSymbols) {
-			Array.prototype.push.apply(symbols, cs);
-		}
+				return symbols;
+			})
+			.flatten<SymbolInformation>()
+			.toArray();
 
 		if (!query) {
 			return symbols.sort((a, b) => a.name.toLocaleLowerCase().localeCompare(b.name.toLocaleLowerCase()));
