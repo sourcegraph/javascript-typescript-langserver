@@ -110,7 +110,7 @@ export class TypeScriptService {
 			// Pre-fetch files in the background
 			// TODO why does ensureAllFiles() fetch less files than ensureFilesForWorkspaceSymbol()?
 			//      (package.json is not fetched)
-			this.projectManager.ensureOwnFiles().catch(err => {
+			this.projectManager.ensureOwnFiles(span).catch(err => {
 				this.logger.error('Background fetching failed ', err);
 			});
 		}
@@ -264,7 +264,7 @@ export class TypeScriptService {
 	async textDocumentReferences(params: ReferenceParams, span = new Span()): Promise<Location[]> {
 
 		// Ensure all files were fetched to collect all references
-		await this.projectManager.ensureAllFiles();
+		await this.projectManager.ensureAllFiles(span);
 
 		const fileName = util.uri2path(params.textDocument.uri);
 		const configuration = this.projectManager.getConfiguration(fileName);
@@ -318,7 +318,7 @@ export class TypeScriptService {
 			}
 		}
 
-		await this.projectManager.ensureOwnFiles();
+		await this.projectManager.ensureOwnFiles(span);
 
 		if (!query && !symQuery && this.emptyQueryWorkspaceSymbols) {
 			return this.emptyQueryWorkspaceSymbols;
@@ -402,7 +402,7 @@ export class TypeScriptService {
 	async workspaceXreferences(params: WorkspaceReferenceParams, span = new Span()): Promise<ReferenceInformation[]> {
 		const refInfo: ReferenceInformation[] = [];
 
-		await this.projectManager.ensureAllFiles();
+		await this.projectManager.ensureAllFiles(span);
 
 		const configs = this.projectManager.configurations();
 		await Promise.all(iterate(configs).map(async config => {
