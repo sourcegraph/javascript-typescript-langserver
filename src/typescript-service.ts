@@ -3,6 +3,7 @@ import iterate from 'iterare';
 import { Span } from 'opentracing';
 import * as path_ from 'path';
 import * as ts from 'typescript';
+import * as url from 'url';
 import {
 	CompletionItem,
 	CompletionItemKind,
@@ -25,7 +26,6 @@ import {
 	TextDocumentPositionParams,
 	TextDocumentSyncKind
 } from 'vscode-languageserver';
-import { isCancelledError } from './cancellation';
 import { FileSystem, FileSystemUpdater, LocalFileSystem, RemoteFileSystem } from './fs';
 import { RemoteLanguageClient } from './lang-handler';
 import { Logger, LSPLogger } from './logging';
@@ -110,10 +110,8 @@ export class TypeScriptService {
 			// Pre-fetch files in the background
 			// TODO why does ensureAllFiles() fetch less files than ensureFilesForWorkspaceSymbol()?
 			//      (package.json is not fetched)
-			this.projectManager.ensureFilesForWorkspaceSymbol().catch(err => {
-				if (!isCancelledError(err)) {
-					this.logger.error('Background fetching failed ', err);
-				}
+			this.projectManager.ensureOwnFiles().catch(err => {
+				this.logger.error('Background fetching failed ', err);
 			});
 		}
 		return {
@@ -265,10 +263,9 @@ export class TypeScriptService {
 
 	async textDocumentReferences(params: ReferenceParams, span = new Span()): Promise<Location[]> {
 
+		await this.projectManager.ensureAllFiles();
+
 		const fileName = util.uri2path(params.textDocument.uri);
-
-		await this.projectManager.ensureFilesForReferences(params.textDocument.uri);
-
 		const configuration = this.projectManager.getConfiguration(fileName);
 		configuration.ensureAllFiles();
 
@@ -306,9 +303,13 @@ export class TypeScriptService {
 		const limit = params.limit;
 
 		if (symQuery) {
-			const dtRes = await this._workspaceSymbolDefinitelyTyped(params);
-			if (dtRes) {
-				return dtRes;
+			try {
+				const dtRes = await this._workspaceSymbolDefinitelyTyped(params);
+				if (dtRes) {
+					return dtRes;
+				}
+			} catch (err) {
+				// Ignore
 			}
 
 			if (!symQuery.containerKind) {
@@ -316,7 +317,7 @@ export class TypeScriptService {
 			}
 		}
 
-		await this.projectManager.ensureFilesForWorkspaceSymbol();
+		await this.projectManager.ensureOwnFiles();
 
 		if (!query && !symQuery && this.emptyQueryWorkspaceSymbols) {
 			return this.emptyQueryWorkspaceSymbols;
@@ -345,15 +346,13 @@ export class TypeScriptService {
 	}
 
 	protected async _workspaceSymbolDefinitelyTyped(params: WorkspaceSymbolParams): Promise<SymbolInformation[] | null> {
-		try {
-			await this.projectManager.ensureFiles(['/package.json']);
-		} catch (e) {
+		const rootUriParts = url.parse(this.rootUri);
+		if (!rootUriParts.pathname) {
 			return null;
 		}
-		if (!this.projectManager.getFs().fileExists('/package.json')) {
-			return null;
-		}
-		const rootConfig = JSON.parse(this.projectManager.getFs().readFile('/package.json'));
+		const packageJsonUri = url.format({ ...rootUriParts, pathname: path_.posix.join(rootUriParts.pathname, 'package.json') });
+		await this.updater.ensure(packageJsonUri);
+		const rootConfig = JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri));
 		if (rootConfig.name !== 'definitely-typed') {
 			return null;
 		}

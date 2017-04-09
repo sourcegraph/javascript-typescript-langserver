@@ -1,13 +1,11 @@
 import { Observable } from '@reactivex/rxjs';
 import iterate from 'iterare';
-import { memoize } from 'lodash';
 import { Span } from 'opentracing';
 import * as os from 'os';
 import * as path_ from 'path';
 import * as ts from 'typescript';
 import * as url from 'url';
 import { Disposable } from 'vscode-languageserver';
-import { CancellationToken, CancellationTokenSource, throwIfCancelledError, throwIfRequested } from './cancellation';
 import { FileSystemUpdater } from './fs';
 import { Logger, NoopLogger } from './logging';
 import { InMemoryFileSystem, walkInMemoryFs } from './memfs';
@@ -21,11 +19,6 @@ import * as util from './util';
  * all files from all projects for workspace symbols.
  */
 export class ProjectManager implements Disposable {
-
-	/**
-	 * Cancellations to do when the object is disposed
-	 */
-	private cancellationSources = new Set<CancellationTokenSource>();
 
 	/**
 	 * Root path (as passed to `initialize` request)
@@ -73,9 +66,14 @@ export class ProjectManager implements Disposable {
 	private ensuredModuleStructure?: Promise<void>;
 
 	/**
-	 * For references/symbols we need all the source files making workspace so this flag tracks if we already did it
+	 * Promise resolved when `ensureAllFiles` completed
 	 */
 	private ensuredAllFiles?: Promise<void>;
+
+	/**
+	 * Promise resolved when `ensureOwnFiles` completed
+	 */
+	private ensuredOwnFiles?: Promise<void>;
 
 	/**
 	 * A URI Map from file to files referenced by the file, so files only need to be pre-processed once
@@ -102,9 +100,7 @@ export class ProjectManager implements Disposable {
 	 * Disposes the object and cancels any asynchronous operations that are still active
 	 */
 	dispose(): void {
-		for (const source of this.cancellationSources) {
-			source.cancel();
-		}
+		// TODO unsubscribe subscriptions
 	}
 
 	/**
@@ -170,38 +166,39 @@ export class ProjectManager implements Disposable {
 	}
 
 	/**
-	 * Causes the next call of `ensureModuleStructure` to re-ensure module structure
+	 * Invalidates caches for `ensureModuleStructure`, `ensureAllFiles` and `insureOwnFiles`
 	 */
 	invalidateModuleStructure(): void {
 		this.ensuredModuleStructure = undefined;
+		this.ensuredAllFiles = undefined;
+		this.ensuredOwnFiles = undefined;
 	}
 
 	/**
-	 * Ensures all files needed for a workspace/symbol request are available in memory.
+	 * Ensures all files not in node_modules were fetched.
 	 * This includes all js/ts files, tsconfig files and package.json files.
-	 * It excludes files in node_modules.
 	 * Invalidates project configurations after execution
 	 */
-	ensureFilesForWorkspaceSymbol = memoize(async (): Promise<void> => {
-		try {
-			await this.updater.ensureStructure();
-			const filesToEnsure = [];
-			for (const uri of this.localFs.uris()) {
-				const file = util.uri2path(uri);
-				if (
-					util.toUnixPath(file).indexOf('/node_modules/') === -1
-					&& (util.isJSTSFile(file) || util.isConfigFile(file) || util.isPackageJsonFile(file))
-				) {
-					filesToEnsure.push(file);
-				}
-			}
-			await this.ensureFiles(filesToEnsure);
-			await this.createConfigurations();
-		} catch (e) {
-			this.ensureFilesForWorkspaceSymbol.cache = new WeakMap();
-			throw e;
+	ensureOwnFiles(): Promise<void> {
+		if (this.ensuredOwnFiles) {
+			return this.ensuredOwnFiles;
 		}
-	});
+		this.ensuredOwnFiles = (async () => {
+			try {
+				await this.updater.ensureStructure();
+				await Promise.all(
+					iterate(this.localFs.uris())
+						.filter(uri => !uri.includes('/node_modules/') && util.isJSTSFile(uri) || util.isConfigFile(uri) || util.isPackageJsonFile(uri))
+						.map(uri => this.updater.ensure(uri))
+				);
+				this.createConfigurations();
+			} catch (err) {
+				this.ensuredOwnFiles = undefined;
+				throw err;
+			}
+		})();
+		return this.ensuredOwnFiles;
+	}
 
 	/**
 	 * Ensures all files were fetched from the remote file system.
@@ -211,22 +208,21 @@ export class ProjectManager implements Disposable {
 		if (this.ensuredAllFiles) {
 			return this.ensuredAllFiles;
 		}
-
-		const promise = this.updater.ensureStructure()
-			.then(() => this.ensureFiles(
-				iterate(this.localFs.uris())
-					.map(uri => util.uri2path(uri))
-					.filter(file => util.isJSTSFile(file))
-			))
-			.then(() => this.createConfigurations());
-
-		this.ensuredAllFiles = promise;
-		promise.catch(err => {
-			this.logger.error('Failed to fetch files for references:', err);
-			this.ensuredAllFiles = undefined;
-		});
-
-		return promise;
+		this.ensuredAllFiles = (async () => {
+			try {
+				await this.updater.ensureStructure();
+				await Promise.all(
+					iterate(this.localFs.uris())
+						.filter(uri => util.isJSTSFile(uri) || util.isConfigFile(uri) || util.isPackageJsonFile(uri))
+						.map(uri => this.updater.ensure(uri))
+				);
+				this.createConfigurations();
+			} catch (err) {
+				this.ensuredAllFiles = undefined;
+				throw err;
+			}
+		})();
+		return this.ensuredAllFiles;
 	}
 
 	/**
@@ -239,7 +235,7 @@ export class ProjectManager implements Disposable {
 	ensureFilesForReferences(uri: string): Promise<void> {
 		const fileName: string = util.uri2path(uri);
 		if (util.toUnixPath(fileName).indexOf(`${path_.posix.sep}node_modules${path_.posix.sep}`) !== -1) {
-			return this.ensureFilesForWorkspaceSymbol();
+			return this.ensureOwnFiles();
 		}
 
 		return this.ensureAllFiles();
@@ -444,41 +440,6 @@ export class ProjectManager implements Disposable {
 	 */
 	didSave(filePath: string) {
 		this.localFs.didSave(filePath);
-	}
-
-	/**
-	 * ensureFiles ensures the following files have been fetched to
-	 * localFs. The files parameter is expected to contain paths in
-	 * the remote FS. ensureFiles only syncs unfetched file content
-	 * from remoteFs to localFs. It does not update project
-	 * state. Callers that want to do so after file contents have been
-	 * fetched should call this.createConfigurations().
-	 *
-	 * If one file fetch failed, the error will be caught and logged.
-	 *
-	 * @param files File paths
-	 */
-	async ensureFiles(files: Iterable<string>, token: CancellationToken = CancellationToken.None): Promise<void> {
-		const source = new CancellationTokenSource();
-		token.onCancellationRequested(() => source.cancel());
-		this.cancellationSources.add(source);
-		token = source.token;
-		try {
-			await Promise.all(iterate(files).map(async path => {
-				throwIfRequested(token);
-				try {
-					await this.updater.ensure(util.path2uri('', path));
-				} catch (err) {
-					// if cancellation was requested, break out of the loop
-					throwIfCancelledError(err);
-					throwIfRequested(token);
-					// else log error and continue
-					this.logger.error(`Ensuring file ${path} failed`, err);
-				}
-			}));
-		} finally {
-			this.cancellationSources.delete(source);
-		}
 	}
 
 	/**
