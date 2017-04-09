@@ -263,6 +263,7 @@ export class TypeScriptService {
 
 	async textDocumentReferences(params: ReferenceParams, span = new Span()): Promise<Location[]> {
 
+		// Ensure all files were fetched to collect all references
 		await this.projectManager.ensureAllFiles();
 
 		const fileName = util.uri2path(params.textDocument.uri);

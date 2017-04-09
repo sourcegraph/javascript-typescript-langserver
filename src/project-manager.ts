@@ -226,22 +226,6 @@ export class ProjectManager implements Disposable {
 	}
 
 	/**
-	 * Ensures that we have all the files needed to retrieve all the references to a symbol in the given file.
-	 * Pretty much it's the same set of files needed to produce workspace symbols unless file is located in `node_modules`
-	 * in which case we need to fetch the whole tree
-	 *
-	 * @param uri target file URI
-	 */
-	ensureFilesForReferences(uri: string): Promise<void> {
-		const fileName: string = util.uri2path(uri);
-		if (util.toUnixPath(fileName).indexOf(`${path_.posix.sep}node_modules${path_.posix.sep}`) !== -1) {
-			return this.ensureOwnFiles();
-		}
-
-		return this.ensureAllFiles();
-	}
-
-	/**
 	 * Recursively collects file(s) dependencies up to given level.
 	 * Dependencies are extracted by TS compiler from import and reference statements
 	 *
