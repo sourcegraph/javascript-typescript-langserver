@@ -108,8 +108,6 @@ export class TypeScriptService {
 			this.updater = new FileSystemUpdater(this.fileSystem, this.inMemoryFileSystem);
 			this.projectManager = new pm.ProjectManager(this.root, this.inMemoryFileSystem, this.updater, !!this.options.strict, this.traceModuleResolution, this.logger);
 			// Pre-fetch files in the background
-			// TODO why does ensureAllFiles() fetch less files than ensureFilesForWorkspaceSymbol()?
-			//      (package.json is not fetched)
 			this.projectManager.ensureOwnFiles(span).catch(err => {
 				this.logger.error('Background fetching failed ', err);
 			});
