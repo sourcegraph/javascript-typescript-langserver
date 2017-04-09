@@ -80,15 +80,17 @@ export class RemoteLanguageClient {
 	}
 
 	/**
-	 * The content request is sent from a server to a client to request the
-	 * current content of a text document identified by the URI
+	 * The content request is sent from the server to the client to request the current content of
+	 * any text document. This allows language servers to operate without accessing the file system
+	 * directly.
 	 */
 	textDocumentXcontent(params: TextDocumentContentParams): Promise<TextDocumentItem> {
 		return this.request('textDocument/xcontent', params).toPromise();
 	}
 
 	/**
-	 * Returns a list of all files in a directory
+	 * The files request is sent from the server to the client to request a list of all files in the
+	 * workspace or inside the directory of the `base` parameter, if given.
 	 */
 	workspaceXfiles(params: WorkspaceFilesParams): Promise<TextDocumentIdentifier[]> {
 		return this.request('workspace/xfiles', params).toPromise();
