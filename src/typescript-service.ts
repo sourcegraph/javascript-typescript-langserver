@@ -1479,7 +1479,7 @@ export class TypeScriptService {
 	textDocumentDidOpen(params: DidOpenTextDocumentParams): Promise<void> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		return this.projectManager.ensureFilesForHoverAndDefinition(uri).then(() => {
-			this.projectManager.didOpen(util.uri2path(uri), params.textDocument.text);
+			this.projectManager.didOpen(util.uri2relpath(uri, this.root), params.textDocument.text);
 		});
 	}
 
@@ -1500,7 +1500,7 @@ export class TypeScriptService {
 		if (!text) {
 			return;
 		}
-		this.projectManager.didChange(util.uri2path(uri), text);
+		this.projectManager.didChange(util.uri2relpath(uri, this.root), text);
 	}
 
 	/**
@@ -1510,7 +1510,7 @@ export class TypeScriptService {
 	textDocumentDidSave(params: DidSaveTextDocumentParams): Promise<void> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		return this.projectManager.ensureFilesForHoverAndDefinition(uri).then(() => {
-			this.projectManager.didSave(util.uri2path(uri));
+			this.projectManager.didSave(util.uri2relpath(uri, this.root));
 		});
 	}
 
@@ -1522,7 +1522,7 @@ export class TypeScriptService {
 	textDocumentDidClose(params: DidCloseTextDocumentParams): Promise<void> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		return this.projectManager.ensureFilesForHoverAndDefinition(uri).then(() => {
-			this.projectManager.didClose(util.uri2path(uri));
+			this.projectManager.didClose(util.uri2relpath(uri, this.root));
 		});
 	}
 
