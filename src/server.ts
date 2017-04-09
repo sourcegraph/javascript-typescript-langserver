@@ -1,27 +1,20 @@
 import * as cluster from 'cluster';
 import * as net from 'net';
 import { Tracer } from 'opentracing';
-import { StreamMessageWriter } from 'vscode-jsonrpc';
 import { isNotificationMessage } from 'vscode-jsonrpc/lib/messages';
-import { MessageEmitter, registerLanguageHandler } from './connection';
+import { MessageEmitter, MessageLogOptions, MessageWriter, registerLanguageHandler } from './connection';
 import { RemoteLanguageClient } from './lang-handler';
 import { Logger, PrefixedLogger, StdioLogger } from './logging';
 import { TypeScriptService } from './typescript-service';
 
 /** Options to `serve()` */
-export interface ServeOptions {
+export interface ServeOptions extends MessageLogOptions {
 
 	/** Amount of workers to spawn */
 	clusterSize: number;
 
 	/** Port to listen on for TCP LSP connections */
 	lspPort: number;
-
-	/** A logger to log to. Defaults to STDIO */
-	logger?: Logger;
-
-	/** Whether to log all JSON RPC messages to the passed logger */
-	logMessages?: boolean;
 
 	/** An OpenTracing-compatible Tracer */
 	tracer?: Tracer;
@@ -63,9 +56,9 @@ export function serve(options: ServeOptions, createLangHandler = (remoteClient: 
 			const id = counter++;
 			logger.log(`Connection ${id} accepted`);
 
-			const messageEmitter = new MessageEmitter(socket as NodeJS.ReadableStream);
-			const messageWriter = new StreamMessageWriter(socket);
-			const remoteClient = new RemoteLanguageClient(messageEmitter, messageWriter, options);
+			const messageEmitter = new MessageEmitter(socket as NodeJS.ReadableStream, options);
+			const messageWriter = new MessageWriter(socket, options);
+			const remoteClient = new RemoteLanguageClient(messageEmitter, messageWriter);
 
 			// Add exit notification handler to close the socket on exit
 			messageEmitter.on('message', message => {

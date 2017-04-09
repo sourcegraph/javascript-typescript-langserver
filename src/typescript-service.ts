@@ -15,8 +15,11 @@ import {
 	InitializeResult,
 	Location,
 	MarkedString,
+	ParameterInformation,
 	Range,
 	ReferenceParams,
+	SignatureHelp,
+	SignatureInformation,
 	SymbolInformation,
 	TextDocumentPositionParams,
 	TextDocumentSyncKind
@@ -25,6 +28,7 @@ import { isCancelledError } from './cancellation';
 import { FileSystem, FileSystemUpdater, LocalFileSystem, RemoteFileSystem } from './fs';
 import { RemoteLanguageClient } from './lang-handler';
 import { Logger, LSPLogger } from './logging';
+import { InMemoryFileSystem, isTypeScriptLibrary, skipDir, walkInMemoryFs } from './memfs';
 import * as pm from './project-manager';
 import {
 	DependencyReference,
@@ -84,17 +88,12 @@ export class TypeScriptService {
 	/**
 	 * Holds file contents and workspace structure in memory
 	 */
-	protected inMemoryFileSystem: pm.InMemoryFileSystem;
+	protected inMemoryFileSystem: InMemoryFileSystem;
 
 	/**
 	 * Syncs the remote file system with the in-memory file system
 	 */
 	protected updater: FileSystemUpdater;
-
-	/**
-	 * Set to true when shutdown is called
-	 */
-	shutdownCalled = false;
 
 	constructor(protected client: RemoteLanguageClient, protected options: TypeScriptServiceOptions = {}) {
 		this.logger = new LSPLogger(client);
@@ -121,6 +120,9 @@ export class TypeScriptService {
 				// Tell the client that the server works in FULL text document sync mode
 				textDocumentSync: TextDocumentSyncKind.Full,
 				hoverProvider: true,
+				signatureHelpProvider: {
+					triggerCharacters: ['(', ',']
+				},
 				definitionProvider: true,
 				referencesProvider: true,
 				documentSymbolProvider: true,
@@ -145,12 +147,12 @@ export class TypeScriptService {
 	 */
 	protected _initializeFileSystems(accessDisk: boolean): void {
 		this.fileSystem = accessDisk ? new LocalFileSystem(util.uri2path(this.root)) : new RemoteFileSystem(this.client);
-		this.inMemoryFileSystem = new pm.InMemoryFileSystem(this.root);
+		this.inMemoryFileSystem = new InMemoryFileSystem(this.root);
 	}
 
-	async shutdown(params = {}, span = new Span()): Promise<void> {
-		this.shutdownCalled = true;
+	async shutdown(params = {}, span = new Span()): Promise<null> {
 		this.projectManager.dispose();
+		return null;
 	}
 
 	async textDocumentDefinition(params: TextDocumentPositionParams, span = new Span()): Promise<Location[]> {
@@ -172,7 +174,7 @@ export class TypeScriptService {
 		const defs: ts.DefinitionInfo[] = configuration.getService().getDefinitionAtPosition(fileName, offset);
 		const ret = [];
 		if (defs) {
-			for (let def of defs) {
+			for (const def of defs) {
 				const sourceFile = this._getSourceFile(configuration, def.fileName);
 				if (!sourceFile) {
 					throw new Error('expected source file "' + def.fileName + '" to exist in configuration');
@@ -207,7 +209,7 @@ export class TypeScriptService {
 		const defs: ts.DefinitionInfo[] = configuration.getService().getDefinitionAtPosition(fileName, offset);
 		const ret = [];
 		if (defs) {
-			for (let def of defs) {
+			for (const def of defs) {
 				const sourceFile = this._getSourceFile(configuration, def.fileName);
 				if (!sourceFile) {
 					throw new Error('expected source file "' + def.fileName + '" to exist in configuration');
@@ -237,7 +239,7 @@ export class TypeScriptService {
 		const configuration = this.projectManager.getConfiguration(fileName);
 		await configuration.ensureBasicFiles();
 
-		let sourceFile = this._getSourceFile(configuration, fileName);
+		const sourceFile = this._getSourceFile(configuration, fileName);
 		if (!sourceFile) {
 			throw new Error(`Unknown text document ${params.textDocument.uri}`);
 		}
@@ -250,7 +252,7 @@ export class TypeScriptService {
 			language: 'typescript',
 			value: ts.displayPartsToString(info.displayParts)
 		}];
-		let documentation = ts.displayPartsToString(info.documentation);
+		const documentation = ts.displayPartsToString(info.documentation);
 		if (documentation) {
 			contents.push(documentation);
 		}
@@ -282,7 +284,7 @@ export class TypeScriptService {
 		const tasks: AsyncFunction<Location, Error>[] = [];
 
 		if (refs) {
-			for (let ref of refs) {
+			for (const ref of refs) {
 				tasks.push(this._transformReference(this.root,
 					configuration.getProgram(),
 					params.context && params.context.includeDeclaration,
@@ -463,9 +465,9 @@ export class TypeScriptService {
 		await this.projectManager.ensureModuleStructure();
 
 		const pkgFiles: string[] = [];
-		pm.walkInMemoryFs(this.projectManager.getFs(), '/', (path: string, isdir: boolean): Error | void => {
+		walkInMemoryFs(this.projectManager.getFs(), '/', (path: string, isdir: boolean): Error | void => {
 			if (isdir && path_.basename(path) === 'node_modules') {
-				return pm.skipDir;
+				return skipDir;
 			}
 			if (isdir) {
 				return;
@@ -506,9 +508,9 @@ export class TypeScriptService {
 		await this.projectManager.ensureModuleStructure();
 
 		const pkgFiles: string[] = [];
-		pm.walkInMemoryFs(this.projectManager.getFs(), '/', (path: string, isdir: boolean): Error | void => {
+		walkInMemoryFs(this.projectManager.getFs(), '/', (path: string, isdir: boolean): Error | void => {
 			if (isdir && path_.basename(path) === 'node_modules') {
-				return pm.skipDir;
+				return skipDir;
 			}
 			if (isdir) {
 				return;
@@ -575,6 +577,43 @@ export class TypeScriptService {
 		}));
 	}
 
+	async textDocumentSignatureHelp(params: TextDocumentPositionParams, span = new Span()): Promise<SignatureHelp> {
+		const uri = util.uri2reluri(params.textDocument.uri, this.root);
+		const line = params.position.line;
+		const column = params.position.character;
+		await this.projectManager.ensureFilesForHoverAndDefinition(uri, span);
+
+		const fileName: string = util.uri2path(uri);
+		const configuration = this.projectManager.getConfiguration(fileName);
+		await configuration.ensureBasicFiles();
+
+		const sourceFile = this._getSourceFile(configuration, fileName);
+		if (!sourceFile) {
+			throw new Error('expected source file "' + fileName + '" to exist in configuration');
+		}
+		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
+
+		const signatures: ts.SignatureHelpItems = configuration.getService().getSignatureHelpItems(fileName, offset);
+		if (!signatures) {
+			return { signatures: [], activeParameter: 0, activeSignature: 0};
+		}
+
+		const signatureInformations = signatures.items.map(item => {
+			const prefix = ts.displayPartsToString(item.prefixDisplayParts);
+			const params = item.parameters.map(p => ts.displayPartsToString(p.displayParts)).join(', ');
+			const suffix = ts.displayPartsToString(item.suffixDisplayParts);
+			const parameters = item.parameters.map(p => {
+				return ParameterInformation.create(ts.displayPartsToString(p.displayParts), ts.displayPartsToString(p.documentation));
+			});
+			return SignatureInformation.create(prefix + params + suffix, ts.displayPartsToString(item.documentation), ...parameters);
+		});
+
+		return {
+			signatures: signatureInformations,
+			activeSignature: signatures.selectedItemIndex,
+			activeParameter: signatures.argumentIndex
+		};
+	}
 	/*
 	 * walkMostAST walks most of the AST (the part that matters for gathering all references)
 	 */
@@ -1435,8 +1474,8 @@ export class TypeScriptService {
 			if (!sourceFile) {
 				return callback(new Error('source file "' + ref.fileName + '" does not exist'));
 			}
-			let start = ts.getLineAndCharacterOfPosition(sourceFile, ref.textSpan.start);
-			let end = ts.getLineAndCharacterOfPosition(sourceFile, ref.textSpan.start + ref.textSpan.length);
+			const start = ts.getLineAndCharacterOfPosition(sourceFile, ref.textSpan.start);
+			const end = ts.getLineAndCharacterOfPosition(sourceFile, ref.textSpan.start + ref.textSpan.length);
 			callback(undefined, Location.create(util.path2uri(root, ref.fileName), {
 				start,
 				end
@@ -1452,8 +1491,8 @@ export class TypeScriptService {
 		if (!sourceFile) {
 			throw new Error('source file "' + item.fileName + '" does not exist');
 		}
-		let start = ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start);
-		let end = ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start + item.textSpan.length);
+		const start = ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start);
+		const end = ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start + item.textSpan.length);
 		return SymbolInformation.create(item.name,
 			util.convertStringtoSymbolKind(item.kind),
 			Range.create(start.line, start.character, end.line, end.character),
@@ -1510,8 +1549,7 @@ export class TypeScriptService {
 	 * returns git://github.com/Microsoft/TypeScript URL, otherwise returns file:// one
 	 */
 	private _defUri(filePath: string): string {
-		filePath = util.toUnixPath(filePath);
-		if (pm.getTypeScriptLibraries().has(filePath)) {
+		if (isTypeScriptLibrary(filePath)) {
 			return 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/' + path_.basename(filePath);
 		}
 		return util.path2uri(this.root, filePath);
@@ -1522,10 +1560,9 @@ export class TypeScriptService {
 	 */
 	private _getNavigationTreeItems(configuration: pm.ProjectConfiguration, limit?: number): SymbolInformation[] {
 		const result: SymbolInformation[] = [];
-		const libraries = pm.getTypeScriptLibraries();
 		for (const sourceFile of configuration.getProgram().getSourceFiles().sort((a, b) => a.fileName.localeCompare(b.fileName))) {
 			// excluding navigation items from TypeScript libraries
-			if (libraries.has(util.toUnixPath(sourceFile.fileName))) {
+			if (isTypeScriptLibrary(sourceFile.fileName)) {
 				continue;
 			}
 			let tree;
@@ -1568,8 +1605,8 @@ export class TypeScriptService {
 	 */
 	private _transformNavigationTreeItem(item: ts.NavigationTree, parent: ts.NavigationTree | null, sourceFile: ts.SourceFile): SymbolInformation {
 		const span = item.spans[0];
-		let start = ts.getLineAndCharacterOfPosition(sourceFile, span.start);
-		let end = ts.getLineAndCharacterOfPosition(sourceFile, span.start + span.length);
+		const start = ts.getLineAndCharacterOfPosition(sourceFile, span.start);
+		const end = ts.getLineAndCharacterOfPosition(sourceFile, span.start + span.length);
 		return SymbolInformation.create(item.text,
 			util.convertStringtoSymbolKind(item.kind),
 			Range.create(start.line, start.character, end.line, end.character),

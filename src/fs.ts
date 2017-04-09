@@ -6,7 +6,7 @@ import glob = require('glob');
 import iterate from 'iterare';
 import { Span } from 'opentracing';
 import Semaphore from 'semaphore-async-await';
-import { InMemoryFileSystem } from './project-manager';
+import { InMemoryFileSystem } from './memfs';
 import { normalizeDir, path2uri, toUnixPath, uri2path } from './util';
 
 export interface FileSystem {

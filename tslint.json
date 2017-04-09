@@ -27,6 +27,7 @@
     "no-shadowed-variable": false,
     "member-ordering": [false],
     "trailing-comma": [true, {"singleline": "never", "multiline": "never"}],
-    "no-console": [true, "log", "info", "warn", "error", "trace", "time", "timeEnd", "assert", "count", "dir", "table"]
+    "no-console": [true, "log", "info", "warn", "error", "trace", "time", "timeEnd", "assert", "count", "dir", "table"],
+    "prefer-const": [true, {"destructuring": "all"}]
   }
 }
