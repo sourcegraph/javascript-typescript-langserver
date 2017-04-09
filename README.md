@@ -1,7 +1,5 @@
 # JavaScript/TypeScript language server
 
-[![Greenkeeper badge](https://badges.greenkeeper.io/sourcegraph/javascript-typescript-langserver.svg)](https://greenkeeper.io/)
-
 [![npm](https://img.shields.io/npm/v/javascript-typescript-langserver.svg)](https://www.npmjs.com/package/javascript-typescript-langserver)
 [![npm](https://img.shields.io/npm/dm/javascript-typescript-langserver.svg)](https://www.npmjs.com/package/javascript-typescript-langserver)
 [![Build Status](https://travis-ci.org/sourcegraph/javascript-typescript-langserver.svg?branch=master)](https://travis-ci.org/sourcegraph/javascript-typescript-langserver)
