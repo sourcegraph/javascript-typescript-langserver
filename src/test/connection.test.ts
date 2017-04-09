@@ -1,7 +1,6 @@
 
 import { Observable } from '@reactivex/rxjs';
 import { EventEmitter } from 'events';
-import * as net from 'net';
 import { Span } from 'opentracing';
 import * as sinon from 'sinon';
 import { PassThrough } from 'stream';
@@ -256,18 +255,6 @@ describe('connection', () => {
 			emitter.emit('message', { jsonrpc: '2.0', method: 'whatever' });
 			await new Promise(resolve => setTimeout(resolve, 0));
 			sinon.assert.notCalled(logger.log);
-		});
-		it('should emit a close event when the passed socket was closed by the other party', async () => {
-			const server = net.createServer(socket => {
-				setTimeout(() => socket.end(), 10);
-			});
-			await new Promise(resolve => server.listen(0, resolve));
-			const socket = net.connect(server.address().port);
-			const listener = sinon.spy();
-			const emitter = new MessageEmitter(socket as NodeJS.ReadableStream);
-			emitter.on('close', listener);
-			await new Promise(resolve => setTimeout(resolve, 20));
-			sinon.assert.calledOnce(listener);
 		});
 	});
 	describe('MessageWriter', () => {
