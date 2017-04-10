@@ -138,7 +138,7 @@ export class FileSystemUpdater {
 			return await (this.fetches.get(uri) || this.fetch(uri, span));
 		} catch (err) {
 			span.setTag('error', true);
-			span.log({ 'event': 'error', 'error.object': err });
+			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
 			throw err;
 		} finally {
 			span.finish();
@@ -161,7 +161,7 @@ export class FileSystemUpdater {
 			} catch (err) {
 				this.structureFetch = undefined;
 				span.setTag('error', true);
-				span.log({ 'event': 'error', 'error.object': err });
+				span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
 				throw err;
 			} finally {
 				span.finish();
@@ -183,7 +183,7 @@ export class FileSystemUpdater {
 			return await (this.structureFetch || this.fetchStructure(span));
 		} catch (err) {
 			span.setTag('error', true);
-			span.log({ 'event': 'error', 'error.object': err });
+			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
 			throw err;
 		} finally {
 			span.finish();

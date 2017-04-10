@@ -263,7 +263,9 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 					});
 					// Set error on span
 					span.setTag('error', true);
-					span.log({ 'event': 'error', 'error.object': err });
+					span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
+					// Log error
+					logger.error(`Handler for ${message.method} failed:`, err, 'Message:', message);
 				});
 			// Save subscription for $/cancelRequest
 			subscriptions.set(message.id, subscription);

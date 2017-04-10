@@ -166,7 +166,7 @@ export class ProjectManager implements Disposable {
 			} catch (err) {
 				this.ensuredModuleStructure = undefined;
 				span.setTag('error', true);
-				span.log({ 'event': 'error', 'error.object': err });
+				span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
 				throw err;
 			} finally {
 				span.finish();
@@ -206,7 +206,7 @@ export class ProjectManager implements Disposable {
 			} catch (err) {
 				this.ensuredOwnFiles = undefined;
 				span.setTag('error', true);
-				span.log({ 'event': 'error', 'error.object': err });
+				span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
 				throw err;
 			} finally {
 				span.finish();
@@ -236,7 +236,7 @@ export class ProjectManager implements Disposable {
 			} catch (err) {
 				this.ensuredAllFiles = undefined;
 				span.setTag('error', true);
-				span.log({ 'event': 'error', 'error.object': err });
+				span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
 				throw err;
 			} finally {
 				span.finish();
@@ -284,7 +284,7 @@ export class ProjectManager implements Disposable {
 			// Log errors to span
 			.catch(err => {
 				span.setTag('error', true);
-				span.log({ 'event': 'error', 'error.object': err });
+				span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
 				throw err;
 			})
 			// Finish span
