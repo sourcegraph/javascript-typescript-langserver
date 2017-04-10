@@ -43,28 +43,39 @@ export function toUnixPath(filePath: string): string {
 
 export function convertStringtoSymbolKind(kind: string): SymbolKind {
 	switch (kind) {
-		case 'file': return SymbolKind.File;
 		case 'module': return SymbolKind.Module;
-		case 'namespace': return SymbolKind.Namespace;
-		case 'package': return SymbolKind.Package;
 		case 'class': return SymbolKind.Class;
-		case 'method': return SymbolKind.Method;
-		case 'property': return SymbolKind.Property;
-		case 'field': return SymbolKind.Field;
-		case 'constructor': return SymbolKind.Constructor;
-		case 'enum': return SymbolKind.Enum;
+		case 'local class': return SymbolKind.Class;
 		case 'interface': return SymbolKind.Interface;
+		case 'enum': return SymbolKind.Enum;
+		case 'enum member': return SymbolKind.Constant;
+		case 'var': return SymbolKind.Variable;
+		case 'local var': return SymbolKind.Variable;
 		case 'function': return SymbolKind.Function;
-		case 'variable': return SymbolKind.Variable;
-		case 'constant': return SymbolKind.Constant;
-		case 'string': return SymbolKind.String;
-		case 'number': return SymbolKind.Number;
-		case 'boolean': return SymbolKind.Boolean;
-		case 'array': return SymbolKind.Array;
-		case 'array': return SymbolKind.Array;
-		case 'sourcefile': return SymbolKind.File;
+		case 'local function': return SymbolKind.Function;
+		case 'method': return SymbolKind.Method;
+		case 'getter': return SymbolKind.Method;
+		case 'setter': return SymbolKind.Method;
+		case 'property': return SymbolKind.Property;
+		case 'constructor': return SymbolKind.Constructor;
+		case 'parameter': return SymbolKind.Variable;
+		case 'type parameter': return SymbolKind.Variable;
 		case 'alias': return SymbolKind.Variable;
-		default: return SymbolKind.String;
+		case 'let': return SymbolKind.Variable;
+		case 'const': return SymbolKind.Constant;
+		case 'JSX attribute': return SymbolKind.Property;
+		// case 'script'
+		// case 'keyword'
+		// case 'type'
+		// case 'call'
+		// case 'index'
+		// case 'construct'
+		// case 'primitive type'
+		// case 'label'
+		// case 'directory'
+		// case 'external module name'
+		// case 'external module name'
+		default: return SymbolKind.Variable;
 	}
 }
 
@@ -124,19 +135,19 @@ export function resolve(root: string, file: string): string {
 	}
 
 }
-let jstsPattern = /\.[tj]sx?$/;
+const jstsPattern = /\.[tj]sx?$/;
 
 export function isJSTSFile(filename: string): boolean {
 	return jstsPattern.test(filename);
 }
 
-let jstsConfigPattern = /(^|\/)[tj]sconfig\.json$/;
+const jstsConfigPattern = /(^|\/)[tj]sconfig\.json$/;
 
 export function isConfigFile(filename: string): boolean {
 	return jstsConfigPattern.test(filename);
 }
 
-let packageJsonPattern = /(^|\/)package\.json$/;
+const packageJsonPattern = /(^|\/)package\.json$/;
 
 export function isPackageJsonFile(filename: string): boolean {
 	return packageJsonPattern.test(filename);
@@ -210,7 +221,7 @@ export function defInfoToSymbolDescriptor(d: ts.DefinitionInfo): rt.SymbolDescri
 
 export function symbolDescriptorMatch(query: Partial<rt.SymbolDescriptor>, sym: rt.SymbolDescriptor): boolean {
 	for (const key of Object.keys(query)) {
-		if ((<any> query)[key] === undefined) {
+		if ((query as any)[key] === undefined) {
 			continue;
 		}
 		if (key === 'package') {
@@ -219,7 +230,7 @@ export function symbolDescriptorMatch(query: Partial<rt.SymbolDescriptor>, sym: 
 			}
 			continue;
 		}
-		if ((<any> query)[key] !== (<any> sym)[key]) {
+		if ((query as any)[key] !== (sym as any)[key]) {
 			return false;
 		}
 	}
@@ -228,10 +239,10 @@ export function symbolDescriptorMatch(query: Partial<rt.SymbolDescriptor>, sym: 
 
 function packageDescriptorMatch(query: rt.PackageDescriptor, sym: rt.PackageDescriptor): boolean {
 	for (const key of Object.keys(query)) {
-		if ((<any> query)[key] === undefined) {
+		if ((query as any)[key] === undefined) {
 			continue;
 		}
-		if ((<any> query)[key] !== (<any> sym)[key]) {
+		if ((query as any)[key] !== (sym as any)[key]) {
 			return false;
 		}
 	}

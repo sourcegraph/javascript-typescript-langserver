@@ -1,14 +1,14 @@
-import * as fs_ from 'fs';
+import { Observable } from '@reactivex/rxjs';
 import iterate from 'iterare';
-import { memoize } from 'lodash';
+import { Span } from 'opentracing';
 import * as os from 'os';
 import * as path_ from 'path';
 import * as ts from 'typescript';
+import * as url from 'url';
 import { Disposable } from 'vscode-languageserver';
-import { CancellationToken, CancellationTokenSource, throwIfCancelledError, throwIfRequested } from './cancellation';
 import { FileSystemUpdater } from './fs';
 import { Logger, NoopLogger } from './logging';
-import * as match from './match-files';
+import { InMemoryFileSystem, walkInMemoryFs } from './memfs';
 import * as util from './util';
 
 /**
@@ -19,11 +19,6 @@ import * as util from './util';
  * all files from all projects for workspace symbols.
  */
 export class ProjectManager implements Disposable {
-
-	/**
-	 * Cancellations to do when the object is disposed
-	 */
-	private cancellationSources = new Set<CancellationTokenSource>();
 
 	/**
 	 * Root path (as passed to `initialize` request)
@@ -68,19 +63,22 @@ export class ProjectManager implements Disposable {
 	 * Flag indicating that we fetched module struture (tsconfig.json, jsconfig.json, package.json files) from the remote file system.
 	 * Without having this information we won't be able to split workspace to sub-projects
 	 */
-	ensuredModuleStructure?: Promise<void>;
+	private ensuredModuleStructure?: Promise<void>;
 
 	/**
-	 * Tracks if source file denoted by the given URI is fetched from remote file system and available locally.
-	 * For hover or definition we only need a single file (and maybe its transitive includes/references as reported by TS compiler).
-	 * This map prevents fetching of file content from remote filesystem twice
-	 */
-	ensuredFilesForHoverAndDefinition = new Map<string, Promise<void>>();
-
-	/**
-	 * For references/symbols we need all the source files making workspace so this flag tracks if we already did it
+	 * Promise resolved when `ensureAllFiles` completed
 	 */
 	private ensuredAllFiles?: Promise<void>;
+
+	/**
+	 * Promise resolved when `ensureOwnFiles` completed
+	 */
+	private ensuredOwnFiles?: Promise<void>;
+
+	/**
+	 * A URI Map from file to files referenced by the file, so files only need to be pre-processed once
+	 */
+	private referencedFiles = new Map<string, Observable<string>>();
 
 	/**
 	 * @param rootPath root path as passed to `initialize`
@@ -102,9 +100,7 @@ export class ProjectManager implements Disposable {
 	 * Disposes the object and cancels any asynchronous operations that are still active
 	 */
 	dispose(): void {
-		for (const source of this.cancellationSources) {
-			source.cancel();
-		}
+		// TODO unsubscribe subscriptions
 	}
 
 	/**
@@ -134,177 +130,119 @@ export class ProjectManager implements Disposable {
 	 * Sub-project is mainly a folder which contains tsconfig.json, jsconfig.json, package.json,
 	 * or a root folder which serves as a fallback
 	 */
-	getConfigurations(): ProjectConfiguration[] {
-		const ret: ProjectConfiguration[] = [];
-		this.configs.forEach((v, k) => {
-			ret.push(v);
-		});
-		return ret;
+	configurations(): IterableIterator<ProjectConfiguration> {
+		return this.configs.values();
 	}
 
 	/**
-	 * ensureModuleStructure ensures that the module structure of the
-	 * project exists in localFs. TypeScript/JavaScript module
-	 * structure is determined by [jt]sconfig.json, filesystem layout,
-	 * global*.d.ts files. For performance reasons, we only read in
-	 * the contents of some files and store "var dummy_0ff1bd;" as the
-	 * contents of all other files.
+	 * Ensures that the module structure of the project exists in memory.
+	 * TypeScript/JavaScript module structure is determined by [jt]sconfig.json,
+	 * filesystem layout, global*.d.ts and package.json files.
+	 * Then creates new ProjectConfigurations, resets existing and invalidates file references.
 	 */
-	ensureModuleStructure(): Promise<void> {
-		if (!this.ensuredModuleStructure) {
-			this.ensuredModuleStructure = this.refreshFileTree(this.rootPath, true).then(() => {
-				this.createConfigurations();
-			});
-			this.ensuredModuleStructure.catch(err => {
-				this.logger.error('Failed to fetch module structure: ', err);
-				this.ensuredModuleStructure = undefined;
-			});
+	ensureModuleStructure(childOf = new Span()): Promise<void> {
+		if (this.ensuredModuleStructure) {
+			return this.ensuredModuleStructure;
 		}
+		this.ensuredModuleStructure = (async () => {
+			const span = childOf.tracer().startSpan('Ensure module structure', { childOf });
+			try {
+				await this.updater.ensureStructure();
+				// Ensure content of all all global .d.ts, [tj]sconfig.json, package.json files
+				await Promise.all(
+					iterate(this.localFs.uris())
+						.filter(uri => util.isGlobalTSFile(uri) || util.isConfigFile(uri) || util.isPackageJsonFile(uri))
+						.map(uri => this.updater.ensure(uri))
+				);
+				// Scan for [tj]sconfig.json files
+				this.createConfigurations();
+				// Reset all compilation state
+				// TODO utilize incremental compilation instead
+				for (const config of this.configs.values()) {
+					config.reset();
+				}
+				// Require re-processing of file references
+				this.invalidateReferencedFiles();
+			} catch (err) {
+				this.ensuredModuleStructure = undefined;
+				span.setTag('error', true);
+				span.log({ 'event': 'error', 'error.object': err });
+				throw err;
+			} finally {
+				span.finish();
+			}
+		})();
 		return this.ensuredModuleStructure;
 	}
 
 	/**
-	 * refreshFileTree refreshes the local in-memory filesytem's (this.localFs) files under the
-	 * specified path (root) with the contents of the remote filesystem (this.remoteFs). It will
-	 * also reset the ProjectConfigurations that are affected by the refreshed files.
-	 *
-	 * If moduleStructureOnly is true, then only files related to module structure (package.json,
-	 * tsconfig.json, etc.) will be refreshed.
-	 *
-	 * This method is public because a ProjectManager instance assumes there are no changes made to
-	 * the remote filesystem structure after initialization. If such changes are made, it is
-	 * necessary to call this method to alert the ProjectManager instance of the change.
-	 *
-	 * @param rootPath root path
-	 * @param moduleStructureOnly indicates if we need to fetch only configuration files such as tsconfig.json,
-	 * jsconfig.json or package.json (otherwise we want to fetch them plus source files)
+	 * Invalidates caches for `ensureModuleStructure`, `ensureAllFiles` and `insureOwnFiles`
 	 */
-	async refreshFileTree(rootPath: string, moduleStructureOnly: boolean): Promise<void> {
-		rootPath = util.normalizeDir(rootPath);
-		const filesToFetch: string[] = [];
-		await this.updater.fetchStructure();
-		for (const uri of this.localFs.uris()) {
-			const file = util.uri2path(uri);
-			const rel = path_.posix.relative(this.rootPath, util.toUnixPath(file));
-			if (!moduleStructureOnly || util.isGlobalTSFile(rel) || util.isConfigFile(rel) || util.isPackageJsonFile(rel)) {
-				filesToFetch.push(file);
-			} else if (!this.localFs.fileExists(rel)) {
-				this.localFs.add(uri, localFSPlaceholder);
-			}
-		}
-		await this.ensureFiles(filesToFetch);
-
-		// require re-fetching of dependency files (but not for
-		// workspace/symbol and textDocument/references, because those
-		// should not be affected by new external modules)
-		this.ensuredFilesForHoverAndDefinition.clear();
-
-		// require re-parsing of projects whose file set may have been affected
-		for (let [dir, config] of this.configs) {
-			dir = util.normalizeDir(dir);
-
-			if (dir.startsWith(rootPath + '/') || rootPath.startsWith(dir + '/') || rootPath === dir) {
-				config.reset();
-			}
-		}
+	invalidateModuleStructure(): void {
+		this.ensuredModuleStructure = undefined;
+		this.ensuredAllFiles = undefined;
+		this.ensuredOwnFiles = undefined;
 	}
 
 	/**
-	 * Ensures that all the files needed to produce hover and definitions for a given
-	 * source file URI were fetched from the remote file system. Set of the needed files includes:
-	 * - file itself
-	 * - file's includes and dependencies (transitive) reported by TS compiler up to depth 30
-	 * There is no need to fetch/parse/compile all the workspace files to produce hover of a symbol in the file F because
-	 * definition of this symbol must be in one of files references by F or its dependencies
-	 *
-	 * @param uri target file URI
-	 */
-	ensureFilesForHoverAndDefinition(uri: string): Promise<void> {
-		const existing = this.ensuredFilesForHoverAndDefinition.get(uri);
-		if (existing) {
-			return existing;
-		}
-		const promise = (async () => {
-			try {
-				await this.ensureModuleStructure();
-				// Include dependencies up to depth 30
-				await this.ensureTransitiveFileDependencies([util.uri2path(uri)], 30);
-			} catch (err) {
-				this.ensuredFilesForHoverAndDefinition.delete(uri);
-				throw err;
-			}
-		})();
-		this.ensuredFilesForHoverAndDefinition.set(uri, promise);
-		return promise;
-	}
-
-	/**
-	 * Ensures all files needed for a workspace/symbol request are available in memory.
+	 * Ensures all files not in node_modules were fetched.
 	 * This includes all js/ts files, tsconfig files and package.json files.
-	 * It excludes files in node_modules.
 	 * Invalidates project configurations after execution
 	 */
-	ensureFilesForWorkspaceSymbol = memoize(async (): Promise<void> => {
-		try {
-			await this.updater.ensureStructure();
-			const filesToEnsure = [];
-			for (const uri of this.localFs.uris()) {
-				const file = util.uri2path(uri);
-				if (
-					util.toUnixPath(file).indexOf('/node_modules/') === -1
-					&& (util.isJSTSFile(file) || util.isConfigFile(file) || util.isPackageJsonFile(file))
-				) {
-					filesToEnsure.push(file);
-				}
-			}
-			await this.ensureFiles(filesToEnsure);
-			await this.createConfigurations();
-		} catch (e) {
-			this.ensureFilesForWorkspaceSymbol.cache = new WeakMap();
-			throw e;
+	ensureOwnFiles(childOf = new Span()): Promise<void> {
+		if (this.ensuredOwnFiles) {
+			return this.ensuredOwnFiles;
 		}
-	});
+		this.ensuredOwnFiles = (async () => {
+			const span = childOf.tracer().startSpan('Ensure own files', { childOf });
+			try {
+				await this.updater.ensureStructure(span);
+				await Promise.all(
+					iterate(this.localFs.uris())
+						.filter(uri => !uri.includes('/node_modules/') && util.isJSTSFile(uri) || util.isConfigFile(uri) || util.isPackageJsonFile(uri))
+						.map(uri => this.updater.ensure(uri))
+				);
+				this.createConfigurations();
+			} catch (err) {
+				this.ensuredOwnFiles = undefined;
+				span.setTag('error', true);
+				span.log({ 'event': 'error', 'error.object': err });
+				throw err;
+			} finally {
+				span.finish();
+			}
+		})();
+		return this.ensuredOwnFiles;
+	}
 
 	/**
 	 * Ensures all files were fetched from the remote file system.
 	 * Invalidates project configurations after execution
 	 */
-	ensureAllFiles(): Promise<void> {
+	ensureAllFiles(childOf = new Span()): Promise<void> {
 		if (this.ensuredAllFiles) {
 			return this.ensuredAllFiles;
 		}
-
-		const promise = this.updater.ensureStructure()
-			.then(() => this.ensureFiles(
-				iterate(this.localFs.uris())
-					.map(uri => util.uri2path(uri))
-					.filter(file => util.isJSTSFile(file))
-			))
-			.then(() => this.createConfigurations());
-
-		this.ensuredAllFiles = promise;
-		promise.catch(err => {
-			this.logger.error('Failed to fetch files for references:', err);
-			this.ensuredAllFiles = undefined;
-		});
-
-		return promise;
-	}
-
-	/**
-	 * Ensures that we have all the files needed to retrieve all the references to a symbol in the given file.
-	 * Pretty much it's the same set of files needed to produce workspace symbols unless file is located in `node_modules`
-	 * in which case we need to fetch the whole tree
-	 *
-	 * @param uri target file URI
-	 */
-	ensureFilesForReferences(uri: string): Promise<void> {
-		const fileName: string = util.uri2path(uri);
-		if (util.toUnixPath(fileName).indexOf(`${path_.posix.sep}node_modules${path_.posix.sep}`) !== -1) {
-			return this.ensureFilesForWorkspaceSymbol();
-		}
-
-		return this.ensureAllFiles();
+		this.ensuredAllFiles = (async () => {
+			const span = childOf.tracer().startSpan('Ensure all files', { childOf });
+			try {
+				await this.updater.ensureStructure(span);
+				await Promise.all(
+					iterate(this.localFs.uris())
+						.filter(uri => util.isJSTSFile(uri) || util.isConfigFile(uri) || util.isPackageJsonFile(uri))
+						.map(uri => this.updater.ensure(uri))
+				);
+				this.createConfigurations();
+			} catch (err) {
+				this.ensuredAllFiles = undefined;
+				span.setTag('error', true);
+				span.log({ 'event': 'error', 'error.object': err });
+				throw err;
+			} finally {
+				span.finish();
+			}
+		})();
+		return this.ensuredAllFiles;
 	}
 
 	/**
@@ -316,53 +254,124 @@ export class ProjectManager implements Disposable {
 	 * - files referenced by the given file
 	 * - files included by the given file
 	 *
-	 * @param filePaths files to process (both absolute and relative paths are accepted)
-	 * @param maxDepth stop collecting when reached given recursion level
-	 * @param seen tracks visited files to avoid cycles
+	 * The return values of this method are not cached, but those of the file fetching and file processing are.
+	 *
+	 * @param uri File to process
+	 * @param maxDepth Stop collecting when reached given recursion level
+	 * @param ignore Tracks visited files to prevent cycles
+	 * @param childOf OpenTracing parent span for tracing
+	 * @return Observable of file URIs ensured
 	 */
-	private async ensureTransitiveFileDependencies(filePaths: string[], maxDepth: number, seen = new Set<string>()): Promise<void> {
-		filePaths = filePaths.filter(f => !seen.has(f));
-		if (filePaths.length === 0) {
-			return Promise.resolve();
+	ensureReferencedFiles(uri: string, maxDepth = 30, ignore = new Set<string>(), childOf = new Span()): Observable<string> {
+		const span = childOf.tracer().startSpan('Ensure referenced files', { childOf });
+		span.addTags({ uri, maxDepth });
+		ignore.add(uri);
+		return Observable.from(this.ensureModuleStructure(span))
+			// If max depth was reached, don't go any further
+			.mergeMap(() => maxDepth === 0 ? [] : this.resolveReferencedFiles(uri))
+			// Prevent cycles
+			.filter(referencedUri => !ignore.has(referencedUri))
+			// Call method recursively with one less dep level
+			// Don't pass span, because the recursive call would create way to many spans
+			.mergeMap(referencedUri =>
+				this.ensureReferencedFiles(referencedUri, maxDepth - 1, ignore)
+					// Continue even if an import wasn't found
+					.catch(err => {
+						this.logger.error(`Error resolving file references for ${uri}:`, err);
+						return [];
+					})
+			)
+			// Log errors to span
+			.catch(err => {
+				span.setTag('error', true);
+				span.log({ 'event': 'error', 'error.object': err });
+				throw err;
+			})
+			// Finish span
+			.finally(() => {
+				span.finish();
+			});
+	}
+
+	/**
+	 * Invalidates a cache entry for `resolveReferencedFiles` (e.g. because the file changed)
+	 *
+	 * @param uri The URI that referenced files should be invalidated for. If not given, all entries are invalidated
+	 */
+	invalidateReferencedFiles(uri?: string): void {
+		if (uri) {
+			this.referencedFiles.delete(uri);
+		} else {
+			this.referencedFiles.clear();
 		}
-		filePaths.forEach(f => seen.add(f));
+	}
 
-		const absFilePaths = filePaths.map(f => util.toUnixPath(util.resolve(this.rootPath, f)));
-		await this.ensureFiles(absFilePaths);
-
-		if (maxDepth > 0) {
-			const importPaths = new Set<string>();
-			await Promise.all(filePaths.map(async filePath => {
+	/**
+	 * Returns the files that are referenced from a given file.
+	 * If the file has already been processed, returns a cached value.
+	 *
+	 * @param uri URI of the file to process
+	 * @return URIs of files referenced by the file
+	 */
+	private resolveReferencedFiles(uri: string): Observable<string> {
+		let observable = this.referencedFiles.get(uri);
+		if (observable) {
+			return observable;
+		}
+		const parts = url.parse(uri);
+		if (!parts.pathname) {
+			return Observable.throw(new Error(`Invalid URI ${uri}`));
+		}
+		// TypeScript works with file paths, not URIs
+		const filePath = parts.pathname.split('/').map(decodeURIComponent).join('/');
+		observable = Observable.from(this.updater.ensure(uri))
+			.mergeMap(() => {
 				const config = this.getConfiguration(filePath);
-				await config.ensureBasicFiles();
-				const contents = this.getFs().readFile(filePath);
+				config.ensureBasicFiles();
+				const contents = this.localFs.getContent(uri);
 				const info = ts.preProcessFile(contents, true, true);
 				const compilerOpt = config.getHost().getCompilationSettings();
-				for (const imp of info.importedFiles) {
-					const resolved = ts.resolveModuleName(util.toUnixPath(imp.fileName), filePath, compilerOpt, config.moduleResolutionHost());
-					if (!resolved || !resolved.resolvedModule) {
-						// This means we didn't find a file defining
-						// the module. It could still exist as an
-						// ambient module, which is why we fetch
-						// global*.d.ts files.
-						continue;
-					}
-					importPaths.add(resolved.resolvedModule.resolvedFileName);
-				}
+				// TODO remove platform-specific behavior here, the host OS is not coupled to the client OS
 				const resolver = !this.strict && os.platform() === 'win32' ? path_ : path_.posix;
-				for (const ref of info.referencedFiles) {
-					// Resolving triple slash references relative to current file
-					// instead of using module resolution host because it behaves
-					// differently in "nodejs" mode
-					const refFilePath = util.toUnixPath(path_.relative(this.rootPath,
-						resolver.resolve(this.rootPath,
-							resolver.dirname(filePath),
-							util.toUnixPath(ref.fileName))));
-					importPaths.add(refFilePath);
-				}
-			}));
-			await this.ensureTransitiveFileDependencies(Array.from(importPaths), maxDepth - 1, seen);
-		}
+				// Iterate imported files
+				return Observable.merge(
+					// References with `import`
+					Observable.from(info.importedFiles)
+						.map(importedFile => ts.resolveModuleName(util.toUnixPath(importedFile.fileName), filePath, compilerOpt, config.moduleResolutionHost()))
+						// false means we didn't find a file defining the module. It
+						// could still exist as an ambient module, which is why we
+						// fetch global*.d.ts files.
+						.filter(resolved => !!(resolved && resolved.resolvedModule))
+						.map(resolved => resolved.resolvedModule!.resolvedFileName),
+					// References with `<reference path="..."/>`
+					Observable.from(info.referencedFiles)
+						// Resolve triple slash references relative to current file
+						// instead of using module resolution host because it behaves
+						// differently in "nodejs" mode
+						.map(referencedFile => util.toUnixPath(
+							path_.relative(
+								this.rootPath,
+								resolver.resolve(
+									this.rootPath,
+									resolver.dirname(filePath),
+									util.toUnixPath(referencedFile.fileName)
+								)
+							)
+						))
+				);
+			})
+			// Use same scheme, slashes, host for referenced URI as input file
+			.map(filePath => url.format({ ...parts, pathname: filePath.split(/[\\\/]/).map(encodeURIComponent).join('/'), search: undefined, hash: undefined }))
+			// Don't cache errors
+			.catch(err => {
+				this.referencedFiles.delete(uri);
+				throw err;
+			})
+			// Make sure all subscribers get the same values
+			.publishReplay()
+			.refCount();
+		this.referencedFiles.set(uri, observable);
+		return observable;
 	}
 
 	/**
@@ -419,10 +428,9 @@ export class ProjectManager implements Disposable {
 		if (!config) {
 			return;
 		}
-		config.ensureConfigFile().then(() => {
-			config.getHost().incProjectVersion();
-			config.syncProgram();
-		});
+		config.ensureConfigFile();
+		config.getHost().incProjectVersion();
+		config.syncProgram();
 	}
 
 	/**
@@ -438,10 +446,9 @@ export class ProjectManager implements Disposable {
 		if (!config) {
 			return;
 		}
-		config.ensureConfigFile().then(() => {
-			config.getHost().incProjectVersion();
-			config.syncProgram();
-		});
+		config.ensureConfigFile();
+		config.getHost().incProjectVersion();
+		config.syncProgram();
 	}
 
 	/**
@@ -450,41 +457,6 @@ export class ProjectManager implements Disposable {
 	 */
 	didSave(filePath: string) {
 		this.localFs.didSave(filePath);
-	}
-
-	/**
-	 * ensureFiles ensures the following files have been fetched to
-	 * localFs. The files parameter is expected to contain paths in
-	 * the remote FS. ensureFiles only syncs unfetched file content
-	 * from remoteFs to localFs. It does not update project
-	 * state. Callers that want to do so after file contents have been
-	 * fetched should call this.createConfigurations().
-	 *
-	 * If one file fetch failed, the error will be caught and logged.
-	 *
-	 * @param files File paths
-	 */
-	async ensureFiles(files: Iterable<string>, token: CancellationToken = CancellationToken.None): Promise<void> {
-		const source = new CancellationTokenSource();
-		token.onCancellationRequested(() => source.cancel());
-		this.cancellationSources.add(source);
-		token = source.token;
-		try {
-			await Promise.all(iterate(files).map(async path => {
-				throwIfRequested(token);
-				try {
-					await this.updater.ensure(util.path2uri('', path));
-				} catch (err) {
-					// if cancellation was requested, break out of the loop
-					throwIfCancelledError(err);
-					throwIfRequested(token);
-					// else log error and continue
-					this.logger.error(`Ensuring file ${path} failed`, err);
-				}
-			}));
-		} finally {
-			this.cancellationSources.delete(source);
-		}
 	}
 
 	/**
@@ -582,10 +554,6 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 		this.versions = versions;
 		this.projectVersion = 1;
 		this.filePaths = [];
-		// adding library files from the local file system
-		getTypeScriptLibraries().forEach((content, name) => {
-			this.fs.add(util.path2uri(rootPath, name), content);
-		});
 	}
 
 	/**
@@ -672,252 +640,6 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 		this.logger.error(message);
 	}
 
-}
-
-const localFSPlaceholder = 'var dummy_0ff1bd;';
-
-/**
- * In-memory file cache node which represents either a folder or a file
- */
-export interface FileSystemNode {
-	file: boolean;
-	children: Map<string, FileSystemNode>;
-};
-
-/**
- * In-memory file system, can be served as a ParseConfigHost (thus allowing listing files that belong to project based on tsconfig.json options)
- */
-export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResolutionHost {
-
-	/**
-	 * Contains a Map of all URIs that exist in the workspace, optionally with a content.
-	 * File contents for URIs in it do not neccessarily have to be fetched already.
-	 */
-	private files = new Map<string, string | undefined>();
-
-	/**
-	 * Map (relative filepath -> string content) of temporary files made while user modifies local file(s).  Paths are relative to `this.path`
-	 *
-	 * TODO make this use URIs too
-	 */
-	overlay: Map<string, string>;
-
-	/**
-	 * Should we take into account register when performing a file name match or not. On Windows when using local file system, file names are case-insensitive
-	 */
-	useCaseSensitiveFileNames: boolean;
-
-	/**
-	 * Root path
-	 */
-	path: string;
-
-	/**
-	 * File tree root
-	 */
-	rootNode: FileSystemNode;
-
-	constructor(path: string, private logger: Logger = new NoopLogger()) {
-		this.path = path;
-		this.overlay = new Map<string, string>();
-		this.rootNode = { file: false, children: new Map<string, FileSystemNode>() };
-	}
-
-	/**
-	 * Returns an IterableIterator for all URIs known to exist in the workspace (content loaded or not)
-	 */
-	uris(): IterableIterator<string> {
-		return this.files.keys();
-	}
-
-	/**
-	 * Adds a file to the local cache
-	 *
-	 * @param uri The URI of the file
-	 * @param content The optional content
-	 */
-	add(uri: string, content?: string): void {
-		// Make sure not to override existing content with undefined
-		if (content !== undefined || !this.files.has(uri)) {
-			this.files.set(uri, content);
-		}
-		// Add to directory tree
-		const filePath = path_.posix.relative(this.path, util.uri2path(uri));
-		const components = filePath.split('/');
-		let node = this.rootNode;
-		for (const [i, component] of components.entries()) {
-			const n = node.children.get(component);
-			if (!n) {
-				if (i < components.length - 1) {
-					const n = { file: false, children: new Map<string, FileSystemNode>() };
-					node.children.set(component, n);
-					node = n;
-				} else {
-					node.children.set(component, { file: true, children: new Map<string, FileSystemNode>() });
-				}
-			} else {
-				node = n;
-			}
-		}
-	}
-
-	/**
-	 * Returns the file content for the given URI.
-	 * Will throw an Error if no available in-memory.
-	 * Use FileSystemUpdater.ensure() to ensure that the file is available.
-	 *
-	 * TODO take overlay into account
-	 */
-	getContent(uri: string): string {
-		const content = this.files.get(uri);
-		if (content === undefined) {
-			throw new Error(`Content of ${uri} is not available in memory`);
-		}
-		return content;
-	}
-
-	/**
-	 * Tells if a file denoted by the given name exists in the workspace (does not have to be loaded)
-	 *
-	 * @param path File path or URI (both absolute or relative file paths are accepted)
-	 */
-	fileExists(path: string): boolean {
-		return this.readFileIfExists(path) !== undefined || this.files.has(path) || this.files.has(util.path2uri(this.path, path));
-	}
-
-	/**
-	 * @param path file path (both absolute or relative file paths are accepted)
-	 * @return file's content in the following order (overlay then cache).
-	 * If there is no such file, returns empty string to match expected signature
-	 */
-	readFile(path: string): string {
-		return this.readFileIfExists(path) || '';
-	}
-
-	/**
-	 * @param path file path (both absolute or relative file paths are accepted)
-	 * @return file's content in the following order (overlay then cache).
-	 * If there is no such file, returns undefined
-	 */
-	private readFileIfExists(path: string): string | undefined {
-		let content = this.overlay.get(path);
-		if (content !== undefined) {
-			return content;
-		}
-
-		const rel = path_.posix.relative('/', path);
-		content = this.overlay.get(rel);
-		if (content !== undefined) {
-			return content;
-		}
-
-		// TODO This assumes that the URI was a file:// URL.
-		//      In reality it could be anything, and the first URI matching the path should be used.
-		//      With the current Map, the search would be O(n), it would require a tree to get O(log(n))
-		content = this.files.get(util.path2uri(this.path, path));
-		if (content !== undefined) {
-			return content;
-		}
-
-		return this.files.get(util.path2uri(this.path, path));
-	}
-
-	/**
-	 * Invalidates temporary content denoted by the given path
-	 * @param path path to a file relative to project root
-	 */
-	didClose(path: string) {
-		this.overlay.delete(path);
-	}
-
-	/**
-	 * Adds temporary content denoted by the given path
-	 * @param path path to a file relative to project root
-	 */
-	didSave(path: string) {
-		const content = this.readFileIfExists(path);
-		if (content !== undefined) {
-			this.add(util.path2uri('', path), content);
-		}
-	}
-
-	/**
-	 * Updates temporary content denoted by the given path
-	 * @param path path to a file relative to project root
-	 */
-	didChange(path: string, text: string) {
-		this.overlay.set(path, text);
-	}
-
-	/**
-	 * Called by TS service to scan virtual directory when TS service looks for source files that belong to a project
-	 */
-	readDirectory(rootDir: string, extensions: string[], excludes: string[], includes: string[]): string[] {
-		return match.matchFiles(rootDir,
-			extensions,
-			excludes,
-			includes,
-			true,
-			this.path,
-			p => this.getFileSystemEntries(p));
-	}
-
-	/**
-	 * Called by TS service to scan virtual directory when TS service looks for source files that belong to a project
-	 */
-	getFileSystemEntries(path: string): match.FileSystemEntries {
-		const ret: { files: string[], directories: string[] } = { files: [], directories: [] };
-		let node = this.rootNode;
-		const components = path.split('/').filter(c => c);
-		if (components.length !== 1 || components[0]) {
-			for (const component of components) {
-				const n = node.children.get(component);
-				if (!n) {
-					return ret;
-				}
-				node = n;
-			}
-		}
-		node.children.forEach((value, name) => {
-			if (value.file) {
-				ret.files.push(name);
-			} else {
-				ret.directories.push(name);
-			}
-		});
-		return ret;
-	}
-
-	trace(message: string) {
-		this.logger.log(message);
-	}
-}
-
-/**
- * Iterates over in-memory cache calling given function on each node until callback signals abort or all nodes were traversed
- */
-export function walkInMemoryFs(fs: InMemoryFileSystem, rootdir: string, walkfn: (path: string, isdir: boolean) => Error | void): Error | void {
-	const err = walkfn(rootdir, true);
-	if (err) {
-		if (err === skipDir) {
-			return;
-		}
-		return err;
-	}
-	const { files, directories } = fs.getFileSystemEntries(rootdir);
-	for (const file of files) {
-		const err = walkfn(path_.posix.join(rootdir, file), false);
-		if (err) {
-			return err;
-		}
-	}
-	for (const dir of directories) {
-		const err = walkInMemoryFs(fs, path_.posix.join(rootdir, dir), walkfn);
-		if (err) {
-			return err;
-		}
-	}
-	return;
 }
 
 /**
@@ -1010,9 +732,9 @@ export class ProjectConfiguration {
 	 * that of the underlying files.
 	 */
 	reset(): void {
-		this.initialized = undefined;
-		this.ensuredBasicFiles = undefined;
-		this.ensuredAllFiles = undefined;
+		this.initialized = false;
+		this.ensuredBasicFiles = false;
+		this.ensuredAllFiles = false;
 		this.service = undefined;
 		this.program = undefined;
 		this.host = undefined;
@@ -1077,162 +799,127 @@ export class ProjectConfiguration {
 		this.program = this.getService().getProgram();
 	}
 
-	private initialized?: Promise<void>;
+	private initialized = false;
 
 	/**
 	 * Initializes (sub)project by parsing configuration and making proper internal objects
 	 */
-	private init(): Promise<void> {
+	private init(): void {
 		if (this.initialized) {
-			return this.initialized;
+			return;
 		}
-		this.initialized = new Promise<void>((resolve, reject) => {
-			let configObject;
-			if (!this.configContent) {
-				const jsonConfig = ts.parseConfigFileTextToJson(this.configFilePath, this.fs.readFile(this.configFilePath));
-				if (jsonConfig.error) {
-					this.logger.error('Cannot parse ' + this.configFilePath + ': ' + jsonConfig.error.messageText);
-					return reject(new Error('Cannot parse ' + this.configFilePath + ': ' + jsonConfig.error.messageText));
-				}
-				configObject = jsonConfig.config;
-			} else {
-				configObject = this.configContent;
+		let configObject;
+		if (!this.configContent) {
+			const jsonConfig = ts.parseConfigFileTextToJson(this.configFilePath, this.fs.readFile(this.configFilePath));
+			if (jsonConfig.error) {
+				this.logger.error('Cannot parse ' + this.configFilePath + ': ' + jsonConfig.error.messageText);
+				throw new Error('Cannot parse ' + this.configFilePath + ': ' + jsonConfig.error.messageText);
 			}
-			let dir = path_.posix.dirname(this.configFilePath);
-			if (dir === '.') {
-				dir = '';
-			}
-			const base = dir || this.fs.path;
-			const configParseResult = ts.parseJsonConfigFileContent(configObject, this.fs, base);
-			const expFiles = configParseResult.fileNames;
+			configObject = jsonConfig.config;
+		} else {
+			configObject = this.configContent;
+		}
+		let dir = path_.posix.dirname(this.configFilePath);
+		if (dir === '.') {
+			dir = '';
+		}
+		const base = dir || this.fs.path;
+		const configParseResult = ts.parseJsonConfigFileContent(configObject, this.fs, base);
+		const expFiles = configParseResult.fileNames;
 
-			// Add globals that might exist in dependencies
-			const nodeModulesDir = path_.posix.join(base, 'node_modules');
-			const err = walkInMemoryFs(this.fs, nodeModulesDir, (path, isdir) => {
-				if (!isdir && util.isGlobalTSFile(path)) {
-					expFiles.push(path);
-				}
-			});
-			if (err) {
-				return reject(err);
+		// Add globals that might exist in dependencies
+		const nodeModulesDir = path_.posix.join(base, 'node_modules');
+		const err = walkInMemoryFs(this.fs, nodeModulesDir, (path, isdir) => {
+			if (!isdir && util.isGlobalTSFile(path)) {
+				expFiles.push(path);
 			}
-
-			const options = configParseResult.options;
-			if (/(^|\/)jsconfig\.json$/.test(this.configFilePath)) {
-				options.allowJs = true;
-			}
-			if (this.traceModuleResolution) {
-				options.traceResolution = true;
-			}
-			this.host = new InMemoryLanguageServiceHost(
-				this.fs.path,
-				options,
-				this.fs,
-				expFiles,
-				this.versions,
-				this.logger
-			);
-			this.service = ts.createLanguageService(this.host, ts.createDocumentRegistry());
-			this.program = this.service.getProgram();
-			return resolve();
 		});
-		return this.initialized;
+		if (err) {
+			throw err;
+		}
+
+		const options = configParseResult.options;
+		if (/(^|\/)jsconfig\.json$/.test(this.configFilePath)) {
+			options.allowJs = true;
+		}
+		if (this.traceModuleResolution) {
+			options.traceResolution = true;
+		}
+		this.host = new InMemoryLanguageServiceHost(
+			this.fs.path,
+			options,
+			this.fs,
+			expFiles,
+			this.versions,
+			this.logger
+		);
+		this.service = ts.createLanguageService(this.host, ts.createDocumentRegistry());
+		this.program = this.service.getProgram();
+		this.initialized = true;
 	}
 
 	/**
 	 * Ensures we are ready to process files from a given sub-project
 	 */
-	ensureConfigFile(): Promise<void> {
-		return this.init();
+	ensureConfigFile(): void {
+		this.init();
 	}
 
-	private ensuredBasicFiles?: Promise<void>;
+	private ensuredBasicFiles = false;
 
 	/**
-	 * Ensures we fetched basic files (global TS files, dependencies, declarations)
+	 * Ensures we added basic files (global TS files, dependencies, declarations)
 	 */
-	async ensureBasicFiles(): Promise<void> {
+	ensureBasicFiles(): void {
 		if (this.ensuredBasicFiles) {
-			return this.ensuredBasicFiles;
+			return;
 		}
 
-		this.ensuredBasicFiles = this.init().then(() => {
-			let changed = false;
-			for (const fileName of (this.getHost().expectedFilePaths || [])) {
-				if (util.isGlobalTSFile(fileName) || (!util.isDependencyFile(fileName) && util.isDeclarationFile(fileName))) {
-					const sourceFile = this.getProgram().getSourceFile(fileName);
-					if (!sourceFile) {
-						this.getHost().addFile(fileName);
-						changed = true;
-					}
-				}
-			}
-			if (changed) {
-				// requery program object to synchonize LanguageService's data
-				this.program = this.getService().getProgram();
-			}
-		});
-		return this.ensuredBasicFiles;
-	}
-
-	private ensuredAllFiles?: Promise<void>;
-
-	/**
-	 * Ensures we fetched all project's source file (as were defined in tsconfig.json)
-	 */
-	async ensureAllFiles(): Promise<void> {
-		if (this.ensuredAllFiles) {
-			return this.ensuredAllFiles;
-		}
-
-		this.ensuredAllFiles = this.init().then(() => {
-			if (this.getHost().complete) {
-				return;
-			}
-			let changed = false;
-			for (const fileName of (this.getHost().expectedFilePaths || [])) {
+		this.init();
+		let changed = false;
+		for (const fileName of (this.getHost().expectedFilePaths || [])) {
+			if (util.isGlobalTSFile(fileName) || (!util.isDependencyFile(fileName) && util.isDeclarationFile(fileName))) {
 				const sourceFile = this.getProgram().getSourceFile(fileName);
 				if (!sourceFile) {
 					this.getHost().addFile(fileName);
 					changed = true;
 				}
 			}
-			if (changed) {
-				// requery program object to synchonize LanguageService's data
-				this.program = this.getService().getProgram();
-			}
-			this.getHost().complete = true;
-		});
-		return this.ensuredAllFiles;
+		}
+		if (changed) {
+			// requery program object to synchonize LanguageService's data
+			this.program = this.getService().getProgram();
+		}
+		this.ensuredBasicFiles = true;
 	}
-}
 
-/**
- * Indicates that tree traversal function should stop
- */
-export const skipDir: Error = {
-	name: 'WALK_FN_SKIP_DIR',
-	message: ''
-};
+	private ensuredAllFiles = false;
 
-/**
- * TypeScript library files fetched from the local file system (bundled TS)
- */
-let tsLibraries: Map<string, string>;
+	/**
+	 * Ensures we added all project's source file (as were defined in tsconfig.json)
+	 */
+	ensureAllFiles(): void {
+		if (this.ensuredAllFiles) {
+			return;
+		}
 
-/**
- * Fetches TypeScript library files from local file system
- */
-export function getTypeScriptLibraries(): Map<string, string> {
-	if (!tsLibraries) {
-		tsLibraries = new Map<string, string>();
-		const path = path_.dirname(ts.getDefaultLibFilePath({ target: ts.ScriptTarget.ES2015 }));
-		fs_.readdirSync(path).forEach(file => {
-			const fullPath = path_.join(path, file);
-			if (fs_.statSync(fullPath).isFile()) {
-				tsLibraries.set(util.toUnixPath(fullPath), fs_.readFileSync(fullPath).toString());
+		this.init();
+		if (this.getHost().complete) {
+			return;
+		}
+		let changed = false;
+		for (const fileName of (this.getHost().expectedFilePaths || [])) {
+			const sourceFile = this.getProgram().getSourceFile(fileName);
+			if (!sourceFile) {
+				this.getHost().addFile(fileName);
+				changed = true;
 			}
-		});
+		}
+		if (changed) {
+			// requery program object to synchonize LanguageService's data
+			this.program = this.getService().getProgram();
+		}
+		this.getHost().complete = true;
+		this.ensuredAllFiles = true;
 	}
-	return tsLibraries;
 }
