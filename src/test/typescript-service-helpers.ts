@@ -1732,7 +1732,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		it('should accept files with special characters in path', async function (this: TestContext) {
 			const result = await this.service.textDocumentHover({
 				textDocument: {
-					uri: 'file:///special-characters-in-path/@foo/b.ts'
+					uri: 'file:///special-characters-in-path/%40foo/b.ts'
 				},
 				position: {
 					line: 0,

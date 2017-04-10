@@ -91,6 +91,15 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	}
 
 	/**
+	 * Returns true if the given file is known to exist in the workspace (content loaded or not)
+	 *
+	 * @param uri URI to a file
+	 */
+	has(uri: string): boolean {
+		return this.files.has(uri) || this.fileExists(util.uri2path(uri));
+	}
+
+	/**
 	 * Returns the file content for the given URI.
 	 * Will throw an Error if no available in-memory.
 	 * Use FileSystemUpdater.ensure() to ensure that the file is available.

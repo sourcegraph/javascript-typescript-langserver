@@ -1,7 +1,9 @@
 import * as async from 'async';
+import iterate from 'iterare';
 import { Span } from 'opentracing';
 import * as path_ from 'path';
 import * as ts from 'typescript';
+import * as url from 'url';
 import {
 	CompletionItem,
 	CompletionItemKind,
@@ -24,7 +26,6 @@ import {
 	TextDocumentPositionParams,
 	TextDocumentSyncKind
 } from 'vscode-languageserver';
-import { isCancelledError } from './cancellation';
 import { FileSystem, FileSystemUpdater, LocalFileSystem, RemoteFileSystem } from './fs';
 import { RemoteLanguageClient } from './lang-handler';
 import { Logger, LSPLogger } from './logging';
@@ -124,12 +125,8 @@ export class TypeScriptService {
 			this.updater = new FileSystemUpdater(this.fileSystem, this.inMemoryFileSystem);
 			this.projectManager = new pm.ProjectManager(this.root, this.inMemoryFileSystem, this.updater, !!this.options.strict, this.traceModuleResolution, this.logger);
 			// Pre-fetch files in the background
-			// TODO why does ensureAllFiles() fetch less files than ensureFilesForWorkspaceSymbol()?
-			//      (package.json is not fetched)
-			this.projectManager.ensureFilesForWorkspaceSymbol().catch(err => {
-				if (!isCancelledError(err)) {
-					this.logger.error('Background fetching failed ', err);
-				}
+			this.projectManager.ensureOwnFiles(span).catch(err => {
+				this.logger.error('Background fetching failed ', err);
 			});
 		}
 		return {
@@ -185,11 +182,13 @@ export class TypeScriptService {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
-		await this.projectManager.ensureFilesForHoverAndDefinition(uri, span);
+
+		// Fetch files needed to resolve definition
+		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
 
 		const fileName: string = util.uri2path(uri);
 		const configuration = this.projectManager.getConfiguration(fileName);
-		await configuration.ensureBasicFiles();
+		configuration.ensureBasicFiles();
 
 		const sourceFile = this._getSourceFile(configuration, fileName);
 		if (!sourceFile) {
@@ -217,21 +216,20 @@ export class TypeScriptService {
 	}
 
 	async textDocumentXdefinition(params: TextDocumentPositionParams, span = new Span()): Promise<SymbolLocationInformation[]> {
-		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		const line = params.position.line;
-		const column = params.position.character;
-		await this.projectManager.ensureFilesForHoverAndDefinition(uri, span);
 
-		const fileName: string = util.uri2path(uri);
+		// Ensure files needed to resolve SymbolLocationInformation are fetched
+		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
+
+		const fileName: string = util.uri2path(params.textDocument.uri);
 		const configuration = this.projectManager.getConfiguration(fileName);
-		await configuration.ensureBasicFiles();
+		configuration.ensureBasicFiles();
 
 		const sourceFile = this._getSourceFile(configuration, fileName);
 		if (!sourceFile) {
 			return [];
 		}
 
-		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
+		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
 		const defs: ts.DefinitionInfo[] = configuration.getService().getDefinitionAtPosition(fileName, offset);
 		const ret = [];
 		if (defs) {
@@ -260,20 +258,19 @@ export class TypeScriptService {
 	 * given text document position.
 	 */
 	async textDocumentHover(params: TextDocumentPositionParams, span = new Span()): Promise<Hover> {
-		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		const line = params.position.line;
-		const column = params.position.character;
-		await this.projectManager.ensureFilesForHoverAndDefinition(uri, span);
 
-		const fileName: string = util.uri2path(uri);
+		// Ensure files needed to resolve hover are fetched
+		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
+
+		const fileName: string = util.uri2path(params.textDocument.uri);
 		const configuration = this.projectManager.getConfiguration(fileName);
-		await configuration.ensureBasicFiles();
+		configuration.ensureBasicFiles();
 
 		const sourceFile = this._getSourceFile(configuration, fileName);
 		if (!sourceFile) {
 			throw new Error(`Unknown text document ${params.textDocument.uri}`);
 		}
-		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
+		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
 		const info = configuration.getService().getQuickInfoAtPosition(fileName, offset);
 		if (!info) {
 			return { contents: [] };
@@ -297,22 +294,20 @@ export class TypeScriptService {
 	 * references for the symbol denoted by the given text document position.
 	 */
 	async textDocumentReferences(params: ReferenceParams, span = new Span()): Promise<Location[]> {
-		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		const line = params.position.line;
-		const column = params.position.character;
-		const fileName: string = util.uri2path(uri);
 
-		await this.projectManager.ensureFilesForReferences(uri);
+		// Ensure all files were fetched to collect all references
+		await this.projectManager.ensureAllFiles(span);
 
+		const fileName = util.uri2path(params.textDocument.uri);
 		const configuration = this.projectManager.getConfiguration(fileName);
-		await configuration.ensureAllFiles();
+		configuration.ensureAllFiles();
 
 		const sourceFile = this._getSourceFile(configuration, fileName);
 		if (!sourceFile) {
 			return [];
 		}
 
-		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
+		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
 		const refs = configuration.getService().getReferencesAtPosition(fileName, offset);
 
 		const tasks: AsyncFunction<Location, Error>[] = [];
@@ -346,9 +341,13 @@ export class TypeScriptService {
 		const limit = params.limit;
 
 		if (symQuery) {
-			const dtRes = await this._workspaceSymbolDefinitelyTyped(params);
-			if (dtRes) {
-				return dtRes;
+			try {
+				const dtRes = await this._workspaceSymbolDefinitelyTyped(params);
+				if (dtRes) {
+					return dtRes;
+				}
+			} catch (err) {
+				// Ignore
 			}
 
 			if (!symQuery.containerKind) {
@@ -356,7 +355,7 @@ export class TypeScriptService {
 			}
 		}
 
-		await this.projectManager.ensureFilesForWorkspaceSymbol();
+		await this.projectManager.ensureOwnFiles(span);
 
 		if (!query && !symQuery && this.emptyQueryWorkspaceSymbols) {
 			return this.emptyQueryWorkspaceSymbols;
@@ -364,7 +363,7 @@ export class TypeScriptService {
 		let configs;
 		if (symQuery && symQuery.package && symQuery.package.name) {
 			configs = [];
-			for (const config of this.projectManager.getConfigurations()) {
+			for (const config of this.projectManager.configurations()) {
 				if (config.getPackageName() === symQuery.package.name) {
 					configs.push(config);
 				}
@@ -374,7 +373,7 @@ export class TypeScriptService {
 			if (rootConfig) {  // if there's a root configuration, it includes all files
 				configs = [rootConfig];
 			} else {
-				configs = this.projectManager.getConfigurations();
+				configs = this.projectManager.configurations();
 			}
 		}
 		const itemsPromise = this._collectWorkspaceSymbols(configs, query, symQuery);
@@ -385,15 +384,13 @@ export class TypeScriptService {
 	}
 
 	protected async _workspaceSymbolDefinitelyTyped(params: WorkspaceSymbolParams): Promise<SymbolInformation[] | null> {
-		try {
-			await this.projectManager.ensureFiles(['/package.json']);
-		} catch (e) {
+		const rootUriParts = url.parse(this.rootUri);
+		if (!rootUriParts.pathname) {
 			return null;
 		}
-		if (!this.projectManager.getFs().fileExists('/package.json')) {
-			return null;
-		}
-		const rootConfig = JSON.parse(this.projectManager.getFs().readFile('/package.json'));
+		const packageJsonUri = url.format({ ...rootUriParts, pathname: path_.posix.join(rootUriParts.pathname, 'package.json') });
+		await this.updater.ensure(packageJsonUri);
+		const rootConfig = JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri));
 		if (rootConfig.name !== 'definitely-typed') {
 			return null;
 		}
@@ -405,9 +402,7 @@ export class TypeScriptService {
 			return null;
 		}
 		const relPkgRoot = pkg.name.slice('@types/'.length);
-		await this.projectManager.refreshFileTree(relPkgRoot, false);
-
-		this.projectManager.createConfigurations();
+		await this.projectManager.ensureModuleStructure();
 
 		const symQuery = params.symbol ? Object.assign({}, params.symbol) : undefined;
 		if (symQuery) {
@@ -427,12 +422,14 @@ export class TypeScriptService {
 	 * in a given text document.
 	 */
 	async textDocumentDocumentSymbol(params: DocumentSymbolParams, span = new Span()): Promise<SymbolInformation[]> {
-		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		await this.projectManager.ensureFilesForHoverAndDefinition(uri, span);
-		const fileName = util.uri2path(uri);
 
-		const config = this.projectManager.getConfiguration(uri);
-		await config.ensureBasicFiles();
+		// Ensure files needed to resolve symbols are fetched
+		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
+
+		const fileName = util.uri2path(params.textDocument.uri);
+
+		const config = this.projectManager.getConfiguration(fileName);
+		config.ensureBasicFiles();
 		const sourceFile = this._getSourceFile(config, fileName);
 		if (!sourceFile) {
 			return [];
@@ -450,15 +447,15 @@ export class TypeScriptService {
 	async workspaceXreferences(params: WorkspaceReferenceParams, span = new Span()): Promise<ReferenceInformation[]> {
 		const refInfo: ReferenceInformation[] = [];
 
-		await this.projectManager.ensureAllFiles();
+		await this.projectManager.ensureAllFiles(span);
 
-		const configs = this.projectManager.getConfigurations();
-		await Promise.all(configs.map(async config => {
+		const configs = this.projectManager.configurations();
+		await Promise.all(iterate(configs).map(async config => {
 			if (params.hints && params.hints.dependeePackageName && params.hints.dependeePackageName !== config.getPackageName()) {
 				return;
 			}
 
-			await config.ensureAllFiles();
+			config.ensureAllFiles();
 
 			const files = config.getService().getProgram().getSourceFiles().sort((a, b) => a.fileName.localeCompare(b.fileName));
 			for (const source of files) {
@@ -597,22 +594,21 @@ export class TypeScriptService {
 	 * property filled in.
 	 */
 	async textDocumentCompletion(params: TextDocumentPositionParams, span = new Span()): Promise<CompletionList> {
-		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		const line = params.position.line;
-		const column = params.position.character;
-		const fileName: string = util.uri2path(uri);
 
-		await this.projectManager.ensureFilesForHoverAndDefinition(uri, span);
+		// Ensure files needed to suggest completions are fetched
+		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
+
+		const fileName: string = util.uri2path(params.textDocument.uri);
 
 		const configuration = this.projectManager.getConfiguration(fileName);
-		await configuration.ensureBasicFiles();
+		configuration.ensureBasicFiles();
 
 		const sourceFile = this._getSourceFile(configuration, fileName);
 		if (!sourceFile) {
 			return CompletionList.create();
 		}
 
-		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
+		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
 		const completions = configuration.getService().getCompletionsAtPosition(fileName, offset);
 
 		if (completions == null) {
@@ -642,24 +638,23 @@ export class TypeScriptService {
 	 * information at a given cursor position.
 	 */
 	async textDocumentSignatureHelp(params: TextDocumentPositionParams, span = new Span()): Promise<SignatureHelp> {
-		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		const line = params.position.line;
-		const column = params.position.character;
-		await this.projectManager.ensureFilesForHoverAndDefinition(uri, span);
 
-		const fileName: string = util.uri2path(uri);
-		const configuration = this.projectManager.getConfiguration(fileName);
-		await configuration.ensureBasicFiles();
+		// Ensure files needed to resolve signature are fetched
+		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
 
-		const sourceFile = this._getSourceFile(configuration, fileName);
+		const filePath = util.uri2path(params.textDocument.uri);
+		const configuration = this.projectManager.getConfiguration(filePath);
+		configuration.ensureBasicFiles();
+
+		const sourceFile = this._getSourceFile(configuration, filePath);
 		if (!sourceFile) {
-			throw new Error('expected source file "' + fileName + '" to exist in configuration');
+			throw new Error(`expected source file ${filePath} to exist in configuration`);
 		}
-		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
+		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
 
-		const signatures: ts.SignatureHelpItems = configuration.getService().getSignatureHelpItems(fileName, offset);
+		const signatures: ts.SignatureHelpItems = configuration.getService().getSignatureHelpItems(filePath, offset);
 		if (!signatures) {
-			return { signatures: [], activeParameter: 0, activeSignature: 0};
+			return { signatures: [], activeParameter: 0, activeSignature: 0 };
 		}
 
 		const signatureInformations = signatures.items.map(item => {
@@ -1476,11 +1471,13 @@ export class TypeScriptService {
 	 * text documents. The document's truth is now managed by the client and the server must not try
 	 * to read the document's truth using the document's uri.
 	 */
-	textDocumentDidOpen(params: DidOpenTextDocumentParams): Promise<void> {
+	async textDocumentDidOpen(params: DidOpenTextDocumentParams): Promise<void> {
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		return this.projectManager.ensureFilesForHoverAndDefinition(uri).then(() => {
-			this.projectManager.didOpen(util.uri2path(uri), params.textDocument.text);
-		});
+
+		// Ensure files needed for most operations are fetched
+		await this.projectManager.ensureReferencedFiles(params.textDocument.uri).toPromise();
+
+		this.projectManager.didOpen(util.uri2path(uri), params.textDocument.text);
 	}
 
 	/**
@@ -1507,11 +1504,14 @@ export class TypeScriptService {
 	 * The document save notification is sent from the client to the server when the document was
 	 * saved in the client.
 	 */
-	textDocumentDidSave(params: DidSaveTextDocumentParams): Promise<void> {
+	async textDocumentDidSave(params: DidSaveTextDocumentParams): Promise<void> {
+
+		// Ensure files needed to suggest completions are fetched
+		await this.projectManager.ensureReferencedFiles(params.textDocument.uri).toPromise();
+
+		// TODO don't use "relative" URI
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		return this.projectManager.ensureFilesForHoverAndDefinition(uri).then(() => {
-			this.projectManager.didSave(util.uri2path(uri));
-		});
+		this.projectManager.didSave(util.uri2path(uri));
 	}
 
 	/**
@@ -1519,11 +1519,14 @@ export class TypeScriptService {
 	 * closed in the client. The document's truth now exists where the document's uri points to
 	 * (e.g. if the document's uri is a file uri the truth now exists on disk).
 	 */
-	textDocumentDidClose(params: DidCloseTextDocumentParams): Promise<void> {
+	async textDocumentDidClose(params: DidCloseTextDocumentParams): Promise<void> {
+
+		// Ensure files needed to suggest completions are fetched
+		await this.projectManager.ensureReferencedFiles(params.textDocument.uri).toPromise();
+
+		// TODO don't use "relative" URI
 		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		return this.projectManager.ensureFilesForHoverAndDefinition(uri).then(() => {
-			this.projectManager.didClose(util.uri2path(uri));
-		});
+		this.projectManager.didClose(util.uri2path(uri));
 	}
 
 	/**
@@ -1582,44 +1585,43 @@ export class TypeScriptService {
 			this._defUri(item.fileName), item.containerName);
 	}
 
-	private async _collectWorkspaceSymbols(configs: pm.ProjectConfiguration[], query?: string, symQuery?: Partial<SymbolDescriptor>): Promise<SymbolInformation[]> {
-		const configSymbols: SymbolInformation[][] = await Promise.all(configs.map(async config => {
-			const symbols: SymbolInformation[] = [];
-			await config.ensureAllFiles();
-			if (query) {
-				const items = config.getService().getNavigateToItems(query, undefined, undefined, false);
-				for (const item of items) {
-					const si = this._transformNavItem(this.root, config.getProgram(), item);
-					if (!util.isLocalUri(si.location.uri)) {
-						continue;
+	private async _collectWorkspaceSymbols(configs: Iterable<pm.ProjectConfiguration>, query?: string, symQuery?: Partial<SymbolDescriptor>): Promise<SymbolInformation[]> {
+		const symbols = iterate(configs)
+			.map(config => {
+				const symbols: SymbolInformation[] = [];
+				config.ensureAllFiles();
+				if (query) {
+					const items = config.getService().getNavigateToItems(query, undefined, undefined, false);
+					for (const item of items) {
+						const si = this._transformNavItem(this.root, config.getProgram(), item);
+						if (!util.isLocalUri(si.location.uri)) {
+							continue;
+						}
+						symbols.push(si);
 					}
-					symbols.push(si);
+				} else if (symQuery) {
+					// TODO(beyang): after workspace/symbol extension is accepted into LSP, push this logic upstream to getNavigateToItems
+					const items = config.getService().getNavigateToItems(symQuery.name || '', undefined, undefined, false);
+					const packageName = config.getPackageName();
+					const pd = packageName ? { name: packageName } : undefined;
+					for (const item of items) {
+						const sd = SymbolDescriptor.create(item.kind, item.name, item.containerKind, item.containerName, pd);
+						if (!util.symbolDescriptorMatch(symQuery, sd)) {
+							continue;
+						}
+						const si = this._transformNavItem(this.root, config.getProgram(), item);
+						if (!util.isLocalUri(si.location.uri)) {
+							continue;
+						}
+						symbols.push(si);
+					}
+				} else {
+					Array.prototype.push.apply(symbols, this._getNavigationTreeItems(config));
 				}
-			} else if (symQuery) {
-				// TODO(beyang): after workspace/symbol extension is accepted into LSP, push this logic upstream to getNavigateToItems
-				const items = config.getService().getNavigateToItems(symQuery.name || '', undefined, undefined, false);
-				const packageName = config.getPackageName();
-				const pd = packageName ? { name: packageName } : undefined;
-				for (const item of items) {
-					const sd = SymbolDescriptor.create(item.kind, item.name, item.containerKind, item.containerName, pd);
-					if (!util.symbolDescriptorMatch(symQuery, sd)) {
-						continue;
-					}
-					const si = this._transformNavItem(this.root, config.getProgram(), item);
-					if (!util.isLocalUri(si.location.uri)) {
-						continue;
-					}
-					symbols.push(si);
-				}
-			} else {
-				Array.prototype.push.apply(symbols, this._getNavigationTreeItems(config));
-			}
-			return symbols;
-		}));
-		const symbols: SymbolInformation[] = [];
-		for (const cs of configSymbols) {
-			Array.prototype.push.apply(symbols, cs);
-		}
+				return symbols;
+			})
+			.flatten<SymbolInformation>()
+			.toArray();
 
 		if (!query) {
 			return symbols.sort((a, b) => a.name.toLocaleLowerCase().localeCompare(b.name.toLocaleLowerCase()));
