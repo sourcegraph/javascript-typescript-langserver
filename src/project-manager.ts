@@ -379,6 +379,18 @@ export class ProjectManager implements Disposable {
 	 * @return project configuration for a given source file. Climbs directory tree up to workspace root if needed
 	 */
 	getConfiguration(filePath: string): ProjectConfiguration {
+		const config = this.getConfigurationIfExists(filePath);
+		if (!config) {
+			throw new Error(`TypeScript config file for ${filePath} not found`);
+		}
+		return config;
+	}
+
+	/**
+	 * @param filePath source file path relative to project root
+	 * @return closest configuration for a given file path or undefined if there is no such configuration
+	 */
+	private getConfigurationIfExists(filePath: string): ProjectConfiguration | undefined {
 		let dir = filePath;
 		let config;
 		while (dir && dir !== this.rootPath) {
@@ -391,11 +403,7 @@ export class ProjectManager implements Disposable {
 				dir = '';
 			}
 		}
-		config = this.configs.get('');
-		if (config) {
-			return config;
-		}
-		throw new Error(`TypeScript config file for ${filePath} not found`);
+		return this.configs.get('');
 	}
 
 	/**
@@ -416,7 +424,10 @@ export class ProjectManager implements Disposable {
 		this.localFs.didClose(filePath);
 		let version = this.versions.get(filePath) || 0;
 		this.versions.set(filePath, ++version);
-		const config = this.getConfiguration(filePath);
+		const config = this.getConfigurationIfExists(filePath);
+		if (!config) {
+			return;
+		}
 		config.ensureConfigFile();
 		config.getHost().incProjectVersion();
 		config.syncProgram();
@@ -431,7 +442,10 @@ export class ProjectManager implements Disposable {
 		this.localFs.didChange(filePath, text);
 		let version = this.versions.get(filePath) || 0;
 		this.versions.set(filePath, ++version);
-		const config = this.getConfiguration(filePath);
+		const config = this.getConfigurationIfExists(filePath);
+		if (!config) {
+			return;
+		}
 		config.ensureConfigFile();
 		config.getHost().incProjectVersion();
 		config.syncProgram();

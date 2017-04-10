@@ -1112,7 +1112,87 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		afterEach(shutdownService as any);
 
-		specify('hover updates', async function (this: TestContext) {
+		it('should handle didChange when configuration is not yet initialized', async function (this: TestContext) {
+
+			const hoverParams = {
+				textDocument: {
+					uri: 'file:///a.ts'
+				},
+				position: {
+					line: 0,
+					character: 5
+				}
+			};
+
+			const range = {
+				end: {
+					character: 14,
+					line: 0
+				},
+				start: {
+					character: 4,
+					line: 0
+				}
+			};
+
+			await this.service.textDocumentDidChange({
+				textDocument: {
+					uri: 'file:///a.ts',
+					version: 1
+				},
+				contentChanges: [{
+					text: 'let parameters: number[]'
+				}]
+			});
+
+			assert.deepEqual(await this.service.textDocumentHover(hoverParams), {
+				range,
+				contents: [{
+					language: 'typescript',
+					value: 'let parameters: number[]'
+				}]
+			});
+		} as any);
+
+		it('should handle didClose when configuration is not yet initialized', async function (this: TestContext) {
+
+			const hoverParams = {
+				textDocument: {
+					uri: 'file:///a.ts'
+				},
+				position: {
+					line: 0,
+					character: 5
+				}
+			};
+
+			const range = {
+				end: {
+					character: 14,
+					line: 0
+				},
+				start: {
+					character: 4,
+					line: 0
+				}
+			};
+
+			await this.service.textDocumentDidClose({
+				textDocument: {
+					uri: 'file:///a.ts'
+				}
+			});
+
+			assert.deepEqual(await this.service.textDocumentHover(hoverParams), {
+				range,
+				contents: [{
+					language: 'typescript',
+					value: 'let parameters: any[]'
+				}]
+			});
+		} as any);
+
+		it('should reflect updated content', async function (this: TestContext) {
 
 			const hoverParams = {
 				textDocument: {
