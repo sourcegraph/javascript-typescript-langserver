@@ -15,6 +15,11 @@ export interface ClientCapabilities extends vscode.ClientCapabilities {
 	 * The client provides support for textDocument/xcontent.
 	 */
 	xcontentProvider?: boolean;
+
+	/**
+	 * The client provides support for cache/get and cache/set methods
+	 */
+	xcacheProvider?: boolean;
 }
 
 export interface ServerCapabilities extends vscode.ServerCapabilities {
@@ -153,4 +158,34 @@ export interface DependencyHints {
 export interface DependencyReference {
 	attributes: PackageDescriptor;
 	hints: DependencyHints;
+}
+
+/**
+ * The cache get request is sent from the server to the client to request the value of a cache item
+ * identified by the provided key.
+ */
+export interface CacheGetParams {
+
+	/**
+	 * The key that identifies the cache item
+	 */
+	key: string;
+}
+
+/**
+ * The cache set notification is sent from the server to the client to set the value of a cache item
+ * identified by the provided key. This is a intentionally notification and not a request because
+ * the server is not supposed to act differently if the cache set failed.
+ */
+export interface CacheSetParams {
+
+	/**
+	 * The key that identifies the cache item
+	 */
+	key: string;
+
+	/**
+	 * The value that should be saved
+	 */
+	value: any;
 }
