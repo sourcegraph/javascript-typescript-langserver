@@ -7,6 +7,8 @@ import {
 } from 'vscode-languageserver';
 import { MessageEmitter, MessageWriter } from './connection';
 import {
+	CacheGetParams,
+	CacheSetParams,
 	TextDocumentContentParams,
 	WorkspaceFilesParams
 } from './request-type';
@@ -102,5 +104,22 @@ export class RemoteLanguageClient {
 	 */
 	windowLogMessage(params: LogMessageParams): void {
 		this.notify('window/logMessage', params);
+	}
+
+	/**
+	 * The cache get request is sent from the server to the client to request the value of a cache
+	 * item identified by the provided key.
+	 */
+	xcacheGet(params: CacheGetParams): Promise<any> {
+		return this.request('xcache/get', params).toPromise();
+	}
+
+	/**
+	 * The cache set notification is sent from the server to the client to set the value of a cache
+	 * item identified by the provided key. This is a intentionally notification and not a request
+	 * because the server is not supposed to act differently if the cache set failed.
+	 */
+	xcacheSet(params: CacheSetParams): void {
+		return this.notify('xcache/set', params);
 	}
 }
