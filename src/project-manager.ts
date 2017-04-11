@@ -771,10 +771,7 @@ export class ProjectConfiguration {
 	 * Note that it does not perform any parsing or typechecking
 	 * @return program object (cached result of parsing and typechecking done by TS service)
 	 */
-	getProgram(): ts.Program {
-		if (!this.program) {
-			throw new Error('project is uninitialized');
-		}
+	getProgram(): ts.Program | undefined {
 		return this.program;
 	}
 
@@ -794,7 +791,11 @@ export class ProjectConfiguration {
 	 * the whole project or in some files
 	 */
 	syncProgram(): void {
-		this.program = this.getService().getProgram();
+		try {
+			this.program = this.getService().getProgram();
+		} catch (e) {
+			this.logger.error(`Cannot create program object for ${this.rootFilePath}`, e);
+		}
 	}
 
 	private initialized = false;
@@ -852,7 +853,7 @@ export class ProjectConfiguration {
 			this.logger
 		);
 		this.service = ts.createLanguageService(this.host, ts.createDocumentRegistry());
-		this.program = this.service.getProgram();
+		this.syncProgram();
 		this.initialized = true;
 	}
 
@@ -874,10 +875,16 @@ export class ProjectConfiguration {
 		}
 
 		this.init();
+
+		const program = this.getProgram();
+		if (!program) {
+			return;
+		}
+
 		let changed = false;
 		for (const fileName of (this.getHost().expectedFilePaths || [])) {
 			if (util.isGlobalTSFile(fileName) || (!util.isDependencyFile(fileName) && util.isDeclarationFile(fileName))) {
-				const sourceFile = this.getProgram().getSourceFile(fileName);
+				const sourceFile = program.getSourceFile(fileName);
 				if (!sourceFile) {
 					this.getHost().addFile(fileName);
 					changed = true;
@@ -886,7 +893,7 @@ export class ProjectConfiguration {
 		}
 		if (changed) {
 			// requery program object to synchonize LanguageService's data
-			this.program = this.getService().getProgram();
+			this.syncProgram();
 		}
 		this.ensuredBasicFiles = true;
 	}
@@ -900,14 +907,17 @@ export class ProjectConfiguration {
 		if (this.ensuredAllFiles) {
 			return;
 		}
-
 		this.init();
 		if (this.getHost().complete) {
 			return;
 		}
+		const program = this.getProgram();
+		if (!program) {
+			return;
+		}
 		let changed = false;
 		for (const fileName of (this.getHost().expectedFilePaths || [])) {
-			const sourceFile = this.getProgram().getSourceFile(fileName);
+			const sourceFile = program.getSourceFile(fileName);
 			if (!sourceFile) {
 				this.getHost().addFile(fileName);
 				changed = true;
@@ -915,7 +925,7 @@ export class ProjectConfiguration {
 		}
 		if (changed) {
 			// requery program object to synchonize LanguageService's data
-			this.program = this.getService().getProgram();
+			this.syncProgram();
 		}
 		this.getHost().complete = true;
 		this.ensuredAllFiles = true;

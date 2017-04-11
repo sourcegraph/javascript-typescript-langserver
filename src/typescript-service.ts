@@ -325,6 +325,10 @@ export class TypeScriptService {
 				const configuration = this.projectManager.getConfiguration(fileName);
 				// Ensure all files have been added
 				configuration.ensureAllFiles();
+				const program = configuration.getProgram();
+				if (!program) {
+					return Observable.from([]);
+				}				
 				// Get SourceFile object for requested file
 				const sourceFile = this._getSourceFile(configuration, fileName);
 				if (!sourceFile) {
@@ -339,7 +343,7 @@ export class TypeScriptService {
 					.filter(reference => !reference.isDefinition || (params.context && params.context.includeDeclaration))
 					// Map to Locations
 					.map(reference => {
-						const sourceFile = configuration.getProgram().getSourceFile(reference.fileName);
+						const sourceFile = program.getSourceFile(reference.fileName);
 						if (!sourceFile) {
 							throw new Error(`Source file ${reference.fileName} does not exist`);
 						}
@@ -779,7 +783,11 @@ export class TypeScriptService {
 	 * @param fileName file name to fetch source file for or create it
 	 */
 	private _getSourceFile(configuration: pm.ProjectConfiguration, fileName: string): ts.SourceFile | null {
-		const sourceFile = configuration.getProgram().getSourceFile(fileName);
+		let program = configuration.getProgram();
+		if (!program) {
+			return null;
+		}
+		const sourceFile = program.getSourceFile(fileName);
 		if (sourceFile) {
 			return sourceFile;
 		}
@@ -788,8 +796,9 @@ export class TypeScriptService {
 		}
 		configuration.getHost().addFile(fileName);
 		configuration.syncProgram();
-
-		return configuration.getProgram().getSourceFile(fileName);
+		// update program object
+		program = configuration.getProgram();
+		return program ? program.getSourceFile(fileName) : null;
 	}
 
 	/**
@@ -820,6 +829,11 @@ export class TypeScriptService {
 	 */
 	private _collectWorkspaceSymbols(config: pm.ProjectConfiguration, query?: string | Partial<SymbolDescriptor>, limit = Infinity): IterableIterator<SymbolInformation> {
 		config.ensureAllFiles();
+		const program = config.getProgram();
+		if (!program) {
+			return iterate([]);
+		}
+		
 		if (query) {
 			let items: Iterable<ts.NavigateToItem>;
 			if (typeof query === 'string') {
@@ -840,7 +854,7 @@ export class TypeScriptService {
 					}));
 			}
 			return iterate(items)
-				.map(item => this._transformNavItem(config.getProgram(), item))
+				.map(item => this._transformNavItem(program, item))
 				.filter(symbolInformation => util.isLocalUri(symbolInformation.location.uri));
 		} else {
 			// An empty query uses a different algorithm to iterate all files and aggregate the symbols per-file to get all symbols
@@ -864,7 +878,11 @@ export class TypeScriptService {
 	 * Fetches up to limit navigation bar items from given project, flattens them
 	 */
 	private _getNavigationTreeItems(configuration: pm.ProjectConfiguration): IterableIterator<SymbolInformation> {
-		return iterate(configuration.getProgram().getSourceFiles())
+		const program = configuration.getProgram();
+		if (!program) {
+			return iterate([]);
+		}
+		return iterate(program.getSourceFiles())
 			// Exclude navigation items from TypeScript libraries
 			.filter(sourceFile => !isTypeScriptLibrary(sourceFile.fileName))
 			.map(sourceFile => {
