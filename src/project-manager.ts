@@ -189,30 +189,29 @@ export class ProjectManager implements Disposable {
 	 * This includes all js/ts files, tsconfig files and package.json files.
 	 * Invalidates project configurations after execution
 	 */
-	ensureOwnFiles(childOf = new Span()): Promise<void> {
-		if (this.ensuredOwnFiles) {
-			return this.ensuredOwnFiles;
-		}
-		this.ensuredOwnFiles = (async () => {
-			const span = childOf.tracer().startSpan('Ensure own files', { childOf });
-			try {
+	async ensureOwnFiles(childOf = new Span()): Promise<void> {
+		const span = childOf.tracer().startSpan('Ensure own files', { childOf });
+		if (!this.ensuredOwnFiles) {
+			this.ensuredOwnFiles = (async () => {
 				await this.updater.ensureStructure(span);
 				await Promise.all(
 					iterate(this.localFs.uris())
 						.filter(uri => !uri.includes('/node_modules/') && util.isJSTSFile(uri) || util.isConfigFile(uri) || util.isPackageJsonFile(uri))
-						.map(uri => this.updater.ensure(uri))
+						.map(uri => this.updater.ensure(uri, span))
 				);
 				this.createConfigurations();
-			} catch (err) {
-				this.ensuredOwnFiles = undefined;
-				span.setTag('error', true);
-				span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
-				throw err;
-			} finally {
-				span.finish();
-			}
-		})();
-		return this.ensuredOwnFiles;
+			})();
+		}
+		try {
+			await this.ensuredOwnFiles;
+		} catch (err) {
+			this.ensuredOwnFiles = undefined;
+			span.setTag('error', true);
+			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
+			throw err;
+		} finally {
+			span.finish();
+		}
 	}
 
 	/**
@@ -680,7 +679,7 @@ export class ProjectConfiguration {
 	/**
 	 * Relative path to configuration file (tsconfig.json/jsconfig.json)
 	 */
-	private configFilePath: string;
+	configFilePath: string;
 
 	/**
 	 * Configuration JSON object. May be used when there is no real configuration file to parse and use
@@ -743,7 +742,7 @@ export class ProjectConfiguration {
 	/**
 	 * @return package name (project name) of a given project
 	 */
-	getPackageName(): string | null {
+	getPackageName(): string | undefined {
 		// package.json may be located at the upper level as well
 		let currentDir = this.rootFilePath;
 		while (true) {
@@ -753,7 +752,7 @@ export class ProjectConfiguration {
 			}
 			const parentDir = path_.dirname(currentDir);
 			if (parentDir === '.' || parentDir === '/' || parentDir === currentDir) {
-				return null;
+				return undefined;
 			}
 			currentDir = parentDir;
 		}
