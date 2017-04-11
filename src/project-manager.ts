@@ -272,9 +272,8 @@ export class ProjectManager implements Disposable {
 			// Prevent cycles
 			.filter(referencedUri => !ignore.has(referencedUri))
 			// Call method recursively with one less dep level
-			// Don't pass span, because the recursive call would create way to many spans
 			.mergeMap(referencedUri =>
-				this.ensureReferencedFiles(referencedUri, maxDepth - 1, ignore)
+				this.ensureReferencedFiles(referencedUri, maxDepth - 1, ignore, childOf)
 					// Continue even if an import wasn't found
 					.catch(err => {
 						this.logger.error(`Error resolving file references for ${uri}:`, err);
