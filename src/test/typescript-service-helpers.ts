@@ -1018,7 +1018,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		describe('workspaceXdependencies()', function (this: TestContext) {
 			it('should account for all dependencies', async function (this: TestContext) {
-				const result = await this.service.workspaceXdependencies();
+				const result = await this.service.workspaceXdependencies().toPromise();
 				assert.deepEqual(result, [
 					{ attributes: { name: 'babel-code-frame', version: '^6.16.0' }, hints: { dependeePackageName: 'tslint' } },
 					{ attributes: { name: 'findup-sync', version: '~0.3.0' }, hints: { dependeePackageName: 'tslint' } },
@@ -1035,7 +1035,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		} as any);
 		describe('workspaceXpackages()', function (this: TestContext) {
 			it('should accournt for all packages', async function (this: TestContext) {
-				const result = await this.service.workspaceXpackages();
+				const result = await this.service.workspaceXpackages().toPromise();
 				assert.deepEqual(result, [{
 					package: {
 						name: 'tslint',
