@@ -338,7 +338,6 @@ export class TypeScriptService {
 		if (symQuery && symQuery.package) {
 			symQuery.package = { name: symQuery.package.name };
 		}
-		const limit = params.limit;
 
 		if (symQuery) {
 			try {
@@ -376,11 +375,11 @@ export class TypeScriptService {
 				configs = this.projectManager.configurations();
 			}
 		}
-		const itemsPromise = this._collectWorkspaceSymbols(configs, query, symQuery);
+		const itemsPromise = this._collectWorkspaceSymbols(configs, query, symQuery, params.limit);
 		if (!query && !symQuery) {
 			this.emptyQueryWorkspaceSymbols = itemsPromise;
 		}
-		return (await itemsPromise).slice(0, limit);
+		return await itemsPromise;
 	}
 
 	protected async _workspaceSymbolDefinitelyTyped(params: WorkspaceSymbolParams): Promise<SymbolInformation[] | null> {
@@ -413,8 +412,7 @@ export class TypeScriptService {
 		}
 
 		const config = this.projectManager.getConfiguration(relPkgRoot);
-		const itemsPromise = this._collectWorkspaceSymbols([config], params.query, symQuery);
-		return (await itemsPromise).slice(0, params.limit);
+		return await this._collectWorkspaceSymbols([config], params.query, symQuery, params.limit);
 	}
 
 	/**
@@ -1585,13 +1583,13 @@ export class TypeScriptService {
 			this._defUri(item.fileName), item.containerName);
 	}
 
-	private async _collectWorkspaceSymbols(configs: Iterable<pm.ProjectConfiguration>, query?: string, symQuery?: Partial<SymbolDescriptor>): Promise<SymbolInformation[]> {
+	private async _collectWorkspaceSymbols(configs: Iterable<pm.ProjectConfiguration>, query?: string, symQuery?: Partial<SymbolDescriptor>, limit?: number): Promise<SymbolInformation[]> {
 		const symbols = iterate(configs)
 			.map(config => {
 				const symbols: SymbolInformation[] = [];
 				config.ensureAllFiles();
 				if (query) {
-					const items = config.getService().getNavigateToItems(query, undefined, undefined, false);
+					const items = config.getService().getNavigateToItems(query, limit, undefined, false);
 					for (const item of items) {
 						const si = this._transformNavItem(this.root, config.getProgram(), item);
 						if (!util.isLocalUri(si.location.uri)) {
@@ -1601,7 +1599,7 @@ export class TypeScriptService {
 					}
 				} else if (symQuery) {
 					// TODO(beyang): after workspace/symbol extension is accepted into LSP, push this logic upstream to getNavigateToItems
-					const items = config.getService().getNavigateToItems(symQuery.name || '', undefined, undefined, false);
+					const items = config.getService().getNavigateToItems(symQuery.name || '', limit, undefined, false);
 					const packageName = config.getPackageName();
 					const pd = packageName ? { name: packageName } : undefined;
 					for (const item of items) {
