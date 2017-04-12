@@ -1589,21 +1589,19 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				},
 				context: { includeDeclaration: true }
 			});
-			assert.deepEqual(result, [
-					{
-					range: {
-						end: {
-							character: 7,
-							line: 4
-						},
-						start: {
-							character: 4,
-							line: 4
-						}
+			assert.deepEqual(result, [{
+				range: {
+					end: {
+						character: 7,
+						line: 4
 					},
-					uri: 'file:///a.ts'
-				}
-			]);
+					start: {
+						character: 4,
+						line: 4
+					}
+				},
+				uri: 'file:///a.ts'
+			}]);
 		} as any);
 
 		it('should provide a reference within the same file', async function (this: TestContext) {
@@ -1617,21 +1615,19 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				},
 				context: { includeDeclaration: false }
 			});
-			assert.deepEqual(result, [
-				{
-					range: {
-						end: {
-							character: 5,
-							line: 15
-						},
-						start: {
-							character: 2,
-							line: 15
-						}
+			assert.deepEqual(result, [{
+				range: {
+					end: {
+						character: 5,
+						line: 15
 					},
-					uri: 'file:///a.ts'
-				}
-			]);
+					start: {
+						character: 2,
+						line: 15
+					}
+				},
+				uri: 'file:///a.ts'
+			}]);
 		} as any);
 		it('should provide two references from imports', async function (this: TestContext) {
 			const result = await this.service.textDocumentReferences({
