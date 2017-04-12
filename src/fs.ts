@@ -1,6 +1,5 @@
 import * as fs from 'mz/fs';
 import * as path from 'path';
-import { CancellationToken } from './cancellation';
 import { RemoteLanguageClient } from './lang-handler';
 import glob = require('glob');
 import iterate from 'iterare';
@@ -16,7 +15,7 @@ export interface FileSystem {
 	 * @param base A URI under which to search, resolved relative to the rootUri
 	 * @return A promise that is fulfilled with an array of URIs
 	 */
-	getWorkspaceFiles(base?: string, token?: CancellationToken): Promise<Iterable<string>>;
+	getWorkspaceFiles(base?: string, childOf?: Span): Promise<Iterable<string>>;
 
 	/**
 	 * Returns the content of a text document
@@ -24,7 +23,7 @@ export interface FileSystem {
 	 * @param uri The URI of the text document, resolved relative to the rootUri
 	 * @return A promise that is fulfilled with the text document content
 	 */
-	getTextDocumentContent(uri: string, token?: CancellationToken): Promise<string>;
+	getTextDocumentContent(uri: string, childOf?: Span): Promise<string>;
 }
 
 export class RemoteFileSystem implements FileSystem {
@@ -35,16 +34,16 @@ export class RemoteFileSystem implements FileSystem {
 	 * The files request is sent from the server to the client to request a list of all files in the workspace or inside the directory of the base parameter, if given.
 	 * A language server can use the result to index files by filtering and doing a content request for each text document of interest.
 	 */
-	async getWorkspaceFiles(base?: string): Promise<Iterable<string>> {
-		return iterate(await this.client.workspaceXfiles({ base }))
+	async getWorkspaceFiles(base?: string, childOf = new Span()): Promise<Iterable<string>> {
+		return iterate(await this.client.workspaceXfiles({ base }, childOf))
 			.map(textDocument => textDocument.uri);
 	}
 
 	/**
 	 * The content request is sent from the server to the client to request the current content of any text document. This allows language servers to operate without accessing the file system directly.
 	 */
-	async getTextDocumentContent(uri: string): Promise<string> {
-		const textDocument = await this.client.textDocumentXcontent({ textDocument: { uri } });
+	async getTextDocumentContent(uri: string, childOf = new Span()): Promise<string> {
+		const textDocument = await this.client.textDocumentXcontent({ textDocument: { uri } }, childOf);
 		return textDocument.text;
 	}
 }
@@ -154,7 +153,7 @@ export class FileSystemUpdater {
 		const promise = (async () => {
 			const span = childOf.tracer().startSpan('Fetch workspace structure', { childOf });
 			try {
-				const uris = await this.remoteFs.getWorkspaceFiles();
+				const uris = await this.remoteFs.getWorkspaceFiles(undefined, span);
 				for (const uri of uris) {
 					this.inMemoryFs.add(uri);
 				}

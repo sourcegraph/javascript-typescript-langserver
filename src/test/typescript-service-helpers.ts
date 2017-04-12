@@ -1,6 +1,5 @@
 import * as chai from 'chai';
 import * as ts from 'typescript';
-import { CancellationToken } from 'vscode-jsonrpc';
 import { CompletionItemKind, LogMessageParams, TextDocumentIdentifier, TextDocumentItem } from 'vscode-languageserver';
 import { SymbolKind } from 'vscode-languageserver-types';
 import { RemoteLanguageClient } from '../lang-handler';
@@ -30,7 +29,7 @@ export interface TestContext {
  */
 export const initializeTypeScriptService = (createService: TypeScriptServiceFactory, files: Map<string, string>) => async function (this: TestContext): Promise<void> {
 	this.service = createService({
-		textDocumentXcontent(params: TextDocumentContentParams, token?: CancellationToken): Promise<TextDocumentItem> {
+		textDocumentXcontent(params: TextDocumentContentParams): Promise<TextDocumentItem> {
 			if (!files.has(params.textDocument.uri)) {
 				return Promise.reject(new Error(`Text document ${params.textDocument.uri} does not exist`));
 			}
@@ -41,7 +40,7 @@ export const initializeTypeScriptService = (createService: TypeScriptServiceFact
 				languageId: ''
 			} as TextDocumentItem);
 		},
-		workspaceXfiles(params: WorkspaceFilesParams, token?: CancellationToken): Promise<TextDocumentIdentifier[]> {
+		workspaceXfiles(params: WorkspaceFilesParams): Promise<TextDocumentIdentifier[]> {
 			return Promise.resolve(Array.from(files.keys()).map(uri => ({ uri })));
 		},
 		windowLogMessage(params: LogMessageParams): void {

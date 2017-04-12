@@ -11,7 +11,7 @@ import { TypeScriptService } from './typescript-service';
 /**
  * Interface for JSON RPC messages with tracing metadata
  */
-interface HasMeta {
+export interface HasMeta {
 	meta: { [key: string]: any };
 }
 
