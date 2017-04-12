@@ -190,10 +190,20 @@ export class FileSystemUpdater {
 	}
 
 	/**
+	 * Invalidates the content fetch cache of a file.
+	 * The next call to `ensure` will do a refetch.
+	 *
+	 * @param uri URI of the file that changed
+	 */
+	invalidate(uri: string): void {
+		this.fetches.delete(uri);
+	}
+
+	/**
 	 * Invalidates the structure fetch cache.
 	 * The next call to `ensureStructure` will do a refetch.
 	 */
-	invalidateStructure() {
+	invalidateStructure(): void {
 		this.structureFetch = undefined;
 	}
 }
