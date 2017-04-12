@@ -554,7 +554,7 @@ export class TypeScriptService {
 					repoURL: packageJson.repository && packageJson.repository.url || undefined
 				};
 				// Collect all dependencies for this package.json
-				return Observable.of('dependencies', 'devDependencies', 'optionalDependencies')
+				return Observable.of('dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies')
 					.filter(key => packageJson[key])
 					// Get [name, version] pairs
 					.mergeMap(key => toPairs(packageJson[key]) as [string, string][])
@@ -596,7 +596,7 @@ export class TypeScriptService {
 			))
 			// Map package.json to DependencyReferences
 			.mergeMap(packageJson =>
-				Observable.of('dependencies', 'devDependencies', 'optionalDependencies')
+				Observable.of('dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies')
 					.filter(key => packageJson[key])
 					// Get [name, version] pairs
 					.mergeMap(key => toPairs(packageJson[key]) as [string, string][])
