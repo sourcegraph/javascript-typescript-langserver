@@ -565,36 +565,26 @@ export class TypeScriptService {
 		return pkgs;
 	}
 
-	async workspaceXdependencies(params = {}, span = new Span()): Promise<DependencyReference[]> {
-		await this.projectManager.ensureModuleStructure();
-
-		const pkgFiles: string[] = [];
-		walkInMemoryFs(this.projectManager.getFs(), '/', (path: string, isdir: boolean): Error | void => {
-			if (isdir && path_.basename(path) === 'node_modules') {
-				return skipDir;
-			}
-			if (isdir) {
-				return;
-			}
-			if (path_.basename(path) !== 'package.json') {
-				return;
-			}
-			pkgFiles.push(path);
-		});
-
-		const deps: DependencyReference[] = [];
-		const pkgJsons = pkgFiles.map(p => JSON.parse(this.projectManager.getFs().readFile(p)));
-		for (const pkgJson of pkgJsons) {
-			const pkgName = pkgJson.name;
-			for (const k of ['dependencies', 'devDependencies', 'peerDependencies']) {
-				if (pkgJson[k]) {
-					for (const name of Object.keys(pkgJson[k])) {
-						deps.push({ attributes: { name, version: pkgJson[k][name] }, hints: { dependeePackageName: pkgName } });
-					}
-				}
-			}
-		}
-		return deps;
+	workspaceXdependencies(params = {}, span = new Span()): Observable<DependencyReference[]> {
+		return Observable.from(this.projectManager.ensureModuleStructure())
+			.mergeMap<void, string>(() => this.inMemoryFileSystem.uris() as any)
+			.filter(file => file.includes('/package.json') && !file.includes('/node_modules/'))
+			.mergeMap(file => Observable.from(this.updater.ensure(file)).map(() => JSON.parse(this.inMemoryFileSystem.getContent(file))))
+			.mergeMap<any, DependencyReference>(packageJson =>
+				Observable.of('dependencies', 'devDependencies', 'peerDependencies')
+					.filter(key => packageJson[key])
+					.mergeMap(key => toPairs(packageJson[key]) as [string, string][])
+					.map(([name, version]) => ({
+						attributes: {
+							name,
+							version
+						},
+						hints: {
+							dependeePackageName: packageJson.name
+						}
+					} as DependencyReference))
+			)
+			.toArray();
 	}
 
 	/**
