@@ -317,7 +317,8 @@ export class TypeScriptService {
 				// Convert line/character to offset
 				const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
 				// Request references at position from TypeScript
-				return Observable.from(configuration.getService().getReferencesAtPosition(fileName, offset))
+				// Despite the signature, getReferencesAtPosition() can return undefined
+				return Observable.from(configuration.getService().getReferencesAtPosition(fileName, offset) || [])
 					// Filter declaration if not requested
 					.filter(reference => !reference.isDefinition || (params.context && params.context.includeDeclaration))
 					// Map to Locations
