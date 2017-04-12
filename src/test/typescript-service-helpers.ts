@@ -172,7 +172,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 3,
 						character: 15
 					}
-				});
+				}).toPromise();
 				assert.deepEqual(result, [{
 					location: {
 						uri: 'file:///d.ts',
@@ -204,7 +204,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 29
 					}
-				});
+				}).toPromise();
 				assert.deepEqual(result, [{
 					location: {
 						uri: 'file:///a.ts',

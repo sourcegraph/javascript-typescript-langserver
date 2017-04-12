@@ -222,42 +222,57 @@ export class TypeScriptService {
 		return ret;
 	}
 
-	async textDocumentXdefinition(params: TextDocumentPositionParams, span = new Span()): Promise<SymbolLocationInformation[]> {
-
+	/**
+	 * This method is the same as textDocument/definition, except that:
+	 *
+	 * - The method returns metadata about the definition (the same metadata that
+	 * workspace/xreferences searches for).
+	 * - The concrete location to the definition (location field)
+	 * is optional. This is useful because the language server might not be able to resolve a goto
+	 * definition request to a concrete location (e.g. due to lack of dependencies) but still may
+	 * know some information about it.
+	 */
+	textDocumentXdefinition(params: TextDocumentPositionParams, span = new Span()): Observable<SymbolLocationInformation[]> {
 		// Ensure files needed to resolve SymbolLocationInformation are fetched
-		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
-
-		const fileName: string = util.uri2path(params.textDocument.uri);
-		const configuration = this.projectManager.getConfiguration(fileName);
-		configuration.ensureBasicFiles();
-
-		const sourceFile = this._getSourceFile(configuration, fileName);
-		if (!sourceFile) {
-			return [];
-		}
-
-		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
-		const defs: ts.DefinitionInfo[] = configuration.getService().getDefinitionAtPosition(fileName, offset);
-		const ret = [];
-		if (defs) {
-			for (const def of defs) {
-				const sourceFile = this._getSourceFile(configuration, def.fileName);
+		return this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span)
+			.toArray()
+			.mergeMap(() => {
+				// Convert URI to file path
+				const fileName: string = util.uri2path(params.textDocument.uri);
+				// Get closest tsconfig configuration
+				const configuration = this.projectManager.getConfiguration(fileName);
+				configuration.ensureBasicFiles();
+				const sourceFile = this._getSourceFile(configuration, fileName);
 				if (!sourceFile) {
-					throw new Error('expected source file "' + def.fileName + '" to exist in configuration');
+					throw new Error(`Unknown text document ${params.textDocument.uri}`);
 				}
-				const start = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start);
-				const end = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start + def.textSpan.length);
-				const loc = Location.create(this._defUri(def.fileName), {
-					start,
-					end
-				});
-				ret.push({
-					symbol: util.defInfoToSymbolDescriptor(def),
-					location: loc
-				});
-			}
-		}
-		return ret;
+				// Convert line/character to offset
+				const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
+				// Query TypeScript for references
+				return Observable.from(configuration.getService().getDefinitionAtPosition(fileName, offset) || [])
+					// Map DefinitionInfo to SymbolLocationInformation
+					.map(def => {
+						const sourceFile = this._getSourceFile(configuration, def.fileName);
+						if (!sourceFile) {
+							throw new Error(`Expected source file ${def.fileName} to exist in configuration`);
+						}
+						// Convert offset to line/character
+						const start = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start);
+						const end = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start + def.textSpan.length);
+						return {
+							symbol: util.defInfoToSymbolDescriptor(def),
+							location: {
+								uri: this._defUri(def.fileName),
+								range: {
+									start,
+									end
+								}
+							}
+						};
+					});
+			})
+			.toArray();
+
 	}
 
 	/**
