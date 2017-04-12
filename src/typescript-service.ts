@@ -31,11 +31,12 @@ import {
 import { FileSystem, FileSystemUpdater, LocalFileSystem, RemoteFileSystem } from './fs';
 import { RemoteLanguageClient } from './lang-handler';
 import { Logger, LSPLogger } from './logging';
-import { InMemoryFileSystem, isTypeScriptLibrary, skipDir, walkInMemoryFs } from './memfs';
+import { InMemoryFileSystem, isTypeScriptLibrary } from './memfs';
 import * as pm from './project-manager';
 import {
 	DependencyReference,
 	InitializeParams,
+	PackageDescriptor,
 	PackageInformation,
 	ReferenceInformation,
 	SymbolDescriptor,
@@ -522,59 +523,43 @@ export class TypeScriptService {
 		return refInfo;
 	}
 
-	async workspaceXpackages(params = {}, span = new Span()): Promise<PackageInformation[]> {
-		await this.projectManager.ensureModuleStructure();
-
-		const pkgFiles: string[] = [];
-		walkInMemoryFs(this.projectManager.getFs(), '/', (path: string, isdir: boolean): Error | void => {
-			if (isdir && path_.basename(path) === 'node_modules') {
-				return skipDir;
-			}
-			if (isdir) {
-				return;
-			}
-			if (path_.basename(path) !== 'package.json') {
-				return;
-			}
-			pkgFiles.push(path);
-		});
-
-		const pkgs: PackageInformation[] = [];
-		const pkgJsons = pkgFiles.map(p => JSON.parse(this.projectManager.getFs().readFile(p)));
-		for (const pkgJson of pkgJsons) {
-			const deps: DependencyReference[] = [];
-			const pkgName = pkgJson.name;
-			const pkgVersion = pkgJson.version;
-			const pkgRepoURL = pkgJson.repository ? pkgJson.repository.url : undefined;
-			for (const k of ['dependencies', 'devDependencies', 'peerDependencies']) {
-				if (pkgJson[k]) {
-					for (const name of Object.keys(pkgJson[k])) {
-						deps.push({ attributes: { name, version: pkgJson[k][name] }, hints: { dependeePackageName: pkgName } });
-					}
-				}
-			}
-			pkgs.push({
-				package: {
-					name: pkgName,
-					version: pkgVersion,
-					repoURL: pkgRepoURL
-				},
-				dependencies: deps
-			});
-		}
-		return pkgs;
-	}
-
-	workspaceXdependencies(params = {}, span = new Span()): Observable<DependencyReference[]> {
-		return Observable.from(this.projectManager.ensureModuleStructure())
+	/**
+	 * This method returns metadata about the package(s) defined in a workspace and a list of
+	 * dependencies for each package.
+	 *
+	 * This method is necessary to implement cross-repository jump-to-def when it is not possible to
+	 * resolve the global location of the definition from data present or derived from the local
+	 * workspace. For example, a package manager might not include information about the source
+	 * repository of each dependency. In this case, definition resolution requires mapping from
+	 * package descriptor to repository revision URL. A reverse index can be constructed from calls
+	 * to workspace/xpackages to provide an efficient mapping.
+	 */
+	workspaceXpackages(params = {}, span = new Span()): Observable<PackageInformation[]> {
+		// Ensure package.json files
+		return Observable.from(this.projectManager.ensureModuleStructure(span))
+			// Iterate all files
 			.mergeMap<void, string>(() => this.inMemoryFileSystem.uris() as any)
-			.filter(file => file.includes('/package.json') && !file.includes('/node_modules/'))
-			.mergeMap(file => Observable.from(this.updater.ensure(file)).map(() => JSON.parse(this.inMemoryFileSystem.getContent(file))))
-			.mergeMap<any, DependencyReference>(packageJson =>
-				Observable.of('dependencies', 'devDependencies', 'peerDependencies')
+			// Filter own package.jsons
+			.filter(uri => uri.includes('/package.json') && !uri.includes('/node_modules/'))
+			// Map to contents of package.jsons
+			.mergeMap(uri =>
+				Observable.from(this.updater.ensure(uri))
+					.map(() => JSON.parse(this.inMemoryFileSystem.getContent(uri))
+			))
+			// Map each package.json to a PackageInformation
+			.mergeMap(packageJson => {
+				const packageDescriptor: PackageDescriptor = {
+					name: packageJson.name,
+					version: packageJson.version,
+					repoURL: packageJson.repository && packageJson.repository.url || undefined
+				};
+				// Collect all dependencies for this package.json
+				return Observable.of('dependencies', 'devDependencies', 'optionalDependencies')
 					.filter(key => packageJson[key])
+					// Get [name, version] pairs
 					.mergeMap(key => toPairs(packageJson[key]) as [string, string][])
-					.map(([name, version]) => ({
+					// Map to DependencyReferences
+					.map(([name, version]): DependencyReference => ({
 						attributes: {
 							name,
 							version
@@ -582,7 +567,48 @@ export class TypeScriptService {
 						hints: {
 							dependeePackageName: packageJson.name
 						}
-					} as DependencyReference))
+					}))
+					.toArray()
+					// Map to PackageInformation
+					.map(dependencies => ({
+						package: packageDescriptor,
+						dependencies
+					}));
+			})
+			.toArray();
+	}
+
+	/**
+	 * Returns all dependencies of a workspace.
+	 * Superseded by workspace/xpackages
+	 */
+	workspaceXdependencies(params = {}, span = new Span()): Observable<DependencyReference[]> {
+		// Ensure package.json files
+		return Observable.from(this.projectManager.ensureModuleStructure())
+			// Iterate all files
+			.mergeMap<void, string>(() => this.inMemoryFileSystem.uris() as any)
+			// Filter own package.jsons
+			.filter(uri => uri.includes('/package.json') && !uri.includes('/node_modules/'))
+			// Ensure contents of own package.jsons
+			.mergeMap(uri =>
+				Observable.from(this.updater.ensure(uri))
+					.map(() => JSON.parse(this.inMemoryFileSystem.getContent(uri))
+			))
+			// Map package.json to DependencyReferences
+			.mergeMap(packageJson =>
+				Observable.of('dependencies', 'devDependencies', 'optionalDependencies')
+					.filter(key => packageJson[key])
+					// Get [name, version] pairs
+					.mergeMap(key => toPairs(packageJson[key]) as [string, string][])
+					.map(([name, version]): DependencyReference => ({
+						attributes: {
+							name,
+							version
+						},
+						hints: {
+							dependeePackageName: packageJson.name
+						}
+					}))
 			)
 			.toArray();
 	}
