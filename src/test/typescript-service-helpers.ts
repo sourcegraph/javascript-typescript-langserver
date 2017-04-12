@@ -1035,7 +1035,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		} as any);
 		describe('workspaceXpackages()', function (this: TestContext) {
 			it('should accournt for all packages', async function (this: TestContext) {
-				const result = await this.service.workspaceXpackages();
+				const result = await this.service.workspaceXpackages().toPromise();
 				assert.deepEqual(result, [{
 					package: {
 						name: 'tslint',
