@@ -1531,6 +1531,146 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		} as any);
 	} as any);
 
+	describe('textDocumentReferences()', function (this: TestContext) {
+		beforeEach(initializeTypeScriptService(createService, new Map([
+			['file:///a.ts', [
+				'class A {',
+				'	/** foo doc*/',
+				'    foo() {}',
+				'	/** bar doc*/',
+				'    bar(): number { return 1; }',
+				'	/** ',
+				'     * The Baz function',
+				'     * @param num Number parameter',
+				'     * @param text Text parameter',
+				'	  */',
+				'    baz(num: number, text: string): string { return ""; }',
+				'	/** qux doc*/',
+				'    qux: number;',
+				'}',
+				'const a = new A();',
+				'a.baz(32, sd)'
+			].join('\n')],
+			['file:///uses-import.ts', [
+				'import * as i from "./import"',
+				'i.d()'
+			].join('\n')],
+			['file:///also-uses-import.ts', [
+				'import {d} from "./import"',
+				'd()'
+			].join('\n')],
+			['file:///import.ts', '/** d doc*/ export function d() {}']
+		])) as any);
+
+		afterEach(shutdownService as any);
+
+		it('should provide an empty response when no reference is found', async function (this: TestContext) {
+			const result = await this.service.textDocumentReferences({
+				textDocument: {
+					uri: 'file:///a.ts'
+				},
+				position: {
+					line: 0,
+					character: 0
+				},
+				context: { includeDeclaration: false }
+			});
+			assert.deepEqual(result, []);
+		} as any);
+
+		it('should include the declaration if requested', async function (this: TestContext) {
+			const result = await this.service.textDocumentReferences({
+				textDocument: {
+					uri: 'file:///a.ts'
+				},
+				position: {
+					line: 4,
+					character: 5
+				},
+				context: { includeDeclaration: true }
+			});
+			assert.deepEqual(result, [{
+				range: {
+					end: {
+						character: 7,
+						line: 4
+					},
+					start: {
+						character: 4,
+						line: 4
+					}
+				},
+				uri: 'file:///a.ts'
+			}]);
+		} as any);
+
+		it('should provide a reference within the same file', async function (this: TestContext) {
+			const result = await this.service.textDocumentReferences({
+				textDocument: {
+					uri: 'file:///a.ts'
+				},
+				position: {
+					line: 10,
+					character: 5
+				},
+				context: { includeDeclaration: false }
+			});
+			assert.deepEqual(result, [{
+				range: {
+					end: {
+						character: 5,
+						line: 15
+					},
+					start: {
+						character: 2,
+						line: 15
+					}
+				},
+				uri: 'file:///a.ts'
+			}]);
+		} as any);
+		it('should provide two references from imports', async function (this: TestContext) {
+			const result = await this.service.textDocumentReferences({
+				textDocument: {
+					uri: 'file:///import.ts'
+				},
+				position: {
+					line: 0,
+					character: 28
+				},
+				context: { includeDeclaration: false }
+			});
+			assert.deepEqual(result, [
+				{
+					range: {
+						end: {
+							character: 3,
+							line: 1
+						},
+						start: {
+							character: 2,
+							line: 1
+						}
+					},
+					uri: 'file:///uses-import.ts'
+				},
+				{
+					range: {
+						end: {
+							character: 1,
+							line: 1
+						},
+						start: {
+							character: 0,
+							line: 1
+						}
+					},
+					uri: 'file:///also-uses-import.ts'
+				}
+			]);
+		} as any);
+	} as any);
+
 	describe('textDocumentSignatureHelp()', function (this: TestContext) {
 		beforeEach(initializeTypeScriptService(createService, new Map([
 			['file:///a.ts', [
