@@ -1,10 +1,13 @@
 import { Observable } from '@reactivex/rxjs';
+import { FORMAT_TEXT_MAP, Span } from 'opentracing';
+import { inspect } from 'util';
 import { isReponseMessage, Message, NotificationMessage, RequestMessage, ResponseMessage } from 'vscode-jsonrpc/lib/messages';
 import {
 	LogMessageParams,
 	TextDocumentIdentifier,
 	TextDocumentItem
 } from 'vscode-languageserver';
+import { HasMeta } from './connection';
 import { MessageEmitter, MessageWriter } from './connection';
 import {
 	CacheGetParams,
@@ -35,11 +38,15 @@ export class RemoteLanguageClient {
 	 * @param params The params to pass to the method
 	 * @return Emits the value of the result field or the error
 	 */
-	private request(method: string, params: any[] | { [attr: string]: any }): Observable<any> {
+	private request(method: string, params: any[] | { [attr: string]: any }, childOf = new Span()): Observable<any> {
+		const tracer = childOf.tracer();
+		const span = tracer.startSpan(`Request ${method}`, { childOf });
+		span.setTag('params', inspect(params));
 		return new Observable<any>(subscriber => {
 			// Generate a request ID
 			const id = this.idCounter++;
-			const message: RequestMessage = { jsonrpc: '2.0', method, id, params };
+			const message: RequestMessage & HasMeta = { jsonrpc: '2.0', method, id, params, meta: {} };
+			tracer.inject(span, FORMAT_TEXT_MAP, message.meta);
 			// Send request
 			this.output.write(message);
 			let receivedResponse = false;
@@ -67,6 +74,12 @@ export class RemoteLanguageClient {
 					this.notify('$/cancelRequest', { id });
 				}
 			};
+		}).catch(err => {
+			span.setTag('error', true);
+			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
+			throw err;
+		}).finally(() => {
+			span.finish();
 		});
 	}
 
@@ -86,16 +99,16 @@ export class RemoteLanguageClient {
 	 * any text document. This allows language servers to operate without accessing the file system
 	 * directly.
 	 */
-	textDocumentXcontent(params: TextDocumentContentParams): Promise<TextDocumentItem> {
-		return this.request('textDocument/xcontent', params).toPromise();
+	textDocumentXcontent(params: TextDocumentContentParams, childOf = new Span()): Promise<TextDocumentItem> {
+		return this.request('textDocument/xcontent', params, childOf).toPromise();
 	}
 
 	/**
 	 * The files request is sent from the server to the client to request a list of all files in the
 	 * workspace or inside the directory of the `base` parameter, if given.
 	 */
-	workspaceXfiles(params: WorkspaceFilesParams): Promise<TextDocumentIdentifier[]> {
-		return this.request('workspace/xfiles', params).toPromise();
+	workspaceXfiles(params: WorkspaceFilesParams, childOf = new Span()): Promise<TextDocumentIdentifier[]> {
+		return this.request('workspace/xfiles', params, childOf).toPromise();
 	}
 
 	/**
@@ -110,8 +123,8 @@ export class RemoteLanguageClient {
 	 * The cache get request is sent from the server to the client to request the value of a cache
 	 * item identified by the provided key.
 	 */
-	xcacheGet(params: CacheGetParams): Promise<any> {
-		return this.request('xcache/get', params).toPromise();
+	xcacheGet(params: CacheGetParams, childOf = new Span()): Promise<any> {
+		return this.request('xcache/get', params, childOf).toPromise();
 	}
 
 	/**
