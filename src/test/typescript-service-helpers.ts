@@ -1574,7 +1574,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					character: 0
 				},
 				context: { includeDeclaration: false }
-			});
+			}).toPromise();
 			assert.deepEqual(result, []);
 		} as any);
 
@@ -1588,7 +1588,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					character: 5
 				},
 				context: { includeDeclaration: true }
-			});
+			}).toPromise();
 			assert.deepEqual(result, [{
 				range: {
 					end: {
@@ -1614,7 +1614,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					character: 5
 				},
 				context: { includeDeclaration: false }
-			});
+			}).toPromise();
 			assert.deepEqual(result, [{
 				range: {
 					end: {
@@ -1639,7 +1639,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					character: 28
 				},
 				context: { includeDeclaration: false }
-			});
+			}).toPromise();
 			assert.deepEqual(result, [
 				{
 					range: {

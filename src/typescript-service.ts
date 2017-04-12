@@ -1,5 +1,4 @@
 import { Observable } from '@reactivex/rxjs';
-import * as async from 'async';
 import iterate from 'iterare';
 import { toPairs } from 'lodash';
 import { Span } from 'opentracing';
@@ -300,38 +299,46 @@ export class TypeScriptService {
 	 * The references request is sent from the client to the server to resolve project-wide
 	 * references for the symbol denoted by the given text document position.
 	 */
-	async textDocumentReferences(params: ReferenceParams, span = new Span()): Promise<Location[]> {
-
+	textDocumentReferences(params: ReferenceParams, span = new Span()): Observable<Location[]> {
 		// Ensure all files were fetched to collect all references
-		await this.projectManager.ensureAllFiles(span);
-
-		const fileName = util.uri2path(params.textDocument.uri);
-		const configuration = this.projectManager.getConfiguration(fileName);
-		configuration.ensureAllFiles();
-
-		const sourceFile = this._getSourceFile(configuration, fileName);
-		if (!sourceFile) {
-			return [];
-		}
-
-		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
-		const refs = configuration.getService().getReferencesAtPosition(fileName, offset);
-
-		const tasks: AsyncFunction<Location, Error>[] = [];
-
-		if (refs) {
-			for (const ref of refs) {
-				tasks.push(this._transformReference(this.root,
-					configuration.getProgram(),
-					params.context && params.context.includeDeclaration,
-					ref));
-			}
-		}
-		return new Promise<Location[]>((resolve, reject) => {
-			async.parallel(tasks, (err: Error, results: Location[]) => {
-				return resolve(results.filter(item => item));
-			});
-		});
+		return Observable.from(this.projectManager.ensureOwnFiles(span))
+			.mergeMap(() => {
+				// Convert URI to file path because TypeScript doesn't work with URIs
+				const fileName = util.uri2path(params.textDocument.uri);
+				// Get tsconfig configuration for requested file
+				const configuration = this.projectManager.getConfiguration(fileName);
+				// Ensure all files have been added
+				configuration.ensureAllFiles();
+				// Get SourceFile object for requested file
+				const sourceFile = this._getSourceFile(configuration, fileName);
+				if (!sourceFile) {
+					throw new Error(`Source file ${fileName} does not exist`);
+				}
+				// Convert line/character to offset
+				const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
+				// Request references at position from TypeScript
+				return Observable.from(configuration.getService().getReferencesAtPosition(fileName, offset))
+					// Filter declaration if not requested
+					.filter(reference => !reference.isDefinition || (params.context && params.context.includeDeclaration))
+					// Map to Locations
+					.map(reference => {
+						const sourceFile = configuration.getProgram().getSourceFile(reference.fileName);
+						if (!sourceFile) {
+							throw new Error(`Source file ${reference.fileName} does not exist`);
+						}
+						// Convert offset to line/character position
+						const start = ts.getLineAndCharacterOfPosition(sourceFile, reference.textSpan.start);
+						const end = ts.getLineAndCharacterOfPosition(sourceFile, reference.textSpan.start + reference.textSpan.length);
+						return {
+							uri: util.path2uri(this.root, reference.fileName),
+							range: {
+								start,
+								end
+							}
+						};
+					});
+			})
+			.toArray();
 	}
 
 	/**
@@ -1579,27 +1586,6 @@ export class TypeScriptService {
 		configuration.syncProgram();
 
 		return configuration.getProgram().getSourceFile(fileName);
-	}
-
-	/**
-	 * Produces async function that converts ReferenceEntry object to Location
-	 */
-	private _transformReference(root: string, program: ts.Program, includeDeclaration: boolean, ref: ts.ReferenceEntry): AsyncFunction<Location, Error> {
-		return (callback: (err?: Error, result?: Location) => void) => {
-			if (!includeDeclaration && ref.isDefinition) {
-				return callback();
-			}
-			const sourceFile = program.getSourceFile(ref.fileName);
-			if (!sourceFile) {
-				return callback(new Error('source file "' + ref.fileName + '" does not exist'));
-			}
-			const start = ts.getLineAndCharacterOfPosition(sourceFile, ref.textSpan.start);
-			const end = ts.getLineAndCharacterOfPosition(sourceFile, ref.textSpan.start + ref.textSpan.length);
-			callback(undefined, Location.create(util.path2uri(root, ref.fileName), {
-				start,
-				end
-			}));
-		};
 	}
 
 	/**
