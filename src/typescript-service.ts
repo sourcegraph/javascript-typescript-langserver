@@ -76,7 +76,11 @@ export class TypeScriptService {
 	 */
 	protected rootUri: string;
 
-	private emptyQueryWorkspaceSymbols: Promise<SymbolInformation[]>; // cached response for empty workspace/symbol query
+	/**
+	 * Cached response for empty workspace/symbol query
+	 */
+	private emptyQueryWorkspaceSymbols: SymbolInformation[];
+
 	private traceModuleResolution: boolean;
 
 	/**
@@ -333,15 +337,21 @@ export class TypeScriptService {
 	 * at time of the query. This can be used to rank or limit results.
 	 */
 	async workspaceSymbol(params: WorkspaceSymbolParams, span = new Span()): Promise<SymbolInformation[]> {
+
+		// Always return max. 50 results
+		// TODO stream 50 results, then re-query and stream the rest
+		const limit = Math.min(params.limit || Infinity, 50);
+
 		const query = params.query;
-		const symQuery = params.symbol ? Object.assign({}, params.symbol) : undefined;
-		if (symQuery && symQuery.package) {
-			symQuery.package = { name: symQuery.package.name };
+		const symbolQuery = params.symbol ? Object.assign({}, params.symbol) : undefined;
+
+		if (symbolQuery && symbolQuery.package) {
+			symbolQuery.package = { name: symbolQuery.package.name };
 		}
 
-		if (symQuery) {
+		if (symbolQuery) {
 			try {
-				const dtRes = await this._workspaceSymbolDefinitelyTyped(params);
+				const dtRes = await this._workspaceSymbolDefinitelyTyped({ ...params, limit });
 				if (dtRes) {
 					return dtRes;
 				}
@@ -349,37 +359,46 @@ export class TypeScriptService {
 				// Ignore
 			}
 
-			if (!symQuery.containerKind) {
-				symQuery.containerKind = undefined; // symQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
+			if (!symbolQuery.containerKind) {
+				// symbolQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
+				symbolQuery.containerKind = undefined;
 			}
 		}
 
+		// A workspace/symol request searches all symbols in own code, but not in dependencies
 		await this.projectManager.ensureOwnFiles(span);
 
-		if (!query && !symQuery && this.emptyQueryWorkspaceSymbols) {
+		// Cache result for empty query
+		if (!query && !symbolQuery && this.emptyQueryWorkspaceSymbols) {
 			return this.emptyQueryWorkspaceSymbols;
 		}
-		let configs;
-		if (symQuery && symQuery.package && symQuery.package.name) {
-			configs = [];
-			for (const config of this.projectManager.configurations()) {
-				if (config.getPackageName() === symQuery.package.name) {
-					configs.push(config);
-				}
-			}
+
+		// Find configurations to search
+		let configs: Iterable<pm.ProjectConfiguration>;
+		if (symbolQuery && symbolQuery.package && symbolQuery.package.name) {
+			// If PackageDescriptor is given, only search project with the matching package name
+			configs = iterate(this.projectManager.configurations())
+				.filter(config => config.getPackageName() === symbolQuery.package!.name);
 		} else {
 			const rootConfig = this.projectManager.getConfiguration('');
-			if (rootConfig) {  // if there's a root configuration, it includes all files
+			if (rootConfig) {
+				// Use root configuration because it includes all files
 				configs = [rootConfig];
 			} else {
+				// Use all configurations
 				configs = this.projectManager.configurations();
 			}
 		}
-		const itemsPromise = this._collectWorkspaceSymbols(configs, query, symQuery, params.limit);
-		if (!query && !symQuery) {
-			this.emptyQueryWorkspaceSymbols = itemsPromise;
+		const symbols = iterate(configs)
+			.map(config => this._collectWorkspaceSymbols(config, query || symbolQuery, limit))
+			.flatten<SymbolInformation>()
+			.take(limit)
+			.toArray();
+		// Save empty query result
+		if (!query && !symbolQuery) {
+			this.emptyQueryWorkspaceSymbols = symbols;
 		}
-		return await itemsPromise;
+		return symbols;
 	}
 
 	protected async _workspaceSymbolDefinitelyTyped(params: WorkspaceSymbolParams): Promise<SymbolInformation[] | null> {
@@ -403,16 +422,16 @@ export class TypeScriptService {
 		const relPkgRoot = pkg.name.slice('@types/'.length);
 		await this.projectManager.ensureModuleStructure();
 
-		const symQuery = params.symbol ? Object.assign({}, params.symbol) : undefined;
-		if (symQuery) {
-			symQuery.package = undefined;
-			if (!symQuery.containerKind) {
-				symQuery.containerKind = undefined; // symQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
+		const symbolQuery = params.symbol ? Object.assign({}, params.symbol) : undefined;
+		if (symbolQuery) {
+			symbolQuery.package = undefined;
+			if (!symbolQuery.containerKind) {
+				symbolQuery.containerKind = undefined; // symQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
 			}
 		}
 
 		const config = this.projectManager.getConfiguration(relPkgRoot);
-		return await this._collectWorkspaceSymbols([config], params.query, symQuery, params.limit);
+		return Array.from(this._collectWorkspaceSymbols(config, params.query || symbolQuery, params.limit));
 	}
 
 	/**
@@ -433,9 +452,7 @@ export class TypeScriptService {
 			return [];
 		}
 		const tree = config.getService().getNavigationTree(fileName);
-		const result: SymbolInformation[] = [];
-		this._flattenNavigationTreeItem(tree, null, sourceFile, result);
-		return Promise.resolve(result);
+		return Array.from(this._flattenNavigationTreeItem(tree, null, sourceFile));
 	}
 
 	/**
@@ -1570,7 +1587,7 @@ export class TypeScriptService {
 	/**
 	 * transformNavItem transforms a NavigateToItem instance to a SymbolInformation instance
 	 */
-	private _transformNavItem(root: string, program: ts.Program, item: ts.NavigateToItem): SymbolInformation {
+	private _transformNavItem(program: ts.Program, item: ts.NavigateToItem): SymbolInformation {
 		const sourceFile = program.getSourceFile(item.fileName);
 		if (!sourceFile) {
 			throw new Error('source file "' + item.fileName + '" does not exist');
@@ -1583,48 +1600,45 @@ export class TypeScriptService {
 			this._defUri(item.fileName), item.containerName);
 	}
 
-	private async _collectWorkspaceSymbols(configs: Iterable<pm.ProjectConfiguration>, query?: string, symQuery?: Partial<SymbolDescriptor>, limit?: number): Promise<SymbolInformation[]> {
-		const symbols = iterate(configs)
-			.map(config => {
-				const symbols: SymbolInformation[] = [];
-				config.ensureAllFiles();
-				if (query) {
-					const items = config.getService().getNavigateToItems(query, limit, undefined, false);
-					for (const item of items) {
-						const si = this._transformNavItem(this.root, config.getProgram(), item);
-						if (!util.isLocalUri(si.location.uri)) {
-							continue;
-						}
-						symbols.push(si);
-					}
-				} else if (symQuery) {
-					// TODO(beyang): after workspace/symbol extension is accepted into LSP, push this logic upstream to getNavigateToItems
-					const items = config.getService().getNavigateToItems(symQuery.name || '', limit, undefined, false);
-					const packageName = config.getPackageName();
-					const pd = packageName ? { name: packageName } : undefined;
-					for (const item of items) {
-						const sd = SymbolDescriptor.create(item.kind, item.name, item.containerKind, item.containerName, pd);
-						if (!util.symbolDescriptorMatch(symQuery, sd)) {
-							continue;
-						}
-						const si = this._transformNavItem(this.root, config.getProgram(), item);
-						if (!util.isLocalUri(si.location.uri)) {
-							continue;
-						}
-						symbols.push(si);
-					}
-				} else {
-					Array.prototype.push.apply(symbols, this._getNavigationTreeItems(config));
-				}
-				return symbols;
-			})
-			.flatten<SymbolInformation>()
-			.toArray();
-
-		if (!query) {
-			return symbols.sort((a, b) => a.name.toLocaleLowerCase().localeCompare(b.name.toLocaleLowerCase()));
+	/**
+	 * Returns an Iterator for all symbols in a given config
+	 *
+	 * Note: This method is not traced because it returns an Iterator that may produce values lazily
+	 *
+	 * @param config The ProjectConfiguration to search
+	 * @param query A text or SymbolDescriptor query
+	 * @param limit An optional limit that is passed to TypeScript
+	 * @return Iterator that emits SymbolInformations
+	 */
+	private _collectWorkspaceSymbols(config: pm.ProjectConfiguration, query?: string | Partial<SymbolDescriptor>, limit = Infinity): IterableIterator<SymbolInformation> {
+		config.ensureAllFiles();
+		if (query) {
+			let items: Iterable<ts.NavigateToItem>;
+			if (typeof query === 'string') {
+				// Query by text query
+				items = config.getService().getNavigateToItems(query, limit, undefined, false);
+			} else {
+				// Query by name
+				const packageName = config.getPackageName();
+				const packageDescriptor = packageName && { name: packageName } || undefined;
+				items = iterate(config.getService().getNavigateToItems(query.name || '', limit, undefined, false))
+					// Filter to match SymbolDescriptor
+					.filter(item => util.symbolDescriptorMatch(query, {
+						kind: item.kind,
+						name: item.name,
+						containerKind: item.containerKind,
+						containerName: item.containerName,
+						package: packageDescriptor
+					}));
+			}
+			return iterate(items)
+				.map(item => this._transformNavItem(config.getProgram(), item))
+				.filter(symbolInformation => util.isLocalUri(symbolInformation.location.uri));
+		} else {
+			// An empty query uses a different algorithm to iterate all files and aggregate the symbols per-file to get all symbols
+			// TODO make all implementations use this? It has the advantage of being streamable and cancellable
+			return iterate(this._getNavigationTreeItems(config)).take(limit);
 		}
-		return symbols;
 	}
 
 	/**
@@ -1641,44 +1655,34 @@ export class TypeScriptService {
 	/**
 	 * Fetches up to limit navigation bar items from given project, flattens them
 	 */
-	private _getNavigationTreeItems(configuration: pm.ProjectConfiguration, limit?: number): SymbolInformation[] {
-		const result: SymbolInformation[] = [];
-		for (const sourceFile of configuration.getProgram().getSourceFiles().sort((a, b) => a.fileName.localeCompare(b.fileName))) {
-			// excluding navigation items from TypeScript libraries
-			if (isTypeScriptLibrary(sourceFile.fileName)) {
-				continue;
-			}
-			let tree;
-			try {
-				tree = configuration.getService().getNavigationTree(sourceFile.fileName);
-			} catch (e) {
-				this.logger.error('could not get navigation tree for file', sourceFile.fileName);
-				continue;
-			}
-			this._flattenNavigationTreeItem(tree, null, sourceFile, result, limit);
-			if (limit && result.length >= limit) {
-				break;
-			}
-		}
-		return result;
+	private _getNavigationTreeItems(configuration: pm.ProjectConfiguration): IterableIterator<SymbolInformation> {
+		return iterate(configuration.getProgram().getSourceFiles())
+			// Exclude navigation items from TypeScript libraries
+			.filter(sourceFile => !isTypeScriptLibrary(sourceFile.fileName))
+			.map(sourceFile => {
+				try {
+					const tree = configuration.getService().getNavigationTree(sourceFile.fileName);
+					return this._flattenNavigationTreeItem(tree, null, sourceFile);
+				} catch (e) {
+					this.logger.error('Could not get navigation tree for file', sourceFile.fileName);
+					return [];
+				}
+			})
+			.flatten<SymbolInformation>();
 	}
 
 	/**
-	 * Flattens navigation tree by transforming it to one-dimensional array.
+	 * Flattens navigation tree by emitting acceptable NavigationTreeItems as SymbolInformations.
 	 * Some items (source files, modules) may be excluded
 	 */
-	private _flattenNavigationTreeItem(item: ts.NavigationTree, parent: ts.NavigationTree | null, sourceFile: ts.SourceFile, result: SymbolInformation[], limit?: number) {
-		if (!limit || result.length < limit) {
-			const acceptable = TypeScriptService.isAcceptableNavigationTreeItem(item);
-			if (acceptable) {
-				result.push(this._transformNavigationTreeItem(item, parent, sourceFile));
-			}
-			if (item.childItems) {
-				let i = 0;
-				while (i < item.childItems.length && (!limit || result.length < limit)) {
-					this._flattenNavigationTreeItem(item.childItems[i], acceptable ? item : null, sourceFile, result, limit);
-					i++;
-				}
+	private *_flattenNavigationTreeItem(item: ts.NavigationTree, parent: ts.NavigationTree | null, sourceFile: ts.SourceFile): IterableIterator<SymbolInformation> {
+		const acceptable = TypeScriptService.isAcceptableNavigationTreeItem(item);
+		if (acceptable) {
+			yield this._transformNavigationTreeItem(item, parent, sourceFile);
+		}
+		if (item.childItems) {
+			for (const childItem of item.childItems) {
+				yield* this._flattenNavigationTreeItem(childItem, acceptable ? item : null, sourceFile);
 			}
 		}
 	}
@@ -1690,10 +1694,15 @@ export class TypeScriptService {
 		const span = item.spans[0];
 		const start = ts.getLineAndCharacterOfPosition(sourceFile, span.start);
 		const end = ts.getLineAndCharacterOfPosition(sourceFile, span.start + span.length);
-		return SymbolInformation.create(item.text,
-			util.convertStringtoSymbolKind(item.kind),
-			Range.create(start.line, start.character, end.line, end.character),
-			this._defUri(sourceFile.fileName), parent ? parent.text : '');
+		return {
+			name: item.text,
+			kind: util.convertStringtoSymbolKind(item.kind),
+			location: {
+				uri: this._defUri(sourceFile.fileName),
+				range: { start, end }
+			},
+			containerName: parent ? parent.text : ''
+		};
 	}
 
 	/**
