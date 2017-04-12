@@ -197,7 +197,7 @@ export class ProjectManager implements Disposable {
 				await Promise.all(
 					iterate(this.localFs.uris())
 						.filter(uri => !uri.includes('/node_modules/') && util.isJSTSFile(uri) || util.isConfigFile(uri) || util.isPackageJsonFile(uri))
-						.map(uri => this.updater.ensure(uri, span))
+						.map(uri => this.updater.ensure(uri))
 				);
 				this.createConfigurations();
 			})();
