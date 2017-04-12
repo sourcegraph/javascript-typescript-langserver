@@ -16,6 +16,40 @@ import {
 	WorkspaceFilesParams
 } from './request-type';
 
+export interface LanguageClient {
+	/**
+	 * The content request is sent from the server to the client to request the current content of
+	 * any text document. This allows language servers to operate without accessing the file system
+	 * directly.
+	 */
+	textDocumentXcontent(params: TextDocumentContentParams, childOf?: Span): Promise<TextDocumentItem>;
+
+	/**
+	 * The files request is sent from the server to the client to request a list of all files in the
+	 * workspace or inside the directory of the `base` parameter, if given.
+	 */
+	workspaceXfiles(params: WorkspaceFilesParams, childOf?: Span): Promise<TextDocumentIdentifier[]>;
+
+	/**
+	 * The log message notification is sent from the server to the client to ask
+	 * the client to log a particular message.
+	 */
+	windowLogMessage(params: LogMessageParams): void;
+
+	/**
+	 * The cache get request is sent from the server to the client to request the value of a cache
+	 * item identified by the provided key.
+	 */
+	xcacheGet(params: CacheGetParams, childOf?: Span): Promise<any>;
+
+	/**
+	 * The cache set notification is sent from the server to the client to set the value of a cache
+	 * item identified by the provided key. This is a intentionally notification and not a request
+	 * because the server is not supposed to act differently if the cache set failed.
+	 */
+	xcacheSet(params: CacheSetParams): void;
+}
+
 /**
  * Provides an interface to call methods on the remote client.
  * Methods are named after the camelCase version of the LSP method name

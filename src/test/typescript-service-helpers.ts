@@ -2,8 +2,7 @@ import * as chai from 'chai';
 import * as ts from 'typescript';
 import { CompletionItemKind, LogMessageParams, TextDocumentIdentifier, TextDocumentItem } from 'vscode-languageserver';
 import { SymbolKind } from 'vscode-languageserver-types';
-import { RemoteLanguageClient } from '../lang-handler';
-import { TextDocumentContentParams, WorkspaceFilesParams } from '../request-type';
+import { CacheGetParams, CacheSetParams, TextDocumentContentParams, WorkspaceFilesParams } from '../request-type';
 import { TypeScriptService, TypeScriptServiceFactory } from '../typescript-service';
 import chaiAsPromised = require('chai-as-promised');
 chai.use(chaiAsPromised);
@@ -45,8 +44,14 @@ export const initializeTypeScriptService = (createService: TypeScriptServiceFact
 		},
 		windowLogMessage(params: LogMessageParams): void {
 			// noop
+		},
+		xcacheGet(params: CacheGetParams): any {
+			return Promise.resolve(null);
+		},
+		xcacheSet(params: CacheSetParams): any {
+			// noop
 		}
-	} as RemoteLanguageClient);
+	});
 	await this.service.initialize({
 		processId: process.pid,
 		rootUri: 'file:///',

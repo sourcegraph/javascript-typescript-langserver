@@ -29,7 +29,7 @@ import {
 	TextDocumentSyncKind
 } from 'vscode-languageserver';
 import { FileSystem, FileSystemUpdater, LocalFileSystem, RemoteFileSystem } from './fs';
-import { RemoteLanguageClient } from './lang-handler';
+import { LanguageClient } from './lang-handler';
 import { Logger, LSPLogger } from './logging';
 import { InMemoryFileSystem, isTypeScriptLibrary } from './memfs';
 import * as pm from './project-manager';
@@ -51,7 +51,7 @@ export interface TypeScriptServiceOptions {
 	strict?: boolean;
 }
 
-export type TypeScriptServiceFactory = (client: RemoteLanguageClient, options?: TypeScriptServiceOptions) => TypeScriptService;
+export type TypeScriptServiceFactory = (client: LanguageClient, options?: TypeScriptServiceOptions) => TypeScriptService;
 
 /**
  * Handles incoming requests and return responses. There is a one-to-one-to-one
@@ -103,7 +103,7 @@ export class TypeScriptService {
 	 */
 	protected updater: FileSystemUpdater;
 
-	constructor(protected client: RemoteLanguageClient, protected options: TypeScriptServiceOptions = {}) {
+	constructor(protected client: LanguageClient, protected options: TypeScriptServiceOptions = {}) {
 		this.logger = new LSPLogger(client);
 	}
 

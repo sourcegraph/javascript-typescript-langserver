@@ -1,6 +1,6 @@
 import * as fs from 'mz/fs';
 import * as path from 'path';
-import { RemoteLanguageClient } from './lang-handler';
+import { LanguageClient } from './lang-handler';
 import glob = require('glob');
 import iterate from 'iterare';
 import { Span } from 'opentracing';
@@ -28,7 +28,7 @@ export interface FileSystem {
 
 export class RemoteFileSystem implements FileSystem {
 
-	constructor(private client: RemoteLanguageClient) {}
+	constructor(private client: LanguageClient) {}
 
 	/**
 	 * The files request is sent from the server to the client to request a list of all files in the workspace or inside the directory of the base parameter, if given.

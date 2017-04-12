@@ -3,7 +3,7 @@ import * as chalk from 'chalk';
 import * as fs from 'fs';
 import { inspect } from 'util';
 import { MessageType } from 'vscode-languageserver';
-import { RemoteLanguageClient } from './lang-handler';
+import { LanguageClient } from './lang-handler';
 
 export interface Logger {
 	log(...values: any[]): void;
@@ -27,7 +27,7 @@ export class LSPLogger implements Logger {
 	/**
 	 * @param client The client to send window/logMessage notifications to
 	 */
-	constructor(private client: RemoteLanguageClient) {}
+	constructor(private client: LanguageClient) {}
 
 	log(...values: any[]): void {
 		try {
