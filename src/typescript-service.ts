@@ -478,8 +478,8 @@ export class TypeScriptService {
 						Observable.from<ts.Node>(walkMostAST(source) as any)
 							// Filter Identifier Nodes
 							// TODO: include string-interpolated references
-							.filter(node => node.kind === ts.SyntaxKind.Identifier)
-							.mergeMap((node: ts.Identifier) =>
+							.filter((node): node is ts.Identifier => node.kind === ts.SyntaxKind.Identifier)
+							.mergeMap(node =>
 								// Get DefinitionInformations at the node
 								Observable.from(config.getService().getDefinitionAtPosition(source.fileName, node.pos + 1) || [])
 									// Map to SymbolDescriptor
