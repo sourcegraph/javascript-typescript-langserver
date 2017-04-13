@@ -12,7 +12,7 @@ describe('ProjectManager', () => {
 	let projectManager: ProjectManager;
 
 	describe('getPackageName()', () => {
-		before(() => {
+		before(async () => {
 			const memfs = new InMemoryFileSystem('/');
 			const localfs = new MapFileSystem(new Map([
 				['file:///package.json', '{"name": "package-name-1"}'],
@@ -22,7 +22,7 @@ describe('ProjectManager', () => {
 			]));
 			const updater = new FileSystemUpdater(localfs, memfs);
 			projectManager = new ProjectManager('/', memfs, updater, true);
-			projectManager.ensureAllFiles();
+			await projectManager.ensureAllFiles();
 		});
 		it('should resolve package name when package.json is at the same level', () => {
 			assert.equal(projectManager.getConfiguration('').getPackageName(), 'package-name-1');
