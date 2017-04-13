@@ -491,6 +491,7 @@ export class ProjectManager implements Disposable {
 				}
 			};
 			// if there is at least one config, giving no files to default one
+			// TODO: it makes impossible to IntelliSense gulpfile.js if there is a tsconfig.json in subdirectory
 			if (this.configs.size > 0) {
 				tsConfig.exclude = ['**/*'];
 			}
