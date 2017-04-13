@@ -267,7 +267,7 @@ export class ProjectManager implements Disposable {
 		ignore.add(uri);
 		return Observable.from(this.ensureModuleStructure(span))
 			// If max depth was reached, don't go any further
-			.mergeMap(() => maxDepth === 0 ? [] : this.resolveReferencedFiles(uri))
+			.mergeMap(() => maxDepth === 0 ? [] : this.resolveReferencedFiles(uri, span))
 			// Prevent cycles
 			.filter(referencedUri => !ignore.has(referencedUri))
 			// Call method recursively with one less dep level
@@ -311,7 +311,7 @@ export class ProjectManager implements Disposable {
 	 * @param uri URI of the file to process
 	 * @return URIs of files referenced by the file
 	 */
-	private resolveReferencedFiles(uri: string): Observable<string> {
+	private resolveReferencedFiles(uri: string, span = new Span()): Observable<string> {
 		let observable = this.referencedFiles.get(uri);
 		if (observable) {
 			return observable;
@@ -325,7 +325,7 @@ export class ProjectManager implements Disposable {
 		observable = Observable.from(this.updater.ensure(uri))
 			.mergeMap(() => {
 				const config = this.getConfiguration(filePath);
-				config.ensureBasicFiles();
+				config.ensureBasicFiles(span);
 				const contents = this.localFs.getContent(uri);
 				const info = ts.preProcessFile(contents, true, true);
 				const compilerOpt = config.getHost().getCompilationSettings();
@@ -418,7 +418,7 @@ export class ProjectManager implements Disposable {
 	 * Called when file was closed by client. Current implementation invalidates compiled version
 	 * @param filePath path to a file relative to project root
 	 */
-	didClose(filePath: string) {
+	didClose(filePath: string, span = new Span()) {
 		this.localFs.didClose(filePath);
 		let version = this.versions.get(filePath) || 0;
 		this.versions.set(filePath, ++version);
@@ -426,9 +426,9 @@ export class ProjectManager implements Disposable {
 		if (!config) {
 			return;
 		}
-		config.ensureConfigFile();
+		config.ensureConfigFile(span);
 		config.getHost().incProjectVersion();
-		config.syncProgram();
+		config.syncProgram(span);
 	}
 
 	/**
@@ -436,7 +436,7 @@ export class ProjectManager implements Disposable {
 	 * @param filePath path to a file relative to project root
 	 * @param text file's content
 	 */
-	didChange(filePath: string, text: string) {
+	didChange(filePath: string, text: string, span = new Span()) {
 		this.localFs.didChange(filePath, text);
 		let version = this.versions.get(filePath) || 0;
 		this.versions.set(filePath, ++version);
@@ -444,9 +444,9 @@ export class ProjectManager implements Disposable {
 		if (!config) {
 			return;
 		}
-		config.ensureConfigFile();
+		config.ensureConfigFile(span);
 		config.getHost().incProjectVersion();
-		config.syncProgram();
+		config.syncProgram(span);
 	}
 
 	/**
@@ -796,11 +796,16 @@ export class ProjectConfiguration {
 	 * TS service relies on information provided by language servide host to see if there were any changes in
 	 * the whole project or in some files
 	 */
-	syncProgram(): void {
+	syncProgram(childOf = new Span()): void {
+		const span = childOf.tracer().startSpan('Sync program', { childOf });
 		try {
 			this.program = this.getService().getProgram();
-		} catch (e) {
-			this.logger.error(`Cannot create program object for ${this.rootFilePath}`, e);
+		} catch (err) {
+			span.setTag('error', true);
+			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
+			this.logger.error(`Cannot create program object for ${this.rootFilePath}`, err);
+		} finally {
+			span.finish();
 		}
 	}
 
@@ -809,7 +814,7 @@ export class ProjectConfiguration {
 	/**
 	 * Initializes (sub)project by parsing configuration and making proper internal objects
 	 */
-	private init(): void {
+	private init(span = new Span()): void {
 		if (this.initialized) {
 			return;
 		}
@@ -859,15 +864,15 @@ export class ProjectConfiguration {
 			this.logger
 		);
 		this.service = ts.createLanguageService(this.host, ts.createDocumentRegistry());
-		this.syncProgram();
+		this.syncProgram(span);
 		this.initialized = true;
 	}
 
 	/**
 	 * Ensures we are ready to process files from a given sub-project
 	 */
-	ensureConfigFile(): void {
-		this.init();
+	ensureConfigFile(span = new Span()): void {
+		this.init(span);
 	}
 
 	private ensuredBasicFiles = false;
@@ -875,12 +880,12 @@ export class ProjectConfiguration {
 	/**
 	 * Ensures we added basic files (global TS files, dependencies, declarations)
 	 */
-	ensureBasicFiles(): void {
+	ensureBasicFiles(span = new Span()): void {
 		if (this.ensuredBasicFiles) {
 			return;
 		}
 
-		this.init();
+		this.init(span);
 
 		const program = this.getProgram();
 		if (!program) {
@@ -899,7 +904,7 @@ export class ProjectConfiguration {
 		}
 		if (changed) {
 			// requery program object to synchonize LanguageService's data
-			this.syncProgram();
+			this.syncProgram(span);
 		}
 		this.ensuredBasicFiles = true;
 	}
@@ -909,11 +914,11 @@ export class ProjectConfiguration {
 	/**
 	 * Ensures we added all project's source file (as were defined in tsconfig.json)
 	 */
-	ensureAllFiles(): void {
+	ensureAllFiles(span = new Span()): void {
 		if (this.ensuredAllFiles) {
 			return;
 		}
-		this.init();
+		this.init(span);
 		if (this.getHost().complete) {
 			return;
 		}
@@ -931,7 +936,7 @@ export class ProjectConfiguration {
 		}
 		if (changed) {
 			// requery program object to synchonize LanguageService's data
-			this.syncProgram();
+			this.syncProgram(span);
 		}
 		this.getHost().complete = true;
 		this.ensuredAllFiles = true;
