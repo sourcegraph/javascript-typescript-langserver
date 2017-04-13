@@ -708,7 +708,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		describe('workspaceXreferences()', function (this: TestContext) {
 			specify('"foo"', async function (this: TestContext) {
-				const result = await this.service.workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' } });
+				const result = await this.service.workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' } }).toPromise();
 				assert.deepEqual(result, [{
 					symbol: {
 						containerKind: '',
@@ -732,7 +732,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]);
 			} as any);
 			specify('"foo", with hint', async function (this: TestContext) {
-				const result = await this.service.workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' }, hints: { dependeePackageName: 'mypkg' } });
+				const result = await this.service.workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' }, hints: { dependeePackageName: 'mypkg' } }).toPromise();
 				assert.deepEqual(result, [{
 					symbol: {
 						containerKind: '',
@@ -756,11 +756,11 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]);
 			} as any);
 			specify('"foo", with hint, not found', async function (this: TestContext) {
-				const result = await this.service.workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' }, hints: { dependeePackageName: 'NOT-mypkg' } });
+				const result = await this.service.workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' }, hints: { dependeePackageName: 'NOT-mypkg' } }).toPromise();
 				assert.deepEqual(result, []);
 			} as any);
 			specify('dependency reference', async function (this: TestContext) {
-				const result = await this.service.workspaceXreferences({ query: { name: 'x', containerName: '' } });
+				const result = await this.service.workspaceXreferences({ query: { name: 'x', containerName: '' } }).toPromise();
 				assert.deepEqual(result, [{
 					reference: {
 						range: {
@@ -784,7 +784,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]);
 			} as any);
 			specify('all references', async function (this: TestContext) {
-				const result = await this.service.workspaceXreferences({ query: {} });
+				const result = await this.service.workspaceXreferences({ query: {} }).toPromise();
 				assert.deepEqual(result, [
 					{
 						symbol: {
