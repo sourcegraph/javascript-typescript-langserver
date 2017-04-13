@@ -312,7 +312,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 	describe('Workspace with typings directory', function (this: TestContext) {
 
 		beforeEach(initializeTypeScriptService(createService, new Map([
-			['file:///a.ts', "import * as m from 'dep';"],
+			['file:///src/a.ts', "import * as m from 'dep';"],
 			['file:///typings/dep.d.ts', "declare module 'dep' {}"],
 			['file:///src/tsconfig.json', [
 				'{',
@@ -361,7 +361,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				specify('on import alias', async function (this: TestContext) {
 					const result = await this.service.textDocumentDefinition({
 						textDocument: {
-							uri: 'file:///a.ts'
+							uri: 'file:///src/a.ts'
 						},
 						position: {
 							line: 0,
@@ -385,7 +385,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				specify('on module name', async function (this: TestContext) {
 					const result = await this.service.textDocumentDefinition({
 						textDocument: {
-							uri: 'file:///a.ts'
+							uri: 'file:///src/a.ts'
 						},
 						position: {
 							line: 0,
