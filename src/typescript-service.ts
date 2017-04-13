@@ -314,6 +314,8 @@ export class TypeScriptService {
 	/**
 	 * The references request is sent from the client to the server to resolve project-wide
 	 * references for the symbol denoted by the given text document position.
+	 *
+	 * Returns all references to the symbol at the position in the own workspace, including references inside node_modules.
 	 */
 	textDocumentReferences(params: ReferenceParams, span = new Span()): Observable<Location[]> {
 		// Ensure all files were fetched to collect all references
@@ -335,8 +337,12 @@ export class TypeScriptService {
 				// Request references at position from TypeScript
 				// Despite the signature, getReferencesAtPosition() can return undefined
 				return Observable.from(configuration.getService().getReferencesAtPosition(fileName, offset) || [])
-					// Filter declaration if not requested
-					.filter(reference => !reference.isDefinition || (params.context && params.context.includeDeclaration))
+					.filter(reference =>
+						// Filter declaration if not requested
+						(!reference.isDefinition || (params.context && params.context.includeDeclaration))
+						// Filter references in node_modules
+						&& !reference.fileName.includes('/node_modules/')
+					)
 					// Map to Locations
 					.map(reference => {
 						const sourceFile = configuration.getProgram().getSourceFile(reference.fileName);
