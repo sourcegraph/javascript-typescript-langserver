@@ -327,7 +327,7 @@ export class TypeScriptService {
 				configuration.ensureAllFiles();
 				const program = configuration.getProgram();
 				if (!program) {
-					return Observable.from([]);
+					return [];
 				}
 				// Get SourceFile object for requested file
 				const sourceFile = this._getSourceFile(configuration, fileName);
