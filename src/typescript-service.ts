@@ -335,8 +335,12 @@ export class TypeScriptService {
 				// Request references at position from TypeScript
 				// Despite the signature, getReferencesAtPosition() can return undefined
 				return Observable.from(configuration.getService().getReferencesAtPosition(fileName, offset) || [])
-					// Filter declaration if not requested
-					.filter(reference => !reference.isDefinition || (params.context && params.context.includeDeclaration))
+					.filter(reference =>
+						// Filter declaration if not requested
+						(!reference.isDefinition || (params.context && params.context.includeDeclaration))
+						// Filter references in node_modules
+						&& !reference.fileName.includes('/node_modules/')
+					)
 					// Map to Locations
 					.map(reference => {
 						const sourceFile = configuration.getProgram().getSourceFile(reference.fileName);
