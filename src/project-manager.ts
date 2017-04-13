@@ -702,7 +702,7 @@ export class ProjectConfiguration {
 
 	/**
 	 * @param fs file system to use
-	 * @param rootFilePath root file path, relative to workspace hierarchy root
+	 * @param rootFilePath root file path, absolute
 	 * @param configFilePath configuration file path (relative to workspace root)
 	 * @param configContent optional configuration content to use instead of reading configuration file)
 	 */
@@ -749,8 +749,8 @@ export class ProjectConfiguration {
 			if (this.fs.fileExists(pkgJsonFile)) {
 				return JSON.parse(this.fs.readFile(pkgJsonFile)).name;
 			}
-			const parentDir = path_.dirname(currentDir);
-			if (parentDir === '.' || parentDir === '/' || parentDir === currentDir) {
+			const parentDir = path_.posix.dirname(currentDir);
+			if (parentDir === '.' || parentDir === currentDir || currentDir === this.fs.path) {
 				return undefined;
 			}
 			currentDir = parentDir;
