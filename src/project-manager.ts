@@ -483,13 +483,18 @@ export class ProjectManager implements Disposable {
 		}
 		if (!rootdirs.has('') && !this.configs.has('')) {
 			// collecting all the files in workspace by making fake configuration object
-			this.configs.set('', new ProjectConfiguration(this.localFs, '/', this.versions, '', {
+			const tsConfig: any = {
 				compilerOptions: {
 					module: ts.ModuleKind.CommonJS,
 					allowNonTsExtensions: false,
 					allowJs: true
 				}
-			}, this.traceModuleResolution, this.logger));
+			};
+			// if there is at least one config, giving no files to default one
+			if (this.configs.size > 0) {
+				tsConfig.exclude = ['**/*'];
+			}			
+			this.configs.set('', new ProjectConfiguration(this.localFs, '/', this.versions, '', tsConfig, this.traceModuleResolution, this.logger));
 		}
 	}
 }
