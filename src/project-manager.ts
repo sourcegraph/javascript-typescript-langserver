@@ -493,7 +493,7 @@ export class ProjectManager implements Disposable {
 			// if there is at least one config, giving no files to default one
 			if (this.configs.size > 0) {
 				tsConfig.exclude = ['**/*'];
-			}			
+			}
 			this.configs.set('', new ProjectConfiguration(this.localFs, '/', this.versions, '', tsConfig, this.traceModuleResolution, this.logger));
 		}
 	}

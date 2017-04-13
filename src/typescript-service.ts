@@ -328,7 +328,7 @@ export class TypeScriptService {
 				const program = configuration.getProgram();
 				if (!program) {
 					return Observable.from([]);
-				}				
+				}
 				// Get SourceFile object for requested file
 				const sourceFile = this._getSourceFile(configuration, fileName);
 				if (!sourceFile) {
@@ -782,23 +782,23 @@ export class TypeScriptService {
 	 * @param configuration project configuration
 	 * @param fileName file name to fetch source file for or create it
 	 */
-	private _getSourceFile(configuration: pm.ProjectConfiguration, fileName: string): ts.SourceFile | null {
+	private _getSourceFile(configuration: pm.ProjectConfiguration, fileName: string): ts.SourceFile | undefined {
 		let program = configuration.getProgram();
 		if (!program) {
-			return null;
+			return undefined;
 		}
 		const sourceFile = program.getSourceFile(fileName);
 		if (sourceFile) {
 			return sourceFile;
 		}
 		if (!this.projectManager.hasFile(fileName)) {
-			return null;
+			return undefined;
 		}
 		configuration.getHost().addFile(fileName);
 		configuration.syncProgram();
 		// update program object
 		program = configuration.getProgram();
-		return program ? program.getSourceFile(fileName) : null;
+		return program && program.getSourceFile(fileName);
 	}
 
 	/**
@@ -833,7 +833,7 @@ export class TypeScriptService {
 		if (!program) {
 			return iterate([]);
 		}
-		
+
 		if (query) {
 			let items: Iterable<ts.NavigateToItem>;
 			if (typeof query === 'string') {
