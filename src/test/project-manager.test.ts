@@ -7,26 +7,21 @@ import { InMemoryFileSystem } from '../memfs';
 import { ProjectManager } from '../project-manager';
 import { MapFileSystem } from './fs-helpers';
 
-function initialize(files: Map<string, string>): ProjectManager {
-	const memfs = new InMemoryFileSystem('/');
-	const localfs = new MapFileSystem(files);
-	const updater = new FileSystemUpdater(localfs, memfs);
-	return new ProjectManager('/', memfs, updater, true);
-}
-
 describe('ProjectManager', () => {
 
 	let projectManager: ProjectManager;
 
 	describe('getPackageName()', () => {
 		before(() => {
-			projectManager = initialize(
-				new Map([
-					['file:///package.json', '{"name": "package-name-1"}'],
-					['file:///subdirectory-with-tsconfig/package.json', '{"name": "package-name-2"}'],
-					['file:///subdirectory-with-tsconfig/src/tsconfig.json', '{}'],
-					['file:///subdirectory-with-tsconfig/src/dummy.ts', '']
-				]));
+			const memfs = new InMemoryFileSystem('/');
+			const localfs = new MapFileSystem(new Map([
+				['file:///package.json', '{"name": "package-name-1"}'],
+				['file:///subdirectory-with-tsconfig/package.json', '{"name": "package-name-2"}'],
+				['file:///subdirectory-with-tsconfig/src/tsconfig.json', '{}'],
+				['file:///subdirectory-with-tsconfig/src/dummy.ts', '']
+			]));
+			const updater = new FileSystemUpdater(localfs, memfs);
+			projectManager = new ProjectManager('/', memfs, updater, true);
 			projectManager.ensureAllFiles();
 		});
 		it('should resolve package name when package.json is at the same level', () => {
