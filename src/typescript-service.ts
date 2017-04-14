@@ -195,9 +195,9 @@ export class TypeScriptService {
 
 		const fileName: string = util.uri2path(uri);
 		const configuration = this.projectManager.getConfiguration(fileName);
-		configuration.ensureBasicFiles();
+		configuration.ensureBasicFiles(span);
 
-		const sourceFile = this._getSourceFile(configuration, fileName);
+		const sourceFile = this._getSourceFile(configuration, fileName, span);
 		if (!sourceFile) {
 			return [];
 		}
@@ -207,7 +207,7 @@ export class TypeScriptService {
 		const ret = [];
 		if (defs) {
 			for (const def of defs) {
-				const sourceFile = this._getSourceFile(configuration, def.fileName);
+				const sourceFile = this._getSourceFile(configuration, def.fileName, span);
 				if (!sourceFile) {
 					throw new Error('expected source file "' + def.fileName + '" to exist in configuration');
 				}
@@ -241,8 +241,8 @@ export class TypeScriptService {
 				const fileName: string = util.uri2path(params.textDocument.uri);
 				// Get closest tsconfig configuration
 				const configuration = this.projectManager.getConfiguration(fileName);
-				configuration.ensureBasicFiles();
-				const sourceFile = this._getSourceFile(configuration, fileName);
+				configuration.ensureBasicFiles(span);
+				const sourceFile = this._getSourceFile(configuration, fileName, span);
 				if (!sourceFile) {
 					throw new Error(`Unknown text document ${params.textDocument.uri}`);
 				}
@@ -252,7 +252,7 @@ export class TypeScriptService {
 				return Observable.from(configuration.getService().getDefinitionAtPosition(fileName, offset) || [])
 					// Map DefinitionInfo to SymbolLocationInformation
 					.map(def => {
-						const sourceFile = this._getSourceFile(configuration, def.fileName);
+						const sourceFile = this._getSourceFile(configuration, def.fileName, span);
 						if (!sourceFile) {
 							throw new Error(`Expected source file ${def.fileName} to exist in configuration`);
 						}
@@ -286,9 +286,9 @@ export class TypeScriptService {
 
 		const fileName: string = util.uri2path(params.textDocument.uri);
 		const configuration = this.projectManager.getConfiguration(fileName);
-		configuration.ensureBasicFiles();
+		configuration.ensureBasicFiles(span);
 
-		const sourceFile = this._getSourceFile(configuration, fileName);
+		const sourceFile = this._getSourceFile(configuration, fileName, span);
 		if (!sourceFile) {
 			throw new Error(`Unknown text document ${params.textDocument.uri}`);
 		}
@@ -326,13 +326,13 @@ export class TypeScriptService {
 				// Get tsconfig configuration for requested file
 				const configuration = this.projectManager.getConfiguration(fileName);
 				// Ensure all files have been added
-				configuration.ensureAllFiles();
+				configuration.ensureAllFiles(span);
 				const program = configuration.getProgram();
 				if (!program) {
 					return [];
 				}
 				// Get SourceFile object for requested file
-				const sourceFile = this._getSourceFile(configuration, fileName);
+				const sourceFile = this._getSourceFile(configuration, fileName, span);
 				if (!sourceFile) {
 					throw new Error(`Source file ${fileName} does not exist`);
 				}
@@ -483,8 +483,8 @@ export class TypeScriptService {
 		const fileName = util.uri2path(params.textDocument.uri);
 
 		const config = this.projectManager.getConfiguration(fileName);
-		config.ensureBasicFiles();
-		const sourceFile = this._getSourceFile(config, fileName);
+		config.ensureBasicFiles(span);
+		const sourceFile = this._getSourceFile(config, fileName, span);
 		if (!sourceFile) {
 			return [];
 		}
@@ -502,7 +502,7 @@ export class TypeScriptService {
 			// If we were hinted that we should only search a specific package, trust it
 			.filter(config => !(params.hints && params.hints.dependeePackageName && params.hints.dependeePackageName !== config.getPackageName()))
 			.mergeMap(config => {
-				config.ensureAllFiles();
+				config.ensureAllFiles(span);
 				return Observable.from(config.getService().getProgram().getSourceFiles())
 					// Ignore dependency files
 					.filter(source => !util.toUnixPath(source.fileName).includes('/node_modules/'))
@@ -647,9 +647,9 @@ export class TypeScriptService {
 		const fileName: string = util.uri2path(params.textDocument.uri);
 
 		const configuration = this.projectManager.getConfiguration(fileName);
-		configuration.ensureBasicFiles();
+		configuration.ensureBasicFiles(span);
 
-		const sourceFile = this._getSourceFile(configuration, fileName);
+		const sourceFile = this._getSourceFile(configuration, fileName, span);
 		if (!sourceFile) {
 			return CompletionList.create();
 		}
@@ -690,9 +690,9 @@ export class TypeScriptService {
 
 		const filePath = util.uri2path(params.textDocument.uri);
 		const configuration = this.projectManager.getConfiguration(filePath);
-		configuration.ensureBasicFiles();
+		configuration.ensureBasicFiles(span);
 
-		const sourceFile = this._getSourceFile(configuration, filePath);
+		const sourceFile = this._getSourceFile(configuration, filePath, span);
 		if (!sourceFile) {
 			throw new Error(`expected source file ${filePath} to exist in configuration`);
 		}
@@ -785,10 +785,12 @@ export class TypeScriptService {
 
 	/**
 	 * Fetches (or creates if needed) source file object for a given file name
+	 *
 	 * @param configuration project configuration
 	 * @param fileName file name to fetch source file for or create it
+	 * @param span Span for tracing
 	 */
-	private _getSourceFile(configuration: pm.ProjectConfiguration, fileName: string): ts.SourceFile | undefined {
+	private _getSourceFile(configuration: pm.ProjectConfiguration, fileName: string, span = new Span()): ts.SourceFile | undefined {
 		let program = configuration.getProgram();
 		if (!program) {
 			return undefined;
@@ -801,8 +803,8 @@ export class TypeScriptService {
 			return undefined;
 		}
 		configuration.getHost().addFile(fileName);
-		configuration.syncProgram();
-		// update program object
+		// Update program object
+		configuration.syncProgram(span);
 		program = configuration.getProgram();
 		return program && program.getSourceFile(fileName);
 	}
@@ -833,8 +835,8 @@ export class TypeScriptService {
 	 * @param limit An optional limit that is passed to TypeScript
 	 * @return Iterator that emits SymbolInformations
 	 */
-	private _collectWorkspaceSymbols(config: pm.ProjectConfiguration, query?: string | Partial<SymbolDescriptor>, limit = Infinity): IterableIterator<SymbolInformation> {
-		config.ensureAllFiles();
+	private _collectWorkspaceSymbols(config: pm.ProjectConfiguration, query?: string | Partial<SymbolDescriptor>, limit = Infinity, span = new Span()): IterableIterator<SymbolInformation> {
+		config.ensureAllFiles(span);
 		const program = config.getProgram();
 		if (!program) {
 			return iterate([]);
