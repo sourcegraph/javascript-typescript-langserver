@@ -4,7 +4,6 @@ import { toPairs } from 'lodash';
 import { Span } from 'opentracing';
 import * as path_ from 'path';
 import * as ts from 'typescript';
-import * as url from 'url';
 import {
 	CompletionItem,
 	CompletionItemKind,
@@ -439,11 +438,8 @@ export class TypeScriptService {
 	}
 
 	protected async _workspaceSymbolDefinitelyTyped(params: WorkspaceSymbolParams): Promise<SymbolInformation[] | null> {
-		const rootUriParts = url.parse(this.rootUri);
-		if (!rootUriParts.pathname) {
-			return null;
-		}
-		const packageJsonUri = url.format({ ...rootUriParts, pathname: path_.posix.join(rootUriParts.pathname, 'package.json') });
+		const normRootUri = this.rootUri.endsWith('/') ? this.rootUri : this.rootUri + '/';
+		const packageJsonUri = normRootUri + 'package.json';
 		await this.updater.ensure(packageJsonUri);
 		const rootConfig = JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri));
 		if (rootConfig.name !== 'definitely-typed') {
