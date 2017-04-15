@@ -173,6 +173,9 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 			case 'exit':
 				// Ignore exit notification, it's not the responsibility of the TypeScriptService to handle it,
 				// but the TCP / STDIO server which needs to close the socket or kill the process
+				for (const subscription of subscriptions.values()) {
+					subscription.unsubscribe();
+				}
 				return;
 			case '$/cancelRequest':
 				// Cancel another request by unsubscribing from the Observable
