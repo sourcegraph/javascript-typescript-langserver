@@ -255,7 +255,7 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 					span.setTag('error', true);
 					span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
 					// Log error
-					logger.error(`Handler for ${message.method} failed:`, err, 'Message:', message);
+					logger.error(`Handler for ${message.method} failed:`, err, '\nMessage:', message);
 					// Return error response
 					return [{
 						jsonrpc: '2.0',
