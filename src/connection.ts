@@ -239,7 +239,7 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 			const subscription = observable
 				.map(result => {
 					// Log result on span
-					span.log({ event: 'result', result });
+					span.log({ event: 'result', result: inspect(result) });
 					// Return result response
 					return {
 						jsonrpc: '2.0',
