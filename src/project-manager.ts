@@ -190,28 +190,28 @@ export class ProjectManager implements Disposable {
 	 * Invalidates project configurations after execution
 	 */
 	async ensureOwnFiles(childOf = new Span()): Promise<void> {
-		const span = childOf.tracer().startSpan('Ensure own files', { childOf });
 		if (!this.ensuredOwnFiles) {
 			this.ensuredOwnFiles = (async () => {
-				await this.updater.ensureStructure(span);
-				await Promise.all(
-					iterate(this.localFs.uris())
-						.filter(uri => !uri.includes('/node_modules/') && util.isJSTSFile(uri) || util.isConfigFile(uri) || util.isPackageJsonFile(uri))
-						.map(uri => this.updater.ensure(uri))
-				);
-				this.createConfigurations();
+				const span = childOf.tracer().startSpan('Ensure own files', { childOf });
+				try {
+					await this.updater.ensureStructure(span);
+					await Promise.all(
+						iterate(this.localFs.uris())
+							.filter(uri => !uri.includes('/node_modules/') && util.isJSTSFile(uri) || util.isConfigFile(uri) || util.isPackageJsonFile(uri))
+							.map(uri => this.updater.ensure(uri))
+					);
+					this.createConfigurations();
+				} catch (err) {
+					this.ensuredOwnFiles = undefined;
+					span.setTag('error', true);
+					span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
+					throw err;
+				} finally {
+					span.finish();
+				}
 			})();
 		}
-		try {
-			await this.ensuredOwnFiles;
-		} catch (err) {
-			this.ensuredOwnFiles = undefined;
-			span.setTag('error', true);
-			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
-			throw err;
-		} finally {
-			span.finish();
-		}
+		return this.ensuredOwnFiles;
 	}
 
 	/**
