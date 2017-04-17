@@ -512,25 +512,33 @@ export class TypeScriptService {
 							// Filter Identifier Nodes
 							// TODO: include string-interpolated references
 							.filter((node): node is ts.Identifier => node.kind === ts.SyntaxKind.Identifier)
-							.mergeMap(node =>
-								// Get DefinitionInformations at the node
-								Observable.from(config.getService().getDefinitionAtPosition(source.fileName, node.pos + 1) || [])
-									// Map to SymbolDescriptor
-									.map(definition => util.defInfoToSymbolDescriptor(definition))
-									// Check if SymbolDescriptor matches
-									.filter(symbol => util.symbolDescriptorMatch(params.query, symbol))
-									// Map SymbolDescriptor to ReferenceInformation
-									.map(symbol => ({
-										symbol,
-										reference: {
-											uri: this._defUri(source.fileName),
-											range: {
-												start: ts.getLineAndCharacterOfPosition(source, node.pos),
-												end: ts.getLineAndCharacterOfPosition(source, node.end)
+							.mergeMap(node => {
+								try {
+									// Get DefinitionInformations at the node
+									return Observable.from(config.getService().getDefinitionAtPosition(source.fileName, node.pos + 1) || [])
+										// Map to SymbolDescriptor
+										.map(definition => util.defInfoToSymbolDescriptor(definition))
+										// Check if SymbolDescriptor matches
+										.filter(symbol => util.symbolDescriptorMatch(params.query, symbol))
+										// Map SymbolDescriptor to ReferenceInformation
+										.map(symbol => ({
+											symbol,
+											reference: {
+												uri: this._defUri(source.fileName),
+												range: {
+													start: ts.getLineAndCharacterOfPosition(source, node.pos),
+													end: ts.getLineAndCharacterOfPosition(source, node.end)
+												}
 											}
-										}
-									}))
-							)
+										}));
+								} catch (err) {
+									// Continue with next node on error
+									// Workaround for https://github.com/Microsoft/TypeScript/issues/15219
+									this.logger.error(`workspace/xreferences: Error getting definition for ${source.fileName} at offset ${node.pos + 1}`, err);
+									span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
+									return [];
+								}
+							})
 					);
 			})
 			.toArray();
