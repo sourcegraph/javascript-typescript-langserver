@@ -360,12 +360,6 @@ export class ProjectManager implements Disposable {
 								compilerOpt,
 								config.moduleResolutionHost()
 							)
-							// resolver.resolve(
-							// 	this.rootPath,
-							// 	'node_modules/@types',
-							// 	typeReferenceDirective.fileName,
-							// 	'index.d.ts'
-							// )
 						)
 						.filter(resolved => !!(resolved && resolved.resolvedTypeReferenceDirective && resolved.resolvedTypeReferenceDirective.resolvedFileName))
 						.map(resolved => resolved.resolvedTypeReferenceDirective!.resolvedFileName!)
