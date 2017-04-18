@@ -526,7 +526,7 @@ export class TypeScriptService {
 											reference: {
 												uri: this._defUri(source.fileName),
 												range: {
-													start: ts.getLineAndCharacterOfPosition(source, node.pos),
+													start: ts.getLineAndCharacterOfPosition(source, node.pos + 1),
 													end: ts.getLineAndCharacterOfPosition(source, node.end)
 												}
 											}
