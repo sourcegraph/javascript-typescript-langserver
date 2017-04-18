@@ -29,6 +29,10 @@ export interface ServerCapabilities extends vscode.ServerCapabilities {
 	xpackagesProvider?: boolean;
 }
 
+export interface InitializeResult extends vscode.InitializeResult {
+	capabilities: ServerCapabilities;
+}
+
 export interface TextDocumentContentParams {
 
 	/**

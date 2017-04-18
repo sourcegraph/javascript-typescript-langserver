@@ -15,7 +15,6 @@ import {
 	DidSaveTextDocumentParams,
 	DocumentSymbolParams,
 	Hover,
-	InitializeResult,
 	Location,
 	MarkedString,
 	ParameterInformation,
@@ -36,6 +35,7 @@ import * as pm from './project-manager';
 import {
 	DependencyReference,
 	InitializeParams,
+	InitializeResult,
 	PackageDescriptor,
 	PackageInformation,
 	ReferenceInformation,
