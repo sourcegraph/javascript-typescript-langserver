@@ -103,6 +103,12 @@ export class TypeScriptService {
 	 */
 	protected updater: FileSystemUpdater;
 
+	/**
+	 * Resolved with true or false depending on whether the root package.json is named "definitely-typed".
+	 * On DefinitelyTyped, files are not prefetched and a special workspace/symbol algorithm is used.
+	 */
+	protected isDefinitelyTyped: Promise<boolean>;
+
 	constructor(protected client: LanguageClient, protected options: TypeScriptServiceOptions = {}) {
 		this.logger = new LSPLogger(client);
 	}
@@ -131,10 +137,30 @@ export class TypeScriptService {
 			this._initializeFileSystems(!this.options.strict && !(params.capabilities.xcontentProvider && params.capabilities.xfilesProvider));
 			this.updater = new FileSystemUpdater(this.fileSystem, this.inMemoryFileSystem);
 			this.projectManager = new pm.ProjectManager(this.root, this.inMemoryFileSystem, this.updater, !!this.options.strict, this.traceModuleResolution, this.logger);
-			// Pre-fetch files in the background
-			this.projectManager.ensureOwnFiles(span).catch(err => {
-				this.logger.error('Background fetching failed ', err);
-			});
+			// Detect DefinitelyTyped
+			this.isDefinitelyTyped = (async () => {
+				try {
+					// Fetch root package.json (if exists)
+					const rootUriParts = url.parse(this.rootUri);
+					const packageJsonUri = url.format({ ...rootUriParts, pathname: path_.posix.join(rootUriParts.pathname || '', 'package.json') });
+					await this.updater.ensure(packageJsonUri);
+					// Check name
+					const packageJson = JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri));
+					return packageJson.name === 'definitely-typed';
+				} catch (err) {
+					return false;
+				}
+			})();
+			// Pre-fetch files in the background if not DefinitelyTyped
+			(async () => {
+				try {
+					if (!(await this.isDefinitelyTyped)) {
+						await this.projectManager.ensureOwnFiles(span);
+					}
+				} catch (err) {
+					this.logger.error(err);
+				}
+			})();
 		}
 		return {
 			capabilities: {
@@ -386,20 +412,13 @@ export class TypeScriptService {
 			symbolQuery.package = { name: symbolQuery.package.name };
 		}
 
-		if (symbolQuery) {
-			try {
-				const dtRes = await this._workspaceSymbolDefinitelyTyped({ ...params, limit });
-				if (dtRes) {
-					return dtRes;
-				}
-			} catch (err) {
-				// Ignore
-			}
+		if (await this.isDefinitelyTyped) {
+			return await this._workspaceSymbolDefinitelyTyped({ ...params, limit }, span);
+		}
 
-			if (!symbolQuery.containerKind) {
-				// symbolQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
-				symbolQuery.containerKind = undefined;
-			}
+		if (symbolQuery && !symbolQuery.containerKind) {
+			// symbolQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
+			symbolQuery.containerKind = undefined;
 		}
 
 		// A workspace/symol request searches all symbols in own code, but not in dependencies
@@ -438,37 +457,50 @@ export class TypeScriptService {
 		return symbols;
 	}
 
-	protected async _workspaceSymbolDefinitelyTyped(params: WorkspaceSymbolParams): Promise<SymbolInformation[] | null> {
-		const rootUriParts = url.parse(this.rootUri);
-		if (!rootUriParts.pathname) {
-			return null;
-		}
-		const packageJsonUri = url.format({ ...rootUriParts, pathname: path_.posix.join(rootUriParts.pathname, 'package.json') });
-		await this.updater.ensure(packageJsonUri);
-		const rootConfig = JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri));
-		if (rootConfig.name !== 'definitely-typed') {
-			return null;
-		}
-		if (!params.symbol || !params.symbol.package) {
-			return null;
-		}
-		const pkg = params.symbol.package;
-		if (!pkg.name || !pkg.name.startsWith('@types/')) {
-			return null;
-		}
-		const relPkgRoot = pkg.name.slice('@types/'.length);
-		await this.projectManager.ensureModuleStructure();
-
-		const symbolQuery = params.symbol ? Object.assign({}, params.symbol) : undefined;
-		if (symbolQuery) {
-			symbolQuery.package = undefined;
-			if (!symbolQuery.containerKind) {
-				symbolQuery.containerKind = undefined; // symQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
+	/**
+	 * Specialised version of workspaceSymbol for DefinitelyTyped.
+	 * Searches only in the correct subdirectory for the given PackageDescriptor.
+	 * Will error if not passed a SymbolDescriptor query with an `@types` PackageDescriptor
+	 */
+	protected async _workspaceSymbolDefinitelyTyped(params: WorkspaceSymbolParams, childOf = new Span()): Promise<SymbolInformation[]> {
+		const span = childOf.tracer().startSpan('Handle workspace/symbol DefinitelyTyped', { childOf });
+		try {
+			if (!params.symbol || !params.symbol.package || !params.symbol.package.name || !params.symbol.package.name.startsWith('@types/')) {
+				throw new Error('workspace/symbol on DefinitelyTyped is only supported with a SymbolDescriptor query with an @types PackageDescriptor');
 			}
-		}
 
-		const config = this.projectManager.getConfiguration(relPkgRoot);
-		return Array.from(this._collectWorkspaceSymbols(config, params.query || symbolQuery, params.limit));
+			// Fetch all files in the package subdirectory
+			const rootUriParts = url.parse(this.rootUri);
+			const packageRoot = 'types/' + params.symbol.package.name.slice('@types/'.length);
+			const packageRootUri = url.format({ ...rootUriParts, pathname: path_.posix.join(rootUriParts.pathname || '', packageRoot) + '/', search: undefined, hash: undefined });
+			await this.updater.ensureStructure(span);
+			await Promise.all(
+				iterate(this.inMemoryFileSystem.uris())
+					.filter(uri => uri.startsWith(packageRootUri))
+					.map(uri => this.updater.ensure(uri, span))
+			);
+			this.projectManager.createConfigurations();
+			span.log({ event: 'fetched files' });
+
+			const symbolQuery = params.symbol && { ...params.symbol };
+			if (symbolQuery) {
+				symbolQuery.package = undefined;
+				if (!symbolQuery.containerKind) {
+					// symQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
+					symbolQuery.containerKind = undefined;
+				}
+			}
+
+			const config = this.projectManager.getConfiguration(packageRoot);
+			return Array.from(this._collectWorkspaceSymbols(config, params.query || symbolQuery, params.limit));
+
+		} catch (err) {
+			span.setTag('error', true);
+			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
+			throw err;
+		} finally {
+			span.finish();
+		}
 	}
 
 	/**
