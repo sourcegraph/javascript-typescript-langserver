@@ -481,29 +481,27 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				'declare function resolve(id: string, cb: resolveCallback): void;',
 				''
 			].join('\n')],
-			['file:///types/resolve/tsconfig.json', [
-				'{',
-				'	"compilerOptions": {',
-				'		"module": "commonjs",',
-				'		"lib": [',
-				'			"es6"',
-				'		],',
-				'		"noImplicitAny": true,',
-				'		"noImplicitThis": true,',
-				'		"strictNullChecks": false,',
-				'		"baseUrl": "../",',
-				'		"typeRoots": [',
-				'			"../"',
-				'		],',
-				'		"types": [],',
-				'		"noEmit": true,',
-				'		"forceConsistentCasingInFileNames": true',
-				'	},',
-				'	"files": [',
-				'		"index.d.ts"',
-				'	]',
-				'}'
-			].join('\n')],
+			['file:///types/resolve/tsconfig.json', JSON.stringify({
+				compilerOptions: {
+					module: 'commonjs',
+					lib: [
+						'es6'
+					],
+					noImplicitAny: true,
+					noImplicitThis: true,
+					strictNullChecks: false,
+					baseUrl: '../',
+					typeRoots: [
+						'../'
+					],
+					types: [],
+					noEmit: true,
+					forceConsistentCasingInFileNames: true
+				},
+				files: [
+					'index.d.ts'
+				]
+			})],
 			['file:///types/notResolve/index.d.ts', [
 				'/// <reference types="node" />',
 				'',
@@ -511,29 +509,27 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				'declare function resolve(id: string, cb: resolveCallback): void;',
 				''
 			].join('\n')],
-			['file:///types/notResolve/tsconfig.json', [
-				'{',
-				'	"compilerOptions": {',
-				'		"module": "commonjs",',
-				'		"lib": [',
-				'			"es6"',
-				'		],',
-				'		"noImplicitAny": true,',
-				'		"noImplicitThis": true,',
-				'		"strictNullChecks": false,',
-				'		"baseUrl": "../",',
-				'		"typeRoots": [',
-				'			"../"',
-				'		],',
-				'		"types": [],',
-				'		"noEmit": true,',
-				'		"forceConsistentCasingInFileNames": true',
-				'	},',
-				'	"files": [',
-				'		"index.d.ts"',
-				'	]',
-				'}'
-			].join('\n')]
+			['file:///types/notResolve/tsconfig.json', JSON.stringify({
+				compilerOptions: {
+					module: 'commonjs',
+					lib: [
+						'es6'
+					],
+					noImplicitAny: true,
+					noImplicitThis: true,
+					strictNullChecks: false,
+					baseUrl: '../',
+					typeRoots: [
+						'../'
+					],
+					types: [],
+					noEmit: true,
+					forceConsistentCasingInFileNames: true
+				},
+				files: [
+					'index.d.ts'
+				]
+			})]
 		])) as any);
 
 		afterEach(shutdownService as any);
