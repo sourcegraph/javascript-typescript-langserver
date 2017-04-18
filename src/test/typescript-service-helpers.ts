@@ -535,7 +535,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		afterEach(shutdownService as any);
 
 		describe('workspaceSymbol()', function (this: TestContext) {
-			it('should find the symbol by SymbolDescriptor query with name and package name', async function (this: TestContext) {
+			it('should find a symbol by SymbolDescriptor query with name and package name', async function (this: TestContext) {
 				const result = await this.service.workspaceSymbol({
 					symbol: { name: 'resolveCallback', package: { name: '@types/resolve' } },
 					limit: 10
@@ -558,7 +558,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					name: 'resolveCallback'
 				}]);
 			} as any);
-			it('should find the symbol by SymbolDescriptor query with name and empty containerKind', async function (this: TestContext) {
+			it('should find a symbol by SymbolDescriptor query with name, package name and empty containerKind', async function (this: TestContext) {
 				const result = await this.service.workspaceSymbol({
 					symbol: { name: 'resolveCallback', containerKind: '', package: { name: '@types/resolve' } },
 					limit: 10
