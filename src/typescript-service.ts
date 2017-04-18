@@ -406,28 +406,30 @@ export class TypeScriptService {
 		const limit = Math.min(params.limit || Infinity, 50);
 
 		const query = params.query;
-		const symbolQuery = params.symbol ? Object.assign({}, params.symbol) : undefined;
+		const symbolQuery = params.symbol && { ...params.symbol };
 
 		if (symbolQuery && symbolQuery.package) {
+			// Strip all fields except name from PackageDescriptor
 			symbolQuery.package = { name: symbolQuery.package.name };
 		}
 
+		// Use special logic for DefinitelyTyped
 		if (await this.isDefinitelyTyped) {
 			return await this._workspaceSymbolDefinitelyTyped({ ...params, limit }, span);
 		}
 
+		// Return cached result for empty query, if available
+		if (!query && !symbolQuery && this.emptyQueryWorkspaceSymbols) {
+			return this.emptyQueryWorkspaceSymbols;
+		}
+
+		// symbolQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
 		if (symbolQuery && !symbolQuery.containerKind) {
-			// symbolQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
 			symbolQuery.containerKind = undefined;
 		}
 
 		// A workspace/symol request searches all symbols in own code, but not in dependencies
 		await this.projectManager.ensureOwnFiles(span);
-
-		// Cache result for empty query
-		if (!query && !symbolQuery && this.emptyQueryWorkspaceSymbols) {
-			return this.emptyQueryWorkspaceSymbols;
-		}
 
 		// Find configurations to search
 		let configs: Iterable<pm.ProjectConfiguration>;
@@ -445,11 +447,13 @@ export class TypeScriptService {
 				configs = this.projectManager.configurations();
 			}
 		}
+
 		const symbols = iterate(configs)
 			.map(config => this._collectWorkspaceSymbols(config, query || symbolQuery, limit))
 			.flatten<SymbolInformation>()
 			.take(limit)
 			.toArray();
+
 		// Save empty query result
 		if (!query && !symbolQuery) {
 			this.emptyQueryWorkspaceSymbols = symbols;
@@ -469,6 +473,14 @@ export class TypeScriptService {
 				throw new Error('workspace/symbol on DefinitelyTyped is only supported with a SymbolDescriptor query with an @types PackageDescriptor');
 			}
 
+			const symbolQuery = { ...params.symbol };
+			// Don't match PackageDescriptor on symbols
+			symbolQuery.package = undefined;
+			// symQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
+			if (!symbolQuery.containerKind) {
+				symbolQuery.containerKind = undefined;
+			}
+
 			// Fetch all files in the package subdirectory
 			const rootUriParts = url.parse(this.rootUri);
 			// All packages are in the types/ subdirectory
@@ -481,20 +493,11 @@ export class TypeScriptService {
 					.map(uri => this.updater.ensure(uri, span))
 			);
 			this.projectManager.createConfigurations();
-			span.log({ event: 'fetched files' });
+			span.log({ event: 'fetched package files' });
 
-			const symbolQuery = params.symbol && { ...params.symbol };
-			if (symbolQuery) {
-				symbolQuery.package = undefined;
-				if (!symbolQuery.containerKind) {
-					// symQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
-					symbolQuery.containerKind = undefined;
-				}
-			}
-
+			// Search symbol in configuration
 			const config = this.projectManager.getConfiguration(packageRoot);
 			return Array.from(this._collectWorkspaceSymbols(config, params.query || symbolQuery, params.limit));
-
 		} catch (err) {
 			span.setTag('error', true);
 			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
