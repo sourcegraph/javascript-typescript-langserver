@@ -429,6 +429,7 @@ export class TypeScriptService {
 		const symbols = iterate(configs)
 			.map(config => this._collectWorkspaceSymbols(config, query || symbolQuery, limit))
 			.flatten<SymbolInformation>()
+			.filter(symbol => !symbol.location.uri.includes('/node_modules/'))
 			.take(limit)
 			.toArray();
 		// Save empty query result
