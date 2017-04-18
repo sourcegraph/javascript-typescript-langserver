@@ -350,7 +350,25 @@ export class ProjectManager implements Disposable {
 							this.rootPath,
 							resolver.dirname(filePath),
 							util.toUnixPath(referencedFile.fileName)
-						))
+						)),
+					// References with `<reference types="..."/>`
+					Observable.from(info.typeReferenceDirectives)
+						.map(typeReferenceDirective =>
+							ts.resolveTypeReferenceDirective(
+								typeReferenceDirective.fileName,
+								filePath,
+								compilerOpt,
+								config.moduleResolutionHost()
+							)
+							// resolver.resolve(
+							// 	this.rootPath,
+							// 	'node_modules/@types',
+							// 	typeReferenceDirective.fileName,
+							// 	'index.d.ts'
+							// )
+						)
+						.filter(resolved => !!(resolved && resolved.resolvedTypeReferenceDirective && resolved.resolvedTypeReferenceDirective.resolvedFileName))
+						.map(resolved => resolved.resolvedTypeReferenceDirective!.resolvedFileName!)
 				);
 			})
 			// Use same scheme, slashes, host for referenced URI as input file
