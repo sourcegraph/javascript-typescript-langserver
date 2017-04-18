@@ -734,12 +734,11 @@ export class TypeScriptService {
 	 * to read the document's truth using the document's uri.
 	 */
 	async textDocumentDidOpen(params: DidOpenTextDocumentParams): Promise<void> {
-		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 
 		// Ensure files needed for most operations are fetched
 		await this.projectManager.ensureReferencedFiles(params.textDocument.uri).toPromise();
 
-		this.projectManager.didOpen(util.uri2path(uri), params.textDocument.text);
+		this.projectManager.didOpen(params.textDocument.uri, params.textDocument.text);
 	}
 
 	/**
@@ -748,7 +747,6 @@ export class TypeScriptService {
 	 * and language ids.
 	 */
 	async textDocumentDidChange(params: DidChangeTextDocumentParams): Promise<void> {
-		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		let text = null;
 		params.contentChanges.forEach(change => {
 			if (change.range || change.rangeLength) {
@@ -759,7 +757,7 @@ export class TypeScriptService {
 		if (!text) {
 			return;
 		}
-		this.projectManager.didChange(util.uri2path(uri), text);
+		this.projectManager.didChange(params.textDocument.uri, text);
 	}
 
 	/**
@@ -770,10 +768,7 @@ export class TypeScriptService {
 
 		// Ensure files needed to suggest completions are fetched
 		await this.projectManager.ensureReferencedFiles(params.textDocument.uri).toPromise();
-
-		// TODO don't use "relative" URI
-		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		this.projectManager.didSave(util.uri2path(uri));
+		this.projectManager.didSave(params.textDocument.uri);
 	}
 
 	/**
@@ -786,9 +781,7 @@ export class TypeScriptService {
 		// Ensure files needed to suggest completions are fetched
 		await this.projectManager.ensureReferencedFiles(params.textDocument.uri).toPromise();
 
-		// TODO don't use "relative" URI
-		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		this.projectManager.didClose(util.uri2path(uri));
+		this.projectManager.didClose(params.textDocument.uri);
 	}
 
 	/**
