@@ -32,24 +32,24 @@ describe('ProjectManager', () => {
 			assert.equal(projectManager.getConfiguration('subdirectory-with-tsconfig/src/dummy.ts').getPackageName(), 'package-name-2');
 		});
 	});
-	describe('ensureReferencedFiles', () => {
+	describe('ensureReferencedFiles()', () => {
 		before(async () => {
 			memfs = new InMemoryFileSystem('/');
 			const localfs = new MapFileSystem(new Map([
 				['file:///package.json', '{"name": "package-name-1"}'],
 				['file:///node_modules/somelib/index.js', '/// <reference path="./pathref.d.ts"/>\n/// <reference types="node"/>'],
 				['file:///node_modules/somelib/pathref.d.ts', ''],
-				['file:///node_modules/@types/node/index.d.ts', ''],
+				['file:///node_modules/%40types/node/index.d.ts', ''],
 				['file:///src/dummy.ts', 'import * as somelib from "somelib";']
 			]));
 			const updater = new FileSystemUpdater(localfs, memfs);
 			projectManager = new ProjectManager('/', memfs, updater, true);
-			await projectManager.ensureReferencedFiles('file:///src/dummy.ts').toPromise();
 		});
-		it('should resolve import reference', () => {
+		it('should ensure content for imports and references is fetched', async () => {
+			await projectManager.ensureReferencedFiles('file:///src/dummy.ts').toPromise();
 			memfs.getContent('file:///node_modules/somelib/index.js');
 			memfs.getContent('file:///node_modules/somelib/pathref.d.ts');
-			memfs.getContent('file:///node_modules/@types/node/index.d.ts');
+			memfs.getContent('file:///node_modules/%40types/node/index.d.ts');
 		});
 	});
 });

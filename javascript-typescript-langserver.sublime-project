@@ -1,0 +1,12 @@
+{
+	"folders":
+	[
+		{
+			"folder_exclude_patterns":
+			[
+				".nyc_output"
+			],
+			"path": "."
+		}
+	]
+}
