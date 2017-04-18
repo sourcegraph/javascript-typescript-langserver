@@ -474,14 +474,14 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					'types-publisher': 'Microsoft/types-publisher#production'
 				}
 			}, null, 4)],
-			['file:///resolve/index.d.ts', [
+			['file:///types/resolve/index.d.ts', [
 				'/// <reference types="node" />',
 				'',
 				'type resolveCallback = (err: Error, resolved?: string) => void;',
 				'declare function resolve(id: string, cb: resolveCallback): void;',
 				''
 			].join('\n')],
-			['file:///resolve/tsconfig.json', [
+			['file:///types/resolve/tsconfig.json', [
 				'{',
 				'	"compilerOptions": {',
 				'		"module": "commonjs",',
@@ -504,14 +504,14 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				'	]',
 				'}'
 			].join('\n')],
-			['file:///notResolve/index.d.ts', [
+			['file:///types/notResolve/index.d.ts', [
 				'/// <reference types="node" />',
 				'',
 				'type resolveCallback = (err: Error, resolved?: string) => void;',
 				'declare function resolve(id: string, cb: resolveCallback): void;',
 				''
 			].join('\n')],
-			['file:///notResolve/tsconfig.json', [
+			['file:///types/notResolve/tsconfig.json', [
 				'{',
 				'	"compilerOptions": {',
 				'		"module": "commonjs",',
@@ -539,7 +539,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		afterEach(shutdownService as any);
 
 		describe('workspaceSymbol()', function (this: TestContext) {
-			specify('resolve, with package', async function (this: TestContext) {
+			it('should find the symbol by SymbolDescriptor query with name and package name', async function (this: TestContext) {
 				const result = await this.service.workspaceSymbol({
 					symbol: { name: 'resolveCallback', package: { name: '@types/resolve' } },
 					limit: 10
@@ -557,12 +557,12 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 								line: 2
 							}
 						},
-						uri: 'file:///resolve/index.d.ts'
+						uri: 'file:///types/resolve/index.d.ts'
 					},
 					name: 'resolveCallback'
 				}]);
 			} as any);
-			specify('resolve, with package, empty containerKind', async function (this: TestContext) {
+			it('should find the symbol by SymbolDescriptor query with name and empty containerKind', async function (this: TestContext) {
 				const result = await this.service.workspaceSymbol({
 					symbol: { name: 'resolveCallback', containerKind: '', package: { name: '@types/resolve' } },
 					limit: 10
@@ -580,7 +580,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 								line: 2
 							}
 						},
-						uri: 'file:///resolve/index.d.ts'
+						uri: 'file:///types/resolve/index.d.ts'
 					},
 					name: 'resolveCallback'
 				}]);
