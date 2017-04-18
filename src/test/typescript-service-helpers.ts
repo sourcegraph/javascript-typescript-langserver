@@ -474,72 +474,68 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					'types-publisher': 'Microsoft/types-publisher#production'
 				}
 			}, null, 4)],
-			['file:///resolve/index.d.ts', [
+			['file:///types/resolve/index.d.ts', [
 				'/// <reference types="node" />',
 				'',
 				'type resolveCallback = (err: Error, resolved?: string) => void;',
 				'declare function resolve(id: string, cb: resolveCallback): void;',
 				''
 			].join('\n')],
-			['file:///resolve/tsconfig.json', [
-				'{',
-				'	"compilerOptions": {',
-				'		"module": "commonjs",',
-				'		"lib": [',
-				'			"es6"',
-				'		],',
-				'		"noImplicitAny": true,',
-				'		"noImplicitThis": true,',
-				'		"strictNullChecks": false,',
-				'		"baseUrl": "../",',
-				'		"typeRoots": [',
-				'			"../"',
-				'		],',
-				'		"types": [],',
-				'		"noEmit": true,',
-				'		"forceConsistentCasingInFileNames": true',
-				'	},',
-				'	"files": [',
-				'		"index.d.ts"',
-				'	]',
-				'}'
-			].join('\n')],
-			['file:///notResolve/index.d.ts', [
+			['file:///types/resolve/tsconfig.json', JSON.stringify({
+				compilerOptions: {
+					module: 'commonjs',
+					lib: [
+						'es6'
+					],
+					noImplicitAny: true,
+					noImplicitThis: true,
+					strictNullChecks: false,
+					baseUrl: '../',
+					typeRoots: [
+						'../'
+					],
+					types: [],
+					noEmit: true,
+					forceConsistentCasingInFileNames: true
+				},
+				files: [
+					'index.d.ts'
+				]
+			})],
+			['file:///types/notResolve/index.d.ts', [
 				'/// <reference types="node" />',
 				'',
 				'type resolveCallback = (err: Error, resolved?: string) => void;',
 				'declare function resolve(id: string, cb: resolveCallback): void;',
 				''
 			].join('\n')],
-			['file:///notResolve/tsconfig.json', [
-				'{',
-				'	"compilerOptions": {',
-				'		"module": "commonjs",',
-				'		"lib": [',
-				'			"es6"',
-				'		],',
-				'		"noImplicitAny": true,',
-				'		"noImplicitThis": true,',
-				'		"strictNullChecks": false,',
-				'		"baseUrl": "../",',
-				'		"typeRoots": [',
-				'			"../"',
-				'		],',
-				'		"types": [],',
-				'		"noEmit": true,',
-				'		"forceConsistentCasingInFileNames": true',
-				'	},',
-				'	"files": [',
-				'		"index.d.ts"',
-				'	]',
-				'}'
-			].join('\n')]
+			['file:///types/notResolve/tsconfig.json', JSON.stringify({
+				compilerOptions: {
+					module: 'commonjs',
+					lib: [
+						'es6'
+					],
+					noImplicitAny: true,
+					noImplicitThis: true,
+					strictNullChecks: false,
+					baseUrl: '../',
+					typeRoots: [
+						'../'
+					],
+					types: [],
+					noEmit: true,
+					forceConsistentCasingInFileNames: true
+				},
+				files: [
+					'index.d.ts'
+				]
+			})]
 		])) as any);
 
 		afterEach(shutdownService as any);
 
 		describe('workspaceSymbol()', function (this: TestContext) {
-			specify('resolve, with package', async function (this: TestContext) {
+			it('should find a symbol by SymbolDescriptor query with name and package name', async function (this: TestContext) {
 				const result = await this.service.workspaceSymbol({
 					symbol: { name: 'resolveCallback', package: { name: '@types/resolve' } },
 					limit: 10
@@ -557,12 +553,12 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 								line: 2
 							}
 						},
-						uri: 'file:///resolve/index.d.ts'
+						uri: 'file:///types/resolve/index.d.ts'
 					},
 					name: 'resolveCallback'
 				}]);
 			} as any);
-			specify('resolve, with package, empty containerKind', async function (this: TestContext) {
+			it('should find a symbol by SymbolDescriptor query with name, package name and empty containerKind', async function (this: TestContext) {
 				const result = await this.service.workspaceSymbol({
 					symbol: { name: 'resolveCallback', containerKind: '', package: { name: '@types/resolve' } },
 					limit: 10
@@ -580,7 +576,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 								line: 2
 							}
 						},
-						uri: 'file:///resolve/index.d.ts'
+						uri: 'file:///types/resolve/index.d.ts'
 					},
 					name: 'resolveCallback'
 				}]);
