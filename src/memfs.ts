@@ -25,9 +25,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	private files = new Map<string, string | undefined>();
 
 	/**
-	 * Map (relative filepath -> string content) of temporary files made while user modifies local file(s).  Paths are relative to `this.path`
-	 *
-	 * TODO make this use URIs too
+	 * Map (URI -> string content) of temporary files made while user modifies local file(s)
 	 */
 	overlay: Map<string, string>;
 
@@ -141,14 +139,8 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 * If there is no such file, returns undefined
 	 */
 	private readFileIfExists(path: string): string | undefined {
-
-		let content = this.overlay.get(path);
-		if (content !== undefined) {
-			return content;
-		}
-
-		const rel = path_.posix.relative('/', path);
-		content = this.overlay.get(rel);
+		const uri = util.path2uri(this.path, path);
+		let content = this.overlay.get(uri);
 		if (content !== undefined) {
 			return content;
 		}
@@ -156,7 +148,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 		// TODO This assumes that the URI was a file:// URL.
 		//      In reality it could be anything, and the first URI matching the path should be used.
 		//      With the current Map, the search would be O(n), it would require a tree to get O(log(n))
-		content = this.files.get(util.path2uri(this.path, path));
+		content = this.files.get(uri);
 		if (content !== undefined) {
 			return content;
 		}
@@ -165,30 +157,30 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	}
 
 	/**
-	 * Invalidates temporary content denoted by the given path
-	 * @param path path to a file relative to project root
+	 * Invalidates temporary content denoted by the given URI
+	 * @param uri file's URI
 	 */
-	didClose(path: string) {
-		this.overlay.delete(path);
+	didClose(uri: string) {
+		this.overlay.delete(uri);
 	}
 
 	/**
-	 * Adds temporary content denoted by the given path
-	 * @param path path to a file relative to project root
+	 * Adds temporary content denoted by the given URI
+	 * @param uri file's URI
 	 */
-	didSave(path: string) {
-		const content = this.readFileIfExists(path);
+	didSave(uri: string) {
+		const content = this.overlay.get(uri);
 		if (content !== undefined) {
-			this.add(util.path2uri('', path), content);
+			this.add(uri, content);
 		}
 	}
 
 	/**
-	 * Updates temporary content denoted by the given path
-	 * @param path path to a file relative to project root
+	 * Updates temporary content denoted by the given URI
+	 * @param uri file's URI
 	 */
-	didChange(path: string, text: string) {
-		this.overlay.set(path, text);
+	didChange(uri: string, text: string) {
+		this.overlay.set(uri, text);
 	}
 
 	/**
