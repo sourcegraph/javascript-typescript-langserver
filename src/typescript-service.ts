@@ -168,7 +168,7 @@ export class TypeScriptService {
 	 */
 	protected _initializeFileSystems(accessDisk: boolean): void {
 		this.fileSystem = accessDisk ? new LocalFileSystem(util.uri2path(this.root)) : new RemoteFileSystem(this.client);
-		this.inMemoryFileSystem = new InMemoryFileSystem(this.root);
+		this.inMemoryFileSystem = new InMemoryFileSystem(this.rootUri, this.root);
 	}
 
 	/**

@@ -13,7 +13,7 @@ describe('ProjectManager', () => {
 
 	describe('getPackageName()', () => {
 		before(async () => {
-			const memfs = new InMemoryFileSystem('/');
+			const memfs = new InMemoryFileSystem('file:///', '/');
 			const localfs = new MapFileSystem(new Map([
 				['file:///package.json', '{"name": "package-name-1"}'],
 				['file:///subdirectory-with-tsconfig/package.json', '{"name": "package-name-2"}'],

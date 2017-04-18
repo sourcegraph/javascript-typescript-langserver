@@ -1,6 +1,7 @@
 import * as fs_ from 'fs';
 import * as path_ from 'path';
 import * as ts from 'typescript';
+import * as url from 'url';
 import { Logger, NoopLogger } from './logging';
 import * as match from './match-files';
 import * as util from './util';
@@ -35,6 +36,11 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	useCaseSensitiveFileNames: boolean;
 
 	/**
+	 * Root URI
+	 */
+	rootUri: url.Url;
+
+	/**
 	 * Root path
 	 */
 	path: string;
@@ -44,7 +50,8 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 */
 	rootNode: FileSystemNode;
 
-	constructor(path: string, private logger: Logger = new NoopLogger()) {
+	constructor(rootUri: string, path: string, private logger: Logger = new NoopLogger()) {
+		this.rootUri = url.parse(rootUri);
 		this.path = path;
 		this.overlay = new Map<string, string>();
 		this.rootNode = { file: false, children: new Map<string, FileSystemNode>() };
@@ -121,7 +128,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 * @param path File path or URI (both absolute or relative file paths are accepted)
 	 */
 	fileExists(path: string): boolean {
-		return this.readFileIfExists(path) !== undefined || this.files.has(path) || this.files.has(util.path2uri(this.path, path));
+		return this.readFileIfExists(path) !== undefined || this.files.has(path) || this.files.has(this.path2uri(path));
 	}
 
 	/**
@@ -139,7 +146,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 * If there is no such file, returns undefined
 	 */
 	private readFileIfExists(path: string): string | undefined {
-		const uri = util.path2uri(this.path, path);
+		const uri = this.path2uri(path);
 		let content = this.overlay.get(uri);
 		if (content !== undefined) {
 			return content;
@@ -224,6 +231,11 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 
 	trace(message: string) {
 		this.logger.log(message);
+	}
+
+	// TODO: move this method to util and use through all the code
+	private path2uri(path: string): string {
+		return url.format({...this.rootUri, pathname: util.resolve(this.rootUri.pathname || '', path).split(/[\\\/]/).map(encodeURIComponent).join('/')});
 	}
 }
 
