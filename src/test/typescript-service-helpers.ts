@@ -723,7 +723,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 								line: 0
 							},
 							start: {
-								character: 9,
+								character: 10,
 								line: 0
 							}
 						},
@@ -747,7 +747,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 								line: 0
 							},
 							start: {
-								character: 9,
+								character: 10,
 								line: 0
 							}
 						},
@@ -769,7 +769,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 								line: 0
 							},
 							start: {
-								character: 8,
+								character: 9,
 								line: 0
 							}
 						},
@@ -800,7 +800,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 5,
+									character: 6,
 									line: 0
 								}
 							},
@@ -821,7 +821,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 9,
+									character: 10,
 									line: 0
 								}
 							},
@@ -842,7 +842,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 23,
+									character: 24,
 									line: 0
 								}
 							},
@@ -857,7 +857,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 8,
+									character: 9,
 									line: 0
 								}
 							},
@@ -884,7 +884,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 5,
+									character: 6,
 									line: 0
 								}
 							},
@@ -905,7 +905,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 9,
+									character: 10,
 									line: 0
 								}
 							},
@@ -926,7 +926,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 22,
+									character: 23,
 									line: 0
 								}
 							},
@@ -947,7 +947,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 51,
+									character: 52,
 									line: 0
 								}
 							},
@@ -968,7 +968,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 67,
+									character: 68,
 									line: 0
 								}
 							},
