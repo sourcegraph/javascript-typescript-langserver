@@ -346,15 +346,10 @@ export class ProjectManager implements Disposable {
 						// Resolve triple slash references relative to current file
 						// instead of using module resolution host because it behaves
 						// differently in "nodejs" mode
-						.map(referencedFile => util.toUnixPath(
-							path_.relative(
-								this.rootPath,
-								resolver.resolve(
-									this.rootPath,
-									resolver.dirname(filePath),
-									util.toUnixPath(referencedFile.fileName)
-								)
-							)
+						.map(referencedFile => resolver.resolve(
+							this.rootPath,
+							resolver.dirname(filePath),
+							util.toUnixPath(referencedFile.fileName)
 						))
 				);
 			})
