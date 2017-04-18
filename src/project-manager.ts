@@ -49,7 +49,7 @@ export class ProjectManager implements Disposable {
 	private updater: FileSystemUpdater;
 
 	/**
-	 * Relative file path -> version map. Every time file content is about to change or changed (didChange/didOpen/...), we are incrementing it's version
+	 * URI -> version map. Every time file content is about to change or changed (didChange/didOpen/...), we are incrementing it's version
 	 * signalling that file is changed and file's user must invalidate cached and requery file content
 	 */
 	private versions: Map<string, number>;
@@ -350,7 +350,19 @@ export class ProjectManager implements Disposable {
 							this.rootPath,
 							resolver.dirname(filePath),
 							util.toUnixPath(referencedFile.fileName)
-						))
+						)),
+					// References with `<reference types="..."/>`
+					Observable.from(info.typeReferenceDirectives)
+						.map(typeReferenceDirective =>
+							ts.resolveTypeReferenceDirective(
+								typeReferenceDirective.fileName,
+								filePath,
+								compilerOpt,
+								config.moduleResolutionHost()
+							)
+						)
+						.filter(resolved => !!(resolved && resolved.resolvedTypeReferenceDirective && resolved.resolvedTypeReferenceDirective.resolvedFileName))
+						.map(resolved => resolved.resolvedTypeReferenceDirective!.resolvedFileName!)
 				);
 			})
 			// Use same scheme, slashes, host for referenced URI as input file
@@ -402,21 +414,22 @@ export class ProjectManager implements Disposable {
 	/**
 	 * Called when file was opened by client. Current implementation
 	 * does not differenciates open and change events
-	 * @param filePath path to a file relative to project root
+	 * @param uri file's URI
 	 * @param text file's content
 	 */
-	didOpen(filePath: string, text: string) {
-		this.didChange(filePath, text);
+	didOpen(uri: string, text: string) {
+		this.didChange(uri, text);
 	}
 
 	/**
 	 * Called when file was closed by client. Current implementation invalidates compiled version
-	 * @param filePath path to a file relative to project root
+	 * @param uri file's URI
 	 */
-	didClose(filePath: string, span = new Span()) {
-		this.localFs.didClose(filePath);
-		let version = this.versions.get(filePath) || 0;
-		this.versions.set(filePath, ++version);
+	didClose(uri: string, span = new Span()) {
+		const filePath = util.uri2path(uri);
+		this.localFs.didClose(uri);
+		let version = this.versions.get(uri) || 0;
+		this.versions.set(uri, ++version);
 		const config = this.getConfigurationIfExists(filePath);
 		if (!config) {
 			return;
@@ -428,13 +441,14 @@ export class ProjectManager implements Disposable {
 
 	/**
 	 * Called when file was changed by client. Current implementation invalidates compiled version
-	 * @param filePath path to a file relative to project root
+	 * @param uri file's URI
 	 * @param text file's content
 	 */
-	didChange(filePath: string, text: string, span = new Span()) {
-		this.localFs.didChange(filePath, text);
-		let version = this.versions.get(filePath) || 0;
-		this.versions.set(filePath, ++version);
+	didChange(uri: string, text: string, span = new Span()) {
+		const filePath = util.uri2path(uri);
+		this.localFs.didChange(uri, text);
+		let version = this.versions.get(uri) || 0;
+		this.versions.set(uri, ++version);
 		const config = this.getConfigurationIfExists(filePath);
 		if (!config) {
 			return;
@@ -446,10 +460,10 @@ export class ProjectManager implements Disposable {
 
 	/**
 	 * Called when file was saved by client
-	 * @param filePath path to a file relative to project root
+	 * @param uri file's URI
 	 */
-	didSave(filePath: string) {
-		this.localFs.didSave(filePath);
+	didSave(uri: string) {
+		this.localFs.didSave(uri);
 	}
 
 	/**
@@ -541,7 +555,7 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	private projectVersion: number;
 
 	/**
-	 * Tracks individual files versions to invalidate TS compiler data when single file is changed
+	 * Tracks individual files versions to invalidate TS compiler data when single file is changed. Keys are URIs
 	 */
 	private versions: Map<string, number>;
 
@@ -593,13 +607,15 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	 * @param fileName relative or absolute file path
 	 */
 	getScriptVersion(fileName: string): string {
+
+		const uri = util.path2uri(this.rootPath, fileName);
 		if (path_.posix.isAbsolute(fileName) || path_.isAbsolute(fileName)) {
 			fileName = path_.posix.relative(this.rootPath, util.toUnixPath(fileName));
 		}
-		let version = this.versions.get(fileName);
+		let version = this.versions.get(uri);
 		if (!version) {
 			version = 1;
-			this.versions.set(fileName, version);
+			this.versions.set(uri, version);
 		}
 		return '' + version;
 	}
