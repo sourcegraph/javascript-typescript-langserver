@@ -471,7 +471,8 @@ export class TypeScriptService {
 
 			// Fetch all files in the package subdirectory
 			const rootUriParts = url.parse(this.rootUri);
-			const packageRoot = 'types/' + params.symbol.package.name.slice('@types/'.length);
+			// All packages are in the types/ subdirectory
+			const packageRoot = params.symbol.package.name.substr(1);
 			const packageRootUri = url.format({ ...rootUriParts, pathname: path_.posix.join(rootUriParts.pathname || '', packageRoot) + '/', search: undefined, hash: undefined });
 			await this.updater.ensureStructure(span);
 			await Promise.all(
