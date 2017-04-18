@@ -173,6 +173,9 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 			case 'exit':
 				// Ignore exit notification, it's not the responsibility of the TypeScriptService to handle it,
 				// but the TCP / STDIO server which needs to close the socket or kill the process
+				for (const subscription of subscriptions.values()) {
+					subscription.unsubscribe();
+				}
 				return;
 			case '$/cancelRequest':
 				// Cancel another request by unsubscribing from the Observable
@@ -218,21 +221,52 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 			}
 		}
 		// Call handler method with params and span
-		const returnValue = (handler as any)[method](message.params, span);
-		// Convert return value to Observable that emits a single item, the result (or an error)
 		let observable: Observable<any>;
-		if (returnValue instanceof Observable) {
-			observable = returnValue.take(1);
-		} else if (isPromiseLike(returnValue)) {
-			// Convert Promise to Observable
-			observable = Observable.from(returnValue);
-		} else {
-			// Convert synchronous value to Observable
-			observable = Observable.of(returnValue);
+		try {
+			const returnValue = (handler as any)[method](message.params, span);
+			// Convert return value to Observable that emits a single item, the result (or an error)
+			if (returnValue instanceof Observable) {
+				observable = returnValue.take(1);
+			} else if (isPromiseLike(returnValue)) {
+				// Convert Promise to Observable
+				observable = Observable.from(returnValue);
+			} else {
+				// Convert synchronous value to Observable
+				observable = Observable.of(returnValue);
+			}
+		} catch (err) {
+			observable = Observable.throw(err);
 		}
 		if (isRequestMessage(message)) {
 			// If request, subscribe to result and send a response
 			const subscription = observable
+				.map(result => {
+					// Log result on span
+					span.log({ event: 'result', result: inspect(result) });
+					// Return result response
+					return {
+						jsonrpc: '2.0',
+						id: message.id,
+						result
+					};
+				})
+				.catch(err => {
+					// Set error on span
+					span.setTag('error', true);
+					span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
+					// Log error
+					logger.error(`Handler for ${message.method} failed:`, err, '\nMessage:', message);
+					// Return error response
+					return [{
+						jsonrpc: '2.0',
+						id: message.id,
+						error: {
+							message: err.message + '',
+							code: typeof err.code === 'number' ? err.code : ErrorCodes.UnknownErrorCode,
+							data: omit(err, ['message', 'code'])
+						}
+					}];
+				})
 				.finally(() => {
 					// Finish span
 					span.finish();
@@ -243,29 +277,9 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 						subscriptions.delete(message.id);
 					});
 				})
-				.subscribe(result => {
-					// Send result
-					messageWriter.write({
-						jsonrpc: '2.0',
-						id: message.id,
-						result
-					});
-				}, err => {
-					// Send error response
-					messageWriter.write({
-						jsonrpc: '2.0',
-						id: message.id,
-						error: {
-							message: err.message + '',
-							code: typeof err.code === 'number' ? err.code : ErrorCodes.UnknownErrorCode,
-							data: omit(err, ['message', 'code'])
-						}
-					});
-					// Set error on span
-					span.setTag('error', true);
-					span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
-					// Log error
-					logger.error(`Handler for ${message.method} failed:`, err, 'Message:', message);
+				.subscribe(response => {
+					// Send response
+					messageWriter.write(response);
 				});
 			// Save subscription for $/cancelRequest
 			subscriptions.set(message.id, subscription);
@@ -279,6 +293,10 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 
 	// On stream close, shutdown handler if it was initialized
 	messageEmitter.once('close', () => {
+		// Cancel all outstanding requests
+		for (const subscription of subscriptions.values()) {
+			subscription.unsubscribe();
+		}
 		if (initialized) {
 			initialized = false;
 			logger.error('Stream was closed without shutdown notification');
@@ -288,6 +306,10 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 
 	// On stream error, shutdown handler if it was initialized
 	messageEmitter.once('error', err => {
+		// Cancel all outstanding requests
+		for (const subscription of subscriptions.values()) {
+			subscription.unsubscribe();
+		}
 		if (initialized) {
 			initialized = false;
 			logger.error('Stream:', err);

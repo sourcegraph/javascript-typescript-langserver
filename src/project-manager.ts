@@ -346,16 +346,23 @@ export class ProjectManager implements Disposable {
 						// Resolve triple slash references relative to current file
 						// instead of using module resolution host because it behaves
 						// differently in "nodejs" mode
-						.map(referencedFile => util.toUnixPath(
-							path_.relative(
-								this.rootPath,
-								resolver.resolve(
-									this.rootPath,
-									resolver.dirname(filePath),
-									util.toUnixPath(referencedFile.fileName)
-								)
+						.map(referencedFile => resolver.resolve(
+							this.rootPath,
+							resolver.dirname(filePath),
+							util.toUnixPath(referencedFile.fileName)
+						)),
+					// References with `<reference types="..."/>`
+					Observable.from(info.typeReferenceDirectives)
+						.map(typeReferenceDirective =>
+							ts.resolveTypeReferenceDirective(
+								typeReferenceDirective.fileName,
+								filePath,
+								compilerOpt,
+								config.moduleResolutionHost()
 							)
-						))
+						)
+						.filter(resolved => !!(resolved && resolved.resolvedTypeReferenceDirective && resolved.resolvedTypeReferenceDirective.resolvedFileName))
+						.map(resolved => resolved.resolvedTypeReferenceDirective!.resolvedFileName!)
 				);
 			})
 			// Use same scheme, slashes, host for referenced URI as input file

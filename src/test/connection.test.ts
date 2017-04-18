@@ -190,6 +190,38 @@ describe('connection', () => {
 			sinon.assert.calledOnce(writer.write);
 			sinon.assert.calledWithExactly(writer.write, sinon.match({ jsonrpc: '2.0', id: 1, error: { code: ErrorCodes.RequestCancelled } }));
 		});
+		it('should unsubscribe from the returned Observable when the connection was closed', async () => {
+			const handler: TypeScriptService = Object.create(TypeScriptService.prototype);
+			const unsubscribeHandler = sinon.spy();
+			const hoverStub = sinon.stub(handler, 'textDocumentHover').returns(new Observable(subscriber => unsubscribeHandler));
+			const emitter = new EventEmitter();
+			const writer = {
+				write: sinon.spy()
+			};
+			registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as TypeScriptService);
+			const params = [1, 1];
+			emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params });
+			sinon.assert.calledOnce(hoverStub);
+			emitter.emit('close');
+			await new Promise(resolve => setTimeout(resolve, 0));
+			sinon.assert.calledOnce(unsubscribeHandler);
+		});
+		it('should unsubscribe from the returned Observable on exit notification', async () => {
+			const handler: TypeScriptService = Object.create(TypeScriptService.prototype);
+			const unsubscribeHandler = sinon.spy();
+			const hoverStub = sinon.stub(handler, 'textDocumentHover').returns(new Observable(subscriber => unsubscribeHandler));
+			const emitter = new EventEmitter();
+			const writer = {
+				write: sinon.spy()
+			};
+			registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as TypeScriptService);
+			const params = [1, 1];
+			emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params });
+			sinon.assert.calledOnce(hoverStub);
+			emitter.emit('message', { jsonrpc: '2.0', method: 'exit' });
+			await new Promise(resolve => setTimeout(resolve, 0));
+			sinon.assert.calledOnce(unsubscribeHandler);
+		});
 		for (const event of ['close', 'error']) {
 			it(`should call shutdown on ${event} if the service was initialized`, async () => {
 				const handler = {

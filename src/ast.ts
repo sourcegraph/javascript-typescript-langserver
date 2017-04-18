@@ -214,9 +214,19 @@ export function *walkMostAST(node: ts.Node): IterableIterator<ts.Node> {
 		}
 		case ts.SyntaxKind.NewExpression: {
 			const n = node as ts.NewExpression;
-			pushall(children, n.name, n.expression, ...n.arguments);
+			if (n.name) {
+				yield* walkMostAST(n.name);
+			}
+			yield* walkMostAST(n.expression);
+			if (n.arguments) {
+				for (const argument of n.arguments) {
+					yield* walkMostAST(argument);
+				}
+			}
 			if (n.typeArguments) {
-				children.push(...n.typeArguments);
+				for (const typeArgument of n.typeArguments) {
+					yield* walkMostAST(typeArgument);
+				}
 			}
 			break;
 		}
@@ -502,7 +512,7 @@ export function *walkMostAST(node: ts.Node): IterableIterator<ts.Node> {
 		}
 		case ts.SyntaxKind.NamespaceExportDeclaration: {
 			const n = node as ts.NamespaceExportDeclaration;
-			children.push(n.name, n.moduleReference);
+			yield* walkMostAST(n.name);
 			break;
 		}
 		case ts.SyntaxKind.ImportEqualsDeclaration: {
@@ -574,12 +584,16 @@ export function *walkMostAST(node: ts.Node): IterableIterator<ts.Node> {
 		}
 		case ts.SyntaxKind.JsxSelfClosingElement: {
 			const n = node as ts.JsxSelfClosingElement;
-			children.push(n.tagName, ...n.attributes);
+			yield* walkMostAST(n.tagName);
+			for (const property of n.attributes.properties) {
+				yield* walkMostAST(property);
+			}
 			break;
 		}
 		case ts.SyntaxKind.JsxOpeningElement: {
 			const n = node as ts.JsxOpeningElement;
-			children.push(n.tagName, ...n.attributes);
+			yield* walkMostAST(n.tagName);
+			yield* walkMostAST(n.attributes);
 			break;
 		}
 		case ts.SyntaxKind.JsxClosingElement: {
