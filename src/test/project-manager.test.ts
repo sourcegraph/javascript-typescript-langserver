@@ -13,7 +13,7 @@ describe('ProjectManager', () => {
 	let memfs: InMemoryFileSystem;
 
 	describe('getPackageName()', () => {
-		before(async () => {
+		beforeEach(async () => {
 			memfs = new InMemoryFileSystem('/');
 			const localfs = new MapFileSystem(new Map([
 				['file:///package.json', '{"name": "package-name-1"}'],
@@ -33,7 +33,7 @@ describe('ProjectManager', () => {
 		});
 	});
 	describe('ensureReferencedFiles()', () => {
-		before(async () => {
+		beforeEach(() => {
 			memfs = new InMemoryFileSystem('/');
 			const localfs = new MapFileSystem(new Map([
 				['file:///package.json', '{"name": "package-name-1"}'],
