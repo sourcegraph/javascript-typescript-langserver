@@ -8,7 +8,7 @@ import * as url from 'url';
 import { Disposable } from 'vscode-languageserver';
 import { FileSystemUpdater } from './fs';
 import { Logger, NoopLogger } from './logging';
-import { InMemoryFileSystem, walkInMemoryFs } from './memfs';
+import { InMemoryFileSystem } from './memfs';
 import * as util from './util';
 
 /**
@@ -847,17 +847,6 @@ export class ProjectConfiguration {
 		const base = dir || this.fs.path;
 		const configParseResult = ts.parseJsonConfigFileContent(configObject, this.fs, base);
 		const expFiles = configParseResult.fileNames;
-
-		// Add globals that might exist in dependencies
-		const nodeModulesDir = path_.posix.join(base, 'node_modules');
-		const err = walkInMemoryFs(this.fs, nodeModulesDir, (path, isdir) => {
-			if (!isdir && util.isGlobalTSFile(path)) {
-				expFiles.push(path);
-			}
-		});
-		if (err) {
-			throw err;
-		}
 
 		const options = configParseResult.options;
 		if (/(^|\/)jsconfig\.json$/.test(this.configFilePath)) {

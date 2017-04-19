@@ -228,33 +228,6 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 }
 
 /**
- * Iterates over in-memory cache calling given function on each node until callback signals abort or all nodes were traversed
- */
-export function walkInMemoryFs(fs: InMemoryFileSystem, rootdir: string, walkfn: (path: string, isdir: boolean) => Error | void): Error | void {
-	const err = walkfn(rootdir, true);
-	if (err) {
-		if (err === skipDir) {
-			return;
-		}
-		return err;
-	}
-	const { files, directories } = fs.getFileSystemEntries(rootdir);
-	for (const file of files) {
-		const err = walkfn(path_.posix.join(rootdir, file), false);
-		if (err) {
-			return err;
-		}
-	}
-	for (const dir of directories) {
-		const err = walkInMemoryFs(fs, path_.posix.join(rootdir, dir), walkfn);
-		if (err) {
-			return err;
-		}
-	}
-	return;
-}
-
-/**
  * TypeScript library files fetched from the local file system (bundled TS)
  */
 export const typeScriptLibraries: Map<string, string> = new Map<string, string>();
@@ -277,11 +250,3 @@ fs_.readdirSync(path).forEach(file => {
 export function isTypeScriptLibrary(path: string): boolean {
 	return typeScriptLibraries.has(util.toUnixPath(path));
 }
-
-/**
- * Indicates that tree traversal function should stop
- */
-export const skipDir: Error = {
-	name: 'WALK_FN_SKIP_DIR',
-	message: ''
-};
