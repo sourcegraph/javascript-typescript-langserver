@@ -451,6 +451,7 @@ export class TypeScriptService {
 		const symbols = iterate(configs)
 			.map(config => this._collectWorkspaceSymbols(config, query || symbolQuery, limit))
 			.flatten<SymbolInformation>()
+			.filter(symbol => !symbol.location.uri.includes('/node_modules/'))
 			.take(limit)
 			.toArray();
 
@@ -847,22 +848,6 @@ export class TypeScriptService {
 	}
 
 	/**
-	 * transformNavItem transforms a NavigateToItem instance to a SymbolInformation instance
-	 */
-	private _transformNavItem(program: ts.Program, item: ts.NavigateToItem): SymbolInformation {
-		const sourceFile = program.getSourceFile(item.fileName);
-		if (!sourceFile) {
-			throw new Error('source file "' + item.fileName + '" does not exist');
-		}
-		const start = ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start);
-		const end = ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start + item.textSpan.length);
-		return SymbolInformation.create(item.name,
-			util.convertStringtoSymbolKind(item.kind),
-			Range.create(start.line, start.character, end.line, end.character),
-			this._defUri(item.fileName), item.containerName);
-	}
-
-	/**
 	 * Returns an Iterator for all symbols in a given config
 	 *
 	 * Note: This method is not traced because it returns an Iterator that may produce values lazily
@@ -899,7 +884,28 @@ export class TypeScriptService {
 					}));
 			}
 			return iterate(items)
-				.map(item => this._transformNavItem(program, item))
+				// Map NavigateToItems to SymbolInformations
+				.map(item => {
+					const sourceFile = program.getSourceFile(item.fileName);
+					if (!sourceFile) {
+						throw new Error(`Source file ${item.fileName} does not exist`);
+					}
+					const symbolInformation: SymbolInformation = {
+						name: item.name,
+						kind: util.convertStringtoSymbolKind(item.kind),
+						location: {
+							uri: this._defUri(item.fileName),
+							range: {
+								start: ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start),
+								end: ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start + item.textSpan.length)
+							}
+						}
+					};
+					if (item.containerName) {
+						symbolInformation.containerName = item.containerName;
+					}
+					return symbolInformation;
+				})
 				.filter(symbolInformation => util.isLocalUri(symbolInformation.location.uri));
 		} else {
 			// An empty query uses a different algorithm to iterate all files and aggregate the symbols per-file to get all symbols
@@ -949,31 +955,28 @@ export class TypeScriptService {
 	private *_flattenNavigationTreeItem(item: ts.NavigationTree, parent: ts.NavigationTree | null, sourceFile: ts.SourceFile): IterableIterator<SymbolInformation> {
 		const acceptable = TypeScriptService.isAcceptableNavigationTreeItem(item);
 		if (acceptable) {
-			yield this._transformNavigationTreeItem(item, parent, sourceFile);
+			const span = item.spans[0];
+			const symbolInformation: SymbolInformation = {
+				name: item.text,
+				kind: util.convertStringtoSymbolKind(item.kind),
+				location: {
+					uri: this._defUri(sourceFile.fileName),
+					range: {
+						start: ts.getLineAndCharacterOfPosition(sourceFile, span.start),
+						end: ts.getLineAndCharacterOfPosition(sourceFile, span.start + span.length)
+					}
+				}
+			};
+			if (parent) {
+				symbolInformation.containerName = parent.text;
+			}
+			yield symbolInformation;
 		}
 		if (item.childItems) {
 			for (const childItem of item.childItems) {
 				yield* this._flattenNavigationTreeItem(childItem, acceptable ? item : null, sourceFile);
 			}
 		}
-	}
-
-	/**
-	 * Transforms NavigationTree to SymbolInformation
-	 */
-	private _transformNavigationTreeItem(item: ts.NavigationTree, parent: ts.NavigationTree | null, sourceFile: ts.SourceFile): SymbolInformation {
-		const span = item.spans[0];
-		const start = ts.getLineAndCharacterOfPosition(sourceFile, span.start);
-		const end = ts.getLineAndCharacterOfPosition(sourceFile, span.start + span.length);
-		return {
-			name: item.text,
-			kind: util.convertStringtoSymbolKind(item.kind),
-			location: {
-				uri: this._defUri(sourceFile.fileName),
-				range: { start, end }
-			},
-			containerName: parent ? parent.text : ''
-		};
 	}
 
 	/**
