@@ -11,7 +11,7 @@ import { Logger, NoopLogger } from './logging';
 import { InMemoryFileSystem } from './memfs';
 import * as util from './util';
 
-export enum ConfigType {JsConfig, TsConfig}
+export type ConfigType = 'js' | 'ts';
 
 /**
  * ProjectManager translates VFS files to one or many projects denoted by [tj]config.json.
@@ -28,18 +28,14 @@ export class ProjectManager implements Disposable {
 	private rootPath: string;
 
 	/**
-	 * (Workspace subtree (folder) -> JS configuration) mapping.
+	 * (Workspace subtree (folder) -> TS or JS configuration) mapping.
 	 * Configuration settings for a source file A are located in the closest parent folder of A.
 	 * Map keys are relative (to workspace root) paths
 	 */
-	private jsConfigs: Map<string, ProjectConfiguration>;
-
-	/**
-	 * (Workspace subtree (folder) -> TS configuration) mapping.
-	 * Configuration settings for a source file A are located in the closest parent folder of A.
-	 * Map keys are relative (to workspace root) paths
-	 */
-	private tsConfigs: Map<string, ProjectConfiguration>;
+	private configs = {
+		js: new Map<string, ProjectConfiguration>(),
+		ts: new Map<string, ProjectConfiguration>()
+	};
 
 	/**
 	 * When on, indicates that client is responsible to provide file content (VFS),
@@ -97,8 +93,6 @@ export class ProjectManager implements Disposable {
 	 */
 	constructor(rootPath: string, inMemoryFileSystem: InMemoryFileSystem, updater: FileSystemUpdater, strict: boolean, traceModuleResolution?: boolean, protected logger: Logger = new NoopLogger()) {
 		this.rootPath = util.toUnixPath(rootPath);
-		this.jsConfigs = new Map<string, ProjectConfiguration>();
-		this.tsConfigs = new Map<string, ProjectConfiguration>();
 		this.updater = updater;
 		this.localFs = inMemoryFileSystem;
 		this.versions = new Map<string, number>();
@@ -141,7 +135,7 @@ export class ProjectManager implements Disposable {
 	 * or a root folder which serves as a fallback
 	 */
 	configurations(): IterableIterator<ProjectConfiguration> {
-		return iterate(this.jsConfigs.values()).concat(this.tsConfigs.values());
+		return iterate(this.configs.js.values()).concat(this.configs.ts.values());
 	}
 
 	/**
@@ -405,10 +399,10 @@ export class ProjectManager implements Disposable {
 	 * @param filePath source file path, absolute
 	 * @return closest configuration for a given file path or undefined if there is no such configuration
 	 */
-	private getConfigurationIfExists(filePath: string, configType: ConfigType = this.getConfigurationType(filePath)): ProjectConfiguration | undefined {
+	private getConfigurationIfExists(filePath: string, configType = this.getConfigurationType(filePath)): ProjectConfiguration | undefined {
 		let dir = util.toUnixPath(filePath);
 		let config;
-		const configs = configType === ConfigType.JsConfig ? this.jsConfigs : this.tsConfigs;
+		const configs = this.configs[configType];
 		if (!configs) {
 			return undefined;
 		}
@@ -504,21 +498,21 @@ export class ProjectManager implements Disposable {
 				dir = dir.substring(0, pos);
 			}
 			const configType = this.getConfigurationType(filePath);
-			const configs = configType === ConfigType.JsConfig ? this.jsConfigs : this.tsConfigs;
+			const configs = this.configs[configType];
 			configs.set(dir, new ProjectConfiguration(this.localFs, dir, this.versions, filePath, undefined, this.traceModuleResolution, this.logger));
 		}
 
-		for (const configType of [ConfigType.JsConfig, ConfigType.TsConfig]) {
-			const configs = configType === ConfigType.JsConfig ? this.jsConfigs : this.tsConfigs;
+		for (const configType of ['js', 'ts'] as ConfigType[]) {
+			const configs = this.configs[configType];
 			if (!configs.has('')) {
 				const tsConfig: any = {
 					compilerOptions: {
 						module: ts.ModuleKind.CommonJS,
 						allowNonTsExtensions: false,
-						allowJs: configType === ConfigType.JsConfig
+						allowJs: configType === 'js'
 					}
 				};
-				tsConfig.include = configType === ConfigType.JsConfig ? ['**/*.js', '**/*.jsx'] : ['**/*.ts', '**/*.tsx'];
+				tsConfig.include = { js: ['**/*.js', '**/*.jsx'], ts: ['**/*.ts', '**/*.tsx'] }[configType];
 				// if there is at least one config, giving no files to default one
 				// TODO: it makes impossible to IntelliSense gulpfile.js if there is a tsconfig.json in subdirectory
 				if (configs.size > 0) {
@@ -537,15 +531,15 @@ export class ProjectManager implements Disposable {
 	private getConfigurationType(filePath: string): ConfigType {
 		const name = path_.posix.basename(filePath);
 		if (name === 'tsconfig.json') {
-			return ConfigType.TsConfig;
+			return 'ts';
 		} else if (name === 'jsconfig.json') {
-			return ConfigType.JsConfig;
+			return 'js';
 		}
 		const extension = path_.posix.extname(filePath);
 		if (extension === '.js' || extension === '.jsx') {
-			return ConfigType.JsConfig;
+			return 'js';
 		}
-		return ConfigType.TsConfig;
+		return 'ts';
 	}
 }
 
