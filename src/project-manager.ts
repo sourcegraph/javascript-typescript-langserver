@@ -11,6 +11,10 @@ import { Logger, NoopLogger } from './logging';
 import { InMemoryFileSystem } from './memfs';
 import * as util from './util';
 
+const typeTypeScript = 'ts';
+const typeJavaScript = 'js';
+const types = [typeTypeScript, typeJavaScript];
+
 /**
  * ProjectManager translates VFS files to one or many projects denoted by [tj]config.json.
  * It uses either local or remote file system to fetch directory tree and files from and then
@@ -26,11 +30,11 @@ export class ProjectManager implements Disposable {
 	private rootPath: string;
 
 	/**
-	 * Workspace subtree (folder) -> JS/TS configuration mapping.
+	 * type -> (Workspace subtree (folder) -> JS/TS configuration) mapping.
 	 * Configuration settings for a source file A are located in the closest parent folder of A.
 	 * Map keys are relative (to workspace root) paths
 	 */
-	private configs: Map<string, ProjectConfiguration>;
+	private configs: Map<string, Map<string, ProjectConfiguration>>;
 
 	/**
 	 * When on, indicates that client is responsible to provide file content (VFS),
@@ -88,7 +92,7 @@ export class ProjectManager implements Disposable {
 	 */
 	constructor(rootPath: string, inMemoryFileSystem: InMemoryFileSystem, updater: FileSystemUpdater, strict: boolean, traceModuleResolution?: boolean, protected logger: Logger = new NoopLogger()) {
 		this.rootPath = util.toUnixPath(rootPath);
-		this.configs = new Map<string, ProjectConfiguration>();
+		this.configs = new Map<string, Map<string, ProjectConfiguration>>();
 		this.updater = updater;
 		this.localFs = inMemoryFileSystem;
 		this.versions = new Map<string, number>();
@@ -131,7 +135,7 @@ export class ProjectManager implements Disposable {
 	 * or a root folder which serves as a fallback
 	 */
 	configurations(): IterableIterator<ProjectConfiguration> {
-		return this.configs.values();
+		return iterate(this.configs.values()).map(configs => configs.values()).flatten<ProjectConfiguration>();
 	}
 
 	/**
@@ -158,7 +162,7 @@ export class ProjectManager implements Disposable {
 				this.createConfigurations();
 				// Reset all compilation state
 				// TODO utilize incremental compilation instead
-				for (const config of this.configs.values()) {
+				for (const config of this.configurations()) {
 					config.reset();
 				}
 				// Require re-processing of file references
@@ -380,7 +384,7 @@ export class ProjectManager implements Disposable {
 	}
 
 	/**
-	 * @param filePath source file path relative to project root
+	 * @param filePath source file path, absolute
 	 * @return project configuration for a given source file. Climbs directory tree up to workspace root if needed
 	 */
 	getConfiguration(filePath: string): ProjectConfiguration {
@@ -392,23 +396,29 @@ export class ProjectManager implements Disposable {
 	}
 
 	/**
-	 * @param filePath source file path relative to project root
+	 * @param filePath source file path, absolute
 	 * @return closest configuration for a given file path or undefined if there is no such configuration
 	 */
 	private getConfigurationIfExists(filePath: string): ProjectConfiguration | undefined {
-		let dir = filePath;
+		let dir = util.toUnixPath(filePath);
 		let config;
+		const configs = this.configs.get(this.getConfigurationType(filePath));
+		if (!configs) {
+			return undefined;
+		}
 		while (dir && dir !== this.rootPath) {
-			config = this.configs.get(dir);
+			config = configs.get(dir);
 			if (config) {
 				return config;
 			}
-			dir = path_.posix.dirname(dir);
-			if (dir === '.') {
+			const pos = dir.lastIndexOf('/');
+			if (pos <= 0) {
 				dir = '';
+			} else {
+				dir = dir.substring(0, pos);
 			}
 		}
-		return this.configs.get('');
+		return configs.get('');
 	}
 
 	/**
@@ -472,39 +482,67 @@ export class ProjectManager implements Disposable {
 	 * If there is no root configuration, adds it to catch all orphan files
 	 */
 	createConfigurations() {
-		const rootdirs = new Set<string>();
 		for (const uri of this.localFs.uris()) {
-			const relativeFilePath = path_.posix.relative(this.rootPath, util.uri2path(uri));
-			if (!/(^|\/)[tj]sconfig\.json$/.test(relativeFilePath)) {
+			const filePath = util.uri2path(uri);
+			if (!/(^|\/)[tj]sconfig\.json$/.test(filePath)) {
 				continue;
 			}
-			if (/(^|\/)node_modules\//.test(relativeFilePath)) {
+			if (/(^|\/)node_modules\//.test(filePath)) {
 				continue;
 			}
-			let dir = path_.posix.dirname(relativeFilePath);
-			if (dir === '.') {
+			let dir = util.toUnixPath(filePath);
+			const pos = dir.lastIndexOf('/');
+			if (pos <= 0) {
 				dir = '';
+			} else {
+				dir = dir.substring(0, pos);
 			}
-			if (!this.configs.has(dir)) {
-				this.configs.set(dir, new ProjectConfiguration(this.localFs, path_.posix.join('/', dir), this.versions, relativeFilePath, undefined, this.traceModuleResolution, this.logger));
+			const configType = this.getConfigurationType(filePath);
+			let configs = this.configs.get(configType);
+			if (!configs) {
+				configs = new Map<string, ProjectConfiguration>();
+				this.configs.set(configType, configs);
 			}
-			rootdirs.add(dir);
+			configs.set(dir, new ProjectConfiguration(this.localFs, dir, this.versions, filePath, undefined, this.traceModuleResolution, this.logger));
 		}
-		if (!rootdirs.has('') && !this.configs.has('')) {
-			// collecting all the files in workspace by making fake configuration object
-			const tsConfig: any = {
-				compilerOptions: {
-					module: ts.ModuleKind.CommonJS,
-					allowNonTsExtensions: false,
-					allowJs: true
-				}
-			};
-			// if there is at least one config, giving no files to default one
-			// TODO: it makes impossible to IntelliSense gulpfile.js if there is a tsconfig.json in subdirectory
-			if (this.configs.size > 0) {
-				tsConfig.exclude = ['**/*'];
+		for (const type of types) {
+			let configs = this.configs.get(type);
+			if (!configs) {
+				configs = new Map<string, ProjectConfiguration>();
+				this.configs.set(type, configs);
 			}
-			this.configs.set('', new ProjectConfiguration(this.localFs, '/', this.versions, '', tsConfig, this.traceModuleResolution, this.logger));
+			if (!configs.has('')) {
+				// collecting all the files in workspace by making fake configuration object
+				const tsConfig: any = {
+					compilerOptions: {
+						module: ts.ModuleKind.CommonJS,
+						allowNonTsExtensions: false,
+						allowJs: type === typeJavaScript
+					}
+				};
+				tsConfig.include = type === typeJavaScript ? ['**/*.js', '**/*.jsx'] : ['**/*.ts', '**/*.tsx'];
+				// if there is at least one config, giving no files to default one
+				// TODO: it makes impossible to IntelliSense gulpfile.js if there is a tsconfig.json in subdirectory
+				if (configs.size > 0) {
+					tsConfig.exclude = ['**/*'];
+				}
+				configs.set('', new ProjectConfiguration(this.localFs, this.rootPath, this.versions, '', tsConfig, this.traceModuleResolution, this.logger));
+			}
+		}
+	}
+
+	private getConfigurationType(filePath: string): string {
+		const name = path_.posix.basename(filePath);
+		if (name === 'tsconfig.json') {
+			return typeTypeScript;
+		} else if (name === 'jsconfig.json') {
+			return typeJavaScript;
+		} else {
+			const extension = path_.posix.extname(filePath);
+			if (extension === '.js' || extension === '.jsx') {
+				return typeJavaScript;
+			}
+			return typeTypeScript;
 		}
 	}
 }
@@ -720,7 +758,7 @@ export class ProjectConfiguration {
 	/**
 	 * @param fs file system to use
 	 * @param rootFilePath root file path, absolute
-	 * @param configFilePath configuration file path (relative to workspace root)
+	 * @param configFilePath configuration file path, absolute
 	 * @param configContent optional configuration content to use instead of reading configuration file)
 	 */
 	constructor(fs: InMemoryFileSystem, rootFilePath: string, versions: Map<string, number>, configFilePath: string, configContent?: any, traceModuleResolution?: boolean, private logger: Logger = new NoopLogger()) {
@@ -840,9 +878,12 @@ export class ProjectConfiguration {
 		} else {
 			configObject = this.configContent;
 		}
-		let dir = path_.posix.dirname(this.configFilePath);
-		if (dir === '.') {
+		let dir = util.toUnixPath(this.configFilePath);
+		const pos = dir.lastIndexOf('/');
+		if (pos <= 0) {
 			dir = '';
+		} else {
+			dir = dir.substring(0, pos);
 		}
 		const base = dir || this.fs.path;
 		const configParseResult = ts.parseJsonConfigFileContent(configObject, this.fs, base);
