@@ -508,54 +508,44 @@ export class ProjectManager implements Disposable {
 			configs.set(dir, new ProjectConfiguration(this.localFs, dir, this.versions, filePath, undefined, this.traceModuleResolution, this.logger));
 		}
 
-		if (!this.jsConfigs.has('')) {
-			const tsConfig: any = {
-				compilerOptions: {
-					module: ts.ModuleKind.CommonJS,
-					allowNonTsExtensions: false,
-					allowJs: true
+		for (const configType of [ConfigType.JsConfig, ConfigType.TsConfig]) {
+			const configs = configType === ConfigType.JsConfig ? this.jsConfigs : this.tsConfigs;
+			if (!configs.has('')) {
+				const tsConfig: any = {
+					compilerOptions: {
+						module: ts.ModuleKind.CommonJS,
+						allowNonTsExtensions: false,
+						allowJs: configType === ConfigType.JsConfig
+					}
+				};
+				tsConfig.include = configType === ConfigType.JsConfig ? ['**/*.js', '**/*.jsx'] : ['**/*.ts', '**/*.tsx'];
+				// if there is at least one config, giving no files to default one
+				// TODO: it makes impossible to IntelliSense gulpfile.js if there is a tsconfig.json in subdirectory
+				if (configs.size > 0) {
+					tsConfig.exclude = ['**/*'];
 				}
-			};
-			tsConfig.include = ['**/*.js', '**/*.jsx'];
-			// if there is at least one config, giving no files to default one
-			// TODO: it makes impossible to IntelliSense gulpfile.js if there is a tsconfig.json in subdirectory
-			if (this.jsConfigs.size > 0) {
-				tsConfig.exclude = ['**/*'];
+				configs.set('', new ProjectConfiguration(this.localFs, this.rootPath, this.versions, '', tsConfig, this.traceModuleResolution, this.logger));
 			}
-			this.jsConfigs.set('', new ProjectConfiguration(this.localFs, this.rootPath, this.versions, '', tsConfig, this.traceModuleResolution, this.logger));
-		}
 
-		if (!this.tsConfigs.has('')) {
-			const tsConfig: any = {
-				compilerOptions: {
-					module: ts.ModuleKind.CommonJS,
-					allowNonTsExtensions: false,
-					allowJs: false
-				}
-			};
-			tsConfig.include = ['**/*.ts', '**/*.tsx'];
-			// if there is at least one config, giving no files to default one
-			// TODO: it makes impossible to IntelliSense gulpfile.js if there is a tsconfig.json in subdirectory
-			if (this.tsConfigs.size > 0) {
-				tsConfig.exclude = ['**/*'];
-			}
-			this.tsConfigs.set('', new ProjectConfiguration(this.localFs, this.rootPath, this.versions, '', tsConfig, this.traceModuleResolution, this.logger));
 		}
 	}
 
+	/**
+	 * @param filePath path to source (or config) file
+	 * @return configuration type to use for a given file
+	 */
 	private getConfigurationType(filePath: string): ConfigType {
 		const name = path_.posix.basename(filePath);
 		if (name === 'tsconfig.json') {
 			return ConfigType.TsConfig;
 		} else if (name === 'jsconfig.json') {
 			return ConfigType.JsConfig;
-		} else {
-			const extension = path_.posix.extname(filePath);
-			if (extension === '.js' || extension === '.jsx') {
-				return ConfigType.JsConfig;
-			}
-			return ConfigType.TsConfig;
 		}
+		const extension = path_.posix.extname(filePath);
+		if (extension === '.js' || extension === '.jsx') {
+			return ConfigType.JsConfig;
+		}
+		return ConfigType.TsConfig;
 	}
 }
 
