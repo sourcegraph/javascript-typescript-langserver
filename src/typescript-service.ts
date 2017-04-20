@@ -490,7 +490,7 @@ export class TypeScriptService {
 
 			// Search symbol in configuration
 			// forcing TypeScript mode
-			const config = this.projectManager.getConfiguration(packageRoot + 'file.ts');
+			const config = this.projectManager.getConfiguration(packageRoot, pm.ConfigType.TsConfig);
 			return Array.from(this._collectWorkspaceSymbols(config, params.query || symbolQuery, params.limit));
 		} catch (err) {
 			span.setTag('error', true);

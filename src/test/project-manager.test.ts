@@ -66,8 +66,6 @@ describe('ProjectManager', () => {
 		it('should resolve best configuration based on file name', () => {
 			const jsConfig = projectManager.getConfiguration('/src/foo.js');
 			const tsConfig = projectManager.getConfiguration('/src/foo.ts');
-			assert.isNotNull(jsConfig);
-			assert.isNotNull(tsConfig);
 			assert.equal('/tsconfig.json', tsConfig.configFilePath);
 			assert.equal('/src/jsconfig.json', jsConfig.configFilePath);
 		});
