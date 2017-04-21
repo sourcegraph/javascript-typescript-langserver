@@ -213,14 +213,13 @@ export class TypeScriptService {
 	 * location of a symbol at a given text document position.
 	 */
 	async textDocumentDefinition(params: TextDocumentPositionParams, span = new Span()): Promise<Location[]> {
-		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
 
 		// Fetch files needed to resolve definition
 		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
 
-		const fileName: string = util.uri2path(uri);
+		const fileName: string = util.uri2path(params.textDocument.uri);
 		const configuration = this.projectManager.getConfiguration(fileName);
 		configuration.ensureBasicFiles(span);
 
@@ -439,14 +438,7 @@ export class TypeScriptService {
 			configs = iterate(this.projectManager.configurations())
 				.filter(config => config.getPackageName() === symbolQuery.package!.name);
 		} else {
-			const rootConfig = this.projectManager.getConfiguration('');
-			if (rootConfig) {
-				// Use root configuration because it includes all files
-				configs = [rootConfig];
-			} else {
-				// Use all configurations
-				configs = this.projectManager.configurations();
-			}
+			configs = this.projectManager.configurations();
 		}
 		const seen = new Set<string>();
 		const symbols = iterate(configs)
@@ -498,8 +490,8 @@ export class TypeScriptService {
 			// Fetch all files in the package subdirectory
 			const rootUriParts = url.parse(this.rootUri);
 			// All packages are in the types/ subdirectory
-			const packageRoot = params.symbol.package.name.substr(1);
-			const packageRootUri = url.format({ ...rootUriParts, pathname: path_.posix.join(rootUriParts.pathname || '', packageRoot) + '/', search: undefined, hash: undefined });
+			const packageRoot = path_.posix.join(rootUriParts.pathname || '', params.symbol.package.name.substr(1)) + '/';
+			const packageRootUri = url.format({ ...rootUriParts, pathname: packageRoot, search: undefined, hash: undefined });
 			await this.updater.ensureStructure(span);
 			await Promise.all(
 				iterate(this.inMemoryFileSystem.uris())
@@ -510,7 +502,8 @@ export class TypeScriptService {
 			span.log({ event: 'fetched package files' });
 
 			// Search symbol in configuration
-			const config = this.projectManager.getConfiguration(packageRoot);
+			// forcing TypeScript mode
+			const config = this.projectManager.getConfiguration(packageRoot, 'ts');
 			return Array.from(this._collectWorkspaceSymbols(config, params.query || symbolQuery, params.limit));
 		} catch (err) {
 			span.setTag('error', true);

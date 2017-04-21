@@ -69,8 +69,8 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 			this.files.set(uri, content);
 		}
 		// Add to directory tree
-		const filePath = path_.posix.relative(this.path, util.uri2path(uri));
-		const components = filePath.split('/');
+		const filePath = util.uri2path(uri);
+		const components = filePath.split('/').filter(c => c);
 		let node = this.rootNode;
 		for (const [i, component] of components.entries()) {
 			const n = node.children.get(component);

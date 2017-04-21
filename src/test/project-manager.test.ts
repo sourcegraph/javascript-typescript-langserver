@@ -26,10 +26,10 @@ describe('ProjectManager', () => {
 			await projectManager.ensureAllFiles();
 		});
 		it('should resolve package name when package.json is at the same level', () => {
-			assert.equal(projectManager.getConfiguration('').getPackageName(), 'package-name-1');
+			assert.equal(projectManager.getConfiguration('/').getPackageName(), 'package-name-1');
 		});
 		it('should resolve package name when package.json is at the upper level', () => {
-			assert.equal(projectManager.getConfiguration('subdirectory-with-tsconfig/src/dummy.ts').getPackageName(), 'package-name-2');
+			assert.equal(projectManager.getConfiguration('/subdirectory-with-tsconfig/src/dummy.ts').getPackageName(), 'package-name-2');
 		});
 	});
 	describe('ensureReferencedFiles()', () => {
@@ -50,6 +50,24 @@ describe('ProjectManager', () => {
 			memfs.getContent('file:///node_modules/somelib/index.js');
 			memfs.getContent('file:///node_modules/somelib/pathref.d.ts');
 			memfs.getContent('file:///node_modules/%40types/node/index.d.ts');
+		});
+	});
+	describe('getConfiguration()', () => {
+		beforeEach(async () => {
+			memfs = new InMemoryFileSystem('/');
+			const localfs = new MapFileSystem(new Map([
+				['file:///tsconfig.json', '{}'],
+				['file:///src/jsconfig.json', '{}']
+			]));
+			const updater = new FileSystemUpdater(localfs, memfs);
+			projectManager = new ProjectManager('/', memfs, updater, true);
+			await projectManager.ensureAllFiles();
+		});
+		it('should resolve best configuration based on file name', () => {
+			const jsConfig = projectManager.getConfiguration('/src/foo.js');
+			const tsConfig = projectManager.getConfiguration('/src/foo.ts');
+			assert.equal('/tsconfig.json', tsConfig.configFilePath);
+			assert.equal('/src/jsconfig.json', jsConfig.configFilePath);
 		});
 	});
 });
