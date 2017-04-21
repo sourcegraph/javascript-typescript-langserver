@@ -406,7 +406,8 @@ export class ProjectManager implements Disposable {
 		if (!configs) {
 			return undefined;
 		}
-		while (dir && dir !== this.rootPath) {
+		const rootPath = this.rootPath.replace(/\/+$/, '');
+		while (dir && dir !== rootPath) {
 			config = configs.get(dir);
 			if (config) {
 				return config;
@@ -418,7 +419,7 @@ export class ProjectManager implements Disposable {
 				dir = dir.substring(0, pos);
 			}
 		}
-		return configs.get('');
+		return configs.get(rootPath);
 	}
 
 	/**
@@ -502,9 +503,10 @@ export class ProjectManager implements Disposable {
 			configs.set(dir, new ProjectConfiguration(this.localFs, dir, this.versions, filePath, undefined, this.traceModuleResolution, this.logger));
 		}
 
+		const rootPath = this.rootPath.replace(/\/+$/, '');
 		for (const configType of ['js', 'ts'] as ConfigType[]) {
 			const configs = this.configs[configType];
-			if (!configs.has('')) {
+			if (!configs.has(rootPath)) {
 				const tsConfig: any = {
 					compilerOptions: {
 						module: ts.ModuleKind.CommonJS,
@@ -518,7 +520,7 @@ export class ProjectManager implements Disposable {
 				if (configs.size > 0) {
 					tsConfig.exclude = ['**/*'];
 				}
-				configs.set('', new ProjectConfiguration(this.localFs, this.rootPath, this.versions, '', tsConfig, this.traceModuleResolution, this.logger));
+				configs.set(rootPath, new ProjectConfiguration(this.localFs, this.rootPath, this.versions, '', tsConfig, this.traceModuleResolution, this.logger));
 			}
 
 		}
