@@ -462,11 +462,12 @@ export class TypeScriptService {
 				if (seen.has(hash)) {
 					return false;
 				}
-				seen.add(hash)
+				seen.add(hash);
 				return true;
 			})
 			.take(limit)
 			.toArray();
+
 		// Save empty query result
 		if (!query && !symbolQuery) {
 			this.emptyQueryWorkspaceSymbols = symbols;
