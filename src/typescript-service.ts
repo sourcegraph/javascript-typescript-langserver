@@ -453,14 +453,20 @@ export class TypeScriptService {
 			.map(config => this._collectWorkspaceSymbols(config, query || symbolQuery, limit))
 			.flatten<SymbolInformation>()
 			.filter(symbol => !symbol.location.uri.includes('/node_modules/'))
-			.take(limit)
-			.toArray().
-			// there might be few configurations that contains the same file(s) (explicit inclusion)
-			// or files from a different configurations may refer to the same file (implicit inclusion)
-			filter(symbol => {
+			// Filter duplicate symbols
+			// There may be few configurations that contain the same file(s)
+			// or files from different configurations may refer to the same file(s)
+			// TODO use observable.distinct()
+			.filter(symbol => {
 				const hash = hashObject(symbol, { respectType: false } as any);
-				return seen.has(hash) ? false : (seen.add(hash), true);
-			});
+				if (seen.has(hash)) {
+					return false;
+				}
+				seen.add(hash)
+				return true;
+			})
+			.take(limit)
+			.toArray();
 		// Save empty query result
 		if (!query && !symbolQuery) {
 			this.emptyQueryWorkspaceSymbols = symbols;
