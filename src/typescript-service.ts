@@ -45,6 +45,7 @@ import {
 	WorkspaceSymbolParams
 } from './request-type';
 import * as util from './util';
+import hashObject = require('object-hash');
 
 export interface TypeScriptServiceOptions {
 	traceModuleResolution?: boolean;
@@ -447,14 +448,17 @@ export class TypeScriptService {
 				configs = this.projectManager.configurations();
 			}
 		}
-
+		const seen = new Set<string>();
 		const symbols = iterate(configs)
 			.map(config => this._collectWorkspaceSymbols(config, query || symbolQuery, limit))
 			.flatten<SymbolInformation>()
 			.filter(symbol => !symbol.location.uri.includes('/node_modules/'))
 			.take(limit)
-			.toArray();
-
+			.toArray().
+			filter(symbol => {
+				const hash = hashObject(symbol, { respectType: false } as any);
+				return seen.has(hash) ? false : (seen.add(hash), true);
+			});
 		// Save empty query result
 		if (!query && !symbolQuery) {
 			this.emptyQueryWorkspaceSymbols = symbols;
