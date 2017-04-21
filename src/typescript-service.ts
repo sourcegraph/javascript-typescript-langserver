@@ -45,6 +45,7 @@ import {
 	WorkspaceSymbolParams
 } from './request-type';
 import * as util from './util';
+import hashObject = require('object-hash');
 
 export interface TypeScriptServiceOptions {
 	traceModuleResolution?: boolean;
@@ -439,11 +440,23 @@ export class TypeScriptService {
 		} else {
 			configs = this.projectManager.configurations();
 		}
-
+		const seen = new Set<string>();
 		const symbols = iterate(configs)
 			.map(config => this._collectWorkspaceSymbols(config, query || symbolQuery, limit))
 			.flatten<SymbolInformation>()
 			.filter(symbol => !symbol.location.uri.includes('/node_modules/'))
+			// Filter duplicate symbols
+			// There may be few configurations that contain the same file(s)
+			// or files from different configurations may refer to the same file(s)
+			// TODO use observable.distinct()
+			.filter(symbol => {
+				const hash = hashObject(symbol, { respectType: false } as any);
+				if (seen.has(hash)) {
+					return false;
+				}
+				seen.add(hash);
+				return true;
+			})
 			.take(limit)
 			.toArray();
 
