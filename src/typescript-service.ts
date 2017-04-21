@@ -455,6 +455,8 @@ export class TypeScriptService {
 			.filter(symbol => !symbol.location.uri.includes('/node_modules/'))
 			.take(limit)
 			.toArray().
+			// there might be few configurations that contains the same file(s) (explicit inclusion)
+			// or files from a different configurations may refer to the same file (implicit inclusion)
 			filter(symbol => {
 				const hash = hashObject(symbol, { respectType: false } as any);
 				return seen.has(hash) ? false : (seen.add(hash), true);
