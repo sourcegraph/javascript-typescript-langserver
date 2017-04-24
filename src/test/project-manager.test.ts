@@ -11,6 +11,9 @@ describe('ProjectManager', () => {
 
 	let projectManager: ProjectManager;
 	let memfs: InMemoryFileSystem;
+	const diagnosticsPublisher = {
+		updateFileDiagnostics(diagnostics: any) { /* nop */ }
+	};
 
 	describe('getPackageName()', () => {
 		beforeEach(async () => {
@@ -22,7 +25,7 @@ describe('ProjectManager', () => {
 				['file:///subdirectory-with-tsconfig/src/dummy.ts', '']
 			]));
 			const updater = new FileSystemUpdater(localfs, memfs);
-			projectManager = new ProjectManager('/', memfs, updater, true);
+			projectManager = new ProjectManager('/', memfs, updater, diagnosticsPublisher, true);
 			await projectManager.ensureAllFiles();
 		});
 		it('should resolve package name when package.json is at the same level', () => {
@@ -43,7 +46,7 @@ describe('ProjectManager', () => {
 				['file:///src/dummy.ts', 'import * as somelib from "somelib";']
 			]));
 			const updater = new FileSystemUpdater(localfs, memfs);
-			projectManager = new ProjectManager('/', memfs, updater, true);
+			projectManager = new ProjectManager('/', memfs, updater, diagnosticsPublisher, true);
 		});
 		it('should ensure content for imports and references is fetched', async () => {
 			await projectManager.ensureReferencedFiles('file:///src/dummy.ts').toPromise();
@@ -60,7 +63,7 @@ describe('ProjectManager', () => {
 				['file:///src/jsconfig.json', '{}']
 			]));
 			const updater = new FileSystemUpdater(localfs, memfs);
-			projectManager = new ProjectManager('/', memfs, updater, true);
+			projectManager = new ProjectManager('/', memfs, updater, diagnosticsPublisher, true);
 			await projectManager.ensureAllFiles();
 		});
 		it('should resolve best configuration based on file name', () => {

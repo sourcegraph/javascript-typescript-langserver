@@ -4,6 +4,7 @@ import { inspect } from 'util';
 import { isReponseMessage, Message, NotificationMessage, RequestMessage, ResponseMessage } from 'vscode-jsonrpc/lib/messages';
 import {
 	LogMessageParams,
+	PublishDiagnosticsParams,
 	TextDocumentIdentifier,
 	TextDocumentItem
 } from 'vscode-languageserver';
@@ -48,6 +49,13 @@ export interface LanguageClient {
 	 * because the server is not supposed to act differently if the cache set failed.
 	 */
 	xcacheSet(params: CacheSetParams): void;
+
+	/**
+	 * Diagnostics are sent from the server to the client to notify the user of errors/warnings
+	 * in a source file
+	 * @param params The diagnostics to send to the client
+	 */
+	textDocumentPublishDiagnostics(params: PublishDiagnosticsParams): void;
 }
 
 /**
@@ -168,5 +176,14 @@ export class RemoteLanguageClient {
 	 */
 	xcacheSet(params: CacheSetParams): void {
 		return this.notify('xcache/set', params);
+	}
+
+	/**
+	 * Diagnostics are sent from the server to the client to notify the user of errors/warnings
+	 * in a source file
+	 * @param params The diagnostics to send to the client
+	 */
+	textDocumentPublishDiagnostics(params: PublishDiagnosticsParams): void {
+		this.notify('textDocument/publishDiagnostics', params);
 	}
 }
