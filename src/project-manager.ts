@@ -5,11 +5,11 @@ import * as os from 'os';
 import * as path_ from 'path';
 import * as ts from 'typescript';
 import { Disposable } from 'vscode-languageserver';
+import { URL } from 'whatwg-url';
 import { FileSystemUpdater } from './fs';
 import { Logger, NoopLogger } from './logging';
 import { InMemoryFileSystem } from './memfs';
 import * as util from './util';
-const URL: typeof window.URL = require('whatwg-url').URL;
 
 export type ConfigType = 'js' | 'ts';
 
@@ -83,7 +83,7 @@ export class ProjectManager implements Disposable {
 	/**
 	 * A URI Map from file to files referenced by the file, so files only need to be pre-processed once
 	 */
-	private referencedFiles = new Map<string, Observable<string>>();
+	private referencedFiles = new Map<string, Observable<URL>>();
 
 	/**
 	 * @param rootPath root path as passed to `initialize`
@@ -155,7 +155,7 @@ export class ProjectManager implements Disposable {
 				// Ensure content of all all global .d.ts, [tj]sconfig.json, package.json files
 				await Promise.all(
 					iterate(this.localFs.uris())
-						.filter(uri => util.isGlobalTSFile(uri) || util.isConfigFile(uri) || util.isPackageJsonFile(uri))
+						.filter(uri => util.isGlobalTSFile(uri.pathname) || util.isConfigFile(uri.pathname) || util.isPackageJsonFile(uri.pathname))
 						.map(uri => this.updater.ensure(uri))
 				);
 				// Scan for [tj]sconfig.json files
@@ -201,7 +201,7 @@ export class ProjectManager implements Disposable {
 					await this.updater.ensureStructure(span);
 					await Promise.all(
 						iterate(this.localFs.uris())
-							.filter(uri => !uri.includes('/node_modules/') && util.isJSTSFile(uri) || util.isConfigFile(uri) || util.isPackageJsonFile(uri))
+							.filter(uri => !uri.pathname.includes('/node_modules/') && util.isJSTSFile(uri.pathname) || util.isConfigFile(uri.pathname) || util.isPackageJsonFile(uri.pathname))
 							.map(uri => this.updater.ensure(uri))
 					);
 					this.createConfigurations();
@@ -232,7 +232,7 @@ export class ProjectManager implements Disposable {
 				await this.updater.ensureStructure(span);
 				await Promise.all(
 					iterate(this.localFs.uris())
-						.filter(uri => util.isJSTSFile(uri) || util.isConfigFile(uri) || util.isPackageJsonFile(uri))
+						.filter(uri => util.isJSTSFile(uri.pathname) || util.isConfigFile(uri.pathname) || util.isPackageJsonFile(uri.pathname))
 						.map(uri => this.updater.ensure(uri))
 				);
 				this.createConfigurations();
@@ -265,15 +265,15 @@ export class ProjectManager implements Disposable {
 	 * @param childOf OpenTracing parent span for tracing
 	 * @return Observable of file URIs ensured
 	 */
-	ensureReferencedFiles(uri: string, maxDepth = 30, ignore = new Set<string>(), childOf = new Span()): Observable<string> {
+	ensureReferencedFiles(uri: URL, maxDepth = 30, ignore = new Set<string>(), childOf = new Span()): Observable<string> {
 		const span = childOf.tracer().startSpan('Ensure referenced files', { childOf });
 		span.addTags({ uri, maxDepth });
-		ignore.add(uri);
+		ignore.add(uri.href);
 		return Observable.from(this.ensureModuleStructure(span))
 			// If max depth was reached, don't go any further
 			.mergeMap(() => maxDepth === 0 ? [] : this.resolveReferencedFiles(uri, span))
 			// Prevent cycles
-			.filter(referencedUri => !ignore.has(referencedUri))
+			.filter(referencedUri => !ignore.has(referencedUri.href))
 			// Call method recursively with one less dep level
 			.mergeMap(referencedUri =>
 				this.ensureReferencedFiles(referencedUri, maxDepth - 1, ignore)
@@ -315,19 +315,18 @@ export class ProjectManager implements Disposable {
 	 * @param uri URI of the file to process
 	 * @return URIs of files referenced by the file
 	 */
-	private resolveReferencedFiles(uriStr: string, span = new Span()): Observable<string> {
-		let observable = this.referencedFiles.get(uriStr);
+	private resolveReferencedFiles(uri: URL, span = new Span()): Observable<URL> {
+		let observable = this.referencedFiles.get(uri.href);
 		if (observable) {
 			return observable;
 		}
-		const uri = new URL(uriStr);
 		// TypeScript works with file paths, not URIs
 		const filePath = uri.pathname.split('/').map(decodeURIComponent).join('/');
-		observable = Observable.from(this.updater.ensure(uriStr))
+		observable = Observable.from(this.updater.ensure(uri))
 			.mergeMap(() => {
 				const config = this.getConfiguration(filePath);
 				config.ensureBasicFiles(span);
-				const contents = this.localFs.getContent(uriStr);
+				const contents = this.localFs.getContent(uri);
 				const info = ts.preProcessFile(contents, true, true);
 				const compilerOpt = config.getHost().getCompilationSettings();
 				// TODO remove platform-specific behavior here, the host OS is not coupled to the client OS
@@ -367,16 +366,16 @@ export class ProjectManager implements Disposable {
 				);
 			})
 			// Use same scheme, slashes, host for referenced URI as input file
-			.map(filePath => new URL(filePath.split(/[\\\/]/).map(encodeURIComponent).join('/'), uriStr).href)
+			.map(filePath => new URL(filePath.split(/[\\\/]/).map(encodeURIComponent).join('/'), uri.href))
 			// Don't cache errors
-			.catch<string, never>(err => {
-				this.referencedFiles.delete(uriStr);
+			.catch<URL, never>(err => {
+				this.referencedFiles.delete(uri.href);
 				throw err;
 			})
 			// Make sure all subscribers get the same values
 			.publishReplay()
 			.refCount();
-		this.referencedFiles.set(uriStr, observable);
+		this.referencedFiles.set(uri.href, observable);
 		return observable;
 	}
 
@@ -425,7 +424,7 @@ export class ProjectManager implements Disposable {
 	 * @param uri file's URI
 	 * @param text file's content
 	 */
-	didOpen(uri: string, text: string) {
+	didOpen(uri: URL, text: string) {
 		this.didChange(uri, text);
 	}
 
@@ -433,11 +432,11 @@ export class ProjectManager implements Disposable {
 	 * Called when file was closed by client. Current implementation invalidates compiled version
 	 * @param uri file's URI
 	 */
-	didClose(uri: string, span = new Span()) {
+	didClose(uri: URL, span = new Span()) {
 		const filePath = util.uri2path(uri);
 		this.localFs.didClose(uri);
-		let version = this.versions.get(uri) || 0;
-		this.versions.set(uri, ++version);
+		let version = this.versions.get(uri.href) || 0;
+		this.versions.set(uri.href, ++version);
 		const config = this.getConfigurationIfExists(filePath);
 		if (!config) {
 			return;
@@ -452,11 +451,11 @@ export class ProjectManager implements Disposable {
 	 * @param uri file's URI
 	 * @param text file's content
 	 */
-	didChange(uri: string, text: string, span = new Span()) {
+	didChange(uri: URL, text: string, span = new Span()) {
 		const filePath = util.uri2path(uri);
 		this.localFs.didChange(uri, text);
-		let version = this.versions.get(uri) || 0;
-		this.versions.set(uri, ++version);
+		let version = this.versions.get(uri.href) || 0;
+		this.versions.set(uri.href, ++version);
 		const config = this.getConfigurationIfExists(filePath);
 		if (!config) {
 			return;
@@ -470,7 +469,7 @@ export class ProjectManager implements Disposable {
 	 * Called when file was saved by client
 	 * @param uri file's URI
 	 */
-	didSave(uri: string) {
+	didSave(uri: URL) {
 		this.localFs.didSave(uri);
 	}
 
@@ -930,7 +929,7 @@ export class ProjectConfiguration {
 
 		let changed = false;
 		for (const uri of this.fs.uris()) {
-			const fileName = util.uri2path(uri);
+			const fileName = util.uri2path(uri.href);
 			if (util.isGlobalTSFile(fileName) || (!util.isDependencyFile(fileName) && util.isDeclarationFile(fileName))) {
 				const sourceFile = program.getSourceFile(fileName);
 				if (!sourceFile) {

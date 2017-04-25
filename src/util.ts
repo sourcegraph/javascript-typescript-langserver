@@ -94,17 +94,26 @@ export function path2uri(root: string, file: string): string {
 	return ret + p;
 }
 
-export function uri2path(uri: string): string {
-	if (uri.startsWith('file://')) {
-		uri = uri.substring('file://'.length);
-		if (process.platform === 'win32') {
-			if (!strict) {
-				uri = uri.substring(1);
-			}
+/**
+ * Returns the path component of the passed URI as a file path.
+ * The OS style and seperator is determined by the presence of a Windows drive letter + colon in the URI.
+ * Does not check the URI protocol.
+ */
+export function uri2path(uri: URL): string {
+	// %-decode parts
+	const parts = uri.pathname.split('/').map(part => {
+		try {
+			return decodeURIComponent(part);
+		} catch (err) {
+			throw new Error(`Error decoding ${part} of ${uri}: ${err.message}`);
 		}
-		uri = uri.split('/').map(decodeURIComponent).join('/');
+	});
+	// Strip the leading slash on Windows
+	const isWindowsUri = parts[0] && /^\/[a-z]:\//.test(parts[0]);
+	if (isWindowsUri) {
+		parts[0] = parts[0].substr(1);
 	}
-	return uri;
+	return parts.join(isWindowsUri ? '\\' : '/');
 }
 
 export function isLocalUri(uri: string): boolean {
