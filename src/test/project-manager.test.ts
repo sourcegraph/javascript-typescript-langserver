@@ -2,6 +2,7 @@ import * as chai from 'chai';
 import chaiAsPromised = require('chai-as-promised');
 chai.use(chaiAsPromised);
 const assert = chai.assert;
+import * as sinon from 'sinon';
 import { FileSystemUpdater } from '../fs';
 import { InMemoryFileSystem } from '../memfs';
 import { ProjectManager } from '../project-manager';
@@ -11,6 +12,7 @@ describe('ProjectManager', () => {
 
 	let projectManager: ProjectManager;
 	let memfs: InMemoryFileSystem;
+	let diagnosticsSpy: sinon.SinonSpy;
 	const diagnosticsPublisher = {
 		updateFileDiagnostics(diagnostics: any) { /* nop */ }
 	};
@@ -73,4 +75,46 @@ describe('ProjectManager', () => {
 			assert.equal('/src/jsconfig.json', jsConfig.configFilePath);
 		});
 	});
+	describe('didOpen()', () => {
+		beforeEach(async () => {
+			diagnosticsSpy = sinon.spy();
+			diagnosticsPublisher.updateFileDiagnostics = diagnosticsSpy;
+			memfs = new InMemoryFileSystem('/');
+			const localfs = new MapFileSystem(new Map([
+				['file:///package.json', '{"name": "package-name-1"}'],
+				['file:///src/dummy.ts', 'const num: number = "banana";']
+			]));
+			const updater = new FileSystemUpdater(localfs, memfs);
+			projectManager = new ProjectManager('/', memfs, updater, diagnosticsPublisher, true);
+			await projectManager.ensureAllFiles();
+		});
+		it('should compile opened file and return diagnostics', async () => {
+			projectManager.didOpen('file:///src/dummy.ts', 'const num: number = "banana";');
+			const lastArgs = diagnosticsSpy.lastCall.args[0];
+			assert.equal(lastArgs.length, 1);
+		});
+	});
+	describe('didChange()', () => {
+		beforeEach(async () => {
+			diagnosticsSpy = sinon.spy();
+			diagnosticsPublisher.updateFileDiagnostics = diagnosticsSpy;
+			memfs = new InMemoryFileSystem('/');
+			const localfs = new MapFileSystem(new Map([
+				['file:///package.json', '{"name": "package-name-1"}'],
+				['file:///src/dummy.ts', 'const num: number = "banana";']
+			]));
+			const updater = new FileSystemUpdater(localfs, memfs);
+			projectManager = new ProjectManager('/', memfs, updater, diagnosticsPublisher, true);
+			await projectManager.ensureAllFiles();
+		});
+		it('should update program and get updated diagnostics', async () => {
+			projectManager.didOpen('file:///src/dummy.ts', 'const num: number = "banana";');
+			let lastArgs = diagnosticsSpy.lastCall.args[0];
+			assert.equal(lastArgs.length, 1);
+			projectManager.didChange('file:///src/dummy.ts', 'const num: number = 55;');
+			lastArgs = diagnosticsSpy.lastCall.args[0];
+			assert.equal(lastArgs.length, 0);
+		});
+	});
+
 });
