@@ -38,11 +38,11 @@ export class DiagnosticsPublisher implements DiagnosticsHandler {
 		const diagnosticsByFile = this.groupByFile(diagnostics);
 
 		// add empty diagnostics for fixed files, so client marks them as resolved
-		this.problemFiles.forEach(file => {
+		for (const file of this.problemFiles) {
 			if (!diagnosticsByFile.has(file)) {
 				diagnosticsByFile.set(file, []);
 			}
-		});
+		}
 		this.problemFiles.clear();
 
 		// for each file: publish and set as problem file
@@ -101,14 +101,14 @@ export class DiagnosticsPublisher implements DiagnosticsHandler {
 	 */
 	private groupByFile(diagnostics: ts.Diagnostic[]): Map<string, ts.Diagnostic[]> {
 		const diagnosticsByFile: Map<string, ts.Diagnostic[]> = new Map();
-		diagnostics.forEach(d => {
-			const diagnosticsForFile = diagnosticsByFile.get(d.file.fileName);
+		for (const diagnostic of diagnostics) {
+			const diagnosticsForFile = diagnosticsByFile.get(diagnostic.file.fileName);
 			if (!diagnosticsForFile) {
-				diagnosticsByFile.set(d.file.fileName, [d]);
+				diagnosticsByFile.set(diagnostic.file.fileName, [diagnostic]);
 			} else {
-				diagnosticsForFile.push(d);
+				diagnosticsForFile.push(diagnostic);
 			}
-		});
+		}
 		return diagnosticsByFile;
 	}
 }
