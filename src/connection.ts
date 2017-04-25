@@ -181,7 +181,7 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 				// Cancel another request by unsubscribing from the Observable
 				const subscription = subscriptions.get(message.params.id);
 				if (!subscription) {
-					logger.error(`$/cancelRequest for unknown request ID ${message.params.id}`);
+					logger.warn(`$/cancelRequest for unknown request ID ${message.params.id}`);
 					return;
 				}
 				subscription.unsubscribe();
@@ -207,8 +207,10 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 					span.setTag('params', inspect(message.params));
 				}
 			}
-			if (typeof (handler as any)[method] !== 'function') {
-				// Method not implemented
+		}
+		if (typeof (handler as any)[method] !== 'function') {
+			// Method not implemented
+			if (isRequestMessage(message)) {
 				messageWriter.write({
 					jsonrpc: '2.0',
 					id: message.id,
@@ -217,8 +219,10 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 						message: `Method ${method} not implemented`
 					}
 				});
-				return;
+			} else {
+				logger.warn(`Method ${method} not implemented`);
 			}
+			return;
 		}
 		// Call handler method with params and span
 		let observable: Observable<any>;
