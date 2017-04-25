@@ -2,6 +2,7 @@ import * as chai from 'chai';
 import chaiAsPromised = require('chai-as-promised');
 chai.use(chaiAsPromised);
 const assert = chai.assert;
+import { URL } from 'whatwg-url';
 import { FileSystemUpdater } from '../fs';
 import { InMemoryFileSystem } from '../memfs';
 import { ProjectManager } from '../project-manager';
@@ -46,10 +47,10 @@ describe('ProjectManager', () => {
 			projectManager = new ProjectManager('/', memfs, updater, true);
 		});
 		it('should ensure content for imports and references is fetched', async () => {
-			await projectManager.ensureReferencedFiles('file:///src/dummy.ts').toPromise();
-			memfs.getContent('file:///node_modules/somelib/index.js');
-			memfs.getContent('file:///node_modules/somelib/pathref.d.ts');
-			memfs.getContent('file:///node_modules/%40types/node/index.d.ts');
+			await projectManager.ensureReferencedFiles(new URL('file:///src/dummy.ts')).toPromise();
+			memfs.getContent(new URL('file:///node_modules/somelib/index.js'));
+			memfs.getContent(new URL('file:///node_modules/somelib/pathref.d.ts'));
+			memfs.getContent(new URL('file:///node_modules/%40types/node/index.d.ts'));
 		});
 	});
 	describe('getConfiguration()', () => {

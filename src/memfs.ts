@@ -1,6 +1,8 @@
 import * as fs_ from 'fs';
+import iterate from 'iterare';
 import * as path_ from 'path';
 import * as ts from 'typescript';
+import { URL } from 'whatwg-url';
 import { Logger, NoopLogger } from './logging';
 import * as match from './match-files';
 import * as util from './util';
@@ -53,8 +55,8 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	/**
 	 * Returns an IterableIterator for all URIs known to exist in the workspace (content loaded or not)
 	 */
-	uris(): IterableIterator<string> {
-		return this.files.keys();
+	uris(): IterableIterator<URL> {
+		return iterate(this.files.keys()).map(uri => new URL(uri));
 	}
 
 	/**
@@ -63,10 +65,10 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 * @param uri The URI of the file
 	 * @param content The optional content
 	 */
-	add(uri: string, content?: string): void {
+	add(uri: URL, content?: string): void {
 		// Make sure not to override existing content with undefined
-		if (content !== undefined || !this.files.has(uri)) {
-			this.files.set(uri, content);
+		if (content !== undefined || !this.files.has(uri.href)) {
+			this.files.set(uri.href, content);
 		}
 		// Add to directory tree
 		const filePath = util.uri2path(uri);
@@ -93,8 +95,8 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 *
 	 * @param uri URI to a file
 	 */
-	has(uri: string): boolean {
-		return this.files.has(uri) || this.fileExists(util.uri2path(uri));
+	has(uri: URL): boolean {
+		return this.files.has(uri.href) || this.fileExists(util.uri2path(uri));
 	}
 
 	/**
@@ -104,8 +106,8 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 *
 	 * TODO take overlay into account
 	 */
-	getContent(uri: string): string {
-		let content = this.files.get(uri);
+	getContent(uri: URL): string {
+		let content = this.files.get(uri.href);
 		if (content === undefined) {
 			content = typeScriptLibraries.get(util.uri2path(uri));
 		}
@@ -160,16 +162,16 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 * Invalidates temporary content denoted by the given URI
 	 * @param uri file's URI
 	 */
-	didClose(uri: string) {
-		this.overlay.delete(uri);
+	didClose(uri: URL) {
+		this.overlay.delete(uri.href);
 	}
 
 	/**
 	 * Adds temporary content denoted by the given URI
 	 * @param uri file's URI
 	 */
-	didSave(uri: string) {
-		const content = this.overlay.get(uri);
+	didSave(uri: URL) {
+		const content = this.overlay.get(uri.href);
 		if (content !== undefined) {
 			this.add(uri, content);
 		}
@@ -179,8 +181,8 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 * Updates temporary content denoted by the given URI
 	 * @param uri file's URI
 	 */
-	didChange(uri: string, text: string) {
-		this.overlay.set(uri, text);
+	didChange(uri: URL, text: string) {
+		this.overlay.set(uri.href, text);
 	}
 
 	/**

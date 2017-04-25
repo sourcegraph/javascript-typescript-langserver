@@ -1,4 +1,5 @@
 import { iterate } from 'iterare';
+import { URL } from 'whatwg-url';
 import { FileSystem } from '../fs';
 
 /**
@@ -8,13 +9,14 @@ export class MapFileSystem implements FileSystem {
 
 	constructor(private files: Map<string, string>) { }
 
-	async getWorkspaceFiles(base?: string): Promise<Iterable<string>> {
+	async getWorkspaceFiles(base?: URL): Promise<Iterable<URL>> {
 		return iterate(this.files.keys())
-			.filter(path => !base || path.startsWith(base));
+			.filter(uri => !base || uri.startsWith(base.href))
+			.map(uri => new URL(uri));
 	}
 
-	async getTextDocumentContent(uri: string): Promise<string> {
-		const ret = this.files.get(uri);
+	async getTextDocumentContent(uri: URL): Promise<string> {
+		const ret = this.files.get(uri.href);
 		if (ret === undefined) {
 			throw new Error(`Attempt to read not-existent file ${uri}`);
 		}

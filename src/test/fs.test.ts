@@ -4,8 +4,9 @@ import * as fs from 'mz/fs';
 import * as path from 'path';
 import * as rimraf from 'rimraf';
 import * as temp from 'temp';
+import { URL } from 'whatwg-url';
 import { LocalFileSystem } from '../fs';
-import { path2uri, toUnixPath } from '../util';
+import { path2uri } from '../util';
 import chaiAsPromised = require('chai-as-promised');
 chai.use(chaiAsPromised);
 const assert = chai.assert;
@@ -14,13 +15,13 @@ describe('fs.ts', () => {
 	describe('LocalFileSystem', () => {
 		let temporaryDir: string;
 		let fileSystem: LocalFileSystem;
-		let baseUri: string;
+		let baseUri: URL;
 
 		before(async () => {
 			temporaryDir = await new Promise<string>((resolve, reject) => {
 				temp.mkdir('local-fs', (err: Error, dirPath: string) => err ? reject(err) : resolve(dirPath));
 			});
-			baseUri = path2uri('', temporaryDir) + '/';
+			baseUri = new URL(path2uri('', temporaryDir) + '/');
 			await fs.mkdir(path.join(temporaryDir, 'foo'));
 			await fs.mkdir(path.join(temporaryDir, '@types'));
 			await fs.mkdir(path.join(temporaryDir, '@types', 'diff'));
@@ -28,7 +29,7 @@ describe('fs.ts', () => {
 			await fs.writeFile(path.join(temporaryDir, 'tweedledum'), 'bye');
 			await fs.writeFile(path.join(temporaryDir, 'foo', 'bar.ts'), 'baz');
 			await fs.writeFile(path.join(temporaryDir, '@types', 'diff', 'index.d.ts'), 'baz');
-			fileSystem = new LocalFileSystem(toUnixPath(temporaryDir));
+			fileSystem = new LocalFileSystem(baseUri);
 		});
 		after(async () => {
 			await new Promise<void>((resolve, reject) => {
@@ -38,7 +39,8 @@ describe('fs.ts', () => {
 
 		describe('getWorkspaceFiles()', () => {
 			it('should return all files in the workspace', async () => {
-				assert.sameMembers(iterate(await fileSystem.getWorkspaceFiles()).toArray(), [
+				const files = iterate(await fileSystem.getWorkspaceFiles()).map(uri => uri.href).toArray();
+				assert.sameMembers(files, [
 					baseUri + 'tweedledee',
 					baseUri + 'tweedledum',
 					baseUri + 'foo/bar.ts',
@@ -46,17 +48,15 @@ describe('fs.ts', () => {
 				]);
 			});
 			it('should return all files under specific root', async () => {
-				assert.sameMembers(iterate(await fileSystem.getWorkspaceFiles(baseUri + 'foo')).toArray(), [
+				const files = iterate(await fileSystem.getWorkspaceFiles(new URL('foo/', baseUri.href))).map(uri => uri.href).toArray();
+				assert.sameMembers(files, [
 					baseUri + 'foo/bar.ts'
 				]);
 			});
 		});
 		describe('getTextDocumentContent()', () => {
-			it('should read files denoted by relative URI', async () => {
-				assert.equal(await fileSystem.getTextDocumentContent('tweedledee'), 'hi');
-			});
 			it('should read files denoted by absolute URI', async () => {
-				assert.equal(await fileSystem.getTextDocumentContent(baseUri + 'tweedledee'), 'hi');
+				assert.equal(await fileSystem.getTextDocumentContent(new URL('tweedledee', baseUri.href)), 'hi');
 			});
 		});
 	});
