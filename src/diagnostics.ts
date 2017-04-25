@@ -100,7 +100,7 @@ export class DiagnosticsPublisher implements DiagnosticsHandler {
 	 * @param diagnostics All diagnostics received in an update
 	 */
 	private groupByFile(diagnostics: ts.Diagnostic[]): Map<string, ts.Diagnostic[]> {
-		const diagnosticsByFile: Map<string, ts.Diagnostic[]> = new Map();
+		const diagnosticsByFile = new Map<string, ts.Diagnostic[]>();
 		for (const diagnostic of diagnostics) {
 			const diagnosticsForFile = diagnosticsByFile.get(diagnostic.file.fileName);
 			if (!diagnosticsForFile) {
