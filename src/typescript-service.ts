@@ -4,7 +4,6 @@ import { toPairs } from 'lodash';
 import { Span } from 'opentracing';
 import * as path_ from 'path';
 import * as ts from 'typescript';
-import * as url from 'url';
 import {
 	CompletionItem,
 	CompletionItemKind,
@@ -46,6 +45,7 @@ import {
 } from './request-type';
 import * as util from './util';
 import hashObject = require('object-hash');
+const URL: typeof window.URL = require('whatwg-url').URL;
 
 export interface TypeScriptServiceOptions {
 	traceModuleResolution?: boolean;
@@ -78,7 +78,7 @@ export class TypeScriptService {
 	/**
 	 * The root URI as passed to `initialize` or converted from `rootPath`
 	 */
-	protected rootUri: string;
+	protected rootUri: URL;
 
 	/**
 	 * Cached response for empty workspace/symbol query
@@ -134,7 +134,7 @@ export class TypeScriptService {
 	async initialize(params: InitializeParams, span = new Span()): Promise<InitializeResult> {
 		if (params.rootUri || params.rootPath) {
 			this.root = params.rootPath || util.uri2path(params.rootUri!);
-			this.rootUri = params.rootUri || util.path2uri('', params.rootPath!);
+			this.rootUri = new URL(params.rootUri || util.path2uri('', params.rootPath!));
 			this._initializeFileSystems(!this.options.strict && !(params.capabilities.xcontentProvider && params.capabilities.xfilesProvider));
 			this.updater = new FileSystemUpdater(this.fileSystem, this.inMemoryFileSystem);
 			this.projectManager = new pm.ProjectManager(this.root, this.inMemoryFileSystem, this.updater, !!this.options.strict, this.traceModuleResolution, this.logger);
@@ -142,8 +142,7 @@ export class TypeScriptService {
 			this.isDefinitelyTyped = (async () => {
 				try {
 					// Fetch root package.json (if exists)
-					const rootUriParts = url.parse(this.rootUri);
-					const packageJsonUri = url.format({ ...rootUriParts, pathname: path_.posix.join(rootUriParts.pathname || '', 'package.json') });
+					const packageJsonUri = new URL('package.json', this.rootUri.href).href;
 					await this.updater.ensure(packageJsonUri);
 					// Check name
 					const packageJson = JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri));
@@ -488,14 +487,12 @@ export class TypeScriptService {
 			}
 
 			// Fetch all files in the package subdirectory
-			const rootUriParts = url.parse(this.rootUri);
 			// All packages are in the types/ subdirectory
-			const packageRoot = path_.posix.join(rootUriParts.pathname || '', params.symbol.package.name.substr(1)) + '/';
-			const packageRootUri = url.format({ ...rootUriParts, pathname: packageRoot, search: undefined, hash: undefined });
+			const packageRootUri = new URL(params.symbol.package.name.substr(1), this.rootUri.href);
 			await this.updater.ensureStructure(span);
 			await Promise.all(
 				iterate(this.inMemoryFileSystem.uris())
-					.filter(uri => uri.startsWith(packageRootUri))
+					.filter(uri => uri.startsWith(packageRootUri.href))
 					.map(uri => this.updater.ensure(uri, span))
 			);
 			this.projectManager.createConfigurations();
@@ -503,7 +500,7 @@ export class TypeScriptService {
 
 			// Search symbol in configuration
 			// forcing TypeScript mode
-			const config = this.projectManager.getConfiguration(packageRoot, 'ts');
+			const config = this.projectManager.getConfiguration(util.uri2path(packageRootUri.href), 'ts');
 			return Array.from(this._collectWorkspaceSymbols(config, params.query || symbolQuery, params.limit));
 		} catch (err) {
 			span.setTag('error', true);

@@ -4,12 +4,12 @@ import { Span } from 'opentracing';
 import * as os from 'os';
 import * as path_ from 'path';
 import * as ts from 'typescript';
-import * as url from 'url';
 import { Disposable } from 'vscode-languageserver';
 import { FileSystemUpdater } from './fs';
 import { Logger, NoopLogger } from './logging';
 import { InMemoryFileSystem } from './memfs';
 import * as util from './util';
+const URL: typeof window.URL = require('whatwg-url').URL;
 
 export type ConfigType = 'js' | 'ts';
 
@@ -315,22 +315,19 @@ export class ProjectManager implements Disposable {
 	 * @param uri URI of the file to process
 	 * @return URIs of files referenced by the file
 	 */
-	private resolveReferencedFiles(uri: string, span = new Span()): Observable<string> {
-		let observable = this.referencedFiles.get(uri);
+	private resolveReferencedFiles(uriStr: string, span = new Span()): Observable<string> {
+		let observable = this.referencedFiles.get(uriStr);
 		if (observable) {
 			return observable;
 		}
-		const parts = url.parse(uri);
-		if (!parts.pathname) {
-			return Observable.throw(new Error(`Invalid URI ${uri}`));
-		}
+		const uri = new URL(uriStr);
 		// TypeScript works with file paths, not URIs
-		const filePath = parts.pathname.split('/').map(decodeURIComponent).join('/');
-		observable = Observable.from(this.updater.ensure(uri))
+		const filePath = uri.pathname.split('/').map(decodeURIComponent).join('/');
+		observable = Observable.from(this.updater.ensure(uriStr))
 			.mergeMap(() => {
 				const config = this.getConfiguration(filePath);
 				config.ensureBasicFiles(span);
-				const contents = this.localFs.getContent(uri);
+				const contents = this.localFs.getContent(uriStr);
 				const info = ts.preProcessFile(contents, true, true);
 				const compilerOpt = config.getHost().getCompilationSettings();
 				// TODO remove platform-specific behavior here, the host OS is not coupled to the client OS
@@ -370,16 +367,16 @@ export class ProjectManager implements Disposable {
 				);
 			})
 			// Use same scheme, slashes, host for referenced URI as input file
-			.map(filePath => url.format({ ...parts, pathname: filePath.split(/[\\\/]/).map(encodeURIComponent).join('/'), search: undefined, hash: undefined }))
+			.map(filePath => new URL(filePath.split(/[\\\/]/).map(encodeURIComponent).join('/'), uriStr).href)
 			// Don't cache errors
-			.catch(err => {
-				this.referencedFiles.delete(uri);
+			.catch<string, never>(err => {
+				this.referencedFiles.delete(uriStr);
 				throw err;
 			})
 			// Make sure all subscribers get the same values
 			.publishReplay()
 			.refCount();
-		this.referencedFiles.set(uri, observable);
+		this.referencedFiles.set(uriStr, observable);
 		return observable;
 	}
 
