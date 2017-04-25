@@ -472,14 +472,9 @@ export class ProjectManager implements Disposable {
 			return;
 		}
 		config.ensureConfigFile();
-
-		// If file was unknown, we add it (which syncs program)
-		// If file was known, we bump the project version and sync
-		const changedToLoadFile = config.ensureSourceFile(filePath);
-		if (!changedToLoadFile) {
-			config.getHost().incProjectVersion();
-			config.syncProgram();
-		}
+		config.ensureSourceFile(filePath);
+		config.getHost().incProjectVersion();
+		config.syncProgram();
 	}
 
 	/**
@@ -974,22 +969,15 @@ export class ProjectConfiguration {
 	 * Ensures a single file is available to the LanguageServiceHost
 	 * @param filePath
 	 */
-	ensureSourceFile(filePath: string): boolean {
+	ensureSourceFile(filePath: string): void {
 		const program = this.getProgram();
 		if (!program) {
-			return false;
+			return;
 		}
-		let changed = false;
 		const sourceFile = program.getSourceFile(filePath);
 		if (!sourceFile) {
 			this.getHost().addFile(filePath);
-			changed = true;
 		}
-		if (changed) {
-			// requery program object to synchonize LanguageService's data
-			this.syncProgram();
-		}
-		return changed;
 	}
 
 	/**
