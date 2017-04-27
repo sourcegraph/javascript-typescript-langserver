@@ -3,6 +3,8 @@ import { FORMAT_TEXT_MAP, Span } from 'opentracing';
 import { inspect } from 'util';
 import { isReponseMessage, Message, NotificationMessage, RequestMessage, ResponseMessage } from 'vscode-jsonrpc/lib/messages';
 import {
+	ApplyWorkspaceEditParams,
+	ApplyWorkspaceEditResponse,
 	LogMessageParams,
 	PublishDiagnosticsParams,
 	TextDocumentIdentifier,
@@ -56,6 +58,13 @@ export interface LanguageClient {
 	 * @param params The diagnostics to send to the client
 	 */
 	textDocumentPublishDiagnostics(params: PublishDiagnosticsParams): void;
+
+	/**
+	 * Requests a set of text changes to be applied to documents in the workspace
+	 * Can occur as as a result of rename or executeCommand (code action).
+	 * @param params The edits to apply to the workspace
+	 */
+	workspaceApplyEdit(params: ApplyWorkspaceEditParams): Promise<ApplyWorkspaceEditResponse>;
 }
 
 /**
@@ -185,5 +194,14 @@ export class RemoteLanguageClient {
 	 */
 	textDocumentPublishDiagnostics(params: PublishDiagnosticsParams): void {
 		this.notify('textDocument/publishDiagnostics', params);
+	}
+
+	/**
+	 * Requests a set of text changes to be applied to documents in the workspace
+	 * Can occur as as a result of rename or executeCommand (code action).
+	 * @param params The edits to apply to the workspace
+	 */
+	workspaceApplyEdit(params: ApplyWorkspaceEditParams): Promise<ApplyWorkspaceEditResponse> {
+		return this.request('workspace/applyEdit', params).toPromise();
 	}
 }
