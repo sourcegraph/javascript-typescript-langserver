@@ -219,7 +219,7 @@ export class TypeScriptService {
 		// Fetch files needed to resolve definition
 		await this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span).toPromise();
 
-		const fileName: string = util.uri2path(uri);
+		const fileName: string = util.toUnixPath(util.uri2path(uri));
 		const configuration = this.projectManager.getConfiguration(fileName);
 		configuration.ensureBasicFiles(span);
 
@@ -265,7 +265,7 @@ export class TypeScriptService {
 			.toArray()
 			.mergeMap(() => {
 				// Convert URI to file path
-				const fileName: string = util.uri2path(uri);
+				const fileName: string = util.toUnixPath(util.uri2path(uri));
 				// Get closest tsconfig configuration
 				const configuration = this.projectManager.getConfiguration(fileName);
 				configuration.ensureBasicFiles(span);
@@ -312,7 +312,7 @@ export class TypeScriptService {
 		// Ensure files needed to resolve hover are fetched
 		await this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span).toPromise();
 
-		const fileName: string = util.uri2path(uri);
+		const fileName: string = util.toUnixPath(util.uri2path(uri));
 		const configuration = this.projectManager.getConfiguration(fileName);
 		configuration.ensureBasicFiles(span);
 
@@ -351,7 +351,7 @@ export class TypeScriptService {
 		return Observable.from(this.projectManager.ensureOwnFiles(span))
 			.mergeMap(() => {
 				// Convert URI to file path because TypeScript doesn't work with URIs
-				const fileName = util.uri2path(uri);
+				const fileName = util.toUnixPath(util.uri2path(uri));
 				// Get tsconfig configuration for requested file
 				const configuration = this.projectManager.getConfiguration(fileName);
 				// Ensure all files have been added
@@ -504,7 +504,7 @@ export class TypeScriptService {
 
 			// Search symbol in configuration
 			// forcing TypeScript mode
-			const config = this.projectManager.getConfiguration(util.uri2path(packageRootUri), 'ts');
+			const config = this.projectManager.getConfiguration(util.toUnixPath(util.uri2path(packageRootUri)), 'ts');
 			return Array.from(this._collectWorkspaceSymbols(config, params.query || symbolQuery, params.limit));
 		} catch (err) {
 			span.setTag('error', true);
@@ -525,7 +525,7 @@ export class TypeScriptService {
 		// Ensure files needed to resolve symbols are fetched
 		await this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span).toPromise();
 
-		const fileName = util.uri2path(uri);
+		const fileName = util.toUnixPath(util.uri2path(uri));
 
 		const config = this.projectManager.getConfiguration(fileName);
 		config.ensureBasicFiles(span);
@@ -698,7 +698,7 @@ export class TypeScriptService {
 		// Ensure files needed to suggest completions are fetched
 		await this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span).toPromise();
 
-		const fileName: string = util.uri2path(uri);
+		const fileName: string = util.toUnixPath(util.uri2path(uri));
 
 		const configuration = this.projectManager.getConfiguration(fileName);
 		configuration.ensureBasicFiles(span);
@@ -743,7 +743,7 @@ export class TypeScriptService {
 		// Ensure files needed to resolve signature are fetched
 		await this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span).toPromise();
 
-		const filePath = util.uri2path(uri);
+		const filePath = util.toUnixPath(util.uri2path(uri));
 		const configuration = this.projectManager.getConfiguration(filePath);
 		configuration.ensureBasicFiles(span);
 

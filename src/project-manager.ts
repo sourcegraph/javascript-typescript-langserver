@@ -265,7 +265,7 @@ export class ProjectManager implements Disposable {
 	 * @param childOf OpenTracing parent span for tracing
 	 * @return Observable of file URIs ensured
 	 */
-	ensureReferencedFiles(uri: URL, maxDepth = 30, ignore = new Set<string>(), childOf = new Span()): Observable<string> {
+	ensureReferencedFiles(uri: URL, maxDepth = 30, ignore = new Set<string>(), childOf = new Span()): Observable<URL> {
 		const span = childOf.tracer().startSpan('Ensure referenced files', { childOf });
 		span.addTags({ uri, maxDepth });
 		ignore.add(uri.href);
@@ -284,7 +284,7 @@ export class ProjectManager implements Disposable {
 					})
 			)
 			// Log errors to span
-			.catch(err => {
+			.catch<URL, never>(err => {
 				span.setTag('error', true);
 				span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
 				throw err;
@@ -433,7 +433,7 @@ export class ProjectManager implements Disposable {
 	 * @param uri file's URI
 	 */
 	didClose(uri: URL, span = new Span()) {
-		const filePath = util.uri2path(uri);
+		const filePath = util.toUnixPath(util.uri2path(uri));
 		this.localFs.didClose(uri);
 		let version = this.versions.get(uri.href) || 0;
 		this.versions.set(uri.href, ++version);
@@ -452,7 +452,7 @@ export class ProjectManager implements Disposable {
 	 * @param text file's content
 	 */
 	didChange(uri: URL, text: string, span = new Span()) {
-		const filePath = util.uri2path(uri);
+		const filePath = util.toUnixPath(util.uri2path(uri));
 		this.localFs.didChange(uri, text);
 		let version = this.versions.get(uri.href) || 0;
 		this.versions.set(uri.href, ++version);
@@ -480,7 +480,7 @@ export class ProjectManager implements Disposable {
 	 */
 	createConfigurations() {
 		for (const uri of this.localFs.uris()) {
-			const filePath = util.uri2path(uri);
+			const filePath = util.toUnixPath(util.uri2path(uri));
 			if (!/(^|\/)[tj]sconfig\.json$/.test(filePath)) {
 				continue;
 			}
@@ -926,7 +926,7 @@ export class ProjectConfiguration {
 
 		let changed = false;
 		for (const uri of this.fs.uris()) {
-			const fileName = util.uri2path(uri);
+			const fileName = util.toUnixPath(util.uri2path(uri));
 			if (util.isGlobalTSFile(fileName) || (!util.isDependencyFile(fileName) && util.isDeclarationFile(fileName))) {
 				const sourceFile = program.getSourceFile(fileName);
 				if (!sourceFile) {

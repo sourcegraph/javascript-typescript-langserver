@@ -74,7 +74,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 			this.files.set(uri.href, content);
 		}
 		// Add to directory tree
-		const filePath = util.uri2path(uri);
+		const filePath = util.toUnixPath(util.uri2path(uri));
 		const components = filePath.split('/').filter(c => c);
 		let node = this.rootNode;
 		for (const [i, component] of components.entries()) {
@@ -99,7 +99,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 * @param uri URI to a file
 	 */
 	has(uri: URL): boolean {
-		return this.files.has(uri.href) || this.fileExists(util.uri2path(uri));
+		return this.files.has(uri.href) || this.fileExists(util.toUnixPath(util.uri2path(uri)));
 	}
 
 	/**
@@ -112,7 +112,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	getContent(uri: URL): string {
 		let content = this.files.get(uri.href);
 		if (content === undefined) {
-			content = typeScriptLibraries.get(util.uri2path(uri));
+			content = typeScriptLibraries.get(util.toUnixPath(util.uri2path(uri)));
 		}
 		if (content === undefined) {
 			throw new Error(`Content of ${uri} is not available in memory`);

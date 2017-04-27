@@ -100,19 +100,13 @@ export function path2uri(root: URL, file: string): URL {
  */
 export function uri2path(uri: URL): string {
 	// %-decode parts
-	const parts = uri.pathname.split('/').map(part => {
-		try {
-			return decodeURIComponent(part);
-		} catch (err) {
-			throw new Error(`Error decoding ${part} of ${uri}: ${err.message}`);
-		}
-	});
+	let filePath = decodeURIComponent(uri.pathname);
 	// Strip the leading slash on Windows
-	const isWindowsUri = parts[0] && /^\/[a-z]:\//.test(parts[0]);
+	const isWindowsUri = /^\/[a-z]:\//i.test(filePath);
 	if (isWindowsUri) {
-		parts[0] = parts[0].substr(1);
+		filePath = filePath.substr(1);
 	}
-	return parts.join(isWindowsUri ? '\\' : '/');
+	return filePath.replace(/\//g, isWindowsUri ? '\\' : '/');
 }
 
 export function isLocalUri(uri: string): boolean {
