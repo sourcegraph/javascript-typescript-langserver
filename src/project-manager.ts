@@ -932,7 +932,8 @@ export class ProjectConfiguration {
 		}
 
 		let changed = false;
-		for (const fileName of (this.getHost().expectedFilePaths || [])) {
+		for (const uri of this.fs.uris()) {
+			const fileName = util.uri2path(uri);
 			if (util.isGlobalTSFile(fileName) || (!util.isDependencyFile(fileName) && util.isDeclarationFile(fileName))) {
 				const sourceFile = program.getSourceFile(fileName);
 				if (!sourceFile) {
