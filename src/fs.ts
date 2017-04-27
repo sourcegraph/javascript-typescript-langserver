@@ -56,13 +56,20 @@ export class LocalFileSystem implements FileSystem {
 	/**
 	 * @param rootUri The workspace root URI that is used when no base is given
 	 */
-	constructor(private rootUri: URL) {}
+	constructor(protected rootUri: URL) {}
+
+	/**
+	 * Returns the file path where a given URI should be located on disk
+	 */
+	protected resolveUriToPath(uri: URL): string {
+		return uri2path(uri);
+	}
 
 	async getWorkspaceFiles(base: URL = this.rootUri): Promise<Iterable<URL>> {
 		const files = await new Promise<string[]>((resolve, reject) => {
 			glob('*', {
 				// Search the base directory
-				cwd: uri2path(base),
+				cwd: this.resolveUriToPath(base),
 				// Don't return directories
 				nodir: true,
 				// Search directories recursively
@@ -75,7 +82,7 @@ export class LocalFileSystem implements FileSystem {
 	}
 
 	async getTextDocumentContent(uri: URL): Promise<string> {
-		return fs.readFile(uri2path(uri), 'utf8');
+		return fs.readFile(this.resolveUriToPath(uri), 'utf8');
 	}
 }
 
