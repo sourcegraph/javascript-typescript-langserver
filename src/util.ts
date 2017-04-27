@@ -139,7 +139,7 @@ export function isPackageJsonFile(filename: string): boolean {
 
 const globalTSPatterns = [
 	/(^|\/)globals?\.d\.ts$/,
-	/node_modules\/\@types\/node\/.*/,
+	/node_modules\/(?:\@|%40)types\/node\/.*/,
 	/(^|\/)typings\/.*/,
 	/(^|\/)tsd\.d\.ts($|\/)/
 ];
