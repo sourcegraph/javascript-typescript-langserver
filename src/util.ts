@@ -84,8 +84,8 @@ export function convertStringtoSymbolKind(kind: string): SymbolKind {
  * The returned URL uses protocol and host of the passed root URL
  */
 export function path2uri(rootUri: URL, filePath: string): URL {
-	const parts = filePath.split('/');
-	const isWindowsUri = parts[0].includes(':');
+	const parts = filePath.split(/[\\\/]/);
+	const isWindowsUri = parts[0].endsWith(':');
 	// Don't encode colon after Windows drive letter
 	if (isWindowsUri) {
 		parts[0] = '/' + parts[0];
@@ -96,7 +96,7 @@ export function path2uri(rootUri: URL, filePath: string): URL {
 	for (let i = 1; i < parts.length; i++) {
 		parts[i] = encodeURIComponent(parts[i]);
 	}
-	const pathname = parts.join('/');
+	const pathname = parts.join(isWindowsUri ? '\\' : '/');
 	return new URL(pathname, rootUri.href);
 }
 
@@ -107,19 +107,13 @@ export function path2uri(rootUri: URL, filePath: string): URL {
  */
 export function uri2path(uri: URL): string {
 	// %-decode parts
-	const parts = uri.pathname.split('/').map(part => {
-		try {
-			return decodeURIComponent(part);
-		} catch (err) {
-			throw new Error(`Error decoding ${part} of ${uri}: ${err.message}`);
-		}
-	});
+	let filePath = decodeURIComponent(uri.pathname);
 	// Strip the leading slash on Windows
-	const isWindowsUri = parts[0] && /^\/[a-z]:\//.test(parts[0]);
+	const isWindowsUri = /^\/[a-z]:\//.test(filePath);
 	if (isWindowsUri) {
-		parts[0] = parts[0].substr(1);
+		filePath = filePath.substr(1);
 	}
-	return parts.join(isWindowsUri ? '\\' : '/');
+	return filePath.replace(/\//g, isWindowsUri ? '\\' : '/');
 }
 
 export function isLocalUri(uri: string): boolean {
