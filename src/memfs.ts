@@ -46,7 +46,10 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 */
 	rootNode: FileSystemNode;
 
-	constructor(path: string, private logger: Logger = new NoopLogger()) {
+	/**
+	 * @param rootUri The workspace root URI
+	 */
+	constructor(private rootUri: URL, path: string, private logger: Logger = new NoopLogger()) {
 		this.path = path;
 		this.overlay = new Map<string, string>();
 		this.rootNode = { file: false, children: new Map<string, FileSystemNode>() };
@@ -120,10 +123,10 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	/**
 	 * Tells if a file denoted by the given name exists in the workspace (does not have to be loaded)
 	 *
-	 * @param path File path or URI (both absolute or relative file paths are accepted)
+	 * @param filePath Path to file, absolute or relative to `rootUri`
 	 */
-	fileExists(path: string): boolean {
-		return this.readFileIfExists(path) !== undefined || this.files.has(path) || this.files.has(util.path2uri(this.path, path));
+	fileExists(filePath: string): boolean {
+		return this.readFileIfExists(filePath) !== undefined || this.files.has(filePath) || this.files.has(util.path2uri(this.rootUri, filePath).href);
 	}
 
 	/**
@@ -131,17 +134,17 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 * @return file's content in the following order (overlay then cache).
 	 * If there is no such file, returns empty string to match expected signature
 	 */
-	readFile(path: string): string {
-		return this.readFileIfExists(path) || '';
+	readFile(filePath: string): string {
+		return this.readFileIfExists(filePath) || '';
 	}
 
 	/**
-	 * @param path file path (both absolute or relative file paths are accepted)
+	 * @param filePath Path to the file, absolute or relative to `rootUri`
 	 * @return file's content in the following order (overlay then cache).
 	 * If there is no such file, returns undefined
 	 */
-	private readFileIfExists(path: string): string | undefined {
-		const uri = util.path2uri(this.path, path);
+	readFileIfExists(filePath: string): string | undefined {
+		const uri = util.path2uri(this.rootUri, filePath).href;
 		let content = this.overlay.get(uri);
 		if (content !== undefined) {
 			return content;
@@ -155,7 +158,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 			return content;
 		}
 
-		return typeScriptLibraries.get(path);
+		return typeScriptLibraries.get(filePath);
 	}
 
 	/**

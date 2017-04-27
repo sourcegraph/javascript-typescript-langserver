@@ -21,7 +21,7 @@ describe('fs.ts', () => {
 			temporaryDir = await new Promise<string>((resolve, reject) => {
 				temp.mkdir('local-fs', (err: Error, dirPath: string) => err ? reject(err) : resolve(dirPath));
 			});
-			baseUri = new URL(path2uri('', temporaryDir) + '/');
+			baseUri = path2uri(new URL('file:///'), temporaryDir + '/');
 			await fs.mkdir(path.join(temporaryDir, 'foo'));
 			await fs.mkdir(path.join(temporaryDir, '@types'));
 			await fs.mkdir(path.join(temporaryDir, '@types', 'diff'));
