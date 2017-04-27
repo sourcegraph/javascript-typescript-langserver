@@ -474,72 +474,68 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					'types-publisher': 'Microsoft/types-publisher#production'
 				}
 			}, null, 4)],
-			['file:///resolve/index.d.ts', [
+			['file:///types/resolve/index.d.ts', [
 				'/// <reference types="node" />',
 				'',
 				'type resolveCallback = (err: Error, resolved?: string) => void;',
 				'declare function resolve(id: string, cb: resolveCallback): void;',
 				''
 			].join('\n')],
-			['file:///resolve/tsconfig.json', [
-				'{',
-				'	"compilerOptions": {',
-				'		"module": "commonjs",',
-				'		"lib": [',
-				'			"es6"',
-				'		],',
-				'		"noImplicitAny": true,',
-				'		"noImplicitThis": true,',
-				'		"strictNullChecks": false,',
-				'		"baseUrl": "../",',
-				'		"typeRoots": [',
-				'			"../"',
-				'		],',
-				'		"types": [],',
-				'		"noEmit": true,',
-				'		"forceConsistentCasingInFileNames": true',
-				'	},',
-				'	"files": [',
-				'		"index.d.ts"',
-				'	]',
-				'}'
-			].join('\n')],
-			['file:///notResolve/index.d.ts', [
+			['file:///types/resolve/tsconfig.json', JSON.stringify({
+				compilerOptions: {
+					module: 'commonjs',
+					lib: [
+						'es6'
+					],
+					noImplicitAny: true,
+					noImplicitThis: true,
+					strictNullChecks: false,
+					baseUrl: '../',
+					typeRoots: [
+						'../'
+					],
+					types: [],
+					noEmit: true,
+					forceConsistentCasingInFileNames: true
+				},
+				files: [
+					'index.d.ts'
+				]
+			})],
+			['file:///types/notResolve/index.d.ts', [
 				'/// <reference types="node" />',
 				'',
 				'type resolveCallback = (err: Error, resolved?: string) => void;',
 				'declare function resolve(id: string, cb: resolveCallback): void;',
 				''
 			].join('\n')],
-			['file:///notResolve/tsconfig.json', [
-				'{',
-				'	"compilerOptions": {',
-				'		"module": "commonjs",',
-				'		"lib": [',
-				'			"es6"',
-				'		],',
-				'		"noImplicitAny": true,',
-				'		"noImplicitThis": true,',
-				'		"strictNullChecks": false,',
-				'		"baseUrl": "../",',
-				'		"typeRoots": [',
-				'			"../"',
-				'		],',
-				'		"types": [],',
-				'		"noEmit": true,',
-				'		"forceConsistentCasingInFileNames": true',
-				'	},',
-				'	"files": [',
-				'		"index.d.ts"',
-				'	]',
-				'}'
-			].join('\n')]
+			['file:///types/notResolve/tsconfig.json', JSON.stringify({
+				compilerOptions: {
+					module: 'commonjs',
+					lib: [
+						'es6'
+					],
+					noImplicitAny: true,
+					noImplicitThis: true,
+					strictNullChecks: false,
+					baseUrl: '../',
+					typeRoots: [
+						'../'
+					],
+					types: [],
+					noEmit: true,
+					forceConsistentCasingInFileNames: true
+				},
+				files: [
+					'index.d.ts'
+				]
+			})]
 		])) as any);
 
 		afterEach(shutdownService as any);
 
 		describe('workspaceSymbol()', function (this: TestContext) {
-			specify('resolve, with package', async function (this: TestContext) {
+			it('should find a symbol by SymbolDescriptor query with name and package name', async function (this: TestContext) {
 				const result = await this.service.workspaceSymbol({
 					symbol: { name: 'resolveCallback', package: { name: '@types/resolve' } },
 					limit: 10
@@ -557,12 +553,12 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 								line: 2
 							}
 						},
-						uri: 'file:///resolve/index.d.ts'
+						uri: 'file:///types/resolve/index.d.ts'
 					},
 					name: 'resolveCallback'
 				}]);
 			} as any);
-			specify('resolve, with package, empty containerKind', async function (this: TestContext) {
+			it('should find a symbol by SymbolDescriptor query with name, package name and empty containerKind', async function (this: TestContext) {
 				const result = await this.service.workspaceSymbol({
 					symbol: { name: 'resolveCallback', containerKind: '', package: { name: '@types/resolve' } },
 					limit: 10
@@ -580,7 +576,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 								line: 2
 							}
 						},
-						uri: 'file:///resolve/index.d.ts'
+						uri: 'file:///types/resolve/index.d.ts'
 					},
 					name: 'resolveCallback'
 				}]);
@@ -601,14 +597,19 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		afterEach(shutdownService as any);
 
 		describe('workspaceSymbol()', function (this: TestContext) {
-			describe('symbol query', function (this: TestContext) {
-				specify('with package', async function (this: TestContext) {
+			describe('with SymbolDescriptor query', function (this: TestContext) {
+				it('should find a symbol by name, kind and package name', async function (this: TestContext) {
 					const result = await this.service.workspaceSymbol({
-						symbol: { name: 'a', kind: 'class', package: { name: 'mypkg' } },
-						limit: 10
+						symbol: {
+							name: 'a',
+							kind: 'class',
+							package: {
+								name: 'mypkg'
+							}
+						}
 					});
 					assert.deepEqual(result, [{
-						kind: SymbolKind.Class,
+					kind: SymbolKind.Class,
 						location: {
 							range: {
 								end: {
@@ -625,7 +626,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						name: 'a'
 					}]);
 				} as any);
-				specify('with package, with package version (ignored)', async function (this: TestContext) {
+				it('should find a symbol by name, kind, package name and ignore package version', async function (this: TestContext) {
 					const result = await this.service.workspaceSymbol({
 						symbol: { name: 'a', kind: 'class', package: { name: 'mypkg', version: '203940234' } },
 						limit: 10
@@ -648,10 +649,11 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						name: 'a'
 					}]);
 				} as any);
-				specify('for a', async function (this: TestContext) {
+				it('should find a symbol by name', async function (this: TestContext) {
 					const result = await this.service.workspaceSymbol({
-						symbol: { name: 'a' },
-						limit: 10
+						symbol: {
+							name: 'a'
+						}
 					});
 					assert.deepEqual(result, [{
 						kind: SymbolKind.Class,
@@ -671,43 +673,212 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						name: 'a'
 					}]);
 				} as any);
-			} as any);
-			describe('text query', function (this: TestContext) {
-				specify('for a', async function (this: TestContext) {
+				it('should return no result if the PackageDescriptor does not match', async function (this: TestContext) {
 					const result = await this.service.workspaceSymbol({
-						query: 'a',
-						limit: 10
-					});
-					assert.deepEqual(result, [{
-						kind: SymbolKind.Class,
-						location: {
-							range: {
-								end: {
-									character: 33,
-									line: 0
-								},
-								start: {
-									character: 0,
-									line: 0
-								}
-							},
-							uri: 'file:///a.ts'
-						},
-						name: 'a'
-					}]);
-				} as any);
-				specify('with wrong package', async function (this: TestContext) {
-					const result = await this.service.workspaceSymbol({
-						symbol: { name: 'a', kind: 'class', package: { name: 'not-mypkg' } },
-						limit: 10
+						symbol: {
+							name: 'a',
+							kind: 'class',
+							package: {
+								name: 'not-mypkg'
+							}
+						}
 					});
 					assert.deepEqual(result, []);
+				} as any);
+			} as any);
+			describe('with text query', function (this: TestContext) {
+				it('should find a symbol', async function (this: TestContext) {
+					const result = await this.service.workspaceSymbol({ query: 'a' });
+					assert.deepEqual(result, [{
+						kind: SymbolKind.Class,
+						location: {
+							range: {
+								end: {
+									character: 33,
+									line: 0
+								},
+								start: {
+									character: 0,
+									line: 0
+								}
+							},
+							uri: 'file:///a.ts'
+						},
+						name: 'a'
+					}]);
+				} as any);
+				it('should return all symbols for an empty query excluding dependencies', async function (this: TestContext) {
+					const result = await this.service.workspaceSymbol({ query: '' });
+					assert.deepEqual(result, [
+						{
+							name: 'a',
+							kind: SymbolKind.Class,
+							location: {
+								uri: 'file:///a.ts',
+								range: {
+									start: {
+										line: 0,
+										character: 0
+									},
+									end: {
+										line: 0,
+										character: 33
+									}
+								}
+							}
+						},
+						{
+							name: 'foo',
+							kind: SymbolKind.Method,
+							location: {
+								uri: 'file:///a.ts',
+								range: {
+									start: {
+										line: 0,
+										character: 10
+									},
+									end: {
+										line: 0,
+										character: 31
+									}
+								}
+							},
+							containerName: 'a'
+						},
+						{
+							name: 'i',
+							kind: SymbolKind.Constant,
+							location: {
+								uri: 'file:///a.ts',
+								range: {
+									start: {
+										line: 0,
+										character: 24
+									},
+									end: {
+										line: 0,
+										character: 29
+									}
+								}
+							},
+							containerName: 'foo'
+						},
+						{
+							name: 'x',
+							kind: SymbolKind.Variable,
+							location: {
+								uri: 'file:///c.ts',
+								range: {
+									start: {
+										line: 0,
+										character: 9
+									},
+									end: {
+										line: 0,
+										character: 10
+									}
+								}
+							}
+						},
+						{
+							name: 'b',
+							kind: SymbolKind.Class,
+							location: {
+								uri: 'file:///foo/b.ts',
+								range: {
+									start: {
+										line: 0,
+										character: 0
+									},
+									end: {
+										line: 0,
+										character: 57
+									}
+								}
+							}
+						},
+						{
+							name: 'bar',
+							kind: SymbolKind.Property,
+							location: {
+								uri: 'file:///foo/b.ts',
+								range: {
+									start: {
+										line: 0,
+										character: 10
+									},
+									end: {
+										line: 0,
+										character: 22
+									}
+								}
+							},
+							containerName: 'b'
+						},
+						{
+							name: 'baz',
+							kind: SymbolKind.Method,
+							location: {
+								uri: 'file:///foo/b.ts',
+								range: {
+									start: {
+										line: 0,
+										character: 23
+									},
+									end: {
+										line: 0,
+										character: 56
+									}
+								}
+							},
+							containerName: 'b'
+						},
+						{
+							name: 'qux',
+							kind: SymbolKind.Function,
+							location: {
+								uri: 'file:///foo/b.ts',
+								range: {
+									start: {
+										line: 0,
+										character: 59
+									},
+									end: {
+										line: 0,
+										character: 76
+									}
+								}
+							}
+						}
+					]);
+				} as any);
+				it('should limit the result if a limit is passed', async function (this: TestContext) {
+					const result = await this.service.workspaceSymbol({ query: '', limit: 1 });
+					assert.deepEqual(result, [
+						{
+							name: 'a',
+							kind: SymbolKind.Class,
+							location: {
+								uri: 'file:///a.ts',
+								range: {
+									start: {
+										line: 0,
+										character: 0
+									},
+									end: {
+										line: 0,
+										character: 33
+									}
+								}
+							}
+						}
+					]);
 				} as any);
 			} as any);
 		} as any);
 
 		describe('workspaceXreferences()', function (this: TestContext) {
-			specify('"foo"', async function (this: TestContext) {
+			it('should return all references to a method', async function (this: TestContext) {
 				const result = await this.service.workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' } }).toPromise();
 				assert.deepEqual(result, [{
 					symbol: {
@@ -723,7 +894,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 								line: 0
 							},
 							start: {
-								character: 9,
+								character: 10,
 								line: 0
 							}
 						},
@@ -731,7 +902,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					}
 				}]);
 			} as any);
-			specify('"foo", with hint', async function (this: TestContext) {
+			it('should return all references to a method with hinted dependee package name', async function (this: TestContext) {
 				const result = await this.service.workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' }, hints: { dependeePackageName: 'mypkg' } }).toPromise();
 				assert.deepEqual(result, [{
 					symbol: {
@@ -747,7 +918,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 								line: 0
 							},
 							start: {
-								character: 9,
+								character: 10,
 								line: 0
 							}
 						},
@@ -755,11 +926,11 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					}
 				}]);
 			} as any);
-			specify('"foo", with hint, not found', async function (this: TestContext) {
+			it('should return no references to a method if hinted dependee package name was not found', async function (this: TestContext) {
 				const result = await this.service.workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' }, hints: { dependeePackageName: 'NOT-mypkg' } }).toPromise();
 				assert.deepEqual(result, []);
 			} as any);
-			specify('dependency reference', async function (this: TestContext) {
+			it('should return all references to a symbol from a dependency', async function (this: TestContext) {
 				const result = await this.service.workspaceXreferences({ query: { name: 'x', containerName: '' } }).toPromise();
 				assert.deepEqual(result, [{
 					reference: {
@@ -769,7 +940,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 								line: 0
 							},
 							start: {
-								character: 8,
+								character: 9,
 								line: 0
 							}
 						},
@@ -783,7 +954,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					}
 				}]);
 			} as any);
-			specify('all references', async function (this: TestContext) {
+			it('should return all references to all symbols if empty SymbolDescriptor query is passed', async function (this: TestContext) {
 				const result = await this.service.workspaceXreferences({ query: {} }).toPromise();
 				assert.deepEqual(result, [
 					{
@@ -800,7 +971,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 5,
+									character: 6,
 									line: 0
 								}
 							},
@@ -821,7 +992,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 9,
+									character: 10,
 									line: 0
 								}
 							},
@@ -842,7 +1013,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 23,
+									character: 24,
 									line: 0
 								}
 							},
@@ -857,7 +1028,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 8,
+									character: 9,
 									line: 0
 								}
 							},
@@ -884,7 +1055,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 5,
+									character: 6,
 									line: 0
 								}
 							},
@@ -905,7 +1076,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 9,
+									character: 10,
 									line: 0
 								}
 							},
@@ -926,7 +1097,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 22,
+									character: 23,
 									line: 0
 								}
 							},
@@ -947,7 +1118,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 51,
+									character: 52,
 									line: 0
 								}
 							},
@@ -968,7 +1139,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 67,
+									character: 68,
 									line: 0
 								}
 							},
@@ -1484,11 +1655,11 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					uri: 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/lib.dom.d.ts',
 					range: {
 						start: {
-							line: 8248,
+							line: 8252,
 							character: 10
 						},
 						end: {
-							line: 8248,
+							line: 8252,
 							character: 14
 						}
 					}
@@ -1496,11 +1667,11 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					uri: 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/lib.dom.d.ts',
 					range: {
 						start: {
-							line: 8300,
+							line: 8304,
 							character: 12
 						},
 						end: {
-							line: 8300,
+							line: 8304,
 							character: 16
 						}
 					}

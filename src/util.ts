@@ -107,22 +107,6 @@ export function uri2path(uri: string): string {
 	return uri;
 }
 
-export function uri2reluri(uri: string, root: string): string {
-	return path2uri('', uri2relpath(uri, root));
-}
-
-export function uri2relpath(uri: string, root: string): string {
-	uri = uri2path(uri);
-	root = toUnixPath(root);
-	if (uri.startsWith(root)) {
-		uri = uri.substring(root.length);
-	}
-	while (uri.startsWith('/')) {
-		uri = uri.substring(1);
-	}
-	return uri;
-}
-
 export function isLocalUri(uri: string): boolean {
 	return uri.startsWith('file://');
 }

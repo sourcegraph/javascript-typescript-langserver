@@ -7,8 +7,10 @@ import * as ts from 'typescript';
 import { Disposable } from 'vscode-languageserver';
 import { FileSystemUpdater } from './fs';
 import { Logger, NoopLogger } from './logging';
-import { InMemoryFileSystem, walkInMemoryFs } from './memfs';
+import { InMemoryFileSystem } from './memfs';
 import * as util from './util';
+
+export type ConfigType = 'js' | 'ts';
 
 /**
  * ProjectManager translates VFS files to one or many projects denoted by [tj]config.json.
@@ -25,11 +27,14 @@ export class ProjectManager implements Disposable {
 	private rootPath: string;
 
 	/**
-	 * Workspace subtree (folder) -> JS/TS configuration mapping.
+	 * (Workspace subtree (folder) -> TS or JS configuration) mapping.
 	 * Configuration settings for a source file A are located in the closest parent folder of A.
 	 * Map keys are relative (to workspace root) paths
 	 */
-	private configs: Map<string, ProjectConfiguration>;
+	private configs = {
+		js: new Map<string, ProjectConfiguration>(),
+		ts: new Map<string, ProjectConfiguration>()
+	};
 
 	/**
 	 * When on, indicates that client is responsible to provide file content (VFS),
@@ -48,7 +53,7 @@ export class ProjectManager implements Disposable {
 	private updater: FileSystemUpdater;
 
 	/**
-	 * Relative file path -> version map. Every time file content is about to change or changed (didChange/didOpen/...), we are incrementing it's version
+	 * URI -> version map. Every time file content is about to change or changed (didChange/didOpen/...), we are incrementing it's version
 	 * signalling that file is changed and file's user must invalidate cached and requery file content
 	 */
 	private versions: Map<string, number>;
@@ -87,7 +92,6 @@ export class ProjectManager implements Disposable {
 	 */
 	constructor(rootPath: string, inMemoryFileSystem: InMemoryFileSystem, updater: FileSystemUpdater, strict: boolean, traceModuleResolution?: boolean, protected logger: Logger = new NoopLogger()) {
 		this.rootPath = util.toUnixPath(rootPath);
-		this.configs = new Map<string, ProjectConfiguration>();
 		this.updater = updater;
 		this.localFs = inMemoryFileSystem;
 		this.versions = new Map<string, number>();
@@ -130,7 +134,7 @@ export class ProjectManager implements Disposable {
 	 * or a root folder which serves as a fallback
 	 */
 	configurations(): IterableIterator<ProjectConfiguration> {
-		return this.configs.values();
+		return iterate(this.configs.js.values()).concat(this.configs.ts.values());
 	}
 
 	/**
@@ -157,7 +161,7 @@ export class ProjectManager implements Disposable {
 				this.createConfigurations();
 				// Reset all compilation state
 				// TODO utilize incremental compilation instead
-				for (const config of this.configs.values()) {
+				for (const config of this.configurations()) {
 					config.reset();
 				}
 				// Require re-processing of file references
@@ -189,28 +193,28 @@ export class ProjectManager implements Disposable {
 	 * Invalidates project configurations after execution
 	 */
 	async ensureOwnFiles(childOf = new Span()): Promise<void> {
-		const span = childOf.tracer().startSpan('Ensure own files', { childOf });
 		if (!this.ensuredOwnFiles) {
 			this.ensuredOwnFiles = (async () => {
-				await this.updater.ensureStructure(span);
-				await Promise.all(
-					iterate(this.localFs.uris())
-						.filter(uri => !uri.includes('/node_modules/') && util.isJSTSFile(uri) || util.isConfigFile(uri) || util.isPackageJsonFile(uri))
-						.map(uri => this.updater.ensure(uri))
-				);
-				this.createConfigurations();
+				const span = childOf.tracer().startSpan('Ensure own files', { childOf });
+				try {
+					await this.updater.ensureStructure(span);
+					await Promise.all(
+						iterate(this.localFs.uris())
+							.filter(uri => !uri.includes('/node_modules/') && util.isJSTSFile(uri) || util.isConfigFile(uri) || util.isPackageJsonFile(uri))
+							.map(uri => this.updater.ensure(uri))
+					);
+					this.createConfigurations();
+				} catch (err) {
+					this.ensuredOwnFiles = undefined;
+					span.setTag('error', true);
+					span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
+					throw err;
+				} finally {
+					span.finish();
+				}
 			})();
 		}
-		try {
-			await this.ensuredOwnFiles;
-		} catch (err) {
-			this.ensuredOwnFiles = undefined;
-			span.setTag('error', true);
-			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
-			throw err;
-		} finally {
-			span.finish();
-		}
+		return this.ensuredOwnFiles;
 	}
 
 	/**
@@ -341,16 +345,23 @@ export class ProjectManager implements Disposable {
 						// Resolve triple slash references relative to current file
 						// instead of using module resolution host because it behaves
 						// differently in "nodejs" mode
-						.map(referencedFile => util.toUnixPath(
-							path_.relative(
-								this.rootPath,
-								resolver.resolve(
-									this.rootPath,
-									resolver.dirname(filePath),
-									util.toUnixPath(referencedFile.fileName)
-								)
+						.map(referencedFile => resolver.resolve(
+							this.rootPath,
+							resolver.dirname(filePath),
+							util.toUnixPath(referencedFile.fileName)
+						)),
+					// References with `<reference types="..."/>`
+					Observable.from(info.typeReferenceDirectives)
+						.map(typeReferenceDirective =>
+							ts.resolveTypeReferenceDirective(
+								typeReferenceDirective.fileName,
+								filePath,
+								compilerOpt,
+								config.moduleResolutionHost()
 							)
-						))
+						)
+						.filter(resolved => !!(resolved && resolved.resolvedTypeReferenceDirective && resolved.resolvedTypeReferenceDirective.resolvedFileName))
+						.map(resolved => resolved.resolvedTypeReferenceDirective!.resolvedFileName!)
 				);
 			})
 			// Use same scheme, slashes, host for referenced URI as input file
@@ -368,11 +379,11 @@ export class ProjectManager implements Disposable {
 	}
 
 	/**
-	 * @param filePath source file path relative to project root
+	 * @param filePath source file path, absolute
 	 * @return project configuration for a given source file. Climbs directory tree up to workspace root if needed
 	 */
-	getConfiguration(filePath: string): ProjectConfiguration {
-		const config = this.getConfigurationIfExists(filePath);
+	getConfiguration(filePath: string, configType: ConfigType = this.getConfigurationType(filePath)): ProjectConfiguration {
+		const config = this.getConfigurationIfExists(filePath, configType);
 		if (!config) {
 			throw new Error(`TypeScript config file for ${filePath} not found`);
 		}
@@ -380,43 +391,51 @@ export class ProjectManager implements Disposable {
 	}
 
 	/**
-	 * @param filePath source file path relative to project root
+	 * @param filePath source file path, absolute
 	 * @return closest configuration for a given file path or undefined if there is no such configuration
 	 */
-	private getConfigurationIfExists(filePath: string): ProjectConfiguration | undefined {
-		let dir = filePath;
+	private getConfigurationIfExists(filePath: string, configType = this.getConfigurationType(filePath)): ProjectConfiguration | undefined {
+		let dir = util.toUnixPath(filePath);
 		let config;
-		while (dir && dir !== this.rootPath) {
-			config = this.configs.get(dir);
+		const configs = this.configs[configType];
+		if (!configs) {
+			return undefined;
+		}
+		const rootPath = this.rootPath.replace(/\/+$/, '');
+		while (dir && dir !== rootPath) {
+			config = configs.get(dir);
 			if (config) {
 				return config;
 			}
-			dir = path_.posix.dirname(dir);
-			if (dir === '.') {
+			const pos = dir.lastIndexOf('/');
+			if (pos <= 0) {
 				dir = '';
+			} else {
+				dir = dir.substring(0, pos);
 			}
 		}
-		return this.configs.get('');
+		return configs.get(rootPath);
 	}
 
 	/**
 	 * Called when file was opened by client. Current implementation
 	 * does not differenciates open and change events
-	 * @param filePath path to a file relative to project root
+	 * @param uri file's URI
 	 * @param text file's content
 	 */
-	didOpen(filePath: string, text: string) {
-		this.didChange(filePath, text);
+	didOpen(uri: string, text: string) {
+		this.didChange(uri, text);
 	}
 
 	/**
 	 * Called when file was closed by client. Current implementation invalidates compiled version
-	 * @param filePath path to a file relative to project root
+	 * @param uri file's URI
 	 */
-	didClose(filePath: string, span = new Span()) {
-		this.localFs.didClose(filePath);
-		let version = this.versions.get(filePath) || 0;
-		this.versions.set(filePath, ++version);
+	didClose(uri: string, span = new Span()) {
+		const filePath = util.uri2path(uri);
+		this.localFs.didClose(uri);
+		let version = this.versions.get(uri) || 0;
+		this.versions.set(uri, ++version);
 		const config = this.getConfigurationIfExists(filePath);
 		if (!config) {
 			return;
@@ -428,13 +447,14 @@ export class ProjectManager implements Disposable {
 
 	/**
 	 * Called when file was changed by client. Current implementation invalidates compiled version
-	 * @param filePath path to a file relative to project root
+	 * @param uri file's URI
 	 * @param text file's content
 	 */
-	didChange(filePath: string, text: string, span = new Span()) {
-		this.localFs.didChange(filePath, text);
-		let version = this.versions.get(filePath) || 0;
-		this.versions.set(filePath, ++version);
+	didChange(uri: string, text: string, span = new Span()) {
+		const filePath = util.uri2path(uri);
+		this.localFs.didChange(uri, text);
+		let version = this.versions.get(uri) || 0;
+		this.versions.set(uri, ++version);
 		const config = this.getConfigurationIfExists(filePath);
 		if (!config) {
 			return;
@@ -446,10 +466,10 @@ export class ProjectManager implements Disposable {
 
 	/**
 	 * Called when file was saved by client
-	 * @param filePath path to a file relative to project root
+	 * @param uri file's URI
 	 */
-	didSave(filePath: string) {
-		this.localFs.didSave(filePath);
+	didSave(uri: string) {
+		this.localFs.didSave(uri);
 	}
 
 	/**
@@ -458,40 +478,65 @@ export class ProjectManager implements Disposable {
 	 * If there is no root configuration, adds it to catch all orphan files
 	 */
 	createConfigurations() {
-		const rootdirs = new Set<string>();
 		for (const uri of this.localFs.uris()) {
-			const relativeFilePath = path_.posix.relative(this.rootPath, util.uri2path(uri));
-			if (!/(^|\/)[tj]sconfig\.json$/.test(relativeFilePath)) {
+			const filePath = util.uri2path(uri);
+			if (!/(^|\/)[tj]sconfig\.json$/.test(filePath)) {
 				continue;
 			}
-			if (/(^|\/)node_modules\//.test(relativeFilePath)) {
+			if (/(^|\/)node_modules\//.test(filePath)) {
 				continue;
 			}
-			let dir = path_.posix.dirname(relativeFilePath);
-			if (dir === '.') {
+			let dir = util.toUnixPath(filePath);
+			const pos = dir.lastIndexOf('/');
+			if (pos <= 0) {
 				dir = '';
+			} else {
+				dir = dir.substring(0, pos);
 			}
-			if (!this.configs.has(dir)) {
-				this.configs.set(dir, new ProjectConfiguration(this.localFs, path_.posix.join('/', dir), this.versions, relativeFilePath, undefined, this.traceModuleResolution, this.logger));
-			}
-			rootdirs.add(dir);
+			const configType = this.getConfigurationType(filePath);
+			const configs = this.configs[configType];
+			configs.set(dir, new ProjectConfiguration(this.localFs, dir, this.versions, filePath, undefined, this.traceModuleResolution, this.logger));
 		}
-		if (!rootdirs.has('') && !this.configs.has('')) {
-			// collecting all the files in workspace by making fake configuration object
-			const tsConfig: any = {
-				compilerOptions: {
-					module: ts.ModuleKind.CommonJS,
-					allowNonTsExtensions: false,
-					allowJs: true
+
+		const rootPath = this.rootPath.replace(/\/+$/, '');
+		for (const configType of ['js', 'ts'] as ConfigType[]) {
+			const configs = this.configs[configType];
+			if (!configs.has(rootPath)) {
+				const tsConfig: any = {
+					compilerOptions: {
+						module: ts.ModuleKind.CommonJS,
+						allowNonTsExtensions: false,
+						allowJs: configType === 'js'
+					}
+				};
+				tsConfig.include = { js: ['**/*.js', '**/*.jsx'], ts: ['**/*.ts', '**/*.tsx'] }[configType];
+				// if there is at least one config, giving no files to default one
+				// TODO: it makes impossible to IntelliSense gulpfile.js if there is a tsconfig.json in subdirectory
+				if (configs.size > 0) {
+					tsConfig.exclude = ['**/*'];
 				}
-			};
-			// if there is at least one config, giving no files to default one
-			// TODO: it makes impossible to IntelliSense gulpfile.js if there is a tsconfig.json in subdirectory
-			if (this.configs.size > 0) {
-				tsConfig.exclude = ['**/*'];
+				configs.set(rootPath, new ProjectConfiguration(this.localFs, this.rootPath, this.versions, '', tsConfig, this.traceModuleResolution, this.logger));
 			}
-			this.configs.set('', new ProjectConfiguration(this.localFs, '/', this.versions, '', tsConfig, this.traceModuleResolution, this.logger));
+
 		}
+	}
+
+	/**
+	 * @param filePath path to source (or config) file
+	 * @return configuration type to use for a given file
+	 */
+	private getConfigurationType(filePath: string): ConfigType {
+		const name = path_.posix.basename(filePath);
+		if (name === 'tsconfig.json') {
+			return 'ts';
+		} else if (name === 'jsconfig.json') {
+			return 'js';
+		}
+		const extension = path_.posix.extname(filePath);
+		if (extension === '.js' || extension === '.jsx') {
+			return 'js';
+		}
+		return 'ts';
 	}
 }
 
@@ -541,7 +586,7 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	private projectVersion: number;
 
 	/**
-	 * Tracks individual files versions to invalidate TS compiler data when single file is changed
+	 * Tracks individual files versions to invalidate TS compiler data when single file is changed. Keys are URIs
 	 */
 	private versions: Map<string, number>;
 
@@ -593,13 +638,15 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	 * @param fileName relative or absolute file path
 	 */
 	getScriptVersion(fileName: string): string {
+
+		const uri = util.path2uri(this.rootPath, fileName);
 		if (path_.posix.isAbsolute(fileName) || path_.isAbsolute(fileName)) {
 			fileName = path_.posix.relative(this.rootPath, util.toUnixPath(fileName));
 		}
-		let version = this.versions.get(fileName);
+		let version = this.versions.get(uri);
 		if (!version) {
 			version = 1;
-			this.versions.set(fileName, version);
+			this.versions.set(uri, version);
 		}
 		return '' + version;
 	}
@@ -704,7 +751,7 @@ export class ProjectConfiguration {
 	/**
 	 * @param fs file system to use
 	 * @param rootFilePath root file path, absolute
-	 * @param configFilePath configuration file path (relative to workspace root)
+	 * @param configFilePath configuration file path, absolute
 	 * @param configContent optional configuration content to use instead of reading configuration file)
 	 */
 	constructor(fs: InMemoryFileSystem, rootFilePath: string, versions: Map<string, number>, configFilePath: string, configContent?: any, traceModuleResolution?: boolean, private logger: Logger = new NoopLogger()) {
@@ -824,24 +871,16 @@ export class ProjectConfiguration {
 		} else {
 			configObject = this.configContent;
 		}
-		let dir = path_.posix.dirname(this.configFilePath);
-		if (dir === '.') {
+		let dir = util.toUnixPath(this.configFilePath);
+		const pos = dir.lastIndexOf('/');
+		if (pos <= 0) {
 			dir = '';
+		} else {
+			dir = dir.substring(0, pos);
 		}
 		const base = dir || this.fs.path;
 		const configParseResult = ts.parseJsonConfigFileContent(configObject, this.fs, base);
 		const expFiles = configParseResult.fileNames;
-
-		// Add globals that might exist in dependencies
-		const nodeModulesDir = path_.posix.join(base, 'node_modules');
-		const err = walkInMemoryFs(this.fs, nodeModulesDir, (path, isdir) => {
-			if (!isdir && util.isGlobalTSFile(path)) {
-				expFiles.push(path);
-			}
-		});
-		if (err) {
-			throw err;
-		}
 
 		const options = configParseResult.options;
 		if (/(^|\/)jsconfig\.json$/.test(this.configFilePath)) {

@@ -128,20 +128,10 @@ export class FileSystemUpdater {
 	 * This function cannot be cancelled because multiple callers get the result of the same operation.
 	 *
 	 * @param uri URI of the file to ensure
-	 * @param childOf A parent span for tracing
+	 * @param span An OpenTracing span for tracing
 	 */
-	async ensure(uri: string, childOf = new Span()): Promise<void> {
-		const span = childOf.tracer().startSpan('Ensure file content', { childOf });
-		span.addTags({ uri });
-		try {
-			return await (this.fetches.get(uri) || this.fetch(uri, span));
-		} catch (err) {
-			span.setTag('error', true);
-			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
-			throw err;
-		} finally {
-			span.finish();
-		}
+	ensure(uri: string, span = new Span()): Promise<void> {
+		return this.fetches.get(uri) || this.fetch(uri, span);
 	}
 
 	/**
@@ -174,19 +164,10 @@ export class FileSystemUpdater {
 	 * Returns a promise that is resolved as soon as the file/directory structure for the given directory has been synced
 	 * from the remote file system to the in-memory file system (at least once)
 	 *
-	 * @param childOf A parent span for tracing
+	 * @param span An OpenTracing span for tracing
 	 */
-	async ensureStructure(childOf = new Span()) {
-		const span = childOf.tracer().startSpan('Ensure workspace structure', { childOf });
-		try {
-			return await (this.structureFetch || this.fetchStructure(span));
-		} catch (err) {
-			span.setTag('error', true);
-			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
-			throw err;
-		} finally {
-			span.finish();
-		}
+	ensureStructure(span = new Span()) {
+		return this.structureFetch || this.fetchStructure(span);
 	}
 
 	/**

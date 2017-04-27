@@ -25,9 +25,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	private files = new Map<string, string | undefined>();
 
 	/**
-	 * Map (relative filepath -> string content) of temporary files made while user modifies local file(s).  Paths are relative to `this.path`
-	 *
-	 * TODO make this use URIs too
+	 * Map (URI -> string content) of temporary files made while user modifies local file(s)
 	 */
 	overlay: Map<string, string>;
 
@@ -71,8 +69,8 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 			this.files.set(uri, content);
 		}
 		// Add to directory tree
-		const filePath = path_.posix.relative(this.path, util.uri2path(uri));
-		const components = filePath.split('/');
+		const filePath = util.uri2path(uri);
+		const components = filePath.split('/').filter(c => c);
 		let node = this.rootNode;
 		for (const [i, component] of components.entries()) {
 			const n = node.children.get(component);
@@ -141,14 +139,8 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 * If there is no such file, returns undefined
 	 */
 	private readFileIfExists(path: string): string | undefined {
-
-		let content = this.overlay.get(path);
-		if (content !== undefined) {
-			return content;
-		}
-
-		const rel = path_.posix.relative('/', path);
-		content = this.overlay.get(rel);
+		const uri = util.path2uri(this.path, path);
+		let content = this.overlay.get(uri);
 		if (content !== undefined) {
 			return content;
 		}
@@ -156,7 +148,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 		// TODO This assumes that the URI was a file:// URL.
 		//      In reality it could be anything, and the first URI matching the path should be used.
 		//      With the current Map, the search would be O(n), it would require a tree to get O(log(n))
-		content = this.files.get(util.path2uri(this.path, path));
+		content = this.files.get(uri);
 		if (content !== undefined) {
 			return content;
 		}
@@ -165,30 +157,30 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	}
 
 	/**
-	 * Invalidates temporary content denoted by the given path
-	 * @param path path to a file relative to project root
+	 * Invalidates temporary content denoted by the given URI
+	 * @param uri file's URI
 	 */
-	didClose(path: string) {
-		this.overlay.delete(path);
+	didClose(uri: string) {
+		this.overlay.delete(uri);
 	}
 
 	/**
-	 * Adds temporary content denoted by the given path
-	 * @param path path to a file relative to project root
+	 * Adds temporary content denoted by the given URI
+	 * @param uri file's URI
 	 */
-	didSave(path: string) {
-		const content = this.readFileIfExists(path);
+	didSave(uri: string) {
+		const content = this.overlay.get(uri);
 		if (content !== undefined) {
-			this.add(util.path2uri('', path), content);
+			this.add(uri, content);
 		}
 	}
 
 	/**
-	 * Updates temporary content denoted by the given path
-	 * @param path path to a file relative to project root
+	 * Updates temporary content denoted by the given URI
+	 * @param uri file's URI
 	 */
-	didChange(path: string, text: string) {
-		this.overlay.set(path, text);
+	didChange(uri: string, text: string) {
+		this.overlay.set(uri, text);
 	}
 
 	/**
@@ -236,33 +228,6 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 }
 
 /**
- * Iterates over in-memory cache calling given function on each node until callback signals abort or all nodes were traversed
- */
-export function walkInMemoryFs(fs: InMemoryFileSystem, rootdir: string, walkfn: (path: string, isdir: boolean) => Error | void): Error | void {
-	const err = walkfn(rootdir, true);
-	if (err) {
-		if (err === skipDir) {
-			return;
-		}
-		return err;
-	}
-	const { files, directories } = fs.getFileSystemEntries(rootdir);
-	for (const file of files) {
-		const err = walkfn(path_.posix.join(rootdir, file), false);
-		if (err) {
-			return err;
-		}
-	}
-	for (const dir of directories) {
-		const err = walkInMemoryFs(fs, path_.posix.join(rootdir, dir), walkfn);
-		if (err) {
-			return err;
-		}
-	}
-	return;
-}
-
-/**
  * TypeScript library files fetched from the local file system (bundled TS)
  */
 export const typeScriptLibraries: Map<string, string> = new Map<string, string>();
@@ -285,11 +250,3 @@ fs_.readdirSync(path).forEach(file => {
 export function isTypeScriptLibrary(path: string): boolean {
 	return typeScriptLibraries.has(util.toUnixPath(path));
 }
-
-/**
- * Indicates that tree traversal function should stop
- */
-export const skipDir: Error = {
-	name: 'WALK_FN_SKIP_DIR',
-	message: ''
-};

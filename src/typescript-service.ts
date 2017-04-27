@@ -14,7 +14,6 @@ import {
 	DidSaveTextDocumentParams,
 	DocumentSymbolParams,
 	Hover,
-	InitializeResult,
 	Location,
 	MarkedString,
 	ParameterInformation,
@@ -35,6 +34,7 @@ import * as pm from './project-manager';
 import {
 	DependencyReference,
 	InitializeParams,
+	InitializeResult,
 	PackageDescriptor,
 	PackageInformation,
 	ReferenceInformation,
@@ -44,6 +44,7 @@ import {
 	WorkspaceSymbolParams
 } from './request-type';
 import * as util from './util';
+import hashObject = require('object-hash');
 
 export interface TypeScriptServiceOptions {
 	traceModuleResolution?: boolean;
@@ -102,6 +103,12 @@ export class TypeScriptService {
 	 */
 	protected updater: FileSystemUpdater;
 
+	/**
+	 * Resolved with true or false depending on whether the root package.json is named "definitely-typed".
+	 * On DefinitelyTyped, files are not prefetched and a special workspace/symbol algorithm is used.
+	 */
+	protected isDefinitelyTyped: Promise<boolean>;
+
 	constructor(protected client: LanguageClient, protected options: TypeScriptServiceOptions = {}) {
 		this.logger = new LSPLogger(client);
 	}
@@ -130,10 +137,30 @@ export class TypeScriptService {
 			this._initializeFileSystems(!this.options.strict && !(params.capabilities.xcontentProvider && params.capabilities.xfilesProvider));
 			this.updater = new FileSystemUpdater(this.fileSystem, this.inMemoryFileSystem);
 			this.projectManager = new pm.ProjectManager(this.root, this.inMemoryFileSystem, this.updater, !!this.options.strict, this.traceModuleResolution, this.logger);
-			// Pre-fetch files in the background
-			this.projectManager.ensureOwnFiles(span).catch(err => {
-				this.logger.error('Background fetching failed ', err);
-			});
+			// Detect DefinitelyTyped
+			this.isDefinitelyTyped = (async () => {
+				try {
+					// Fetch root package.json (if exists)
+					const normRootUri = this.rootUri.endsWith('/') ? this.rootUri : this.rootUri + '/';
+					const packageJsonUri = normRootUri + 'package.json';
+					await this.updater.ensure(packageJsonUri);
+					// Check name
+					const packageJson = JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri));
+					return packageJson.name === 'definitely-typed';
+				} catch (err) {
+					return false;
+				}
+			})();
+			// Pre-fetch files in the background if not DefinitelyTyped
+			(async () => {
+				try {
+					if (!(await this.isDefinitelyTyped)) {
+						await this.projectManager.ensureOwnFiles(span);
+					}
+				} catch (err) {
+					this.logger.error(err);
+				}
+			})();
 		}
 		return {
 			capabilities: {
@@ -185,14 +212,13 @@ export class TypeScriptService {
 	 * location of a symbol at a given text document position.
 	 */
 	async textDocumentDefinition(params: TextDocumentPositionParams, span = new Span()): Promise<Location[]> {
-		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		const line = params.position.line;
 		const column = params.position.character;
 
 		// Fetch files needed to resolve definition
 		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
 
-		const fileName: string = util.uri2path(uri);
+		const fileName: string = util.uri2path(params.textDocument.uri);
 		const configuration = this.projectManager.getConfiguration(fileName);
 		configuration.ensureBasicFiles(span);
 
@@ -379,35 +405,30 @@ export class TypeScriptService {
 		const limit = Math.min(params.limit || Infinity, 50);
 
 		const query = params.query;
-		const symbolQuery = params.symbol ? Object.assign({}, params.symbol) : undefined;
+		const symbolQuery = params.symbol && { ...params.symbol };
 
 		if (symbolQuery && symbolQuery.package) {
+			// Strip all fields except name from PackageDescriptor
 			symbolQuery.package = { name: symbolQuery.package.name };
 		}
 
-		if (symbolQuery) {
-			try {
-				const dtRes = await this._workspaceSymbolDefinitelyTyped({ ...params, limit });
-				if (dtRes) {
-					return dtRes;
-				}
-			} catch (err) {
-				// Ignore
-			}
+		// Use special logic for DefinitelyTyped
+		if (await this.isDefinitelyTyped) {
+			return await this._workspaceSymbolDefinitelyTyped({ ...params, limit }, span);
+		}
 
-			if (!symbolQuery.containerKind) {
-				// symbolQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
-				symbolQuery.containerKind = undefined;
-			}
+		// Return cached result for empty query, if available
+		if (!query && !symbolQuery && this.emptyQueryWorkspaceSymbols) {
+			return this.emptyQueryWorkspaceSymbols;
+		}
+
+		// symbolQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
+		if (symbolQuery && !symbolQuery.containerKind) {
+			symbolQuery.containerKind = undefined;
 		}
 
 		// A workspace/symol request searches all symbols in own code, but not in dependencies
 		await this.projectManager.ensureOwnFiles(span);
-
-		// Cache result for empty query
-		if (!query && !symbolQuery && this.emptyQueryWorkspaceSymbols) {
-			return this.emptyQueryWorkspaceSymbols;
-		}
 
 		// Find configurations to search
 		let configs: Iterable<pm.ProjectConfiguration>;
@@ -416,20 +437,28 @@ export class TypeScriptService {
 			configs = iterate(this.projectManager.configurations())
 				.filter(config => config.getPackageName() === symbolQuery.package!.name);
 		} else {
-			const rootConfig = this.projectManager.getConfiguration('');
-			if (rootConfig) {
-				// Use root configuration because it includes all files
-				configs = [rootConfig];
-			} else {
-				// Use all configurations
-				configs = this.projectManager.configurations();
-			}
+			configs = this.projectManager.configurations();
 		}
+		const seen = new Set<string>();
 		const symbols = iterate(configs)
 			.map(config => this._collectWorkspaceSymbols(config, query || symbolQuery, limit))
 			.flatten<SymbolInformation>()
+			.filter(symbol => !symbol.location.uri.includes('/node_modules/'))
+			// Filter duplicate symbols
+			// There may be few configurations that contain the same file(s)
+			// or files from different configurations may refer to the same file(s)
+			// TODO use observable.distinct()
+			.filter(symbol => {
+				const hash = hashObject(symbol, { respectType: false } as any);
+				if (seen.has(hash)) {
+					return false;
+				}
+				seen.add(hash);
+				return true;
+			})
 			.take(limit)
 			.toArray();
+
 		// Save empty query result
 		if (!query && !symbolQuery) {
 			this.emptyQueryWorkspaceSymbols = symbols;
@@ -437,34 +466,50 @@ export class TypeScriptService {
 		return symbols;
 	}
 
-	protected async _workspaceSymbolDefinitelyTyped(params: WorkspaceSymbolParams): Promise<SymbolInformation[] | null> {
-		const normRootUri = this.rootUri.endsWith('/') ? this.rootUri : this.rootUri + '/';
-		const packageJsonUri = normRootUri + 'package.json';
-		await this.updater.ensure(packageJsonUri);
-		const rootConfig = JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri));
-		if (rootConfig.name !== 'definitely-typed') {
-			return null;
-		}
-		if (!params.symbol || !params.symbol.package) {
-			return null;
-		}
-		const pkg = params.symbol.package;
-		if (!pkg.name || !pkg.name.startsWith('@types/')) {
-			return null;
-		}
-		const relPkgRoot = pkg.name.slice('@types/'.length);
-		await this.projectManager.ensureModuleStructure();
-
-		const symbolQuery = params.symbol ? Object.assign({}, params.symbol) : undefined;
-		if (symbolQuery) {
-			symbolQuery.package = undefined;
-			if (!symbolQuery.containerKind) {
-				symbolQuery.containerKind = undefined; // symQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
+	/**
+	 * Specialised version of workspaceSymbol for DefinitelyTyped.
+	 * Searches only in the correct subdirectory for the given PackageDescriptor.
+	 * Will error if not passed a SymbolDescriptor query with an `@types` PackageDescriptor
+	 */
+	protected async _workspaceSymbolDefinitelyTyped(params: WorkspaceSymbolParams, childOf = new Span()): Promise<SymbolInformation[]> {
+		const span = childOf.tracer().startSpan('Handle workspace/symbol DefinitelyTyped', { childOf });
+		try {
+			if (!params.symbol || !params.symbol.package || !params.symbol.package.name || !params.symbol.package.name.startsWith('@types/')) {
+				throw new Error('workspace/symbol on DefinitelyTyped is only supported with a SymbolDescriptor query with an @types PackageDescriptor');
 			}
-		}
 
-		const config = this.projectManager.getConfiguration(relPkgRoot);
-		return Array.from(this._collectWorkspaceSymbols(config, params.query || symbolQuery, params.limit));
+			const symbolQuery = { ...params.symbol };
+			// Don't match PackageDescriptor on symbols
+			symbolQuery.package = undefined;
+			// symQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
+			if (!symbolQuery.containerKind) {
+				symbolQuery.containerKind = undefined;
+			}
+
+			// Fetch all files in the package subdirectory
+			const normRootUri = this.rootUri.endsWith('/') ? this.rootUri : this.rootUri + '/';
+			const packageRootUri = normRootUri + params.symbol.package.name.substr(1) + '/';
+			// All packages are in the types/ subdirectory
+			await this.updater.ensureStructure(span);
+			await Promise.all(
+				iterate(this.inMemoryFileSystem.uris())
+					.filter(uri => uri.startsWith(packageRootUri))
+					.map(uri => this.updater.ensure(uri, span))
+			);
+			this.projectManager.createConfigurations();
+			span.log({ event: 'fetched package files' });
+
+			// Search symbol in configuration
+			// forcing TypeScript mode
+			const config = this.projectManager.getConfiguration(util.uri2path(packageRootUri), 'ts');
+			return Array.from(this._collectWorkspaceSymbols(config, params.query || symbolQuery, params.limit));
+		} catch (err) {
+			span.setTag('error', true);
+			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
+			throw err;
+		} finally {
+			span.finish();
+		}
 	}
 
 	/**
@@ -508,25 +553,33 @@ export class TypeScriptService {
 							// Filter Identifier Nodes
 							// TODO: include string-interpolated references
 							.filter((node): node is ts.Identifier => node.kind === ts.SyntaxKind.Identifier)
-							.mergeMap(node =>
-								// Get DefinitionInformations at the node
-								Observable.from(config.getService().getDefinitionAtPosition(source.fileName, node.pos + 1) || [])
-									// Map to SymbolDescriptor
-									.map(definition => util.defInfoToSymbolDescriptor(definition))
-									// Check if SymbolDescriptor matches
-									.filter(symbol => util.symbolDescriptorMatch(params.query, symbol))
-									// Map SymbolDescriptor to ReferenceInformation
-									.map(symbol => ({
-										symbol,
-										reference: {
-											uri: this._defUri(source.fileName),
-											range: {
-												start: ts.getLineAndCharacterOfPosition(source, node.pos),
-												end: ts.getLineAndCharacterOfPosition(source, node.end)
+							.mergeMap(node => {
+								try {
+									// Get DefinitionInformations at the node
+									return Observable.from(config.getService().getDefinitionAtPosition(source.fileName, node.pos + 1) || [])
+										// Map to SymbolDescriptor
+										.map(definition => util.defInfoToSymbolDescriptor(definition))
+										// Check if SymbolDescriptor matches
+										.filter(symbol => util.symbolDescriptorMatch(params.query, symbol))
+										// Map SymbolDescriptor to ReferenceInformation
+										.map(symbol => ({
+											symbol,
+											reference: {
+												uri: this._defUri(source.fileName),
+												range: {
+													start: ts.getLineAndCharacterOfPosition(source, node.pos + 1),
+													end: ts.getLineAndCharacterOfPosition(source, node.end)
+												}
 											}
-										}
-									}))
-							)
+										}));
+								} catch (err) {
+									// Continue with next node on error
+									// Workaround for https://github.com/Microsoft/TypeScript/issues/15219
+									this.logger.error(`workspace/xreferences: Error getting definition for ${source.fileName} at offset ${node.pos + 1}`, err);
+									span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
+									return [];
+								}
+							})
 					);
 			})
 			.toArray();
@@ -722,12 +775,11 @@ export class TypeScriptService {
 	 * to read the document's truth using the document's uri.
 	 */
 	async textDocumentDidOpen(params: DidOpenTextDocumentParams): Promise<void> {
-		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 
 		// Ensure files needed for most operations are fetched
 		await this.projectManager.ensureReferencedFiles(params.textDocument.uri).toPromise();
 
-		this.projectManager.didOpen(util.uri2path(uri), params.textDocument.text);
+		this.projectManager.didOpen(params.textDocument.uri, params.textDocument.text);
 	}
 
 	/**
@@ -736,7 +788,6 @@ export class TypeScriptService {
 	 * and language ids.
 	 */
 	async textDocumentDidChange(params: DidChangeTextDocumentParams): Promise<void> {
-		const uri = util.uri2reluri(params.textDocument.uri, this.root);
 		let text = null;
 		params.contentChanges.forEach(change => {
 			if (change.range || change.rangeLength) {
@@ -747,7 +798,7 @@ export class TypeScriptService {
 		if (!text) {
 			return;
 		}
-		this.projectManager.didChange(util.uri2path(uri), text);
+		this.projectManager.didChange(params.textDocument.uri, text);
 	}
 
 	/**
@@ -758,10 +809,7 @@ export class TypeScriptService {
 
 		// Ensure files needed to suggest completions are fetched
 		await this.projectManager.ensureReferencedFiles(params.textDocument.uri).toPromise();
-
-		// TODO don't use "relative" URI
-		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		this.projectManager.didSave(util.uri2path(uri));
+		this.projectManager.didSave(params.textDocument.uri);
 	}
 
 	/**
@@ -774,9 +822,7 @@ export class TypeScriptService {
 		// Ensure files needed to suggest completions are fetched
 		await this.projectManager.ensureReferencedFiles(params.textDocument.uri).toPromise();
 
-		// TODO don't use "relative" URI
-		const uri = util.uri2reluri(params.textDocument.uri, this.root);
-		this.projectManager.didClose(util.uri2path(uri));
+		this.projectManager.didClose(params.textDocument.uri);
 	}
 
 	/**
@@ -803,22 +849,6 @@ export class TypeScriptService {
 		configuration.syncProgram(span);
 		program = configuration.getProgram();
 		return program && program.getSourceFile(fileName);
-	}
-
-	/**
-	 * transformNavItem transforms a NavigateToItem instance to a SymbolInformation instance
-	 */
-	private _transformNavItem(program: ts.Program, item: ts.NavigateToItem): SymbolInformation {
-		const sourceFile = program.getSourceFile(item.fileName);
-		if (!sourceFile) {
-			throw new Error('source file "' + item.fileName + '" does not exist');
-		}
-		const start = ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start);
-		const end = ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start + item.textSpan.length);
-		return SymbolInformation.create(item.name,
-			util.convertStringtoSymbolKind(item.kind),
-			Range.create(start.line, start.character, end.line, end.character),
-			this._defUri(item.fileName), item.containerName);
 	}
 
 	/**
@@ -858,7 +888,28 @@ export class TypeScriptService {
 					}));
 			}
 			return iterate(items)
-				.map(item => this._transformNavItem(program, item))
+				// Map NavigateToItems to SymbolInformations
+				.map(item => {
+					const sourceFile = program.getSourceFile(item.fileName);
+					if (!sourceFile) {
+						throw new Error(`Source file ${item.fileName} does not exist`);
+					}
+					const symbolInformation: SymbolInformation = {
+						name: item.name,
+						kind: util.convertStringtoSymbolKind(item.kind),
+						location: {
+							uri: this._defUri(item.fileName),
+							range: {
+								start: ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start),
+								end: ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start + item.textSpan.length)
+							}
+						}
+					};
+					if (item.containerName) {
+						symbolInformation.containerName = item.containerName;
+					}
+					return symbolInformation;
+				})
 				.filter(symbolInformation => util.isLocalUri(symbolInformation.location.uri));
 		} else {
 			// An empty query uses a different algorithm to iterate all files and aggregate the symbols per-file to get all symbols
@@ -908,31 +959,28 @@ export class TypeScriptService {
 	private *_flattenNavigationTreeItem(item: ts.NavigationTree, parent: ts.NavigationTree | null, sourceFile: ts.SourceFile): IterableIterator<SymbolInformation> {
 		const acceptable = TypeScriptService.isAcceptableNavigationTreeItem(item);
 		if (acceptable) {
-			yield this._transformNavigationTreeItem(item, parent, sourceFile);
+			const span = item.spans[0];
+			const symbolInformation: SymbolInformation = {
+				name: item.text,
+				kind: util.convertStringtoSymbolKind(item.kind),
+				location: {
+					uri: this._defUri(sourceFile.fileName),
+					range: {
+						start: ts.getLineAndCharacterOfPosition(sourceFile, span.start),
+						end: ts.getLineAndCharacterOfPosition(sourceFile, span.start + span.length)
+					}
+				}
+			};
+			if (parent) {
+				symbolInformation.containerName = parent.text;
+			}
+			yield symbolInformation;
 		}
 		if (item.childItems) {
 			for (const childItem of item.childItems) {
 				yield* this._flattenNavigationTreeItem(childItem, acceptable ? item : null, sourceFile);
 			}
 		}
-	}
-
-	/**
-	 * Transforms NavigationTree to SymbolInformation
-	 */
-	private _transformNavigationTreeItem(item: ts.NavigationTree, parent: ts.NavigationTree | null, sourceFile: ts.SourceFile): SymbolInformation {
-		const span = item.spans[0];
-		const start = ts.getLineAndCharacterOfPosition(sourceFile, span.start);
-		const end = ts.getLineAndCharacterOfPosition(sourceFile, span.start + span.length);
-		return {
-			name: item.text,
-			kind: util.convertStringtoSymbolKind(item.kind),
-			location: {
-				uri: this._defUri(sourceFile.fileName),
-				range: { start, end }
-			},
-			containerName: parent ? parent.text : ''
-		};
 	}
 
 	/**
