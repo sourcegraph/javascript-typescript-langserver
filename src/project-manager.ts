@@ -622,6 +622,12 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 		return '' + this.projectVersion;
 	}
 
+	getNewLine(): string {
+		// Although this is optional, language service was sending edits with carriage returns if not specified.
+		// TODO: combine with the FormatOptions defaults.
+		return '\n';
+	}
+
 	/**
 	 * Incrementing current project version, telling TS compiler to invalidate internal data
 	 */

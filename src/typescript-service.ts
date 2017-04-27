@@ -6,6 +6,9 @@ import { Span } from 'opentracing';
 import * as path from 'path';
 import * as ts from 'typescript';
 import {
+	ApplyWorkspaceEditParams,
+	CodeActionParams,
+	Command,
 	CompletionItem,
 	CompletionItemKind,
 	CompletionList,
@@ -14,10 +17,12 @@ import {
 	DidOpenTextDocumentParams,
 	DidSaveTextDocumentParams,
 	DocumentSymbolParams,
+	ExecuteCommandParams,
 	Hover,
 	Location,
 	MarkedString,
 	ParameterInformation,
+	Range as LSRange,
 	ReferenceParams,
 	RenameParams,
 	SignatureHelp,
@@ -69,6 +74,29 @@ export interface TypeScriptServiceOptions {
 }
 
 export type TypeScriptServiceFactory = (client: LanguageClient, options?: TypeScriptServiceOptions) => TypeScriptService;
+
+// defaults from https://github.com/Microsoft/vscode/blob/master/tsfmt.json
+// A formattingProvider could be implemented to read editorconfig etc.
+const formatSettings: ts.FormatCodeSettings = {
+	indentSize: 4,
+	tabSize: 4,
+	newLineCharacter: '\n',
+	convertTabsToSpaces: false,
+	indentStyle: ts.IndentStyle.Smart,
+	insertSpaceAfterCommaDelimiter: true,
+	insertSpaceAfterSemicolonInForStatements: true,
+	insertSpaceBeforeAndAfterBinaryOperators: true,
+	insertSpaceAfterKeywordsInControlFlowStatements: true,
+	insertSpaceAfterFunctionKeywordForAnonymousFunctions: false,
+	insertSpaceBeforeFunctionParenthesis: false,
+	insertSpaceAfterOpeningAndBeforeClosingNonemptyParenthesis: false,
+	insertSpaceAfterOpeningAndBeforeClosingNonemptyBrackets: false,
+	insertSpaceAfterOpeningAndBeforeClosingNonemptyBraces: true,
+	insertSpaceAfterOpeningAndBeforeClosingTemplateStringBraces: false,
+	insertSpaceAfterOpeningAndBeforeClosingJsxExpressionBraces: false,
+	placeOpenBraceOnNewLineForFunctions: false,
+	placeOpenBraceOnNewLineForControlBlocks: false
+};
 
 /**
  * Handles incoming requests and return responses. There is a one-to-one-to-one
@@ -210,6 +238,11 @@ export class TypeScriptService {
 				completionProvider: {
 					resolveProvider: false,
 					triggerCharacters: ['.']
+				},
+				codeActionProvider: true,
+				renameProvider: true,
+				executeCommandProvider: {
+					commands: []
 				},
 				xpackagesProvider: true
 			}
@@ -988,6 +1021,94 @@ export class TypeScriptService {
 				};
 			})
 			.map(signatureHelp => ({ op: 'add', path: '', value: signatureHelp }) as AddPatch);
+	}
+
+	textDocumentCodeAction(params: CodeActionParams, span = new Span()): Observable<OpPatch> {
+		return this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span)
+			.toArray()
+			.map((): Command[] => {
+				const filePath = uri2path(params.textDocument.uri);
+				const configuration = this.projectManager.getConfiguration(filePath);
+				configuration.ensureBasicFiles(span);
+
+				const sourceFile = this._getSourceFile(configuration, filePath, span);
+				if (!sourceFile) {
+					throw new Error(`expected source file ${filePath} to exist in configuration`);
+				}
+
+				const start: number = ts.getPositionOfLineAndCharacter(sourceFile, params.range.start.line, params.range.start.character);
+				const end: number = ts.getPositionOfLineAndCharacter(sourceFile, params.range.end.line, params.range.end.character);
+				const errorCodes: number[] = [];
+				for (const diagnostic of params.context.diagnostics) {
+					if (typeof(diagnostic.code) === 'number') {
+						errorCodes.push(diagnostic.code);
+					}
+				}
+
+				const fixes: ts.CodeAction[] = configuration.getService().getCodeFixesAtPosition(filePath, start, end, errorCodes, formatSettings);
+				if (!fixes) {
+					return [];
+				}
+
+				return fixes.map(fix => Command.create(fix.description, 'codeFix', ...fix.changes));
+			})
+			.map(command => ({ op: 'add', path: '', value: command }) as AddPatch);
+	}
+
+	workspaceExecuteCommand(params: ExecuteCommandParams, span = new Span()): Observable<OpPatch> {
+		switch (params.command) {
+			case 'codeFix':
+				if (params.arguments && params.arguments.length === 1) {
+					return Observable
+						.fromPromise(this.executeCodeFixCommand(params.arguments, span))
+						.map(result => ({op: 'add', path: '', value: result }) as OpPatch);
+				} else {
+					throw new Error(`Command ${params.command} requires arguments`);
+				}
+			default:
+				throw new Error(`Unknown command ${params.command}`);
+		}
+	}
+
+	convertTextChange(textChange: ts.TextChange, sourceFile: ts.SourceFile): TextEdit {
+		const start = ts.getLineAndCharacterOfPosition(sourceFile, textChange.span.start);
+		if (textChange.span.length) {
+			const end = ts.getLineAndCharacterOfPosition(sourceFile, textChange.span.start + textChange.span.length);
+			const range = LSRange.create(start, end);
+			if (textChange.newText) {
+				return TextEdit.replace(range, textChange.newText);
+			} else {
+				return TextEdit.del(range);
+			}
+		} else {
+			return TextEdit.insert(start, textChange.newText);
+		}
+	}
+
+	async executeCodeFixCommand(fileTextChanges: ts.FileTextChanges[], span = new Span()): Promise<void> {
+		if (fileTextChanges.length === 0) {
+			throw new Error('No changes supplied for code fix command');
+		}
+
+		await this.projectManager.ensureOwnFiles(span);
+		const configuration = this.projectManager.getConfiguration(fileTextChanges[0].fileName);
+		configuration.ensureBasicFiles(span);
+		const fileToEdits: {[uri: string]: TextEdit[]} = {};
+		for (const change of fileTextChanges) {
+			const sourceFile = this._getSourceFile(configuration, change.fileName, span);
+			if (!sourceFile) {
+				throw new Error(`expected source file ${change.fileName} to exist in configuration`);
+			}
+			fileToEdits[path2uri(this.root, change.fileName)] =
+				change.textChanges.map(tc => this.convertTextChange(tc, sourceFile));
+		}
+
+		const params: ApplyWorkspaceEditParams = {
+			edit:  {
+				changes: fileToEdits
+			}
+		};
+		return this.client.workspaceApplyEdit(params).then(r => undefined);
 	}
 
 	/**
