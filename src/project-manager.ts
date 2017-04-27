@@ -265,7 +265,7 @@ export class ProjectManager implements Disposable {
 	 * @param childOf OpenTracing parent span for tracing
 	 * @return Observable of file URIs ensured
 	 */
-	ensureReferencedFiles(uri: URL, maxDepth = 30, ignore = new Set<string>(), childOf = new Span()): Observable<string> {
+	ensureReferencedFiles(uri: URL, maxDepth = 30, ignore = new Set<string>(), childOf = new Span()): Observable<URL> {
 		const span = childOf.tracer().startSpan('Ensure referenced files', { childOf });
 		span.addTags({ uri, maxDepth });
 		ignore.add(uri.href);
@@ -284,7 +284,7 @@ export class ProjectManager implements Disposable {
 					})
 			)
 			// Log errors to span
-			.catch(err => {
+			.catch<URL, never>(err => {
 				span.setTag('error', true);
 				span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
 				throw err;
