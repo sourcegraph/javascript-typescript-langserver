@@ -133,11 +133,11 @@ export class TypeScriptService {
 	 */
 	async initialize(params: InitializeParams, span = new Span()): Promise<InitializeResult> {
 		if (params.rootUri || params.rootPath) {
-			this.rootUri = new URL(params.rootUri || util.path2uri('', params.rootPath!));
+			this.rootUri = params.rootUri ? new URL(params.rootUri) : util.path2uri(new URL('file:'), params.rootPath!);
 			this.root = params.rootPath || util.uri2path(this.rootUri);
 			this._initializeFileSystems(!this.options.strict && !(params.capabilities.xcontentProvider && params.capabilities.xfilesProvider));
 			this.updater = new FileSystemUpdater(this.fileSystem, this.inMemoryFileSystem);
-			this.projectManager = new pm.ProjectManager(this.root, this.inMemoryFileSystem, this.updater, !!this.options.strict, this.traceModuleResolution, this.logger);
+			this.projectManager = new pm.ProjectManager(this.rootUri, this.root, this.inMemoryFileSystem, this.updater, !!this.options.strict, this.traceModuleResolution, this.logger);
 			// Detect DefinitelyTyped
 			this.isDefinitelyTyped = (async () => {
 				try {
@@ -194,7 +194,7 @@ export class TypeScriptService {
 	 */
 	protected _initializeFileSystems(accessDisk: boolean): void {
 		this.fileSystem = accessDisk ? new LocalFileSystem(this.rootUri) : new RemoteFileSystem(this.client);
-		this.inMemoryFileSystem = new InMemoryFileSystem(this.root);
+		this.inMemoryFileSystem = new InMemoryFileSystem(this.rootUri, this.root);
 	}
 
 	/**
@@ -239,7 +239,7 @@ export class TypeScriptService {
 				}
 				const start = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start);
 				const end = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start + def.textSpan.length);
-				ret.push(Location.create(this._defUri(def.fileName), {
+				ret.push(Location.create(this._defUri(def.fileName).href, {
 					start,
 					end
 				}));
@@ -289,7 +289,7 @@ export class TypeScriptService {
 						return {
 							symbol: util.defInfoToSymbolDescriptor(def),
 							location: {
-								uri: this._defUri(def.fileName),
+								uri: this._defUri(def.fileName).href,
 								range: {
 									start,
 									end
@@ -386,7 +386,7 @@ export class TypeScriptService {
 						const start = ts.getLineAndCharacterOfPosition(sourceFile, reference.textSpan.start);
 						const end = ts.getLineAndCharacterOfPosition(sourceFile, reference.textSpan.start + reference.textSpan.length);
 						return {
-							uri: util.path2uri(this.root, reference.fileName),
+							uri: util.path2uri(this.rootUri, reference.fileName).href,
 							range: {
 								start,
 								end
@@ -569,7 +569,7 @@ export class TypeScriptService {
 										.map(symbol => ({
 											symbol,
 											reference: {
-												uri: this._defUri(source.fileName),
+												uri: this._defUri(source.fileName).href,
 												range: {
 													start: ts.getLineAndCharacterOfPosition(source, node.pos + 1),
 													end: ts.getLineAndCharacterOfPosition(source, node.end)
@@ -908,7 +908,7 @@ export class TypeScriptService {
 						name: item.name,
 						kind: util.convertStringtoSymbolKind(item.kind),
 						location: {
-							uri: this._defUri(item.fileName),
+							uri: this._defUri(item.fileName).href,
 							range: {
 								start: ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start),
 								end: ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start + item.textSpan.length)
@@ -932,11 +932,11 @@ export class TypeScriptService {
 	 * Transforms definition's file name to URI. If definition belongs to TypeScript library,
 	 * returns git://github.com/Microsoft/TypeScript URL, otherwise returns file:// one
 	 */
-	private _defUri(filePath: string): string {
+	private _defUri(filePath: string): URL {
 		if (isTypeScriptLibrary(filePath)) {
-			return 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/' + path_.basename(filePath);
+			return new URL('git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/' + path_.basename(filePath));
 		}
-		return util.path2uri(this.root, filePath);
+		return util.path2uri(this.rootUri, filePath);
 	}
 
 	/**
@@ -974,7 +974,7 @@ export class TypeScriptService {
 				name: item.text,
 				kind: util.convertStringtoSymbolKind(item.kind),
 				location: {
-					uri: this._defUri(sourceFile.fileName),
+					uri: this._defUri(sourceFile.fileName).href,
 					range: {
 						start: ts.getLineAndCharacterOfPosition(sourceFile, span.start),
 						end: ts.getLineAndCharacterOfPosition(sourceFile, span.start + span.length)

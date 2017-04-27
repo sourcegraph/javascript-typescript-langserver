@@ -91,7 +91,7 @@ export class ProjectManager implements Disposable {
 	 * @param strict indicates if we are working in strict mode (VFS) or with a local file system
 	 * @param traceModuleResolution allows to enable module resolution tracing (done by TS compiler)
 	 */
-	constructor(rootPath: string, inMemoryFileSystem: InMemoryFileSystem, updater: FileSystemUpdater, strict: boolean, traceModuleResolution?: boolean, protected logger: Logger = new NoopLogger()) {
+	constructor(private rootUri: URL, rootPath: string, inMemoryFileSystem: InMemoryFileSystem, updater: FileSystemUpdater, strict: boolean, traceModuleResolution?: boolean, protected logger: Logger = new NoopLogger()) {
 		this.rootPath = util.toUnixPath(rootPath);
 		this.updater = updater;
 		this.localFs = inMemoryFileSystem;
@@ -496,7 +496,7 @@ export class ProjectManager implements Disposable {
 			}
 			const configType = this.getConfigurationType(filePath);
 			const configs = this.configs[configType];
-			configs.set(dir, new ProjectConfiguration(this.localFs, dir, this.versions, filePath, undefined, this.traceModuleResolution, this.logger));
+			configs.set(dir, new ProjectConfiguration(this.rootUri, this.localFs, dir, this.versions, filePath, undefined, this.traceModuleResolution, this.logger));
 		}
 
 		const rootPath = this.rootPath.replace(/\/+$/, '');
@@ -516,7 +516,7 @@ export class ProjectManager implements Disposable {
 				if (configs.size > 0) {
 					tsConfig.exclude = ['**/*'];
 				}
-				configs.set(rootPath, new ProjectConfiguration(this.localFs, this.rootPath, this.versions, '', tsConfig, this.traceModuleResolution, this.logger));
+				configs.set(rootPath, new ProjectConfiguration(this.rootUri, this.localFs, this.rootPath, this.versions, '', tsConfig, this.traceModuleResolution, this.logger));
 			}
 
 		}
@@ -591,7 +591,7 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	 */
 	private versions: Map<string, number>;
 
-	constructor(rootPath: string, options: ts.CompilerOptions, fs: InMemoryFileSystem, expectedFiles: string[], versions: Map<string, number>, private logger: Logger = new NoopLogger()) {
+	constructor(private rootUri: URL, rootPath: string, options: ts.CompilerOptions, fs: InMemoryFileSystem, expectedFiles: string[], versions: Map<string, number>, private logger: Logger = new NoopLogger()) {
 		this.rootPath = rootPath;
 		this.options = options;
 		this.fs = fs;
@@ -636,35 +636,31 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	}
 
 	/**
-	 * @param fileName relative or absolute file path
+	 * @param fileName Path to the file, absolute or relative to `rootUri`
 	 */
-	getScriptVersion(fileName: string): string {
+	getScriptVersion(filePath: string): string {
 
-		const uri = util.path2uri(this.rootPath, fileName);
-		if (path_.posix.isAbsolute(fileName) || path_.isAbsolute(fileName)) {
-			fileName = path_.posix.relative(this.rootPath, util.toUnixPath(fileName));
+		const uri = util.path2uri(this.rootUri, filePath);
+		if (path_.posix.isAbsolute(filePath) || path_.isAbsolute(filePath)) {
+			filePath = path_.posix.relative(this.rootPath, util.toUnixPath(filePath));
 		}
-		let version = this.versions.get(uri);
+		let version = this.versions.get(uri.href);
 		if (!version) {
 			version = 1;
-			this.versions.set(uri, version);
+			this.versions.set(uri.href, version);
 		}
 		return '' + version;
 	}
 
 	/**
-	 * @param fileName relative or absolute file path
+	 * @param fileName Path to the file, absolute or relative to `rootUri`
 	 */
-	getScriptSnapshot(fileName: string): ts.IScriptSnapshot | undefined {
-		let exists = this.fs.fileExists(fileName);
-		if (!exists) {
-			fileName = path_.posix.join(this.rootPath, fileName);
-			exists = this.fs.fileExists(fileName);
-		}
-		if (!exists) {
+	getScriptSnapshot(filePath: string): ts.IScriptSnapshot | undefined {
+		const content = this.fs.readFileIfExists(filePath);
+		if (content === undefined) {
 			return undefined;
 		}
-		return ts.ScriptSnapshot.fromString(this.fs.readFile(fileName));
+		return ts.ScriptSnapshot.fromString(content);
 	}
 
 	getCurrentDirectory(): string {
@@ -755,7 +751,7 @@ export class ProjectConfiguration {
 	 * @param configFilePath configuration file path, absolute
 	 * @param configContent optional configuration content to use instead of reading configuration file)
 	 */
-	constructor(fs: InMemoryFileSystem, rootFilePath: string, versions: Map<string, number>, configFilePath: string, configContent?: any, traceModuleResolution?: boolean, private logger: Logger = new NoopLogger()) {
+	constructor(private rootUri: URL, fs: InMemoryFileSystem, rootFilePath: string, versions: Map<string, number>, configFilePath: string, configContent?: any, traceModuleResolution?: boolean, private logger: Logger = new NoopLogger()) {
 		this.fs = fs;
 		this.configFilePath = configFilePath;
 		this.configContent = configContent;
@@ -891,6 +887,7 @@ export class ProjectConfiguration {
 			options.traceResolution = true;
 		}
 		this.host = new InMemoryLanguageServiceHost(
+			this.rootUri,
 			this.fs.path,
 			options,
 			this.fs,

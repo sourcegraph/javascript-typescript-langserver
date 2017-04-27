@@ -1,8 +1,8 @@
 import * as os from 'os';
 import * as path from 'path';
-
 import * as ts from 'typescript';
 import { Position, Range, SymbolKind } from 'vscode-languageserver';
+import { URL } from 'whatwg-url';
 import * as rt from './request-type';
 
 let strict = false;
@@ -79,19 +79,18 @@ export function convertStringtoSymbolKind(kind: string): SymbolKind {
 	}
 }
 
-export function path2uri(root: string, file: string): string {
-	let ret = 'file://';
-	if (!strict && process.platform === 'win32') {
-		ret += '/';
+/**
+ * Returns the given file path as a URL.
+ * The returned URL uses protocol and host of the passed root URL
+ */
+export function path2uri(root: URL, file: string): URL {
+	const uri = new URL(root.href);
+	let pathname = file.split(/[\\\/]/).map((val, i) => i <= 1 && /^[a-z]:$/i.test(val) ? val : encodeURIComponent(val)).join('/');
+	if (!pathname.startsWith('/')) {
+		pathname = '/' + pathname;
 	}
-	let p;
-	if (root) {
-		p = resolve(root, file);
-	} else {
-		p = file;
-	}
-	p = toUnixPath(p).split('/').map((val, i) => i <= 1 && /^[a-z]:$/i.test(val) ? val : encodeURIComponent(val)).join('/');
-	return ret + p;
+	uri.pathname = pathname;
+	return uri;
 }
 
 /**

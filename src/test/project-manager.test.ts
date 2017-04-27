@@ -15,7 +15,7 @@ describe('ProjectManager', () => {
 
 	describe('getPackageName()', () => {
 		beforeEach(async () => {
-			memfs = new InMemoryFileSystem('/');
+			memfs = new InMemoryFileSystem(new URL('file:///'), '/');
 			const localfs = new MapFileSystem(new Map([
 				['file:///package.json', '{"name": "package-name-1"}'],
 				['file:///subdirectory-with-tsconfig/package.json', '{"name": "package-name-2"}'],
@@ -23,7 +23,7 @@ describe('ProjectManager', () => {
 				['file:///subdirectory-with-tsconfig/src/dummy.ts', '']
 			]));
 			const updater = new FileSystemUpdater(localfs, memfs);
-			projectManager = new ProjectManager('/', memfs, updater, true);
+			projectManager = new ProjectManager(new URL('file:///'), '/', memfs, updater, true);
 			await projectManager.ensureAllFiles();
 		});
 		it('should resolve package name when package.json is at the same level', () => {
@@ -35,7 +35,7 @@ describe('ProjectManager', () => {
 	});
 	describe('ensureReferencedFiles()', () => {
 		beforeEach(() => {
-			memfs = new InMemoryFileSystem('/');
+			memfs = new InMemoryFileSystem(new URL('file:///'), '/');
 			const localfs = new MapFileSystem(new Map([
 				['file:///package.json', '{"name": "package-name-1"}'],
 				['file:///node_modules/somelib/index.js', '/// <reference path="./pathref.d.ts"/>\n/// <reference types="node"/>'],
@@ -44,7 +44,7 @@ describe('ProjectManager', () => {
 				['file:///src/dummy.ts', 'import * as somelib from "somelib";']
 			]));
 			const updater = new FileSystemUpdater(localfs, memfs);
-			projectManager = new ProjectManager('/', memfs, updater, true);
+			projectManager = new ProjectManager(new URL('file:///'), '/', memfs, updater, true);
 		});
 		it('should ensure content for imports and references is fetched', async () => {
 			await projectManager.ensureReferencedFiles(new URL('file:///src/dummy.ts')).toPromise();
@@ -55,13 +55,13 @@ describe('ProjectManager', () => {
 	});
 	describe('getConfiguration()', () => {
 		beforeEach(async () => {
-			memfs = new InMemoryFileSystem('/');
+			memfs = new InMemoryFileSystem(new URL('file:///'), '/');
 			const localfs = new MapFileSystem(new Map([
 				['file:///tsconfig.json', '{}'],
 				['file:///src/jsconfig.json', '{}']
 			]));
 			const updater = new FileSystemUpdater(localfs, memfs);
-			projectManager = new ProjectManager('/', memfs, updater, true);
+			projectManager = new ProjectManager(new URL('file:///'), '/', memfs, updater, true);
 			await projectManager.ensureAllFiles();
 		});
 		it('should resolve best configuration based on file name', () => {
