@@ -410,41 +410,6 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		} as any);
 	} as any);
 
-	describe('Global module', function (this: TestContext) {
-
-		beforeEach(initializeTypeScriptService(createService, new Map([
-			['file:///a.ts', 'const rt: GQL.Rt;'],
-			['file:///interfaces.d.ts', 'declare namespace GQL { interface Rt { } }']
-		])) as any);
-
-		afterEach(shutdownService as any);
-
-		specify('textDocumentDefinition()', async function (this: TestContext) {
-			const result = await this.service.textDocumentDefinition({
-				textDocument: {
-					uri: 'file:///a.ts'
-				},
-				position: {
-					line: 0,
-					character: 14
-				}
-			});
-			assert.deepEqual(result, [{
-				uri: 'file:///interfaces.d.ts',
-				range: {
-					start: {
-						line: 0,
-						character: 34
-					},
-					end: {
-						line: 0,
-						character: 36
-					}
-				}
-			}]);
-		} as any);
-	} as any);
-
 	describe('DefinitelyTyped', function (this: TestContext) {
 		beforeEach(initializeTypeScriptService(createService, new Map([
 			['file:///package.json', JSON.stringify({
