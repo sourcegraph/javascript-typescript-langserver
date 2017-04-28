@@ -23,6 +23,10 @@ describe('util', () => {
 			const filePath = uri2path(new URL('file:///c:/baz/%40qux'));
 			assert.equal(filePath, 'c:\\baz\\@qux');
 		});
+		it('should convert a Windows file URI with uppercase drive letter to a file path', () => {
+			const filePath = uri2path(new URL('file:///C:/baz/%40qux'));
+			assert.equal(filePath, 'C:\\baz\\@qux');
+		});
 	});
 	describe('symbolDescriptorMatch', () => {
 		it('', (done: (err?: Error) => void) => {

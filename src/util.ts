@@ -109,7 +109,7 @@ export function uri2path(uri: URL): string {
 	// %-decode parts
 	let filePath = decodeURIComponent(uri.pathname);
 	// Strip the leading slash on Windows
-	const isWindowsUri = /^\/[a-z]:\//.test(filePath);
+	const isWindowsUri = /^\/[a-z]:\//i.test(filePath);
 	if (isWindowsUri) {
 		filePath = filePath.substr(1);
 	}
