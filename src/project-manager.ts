@@ -5,7 +5,6 @@ import * as os from 'os';
 import * as path_ from 'path';
 import * as ts from 'typescript';
 import { Disposable } from 'vscode-languageserver';
-import { URL } from 'whatwg-url';
 import { FileSystemUpdater } from './fs';
 import { Logger, NoopLogger } from './logging';
 import { InMemoryFileSystem } from './memfs';
@@ -320,10 +319,10 @@ export class ProjectManager implements Disposable {
 		if (observable) {
 			return observable;
 		}
-		// TypeScript works with file paths, not URIs
-		const filePath = uri.pathname.split('/').map(decodeURIComponent).join('/');
 		observable = Observable.from(this.updater.ensure(uri))
 			.mergeMap(() => {
+				// TypeScript works with file paths, not URIs
+				const filePath = util.uri2path(uri);
 				const config = this.getConfiguration(filePath);
 				config.ensureBasicFiles(span);
 				const contents = this.localFs.getContent(uri);
@@ -366,7 +365,7 @@ export class ProjectManager implements Disposable {
 				);
 			})
 			// Use same scheme, slashes, host for referenced URI as input file
-			.map(filePath => new URL(filePath.split(/[\\\/]/).map(encodeURIComponent).join('/'), uri.href))
+			.map(filePath => util.path2uri(uri, filePath))
 			// Don't cache errors
 			.catch<URL, never>(err => {
 				this.referencedFiles.delete(uri.href);
@@ -527,6 +526,7 @@ export class ProjectManager implements Disposable {
 	 * @return configuration type to use for a given file
 	 */
 	private getConfigurationType(filePath: string): ConfigType {
+		filePath = util.toUnixPath(filePath);
 		const name = path_.posix.basename(filePath);
 		if (name === 'tsconfig.json') {
 			return 'ts';
