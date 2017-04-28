@@ -78,7 +78,7 @@ export class LocalFileSystem implements FileSystem {
 				absolute: true
 			} as any, (err, matches) => err ? reject(err) : resolve(matches));
 		});
-		return iterate(files).map(file => new URL(file.split('/').map(encodeURIComponent).join('/'), base.href + '/'));
+		return iterate(files).map(file => new URL(file, base.href + '/'));
 	}
 
 	async getTextDocumentContent(uri: URL): Promise<string> {
