@@ -102,11 +102,15 @@ export class DiagnosticsPublisher implements DiagnosticsHandler {
 	private groupByFile(diagnostics: ts.Diagnostic[]): Map<string, ts.Diagnostic[]> {
 		const diagnosticsByFile = new Map<string, ts.Diagnostic[]>();
 		for (const diagnostic of diagnostics) {
-			const diagnosticsForFile = diagnosticsByFile.get(diagnostic.file.fileName);
-			if (!diagnosticsForFile) {
-				diagnosticsByFile.set(diagnostic.file.fileName, [diagnostic]);
-			} else {
-				diagnosticsForFile.push(diagnostic);
+			// TODO for some reason non-file diagnostics end up in here (where file is undefined)
+			const fileName = diagnostic.file ? diagnostic.file.fileName : '';
+			if (fileName) {
+				const diagnosticsForFile = diagnosticsByFile.get(fileName);
+				if (!diagnosticsForFile) {
+					diagnosticsByFile.set(fileName, [diagnostic]);
+				} else {
+					diagnosticsForFile.push(diagnostic);
+				}
 			}
 		}
 		return diagnosticsByFile;
