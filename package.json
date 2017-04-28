@@ -59,7 +59,7 @@
     "@types/chalk": "0.4.31",
     "@types/glob": "5.0.30",
     "@types/lodash": "4.14.63",
-    "@types/mocha": "2.2.40",
+    "@types/mocha": "2.2.41",
     "@types/mz": "0.0.31",
     "@types/node": "7.0.14",
     "@types/object-hash": "0.5.28",
