@@ -2,7 +2,7 @@
   "version": "0.1.0",
   "isShellCommand": true,
   "command": "npm",
-  "run": ["run"],
+  "args": ["--silent", "run"],
   "options": {
     "cwd": "${workspaceRoot}"
   },
