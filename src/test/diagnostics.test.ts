@@ -7,7 +7,7 @@ import { DiagnosticsPublisher } from '../diagnostics';
 import { LanguageClient, RemoteLanguageClient } from '../lang-handler';
 
 describe('DiagnosticsPublisher', () => {
-	let langClient: LanguageClient;
+	let langClient: LanguageClient & { textDocumentPublishDiagnostics: sinon.SinonSpy };
 	let diagnosticsManager: DiagnosticsPublisher;
 
 	function createTSFileDiagnostic(message: string, file: ts.SourceFile) {
@@ -20,7 +20,6 @@ describe('DiagnosticsPublisher', () => {
 			code: 33
 		};
 	}
-	let publishSpy: sinon.SinonSpy;
 	const sourceFile1 = ts.createSourceFile('/file1.ts', '', ts.ScriptTarget.ES2015);
 	const file1FailureA = createTSFileDiagnostic('Failure A', sourceFile1);
 	const file1FailureB = createTSFileDiagnostic('Failure B', sourceFile1);
@@ -40,21 +39,19 @@ describe('DiagnosticsPublisher', () => {
 	};
 
 	beforeEach(() => {
-		publishSpy = sinon.spy();
 		langClient = sinon.createStubInstance(RemoteLanguageClient);
-		langClient.textDocumentPublishDiagnostics = publishSpy;
 	});
 
 	it('should not update if there are no changes', () => {
 		diagnosticsManager = new DiagnosticsPublisher(langClient);
 		diagnosticsManager.updateFileDiagnostics([]);
-		sinon.assert.notCalled(publishSpy);
+		sinon.assert.notCalled(langClient.textDocumentPublishDiagnostics);
 	});
 
 	it('should translate a diagnostic correctly', () => {
 		diagnosticsManager = new DiagnosticsPublisher(langClient);
 		diagnosticsManager.updateFileDiagnostics([file1FailureA]);
-		sinon.assert.calledWithExactly(publishSpy, {
+		sinon.assert.calledWithExactly(langClient.textDocumentPublishDiagnostics, {
 			diagnostics: [failureADiagnostic],
 			uri: 'file:///file1.ts'
 		});
@@ -63,7 +60,7 @@ describe('DiagnosticsPublisher', () => {
 	it('should group diagnostics by file', () => {
 		diagnosticsManager = new DiagnosticsPublisher(langClient);
 		diagnosticsManager.updateFileDiagnostics([file1FailureA, file1FailureB]);
-		sinon.assert.calledWithExactly(publishSpy, {
+		sinon.assert.calledWithExactly(langClient.textDocumentPublishDiagnostics, {
 			diagnostics: [failureADiagnostic, failureBDiagnostic],
 			uri: 'file:///file1.ts'
 		});
@@ -72,12 +69,12 @@ describe('DiagnosticsPublisher', () => {
 	it('should publish empty diagnostics when file is fixed', () => {
 		diagnosticsManager = new DiagnosticsPublisher(langClient);
 		diagnosticsManager.updateFileDiagnostics([file1FailureA]);
-		sinon.assert.calledWithExactly(publishSpy, {
+		sinon.assert.calledWithExactly(langClient.textDocumentPublishDiagnostics, {
 			diagnostics: [failureADiagnostic],
 			uri: 'file:///file1.ts'
 		});
 		diagnosticsManager.updateFileDiagnostics([]);
-		sinon.assert.calledWithExactly(publishSpy, {
+		sinon.assert.calledWithExactly(langClient.textDocumentPublishDiagnostics, {
 			diagnostics: [],
 			uri: 'file:///file1.ts'
 		});

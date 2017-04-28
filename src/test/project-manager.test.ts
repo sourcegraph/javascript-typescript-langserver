@@ -90,8 +90,9 @@ describe('ProjectManager', () => {
 		});
 		it('should compile opened file and return diagnostics', async () => {
 			projectManager.didOpen('file:///src/dummy.ts', 'const num: number = "banana";');
-			const lastArgs = diagnosticsSpy.lastCall.args[0];
-			assert.equal(lastArgs.length, 1);
+			sinon.assert.called(diagnosticsSpy);
+			const lastDiagnostics = diagnosticsSpy.lastCall.args[0];
+			assert.equal(lastDiagnostics.length, 1);
 		});
 	});
 	describe('didChange()', () => {
@@ -109,11 +110,11 @@ describe('ProjectManager', () => {
 		});
 		it('should update program and get updated diagnostics', async () => {
 			projectManager.didOpen('file:///src/dummy.ts', 'const num: number = "banana";');
-			let lastArgs = diagnosticsSpy.lastCall.args[0];
-			assert.equal(lastArgs.length, 1);
+			sinon.assert.calledWith(diagnosticsSpy, []);
+
 			projectManager.didChange('file:///src/dummy.ts', 'const num: number = 55;');
-			lastArgs = diagnosticsSpy.lastCall.args[0];
-			assert.equal(lastArgs.length, 0);
+			const lastDiagnostics = diagnosticsSpy.lastCall.args[0];
+			assert.equal(lastDiagnostics.length, 0);
 		});
 	});
 
