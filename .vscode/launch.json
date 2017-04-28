@@ -1,0 +1,59 @@
+{
+  // Use IntelliSense to learn about possible Node.js debug attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Launch",
+      "program": "${workspaceRoot}/lib/language-server.js",
+      "args": [
+        "--port",
+        "2089",
+        "--strict"
+      ],
+      "cwd": "${workspaceRoot}",
+      "sourceMaps": true,
+      "outFiles": [
+        "${workspaceRoot}/lib/**/*.js"
+      ]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Mocha",
+      "cwd": "${workspaceRoot}",
+      "program": "${workspaceRoot}/node_modules/mocha/bin/_mocha",
+      "runtimeArgs": [
+        "--require",
+        "source-map-support/register"
+      ],
+      "args": [
+        "--no-timeouts",
+        "--colors",
+        "--bail",
+        "--slow",
+        "2000",
+        "${workspaceRoot}/lib/test/**/*.js"
+      ],
+      "internalConsoleOptions": "openOnSessionStart",
+      "sourceMaps": true,
+      "protocol": "inspector",
+      "outFiles": [
+        "${workspaceRoot}/lib/**/*.js"
+      ]
+    },
+    {
+      "type": "node",
+      "request": "attach",
+      "name": "Attach",
+      "port": 18304,
+      "sourceMaps": true,
+      "outFiles": [
+        "${workspaceRoot}/lib/**/*.js"
+      ]
+    }
+  ]
+}

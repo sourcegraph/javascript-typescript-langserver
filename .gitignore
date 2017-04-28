@@ -1,7 +1,6 @@
 node_modules/
 lib/
 .idea/
-.vscode/
 .nyc_output/
 coverage/
 *.iml

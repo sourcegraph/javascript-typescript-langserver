@@ -1,0 +1,39 @@
+{
+  "version": "0.1.0",
+  "isShellCommand": true,
+  "command": "npm",
+  "run": ["run"],
+  "options": {
+    "cwd": "${workspaceRoot}"
+  },
+  "tasks": [
+    {
+      "taskName": "build",
+      "isBuildCommand": true,
+      "problemMatcher": "$tsc"
+    },
+    {
+      "taskName": "watch",
+      "isBackground": true,
+      "problemMatcher": "$tsc-watch"
+    },
+    {
+      "taskName": "clean"
+    },
+    {
+      "taskName": "lint",
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^(.+)\\((\\d+),(\\d+)\\): (\\w+) (.+)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        },
+        "owner": "tslint",
+        "fileLocation": ["relative", "${workspaceRoot}"]
+      }
+    }
+  ]
+}
