@@ -474,7 +474,7 @@ export class ProjectManager implements Disposable {
 		config.ensureConfigFile();
 		config.ensureSourceFile(filePath);
 		config.getHost().incProjectVersion();
-		config.syncProgram();
+		config.syncProgram(span);
 	}
 
 	/**

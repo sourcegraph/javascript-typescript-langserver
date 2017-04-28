@@ -8,8 +8,9 @@ import { LanguageClient, RemoteLanguageClient } from '../lang-handler';
 
 describe('DiagnosticsPublisher', () => {
 	let langClient: LanguageClient;
-	let diagnosticsManager;
-	const createTSFileDiagnostic = (message: string, file: ts.SourceFile) => {
+	let diagnosticsManager: DiagnosticsPublisher;
+
+	function createTSFileDiagnostic(message: string, file: ts.SourceFile) {
 		return {
 			file,
 			messageText: message,
@@ -18,7 +19,7 @@ describe('DiagnosticsPublisher', () => {
 			category: ts.DiagnosticCategory.Error,
 			code: 33
 		};
-	};
+	}
 	let publishSpy: sinon.SinonSpy;
 	const sourceFile1 = ts.createSourceFile('/file1.ts', '', ts.ScriptTarget.ES2015);
 	const file1FailureA = createTSFileDiagnostic('Failure A', sourceFile1);

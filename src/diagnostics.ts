@@ -18,13 +18,13 @@ export class DiagnosticsPublisher implements DiagnosticsHandler {
 	 * The files that were last reported to have errors
 	 * If they don't appear in the next update, we must publish empty diagnostics for them.
 	 */
-	private problemFiles: Set<string> = new Set();
+	private problemFiles = new Set<string>();
 
 	/**
-	 * Requires a connection to the remote client to send diagnostics to
-	 * @param remoteClient
+	 * Requires a connection to the client to send diagnostics to
+	 * @param client
 	 */
-	constructor(private remoteClient: LanguageClient) {}
+	constructor(private client: LanguageClient) {}
 
 	/**
 	 * Receives file diagnostics from eg. ts.getPreEmitDiagnostics
@@ -46,12 +46,12 @@ export class DiagnosticsPublisher implements DiagnosticsHandler {
 		this.problemFiles.clear();
 
 		// for each file: publish and set as problem file
-		diagnosticsByFile.forEach((diagnostics, file) => {
+		for (const [file, diagnostics] of diagnosticsByFile) {
 			this.publishFileDiagnostics(file, diagnostics);
 			if (diagnostics.length > 0) {
 				this.problemFiles.add(file);
 			}
-		});
+		}
 	}
 
 	/**
@@ -71,7 +71,7 @@ export class DiagnosticsPublisher implements DiagnosticsHandler {
 	}
 
 	/**
-	 * Sends given diagnostics for a file to the remote client
+	 * Sends given diagnostics for a file to the client
 	 * @param file Absolute path as specified from the TS API
 	 * @param diagnostics Matching file diagnostics from the TS API, empty to clear errors for file
 	 */
@@ -92,7 +92,7 @@ export class DiagnosticsPublisher implements DiagnosticsHandler {
 				};
 			})
 		};
-		this.remoteClient.textDocumentPublishDiagnostics(params);
+		this.client.textDocumentPublishDiagnostics(params);
 	}
 
 	/**
@@ -103,7 +103,7 @@ export class DiagnosticsPublisher implements DiagnosticsHandler {
 		const diagnosticsByFile = new Map<string, ts.Diagnostic[]>();
 		for (const diagnostic of diagnostics) {
 			// TODO for some reason non-file diagnostics end up in here (where file is undefined)
-			const fileName = diagnostic.file ? diagnostic.file.fileName : '';
+			const fileName = diagnostic.file && diagnostic.file.fileName;
 			if (fileName) {
 				const diagnosticsForFile = diagnosticsByFile.get(fileName);
 				if (!diagnosticsForFile) {

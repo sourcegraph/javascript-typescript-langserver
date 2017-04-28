@@ -68,6 +68,7 @@ export type TypeScriptServiceFactory = (client: LanguageClient, options?: TypeSc
  * underscore.
  */
 export class TypeScriptService {
+
 	projectManager: pm.ProjectManager;
 
 	/**
