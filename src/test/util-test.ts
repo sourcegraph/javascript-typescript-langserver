@@ -1,47 +1,38 @@
-import { symbolDescriptorMatch } from '../util';
+import * as assert from 'assert';
+import { isSymbolDescriptorMatch } from '../util';
 
-describe('util tests', () => {
-	describe('symbolDescriptorMatch', () => {
-		it('', (done: (err?: Error) => void) => {
-			const want = true;
-			const got = symbolDescriptorMatch({
+describe('util', () => {
+	describe('isSymbolDescriptorMatch()', () => {
+		it('should return true for a matching query', () => {
+			const matches = isSymbolDescriptorMatch({
 				containerKind: undefined,
 				containerName: 'ts',
 				kind: 'interface',
 				name: 'Program',
 				package: undefined
 			}, {
-					containerKind: 'module',
-					containerName: 'ts',
-					kind: 'interface',
-					name: 'Program',
-					package: undefined
-				});
-			if (want !== got) {
-				done(new Error('wanted ' + want + ', but got ' + got));
-				return;
-			}
-			done();
+				containerKind: 'module',
+				containerName: 'ts',
+				kind: 'interface',
+				name: 'Program',
+				package: undefined
+			});
+			assert.equal(matches, true);
 		});
-		it('', (done: (err?: Error) => void) => {
-			const want = true;
-			const got = symbolDescriptorMatch({
+		it('should return true for a matching query with PackageDescriptor', () => {
+			const matches = isSymbolDescriptorMatch({
 				name: 'a',
 				kind: 'class',
 				package: { name: 'mypkg' },
 				containerKind: undefined
 			}, {
-					kind: 'class',
-					name: 'a',
-					containerKind: '',
-					containerName: '',
-					package: { name: 'mypkg' }
-				});
-			if (want !== got) {
-				done(new Error('wanted ' + want + ', but got ' + got));
-				return;
-			}
-			done();
+				kind: 'class',
+				name: 'a',
+				containerKind: '',
+				containerName: '',
+				package: { name: 'mypkg' }
+			});
+			assert.equal(matches, true);
 		});
 	});
 });
