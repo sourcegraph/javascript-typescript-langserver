@@ -6,7 +6,7 @@ import { Span } from 'opentracing';
 import Semaphore from 'semaphore-async-await';
 import { URL } from 'whatwg-url';
 import { InMemoryFileSystem } from './memfs';
-import { uri2path } from './util';
+import { path2uri, uri2path } from './util';
 
 export interface FileSystem {
 	/**
@@ -78,7 +78,7 @@ export class LocalFileSystem implements FileSystem {
 				absolute: true
 			} as any, (err, matches) => err ? reject(err) : resolve(matches));
 		});
-		return iterate(files).map(file => new URL(file, base.href + '/'));
+		return iterate(files).map(filePath => path2uri(base, filePath));
 	}
 
 	async getTextDocumentContent(uri: URL): Promise<string> {
