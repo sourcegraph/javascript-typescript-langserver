@@ -90,7 +90,7 @@ export function path2uri(root: string, file: string): string {
 	} else {
 		p = file;
 	}
-	p = toUnixPath(p).split('/').map(encodeURIComponent).join('/');
+	p = toUnixPath(p).split('/').map((val, i) => i <= 1 && /^[a-z]:$/i.test(val) ? val : encodeURIComponent(val)).join('/');
 	return ret + p;
 }
 
