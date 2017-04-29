@@ -96,8 +96,9 @@ export function path2uri(rootUri: URL, filePath: string): URL {
 	for (let i = 1; i < parts.length; i++) {
 		parts[i] = encodeURIComponent(parts[i]);
 	}
-	const pathname = parts.join(isWindowsUri ? '\\' : '/');
-	return new URL(pathname, rootUri.href);
+	const uri = new URL(rootUri.href);
+	uri.pathname = parts.join('/');
+	return uri;
 }
 
 /**
