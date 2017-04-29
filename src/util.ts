@@ -84,20 +84,13 @@ export function convertStringtoSymbolKind(kind: string): SymbolKind {
  * The returned URL uses protocol and host of the passed root URL
  */
 export function path2uri(rootUri: URL, filePath: string): URL {
-	const parts = filePath.split(/[\\\/]/);
-	const isWindowsUri = parts[0].endsWith(':');
-	// Don't encode colon after Windows drive letter
-	if (isWindowsUri) {
-		parts[0] = '/' + parts[0];
-	} else {
-		parts[0] = encodeURIComponent(parts[0]);
+	let pathname = filePath.replace(/\\/g, '/');
+	if (/^\/[a-z]:\//i.test(pathname)) {
+		pathname = '/' + pathname;
 	}
-	// Encode all other parts
-	for (let i = 1; i < parts.length; i++) {
-		parts[i] = encodeURIComponent(parts[i]);
-	}
-	const pathname = parts.join(isWindowsUri ? '\\' : '/');
-	return new URL(pathname, rootUri.href);
+	const uri = new URL(rootUri.href);
+	uri.pathname = pathname;
+	return uri;
 }
 
 /**
