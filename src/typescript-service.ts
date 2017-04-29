@@ -564,7 +564,7 @@ export class TypeScriptService {
 										// Map to SymbolDescriptor
 										.map(definition => util.defInfoToSymbolDescriptor(definition))
 										// Check if SymbolDescriptor matches
-										.filter(symbol => util.symbolDescriptorMatch(params.query, symbol))
+										.filter(symbol => util.isSymbolDescriptorMatch(params.query, symbol))
 										// Map SymbolDescriptor to ReferenceInformation
 										.map(symbol => ({
 											symbol,
@@ -883,7 +883,7 @@ export class TypeScriptService {
 				const packageDescriptor = packageName && { name: packageName } || undefined;
 				items = iterate(config.getService().getNavigateToItems(query.name || '', limit, undefined, false))
 					// Filter to match SymbolDescriptor
-					.filter(item => util.symbolDescriptorMatch(query, {
+					.filter(item => util.isSymbolDescriptorMatch(query, {
 						kind: item.kind,
 						name: item.name,
 						containerKind: item.containerKind,
