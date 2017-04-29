@@ -1,12 +1,12 @@
 import * as fs from 'mz/fs';
-import * as path from 'path';
 import { LanguageClient } from './lang-handler';
 import glob = require('glob');
 import iterate from 'iterare';
 import { Span } from 'opentracing';
 import Semaphore from 'semaphore-async-await';
+import { URL } from 'whatwg-url';
 import { InMemoryFileSystem } from './memfs';
-import { normalizeDir, path2uri, toUnixPath, uri2path } from './util';
+import { path2uri, uri2path } from './util';
 
 export interface FileSystem {
 	/**
@@ -15,7 +15,7 @@ export interface FileSystem {
 	 * @param base A URI under which to search, resolved relative to the rootUri
 	 * @return A promise that is fulfilled with an array of URIs
 	 */
-	getWorkspaceFiles(base?: string, childOf?: Span): Promise<Iterable<string>>;
+	getWorkspaceFiles(base?: URL, childOf?: Span): Promise<Iterable<URL>>;
 
 	/**
 	 * Returns the content of a text document
@@ -23,7 +23,7 @@ export interface FileSystem {
 	 * @param uri The URI of the text document, resolved relative to the rootUri
 	 * @return A promise that is fulfilled with the text document content
 	 */
-	getTextDocumentContent(uri: string, childOf?: Span): Promise<string>;
+	getTextDocumentContent(uri: URL, childOf?: Span): Promise<string>;
 }
 
 export class RemoteFileSystem implements FileSystem {
@@ -34,45 +34,54 @@ export class RemoteFileSystem implements FileSystem {
 	 * The files request is sent from the server to the client to request a list of all files in the workspace or inside the directory of the base parameter, if given.
 	 * A language server can use the result to index files by filtering and doing a content request for each text document of interest.
 	 */
-	async getWorkspaceFiles(base?: string, childOf = new Span()): Promise<Iterable<string>> {
-		return iterate(await this.client.workspaceXfiles({ base }, childOf))
-			.map(textDocument => textDocument.uri);
+	async getWorkspaceFiles(base?: URL, childOf = new Span()): Promise<Iterable<URL>> {
+		return iterate(await this.client.workspaceXfiles({ base: base && base.href }, childOf))
+			.map(textDocument => new URL(textDocument.uri));
 	}
 
 	/**
 	 * The content request is sent from the server to the client to request the current content of any text document. This allows language servers to operate without accessing the file system directly.
 	 */
-	async getTextDocumentContent(uri: string, childOf = new Span()): Promise<string> {
-		const textDocument = await this.client.textDocumentXcontent({ textDocument: { uri } }, childOf);
+	async getTextDocumentContent(uri: URL, childOf = new Span()): Promise<string> {
+		const textDocument = await this.client.textDocumentXcontent({ textDocument: { uri: uri.href } }, childOf);
 		return textDocument.text;
 	}
 }
 
+/**
+ * FileSystem implementation that reads from the local disk
+ */
 export class LocalFileSystem implements FileSystem {
 
 	/**
-	 * @param rootPath The root directory path that relative URIs should be resolved to
+	 * @param rootUri The workspace root URI that is used when no base is given
 	 */
-	constructor(private rootPath: string) {}
+	constructor(protected rootUri: URL) {}
 
 	/**
-	 * Converts the URI to an absolute path
+	 * Returns the file path where a given URI should be located on disk
 	 */
-	protected resolveUriToPath(uri: string): string {
-		return toUnixPath(path.resolve(this.rootPath, uri2path(uri)));
+	protected resolveUriToPath(uri: URL): string {
+		return uri2path(uri);
 	}
 
-	async getWorkspaceFiles(base?: string): Promise<Iterable<string>> {
-		// Even if no base provided, still need to call resolveUriToPath which may be overridden
-		const root = this.resolveUriToPath(base || path2uri('', this.rootPath));
-		const baseUri = path2uri('', normalizeDir(root)) + '/';
+	async getWorkspaceFiles(base: URL = this.rootUri): Promise<Iterable<URL>> {
 		const files = await new Promise<string[]>((resolve, reject) => {
-			glob('*', { cwd: root, nodir: true, matchBase: true }, (err, matches) => err ? reject(err) : resolve(matches));
+			glob('*', {
+				// Search the base directory
+				cwd: this.resolveUriToPath(base),
+				// Don't return directories
+				nodir: true,
+				// Search directories recursively
+				matchBase: true,
+				// Return absolute file paths
+				absolute: true
+			} as any, (err, matches) => err ? reject(err) : resolve(matches));
 		});
-		return iterate(files).map(file => baseUri + file.split('/').map(encodeURIComponent).join('/'));
+		return iterate(files).map(filePath => path2uri(base, filePath));
 	}
 
-	async getTextDocumentContent(uri: string): Promise<string> {
+	async getTextDocumentContent(uri: URL): Promise<string> {
 		return fs.readFile(this.resolveUriToPath(uri), 'utf8');
 	}
 }
@@ -107,7 +116,7 @@ export class FileSystemUpdater {
 	 * @param uri URI of the file to fetch
 	 * @param childOf A parent span for tracing
 	 */
-	async fetch(uri: string, childOf = new Span()): Promise<void> {
+	async fetch(uri: URL, childOf = new Span()): Promise<void> {
 		// Limit concurrent fetches
 		const promise = this.concurrencyLimit.execute(async () => {
 			try {
@@ -115,11 +124,11 @@ export class FileSystemUpdater {
 				this.inMemoryFs.add(uri, content);
 				this.inMemoryFs.getContent(uri);
 			} catch (err) {
-				this.fetches.delete(uri);
+				this.fetches.delete(uri.href);
 				throw err;
 			}
 		});
-		this.fetches.set(uri, promise);
+		this.fetches.set(uri.href, promise);
 		return promise;
 	}
 
@@ -130,8 +139,8 @@ export class FileSystemUpdater {
 	 * @param uri URI of the file to ensure
 	 * @param span An OpenTracing span for tracing
 	 */
-	ensure(uri: string, span = new Span()): Promise<void> {
-		return this.fetches.get(uri) || this.fetch(uri, span);
+	ensure(uri: URL, span = new Span()): Promise<void> {
+		return this.fetches.get(uri.href) || this.fetch(uri, span);
 	}
 
 	/**
@@ -176,8 +185,8 @@ export class FileSystemUpdater {
 	 *
 	 * @param uri URI of the file that changed
 	 */
-	invalidate(uri: string): void {
-		this.fetches.delete(uri);
+	invalidate(uri: URL): void {
+		this.fetches.delete(uri.href);
 	}
 
 	/**

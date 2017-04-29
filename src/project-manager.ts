@@ -4,7 +4,6 @@ import { Span } from 'opentracing';
 import * as os from 'os';
 import * as path_ from 'path';
 import * as ts from 'typescript';
-import * as url from 'url';
 import { Disposable } from 'vscode-languageserver';
 import { FileSystemUpdater } from './fs';
 import { Logger, NoopLogger } from './logging';
@@ -83,7 +82,7 @@ export class ProjectManager implements Disposable {
 	/**
 	 * A URI Map from file to files referenced by the file, so files only need to be pre-processed once
 	 */
-	private referencedFiles = new Map<string, Observable<string>>();
+	private referencedFiles = new Map<string, Observable<URL>>();
 
 	/**
 	 * @param rootPath root path as passed to `initialize`
@@ -91,7 +90,7 @@ export class ProjectManager implements Disposable {
 	 * @param strict indicates if we are working in strict mode (VFS) or with a local file system
 	 * @param traceModuleResolution allows to enable module resolution tracing (done by TS compiler)
 	 */
-	constructor(rootPath: string, inMemoryFileSystem: InMemoryFileSystem, updater: FileSystemUpdater, strict: boolean, traceModuleResolution?: boolean, protected logger: Logger = new NoopLogger()) {
+	constructor(private rootUri: URL, rootPath: string, inMemoryFileSystem: InMemoryFileSystem, updater: FileSystemUpdater, strict: boolean, traceModuleResolution?: boolean, protected logger: Logger = new NoopLogger()) {
 		this.rootPath = util.toUnixPath(rootPath);
 		this.updater = updater;
 		this.localFs = inMemoryFileSystem;
@@ -155,7 +154,7 @@ export class ProjectManager implements Disposable {
 				// Ensure content of all all global .d.ts, [tj]sconfig.json, package.json files
 				await Promise.all(
 					iterate(this.localFs.uris())
-						.filter(uri => util.isGlobalTSFile(uri) || util.isConfigFile(uri) || util.isPackageJsonFile(uri))
+						.filter(uri => util.isGlobalTSFile(uri.pathname) || util.isConfigFile(uri.pathname) || util.isPackageJsonFile(uri.pathname))
 						.map(uri => this.updater.ensure(uri))
 				);
 				// Scan for [tj]sconfig.json files
@@ -201,7 +200,7 @@ export class ProjectManager implements Disposable {
 					await this.updater.ensureStructure(span);
 					await Promise.all(
 						iterate(this.localFs.uris())
-							.filter(uri => !uri.includes('/node_modules/') && util.isJSTSFile(uri) || util.isConfigFile(uri) || util.isPackageJsonFile(uri))
+							.filter(uri => !uri.pathname.includes('/node_modules/') && util.isJSTSFile(uri.pathname) || util.isConfigFile(uri.pathname) || util.isPackageJsonFile(uri.pathname))
 							.map(uri => this.updater.ensure(uri))
 					);
 					this.createConfigurations();
@@ -232,7 +231,7 @@ export class ProjectManager implements Disposable {
 				await this.updater.ensureStructure(span);
 				await Promise.all(
 					iterate(this.localFs.uris())
-						.filter(uri => util.isJSTSFile(uri) || util.isConfigFile(uri) || util.isPackageJsonFile(uri))
+						.filter(uri => util.isJSTSFile(uri.pathname) || util.isConfigFile(uri.pathname) || util.isPackageJsonFile(uri.pathname))
 						.map(uri => this.updater.ensure(uri))
 				);
 				this.createConfigurations();
@@ -265,15 +264,15 @@ export class ProjectManager implements Disposable {
 	 * @param childOf OpenTracing parent span for tracing
 	 * @return Observable of file URIs ensured
 	 */
-	ensureReferencedFiles(uri: string, maxDepth = 30, ignore = new Set<string>(), childOf = new Span()): Observable<string> {
+	ensureReferencedFiles(uri: URL, maxDepth = 30, ignore = new Set<string>(), childOf = new Span()): Observable<URL> {
 		const span = childOf.tracer().startSpan('Ensure referenced files', { childOf });
 		span.addTags({ uri, maxDepth });
-		ignore.add(uri);
+		ignore.add(uri.href);
 		return Observable.from(this.ensureModuleStructure(span))
 			// If max depth was reached, don't go any further
 			.mergeMap(() => maxDepth === 0 ? [] : this.resolveReferencedFiles(uri, span))
 			// Prevent cycles
-			.filter(referencedUri => !ignore.has(referencedUri))
+			.filter(referencedUri => !ignore.has(referencedUri.href))
 			// Call method recursively with one less dep level
 			.mergeMap(referencedUri =>
 				this.ensureReferencedFiles(referencedUri, maxDepth - 1, ignore)
@@ -284,7 +283,7 @@ export class ProjectManager implements Disposable {
 					})
 			)
 			// Log errors to span
-			.catch(err => {
+			.catch<URL, never>(err => {
 				span.setTag('error', true);
 				span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
 				throw err;
@@ -315,19 +314,15 @@ export class ProjectManager implements Disposable {
 	 * @param uri URI of the file to process
 	 * @return URIs of files referenced by the file
 	 */
-	private resolveReferencedFiles(uri: string, span = new Span()): Observable<string> {
-		let observable = this.referencedFiles.get(uri);
+	private resolveReferencedFiles(uri: URL, span = new Span()): Observable<URL> {
+		let observable = this.referencedFiles.get(uri.href);
 		if (observable) {
 			return observable;
 		}
-		const parts = url.parse(uri);
-		if (!parts.pathname) {
-			return Observable.throw(new Error(`Invalid URI ${uri}`));
-		}
-		// TypeScript works with file paths, not URIs
-		const filePath = parts.pathname.split('/').map(decodeURIComponent).join('/');
 		observable = Observable.from(this.updater.ensure(uri))
 			.mergeMap(() => {
+				// TypeScript works with file paths, not URIs
+				const filePath = util.uri2path(uri);
 				const config = this.getConfiguration(filePath);
 				config.ensureBasicFiles(span);
 				const contents = this.localFs.getContent(uri);
@@ -370,16 +365,16 @@ export class ProjectManager implements Disposable {
 				);
 			})
 			// Use same scheme, slashes, host for referenced URI as input file
-			.map(filePath => url.format({ ...parts, pathname: filePath.split(/[\\\/]/).map(encodeURIComponent).join('/'), search: undefined, hash: undefined }))
+			.map(filePath => util.path2uri(uri, filePath))
 			// Don't cache errors
-			.catch(err => {
-				this.referencedFiles.delete(uri);
+			.catch<URL, never>(err => {
+				this.referencedFiles.delete(uri.href);
 				throw err;
 			})
 			// Make sure all subscribers get the same values
 			.publishReplay()
 			.refCount();
-		this.referencedFiles.set(uri, observable);
+		this.referencedFiles.set(uri.href, observable);
 		return observable;
 	}
 
@@ -428,7 +423,7 @@ export class ProjectManager implements Disposable {
 	 * @param uri file's URI
 	 * @param text file's content
 	 */
-	didOpen(uri: string, text: string) {
+	didOpen(uri: URL, text: string) {
 		this.didChange(uri, text);
 	}
 
@@ -436,11 +431,11 @@ export class ProjectManager implements Disposable {
 	 * Called when file was closed by client. Current implementation invalidates compiled version
 	 * @param uri file's URI
 	 */
-	didClose(uri: string, span = new Span()) {
+	didClose(uri: URL, span = new Span()) {
 		const filePath = util.uri2path(uri);
 		this.localFs.didClose(uri);
-		let version = this.versions.get(uri) || 0;
-		this.versions.set(uri, ++version);
+		let version = this.versions.get(uri.href) || 0;
+		this.versions.set(uri.href, ++version);
 		const config = this.getConfigurationIfExists(filePath);
 		if (!config) {
 			return;
@@ -455,11 +450,11 @@ export class ProjectManager implements Disposable {
 	 * @param uri file's URI
 	 * @param text file's content
 	 */
-	didChange(uri: string, text: string, span = new Span()) {
+	didChange(uri: URL, text: string, span = new Span()) {
 		const filePath = util.uri2path(uri);
 		this.localFs.didChange(uri, text);
-		let version = this.versions.get(uri) || 0;
-		this.versions.set(uri, ++version);
+		let version = this.versions.get(uri.href) || 0;
+		this.versions.set(uri.href, ++version);
 		const config = this.getConfigurationIfExists(filePath);
 		if (!config) {
 			return;
@@ -473,7 +468,7 @@ export class ProjectManager implements Disposable {
 	 * Called when file was saved by client
 	 * @param uri file's URI
 	 */
-	didSave(uri: string) {
+	didSave(uri: URL) {
 		this.localFs.didSave(uri);
 	}
 
@@ -500,7 +495,7 @@ export class ProjectManager implements Disposable {
 			}
 			const configType = this.getConfigurationType(filePath);
 			const configs = this.configs[configType];
-			configs.set(dir, new ProjectConfiguration(this.localFs, dir, this.versions, filePath, undefined, this.traceModuleResolution, this.logger));
+			configs.set(dir, new ProjectConfiguration(this.rootUri, this.localFs, dir, this.versions, filePath, undefined, this.traceModuleResolution, this.logger));
 		}
 
 		const rootPath = this.rootPath.replace(/\/+$/, '');
@@ -520,7 +515,7 @@ export class ProjectManager implements Disposable {
 				if (configs.size > 0) {
 					tsConfig.exclude = ['**/*'];
 				}
-				configs.set(rootPath, new ProjectConfiguration(this.localFs, this.rootPath, this.versions, '', tsConfig, this.traceModuleResolution, this.logger));
+				configs.set(rootPath, new ProjectConfiguration(this.rootUri, this.localFs, this.rootPath, this.versions, '', tsConfig, this.traceModuleResolution, this.logger));
 			}
 
 		}
@@ -531,6 +526,7 @@ export class ProjectManager implements Disposable {
 	 * @return configuration type to use for a given file
 	 */
 	private getConfigurationType(filePath: string): ConfigType {
+		filePath = util.toUnixPath(filePath);
 		const name = path_.posix.basename(filePath);
 		if (name === 'tsconfig.json') {
 			return 'ts';
@@ -595,7 +591,7 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	 */
 	private versions: Map<string, number>;
 
-	constructor(rootPath: string, options: ts.CompilerOptions, fs: InMemoryFileSystem, expectedFiles: string[], versions: Map<string, number>, private logger: Logger = new NoopLogger()) {
+	constructor(private rootUri: URL, rootPath: string, options: ts.CompilerOptions, fs: InMemoryFileSystem, expectedFiles: string[], versions: Map<string, number>, private logger: Logger = new NoopLogger()) {
 		this.rootPath = rootPath;
 		this.options = options;
 		this.fs = fs;
@@ -640,35 +636,31 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	}
 
 	/**
-	 * @param fileName relative or absolute file path
+	 * @param fileName Path to the file, absolute or relative to `rootUri`
 	 */
-	getScriptVersion(fileName: string): string {
+	getScriptVersion(filePath: string): string {
 
-		const uri = util.path2uri(this.rootPath, fileName);
-		if (path_.posix.isAbsolute(fileName) || path_.isAbsolute(fileName)) {
-			fileName = path_.posix.relative(this.rootPath, util.toUnixPath(fileName));
+		const uri = util.path2uri(this.rootUri, filePath);
+		if (path_.posix.isAbsolute(filePath) || path_.isAbsolute(filePath)) {
+			filePath = path_.posix.relative(this.rootPath, util.toUnixPath(filePath));
 		}
-		let version = this.versions.get(uri);
+		let version = this.versions.get(uri.href);
 		if (!version) {
 			version = 1;
-			this.versions.set(uri, version);
+			this.versions.set(uri.href, version);
 		}
 		return '' + version;
 	}
 
 	/**
-	 * @param fileName relative or absolute file path
+	 * @param fileName Path to the file, absolute or relative to `rootUri`
 	 */
-	getScriptSnapshot(fileName: string): ts.IScriptSnapshot | undefined {
-		let exists = this.fs.fileExists(fileName);
-		if (!exists) {
-			fileName = path_.posix.join(this.rootPath, fileName);
-			exists = this.fs.fileExists(fileName);
-		}
-		if (!exists) {
+	getScriptSnapshot(filePath: string): ts.IScriptSnapshot | undefined {
+		const content = this.fs.readFileIfExists(filePath);
+		if (content === undefined) {
 			return undefined;
 		}
-		return ts.ScriptSnapshot.fromString(this.fs.readFile(fileName));
+		return ts.ScriptSnapshot.fromString(content);
 	}
 
 	getCurrentDirectory(): string {
@@ -759,7 +751,7 @@ export class ProjectConfiguration {
 	 * @param configFilePath configuration file path, absolute
 	 * @param configContent optional configuration content to use instead of reading configuration file)
 	 */
-	constructor(fs: InMemoryFileSystem, rootFilePath: string, versions: Map<string, number>, configFilePath: string, configContent?: any, traceModuleResolution?: boolean, private logger: Logger = new NoopLogger()) {
+	constructor(private rootUri: URL, fs: InMemoryFileSystem, rootFilePath: string, versions: Map<string, number>, configFilePath: string, configContent?: any, traceModuleResolution?: boolean, private logger: Logger = new NoopLogger()) {
 		this.fs = fs;
 		this.configFilePath = configFilePath;
 		this.configContent = configContent;
@@ -895,6 +887,7 @@ export class ProjectConfiguration {
 			options.traceResolution = true;
 		}
 		this.host = new InMemoryLanguageServiceHost(
+			this.rootUri,
 			this.fs.path,
 			options,
 			this.fs,

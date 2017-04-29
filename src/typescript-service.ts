@@ -4,7 +4,6 @@ import { toPairs } from 'lodash';
 import { Span } from 'opentracing';
 import * as path_ from 'path';
 import * as ts from 'typescript';
-import * as url from 'url';
 import {
 	CompletionItem,
 	CompletionItemKind,
@@ -46,6 +45,7 @@ import {
 } from './request-type';
 import * as util from './util';
 import hashObject = require('object-hash');
+import { URL } from 'whatwg-url';
 
 export interface TypeScriptServiceOptions {
 	traceModuleResolution?: boolean;
@@ -78,7 +78,7 @@ export class TypeScriptService {
 	/**
 	 * The root URI as passed to `initialize` or converted from `rootPath`
 	 */
-	protected rootUri: string;
+	protected rootUri: URL;
 
 	/**
 	 * Cached response for empty workspace/symbol query
@@ -133,17 +133,16 @@ export class TypeScriptService {
 	 */
 	async initialize(params: InitializeParams, span = new Span()): Promise<InitializeResult> {
 		if (params.rootUri || params.rootPath) {
-			this.root = params.rootPath || util.uri2path(params.rootUri!);
-			this.rootUri = params.rootUri || util.path2uri('', params.rootPath!);
+			this.rootUri = params.rootUri ? new URL(params.rootUri) : util.path2uri(new URL('file:'), params.rootPath!);
+			this.root = params.rootPath || util.uri2path(this.rootUri);
 			this._initializeFileSystems(!this.options.strict && !(params.capabilities.xcontentProvider && params.capabilities.xfilesProvider));
 			this.updater = new FileSystemUpdater(this.fileSystem, this.inMemoryFileSystem);
-			this.projectManager = new pm.ProjectManager(this.root, this.inMemoryFileSystem, this.updater, !!this.options.strict, this.traceModuleResolution, this.logger);
+			this.projectManager = new pm.ProjectManager(this.rootUri, this.root, this.inMemoryFileSystem, this.updater, !!this.options.strict, this.traceModuleResolution, this.logger);
 			// Detect DefinitelyTyped
 			this.isDefinitelyTyped = (async () => {
 				try {
 					// Fetch root package.json (if exists)
-					const rootUriParts = url.parse(this.rootUri);
-					const packageJsonUri = url.format({ ...rootUriParts, pathname: path_.posix.join(rootUriParts.pathname || '', 'package.json') });
+					const packageJsonUri = new URL('package.json', this.rootUri.href);
 					await this.updater.ensure(packageJsonUri);
 					// Check name
 					const packageJson = JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri));
@@ -194,8 +193,8 @@ export class TypeScriptService {
 	 * @param accessDisk Whether the language server is allowed to access the local file system
 	 */
 	protected _initializeFileSystems(accessDisk: boolean): void {
-		this.fileSystem = accessDisk ? new LocalFileSystem(util.uri2path(this.root)) : new RemoteFileSystem(this.client);
-		this.inMemoryFileSystem = new InMemoryFileSystem(this.root);
+		this.fileSystem = accessDisk ? new LocalFileSystem(this.rootUri) : new RemoteFileSystem(this.client);
+		this.inMemoryFileSystem = new InMemoryFileSystem(this.rootUri, this.root);
 	}
 
 	/**
@@ -215,11 +214,12 @@ export class TypeScriptService {
 	async textDocumentDefinition(params: TextDocumentPositionParams, span = new Span()): Promise<Location[]> {
 		const line = params.position.line;
 		const column = params.position.character;
+		const uri = new URL(params.textDocument.uri);
 
 		// Fetch files needed to resolve definition
-		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
+		await this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span).toPromise();
 
-		const fileName: string = util.uri2path(params.textDocument.uri);
+		const fileName: string = util.uri2path(uri);
 		const configuration = this.projectManager.getConfiguration(fileName);
 		configuration.ensureBasicFiles(span);
 
@@ -239,7 +239,7 @@ export class TypeScriptService {
 				}
 				const start = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start);
 				const end = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start + def.textSpan.length);
-				ret.push(Location.create(this._defUri(def.fileName), {
+				ret.push(Location.create(this._defUri(def.fileName).href, {
 					start,
 					end
 				}));
@@ -259,12 +259,13 @@ export class TypeScriptService {
 	 * know some information about it.
 	 */
 	textDocumentXdefinition(params: TextDocumentPositionParams, span = new Span()): Observable<SymbolLocationInformation[]> {
+		const uri = new URL(params.textDocument.uri);
 		// Ensure files needed to resolve SymbolLocationInformation are fetched
-		return this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span)
+		return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
 			.toArray()
 			.mergeMap(() => {
 				// Convert URI to file path
-				const fileName: string = util.uri2path(params.textDocument.uri);
+				const fileName: string = util.uri2path(uri);
 				// Get closest tsconfig configuration
 				const configuration = this.projectManager.getConfiguration(fileName);
 				configuration.ensureBasicFiles(span);
@@ -288,7 +289,7 @@ export class TypeScriptService {
 						return {
 							symbol: util.defInfoToSymbolDescriptor(def),
 							location: {
-								uri: this._defUri(def.fileName),
+								uri: this._defUri(def.fileName).href,
 								range: {
 									start,
 									end
@@ -306,17 +307,18 @@ export class TypeScriptService {
 	 * given text document position.
 	 */
 	async textDocumentHover(params: TextDocumentPositionParams, span = new Span()): Promise<Hover> {
+		const uri = new URL(params.textDocument.uri);
 
 		// Ensure files needed to resolve hover are fetched
-		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
+		await this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span).toPromise();
 
-		const fileName: string = util.uri2path(params.textDocument.uri);
+		const fileName: string = util.uri2path(uri);
 		const configuration = this.projectManager.getConfiguration(fileName);
 		configuration.ensureBasicFiles(span);
 
 		const sourceFile = this._getSourceFile(configuration, fileName, span);
 		if (!sourceFile) {
-			throw new Error(`Unknown text document ${params.textDocument.uri}`);
+			throw new Error(`Expected source file ${fileName} to exist`);
 		}
 		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
 		const info = configuration.getService().getQuickInfoAtPosition(fileName, offset);
@@ -344,11 +346,12 @@ export class TypeScriptService {
 	 * Returns all references to the symbol at the position in the own workspace, including references inside node_modules.
 	 */
 	textDocumentReferences(params: ReferenceParams, span = new Span()): Observable<Location[]> {
+		const uri = new URL(params.textDocument.uri);
 		// Ensure all files were fetched to collect all references
 		return Observable.from(this.projectManager.ensureOwnFiles(span))
 			.mergeMap(() => {
 				// Convert URI to file path because TypeScript doesn't work with URIs
-				const fileName = util.uri2path(params.textDocument.uri);
+				const fileName = util.uri2path(uri);
 				// Get tsconfig configuration for requested file
 				const configuration = this.projectManager.getConfiguration(fileName);
 				// Ensure all files have been added
@@ -383,7 +386,7 @@ export class TypeScriptService {
 						const start = ts.getLineAndCharacterOfPosition(sourceFile, reference.textSpan.start);
 						const end = ts.getLineAndCharacterOfPosition(sourceFile, reference.textSpan.start + reference.textSpan.length);
 						return {
-							uri: util.path2uri(this.root, reference.fileName),
+							uri: util.path2uri(this.rootUri, reference.fileName).href,
 							range: {
 								start,
 								end
@@ -488,14 +491,12 @@ export class TypeScriptService {
 			}
 
 			// Fetch all files in the package subdirectory
-			const rootUriParts = url.parse(this.rootUri);
 			// All packages are in the types/ subdirectory
-			const packageRoot = path_.posix.join(rootUriParts.pathname || '', params.symbol.package.name.substr(1)) + '/';
-			const packageRootUri = url.format({ ...rootUriParts, pathname: packageRoot, search: undefined, hash: undefined });
+			const packageRootUri = new URL(params.symbol.package.name.substr(1), this.rootUri.href);
 			await this.updater.ensureStructure(span);
 			await Promise.all(
 				iterate(this.inMemoryFileSystem.uris())
-					.filter(uri => uri.startsWith(packageRootUri))
+					.filter(uri => uri.href.startsWith(packageRootUri.href))
 					.map(uri => this.updater.ensure(uri, span))
 			);
 			this.projectManager.createConfigurations();
@@ -503,7 +504,7 @@ export class TypeScriptService {
 
 			// Search symbol in configuration
 			// forcing TypeScript mode
-			const config = this.projectManager.getConfiguration(packageRoot, 'ts');
+			const config = this.projectManager.getConfiguration(util.uri2path(packageRootUri), 'ts');
 			return Array.from(this._collectWorkspaceSymbols(config, params.query || symbolQuery, params.limit));
 		} catch (err) {
 			span.setTag('error', true);
@@ -519,11 +520,12 @@ export class TypeScriptService {
 	 * in a given text document.
 	 */
 	async textDocumentDocumentSymbol(params: DocumentSymbolParams, span = new Span()): Promise<SymbolInformation[]> {
+		const uri = new URL(params.textDocument.uri);
 
 		// Ensure files needed to resolve symbols are fetched
-		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
+		await this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span).toPromise();
 
-		const fileName = util.uri2path(params.textDocument.uri);
+		const fileName = util.uri2path(uri);
 
 		const config = this.projectManager.getConfiguration(fileName);
 		config.ensureBasicFiles(span);
@@ -567,7 +569,7 @@ export class TypeScriptService {
 										.map(symbol => ({
 											symbol,
 											reference: {
-												uri: this._defUri(source.fileName),
+												uri: this._defUri(source.fileName).href,
 												range: {
 													start: ts.getLineAndCharacterOfPosition(source, node.pos + 1),
 													end: ts.getLineAndCharacterOfPosition(source, node.end)
@@ -602,9 +604,9 @@ export class TypeScriptService {
 		// Ensure package.json files
 		return Observable.from(this.projectManager.ensureModuleStructure(span))
 			// Iterate all files
-			.mergeMap<void, string>(() => this.inMemoryFileSystem.uris() as any)
+			.mergeMap<void, URL>(() => this.inMemoryFileSystem.uris() as any)
 			// Filter own package.jsons
-			.filter(uri => uri.includes('/package.json') && !uri.includes('/node_modules/'))
+			.filter(uri => uri.pathname.includes('/package.json') && !uri.pathname.includes('/node_modules/'))
 			// Map to contents of package.jsons
 			.mergeMap(uri =>
 				Observable.from(this.updater.ensure(uri))
@@ -650,9 +652,9 @@ export class TypeScriptService {
 		// Ensure package.json files
 		return Observable.from(this.projectManager.ensureModuleStructure())
 			// Iterate all files
-			.mergeMap<void, string>(() => this.inMemoryFileSystem.uris() as any)
+			.mergeMap<void, URL>(() => this.inMemoryFileSystem.uris() as any)
 			// Filter own package.jsons
-			.filter(uri => uri.includes('/package.json') && !uri.includes('/node_modules/'))
+			.filter(uri => uri.pathname.includes('/package.json') && !uri.pathname.includes('/node_modules/'))
 			// Ensure contents of own package.jsons
 			.mergeMap(uri =>
 				Observable.from(this.updater.ensure(uri))
@@ -691,11 +693,12 @@ export class TypeScriptService {
 	 * property filled in.
 	 */
 	async textDocumentCompletion(params: TextDocumentPositionParams, span = new Span()): Promise<CompletionList> {
+		const uri =  new URL(params.textDocument.uri);
 
 		// Ensure files needed to suggest completions are fetched
-		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
+		await this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span).toPromise();
 
-		const fileName: string = util.uri2path(params.textDocument.uri);
+		const fileName: string = util.uri2path(uri);
 
 		const configuration = this.projectManager.getConfiguration(fileName);
 		configuration.ensureBasicFiles(span);
@@ -735,11 +738,12 @@ export class TypeScriptService {
 	 * information at a given cursor position.
 	 */
 	async textDocumentSignatureHelp(params: TextDocumentPositionParams, span = new Span()): Promise<SignatureHelp> {
+		const uri = new URL(params.textDocument.uri);
 
 		// Ensure files needed to resolve signature are fetched
-		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
+		await this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span).toPromise();
 
-		const filePath = util.uri2path(params.textDocument.uri);
+		const filePath = util.uri2path(uri);
 		const configuration = this.projectManager.getConfiguration(filePath);
 		configuration.ensureBasicFiles(span);
 
@@ -777,11 +781,12 @@ export class TypeScriptService {
 	 * to read the document's truth using the document's uri.
 	 */
 	async textDocumentDidOpen(params: DidOpenTextDocumentParams): Promise<void> {
+		const uri = new URL(params.textDocument.uri);
 
 		// Ensure files needed for most operations are fetched
-		await this.projectManager.ensureReferencedFiles(params.textDocument.uri).toPromise();
+		await this.projectManager.ensureReferencedFiles(uri).toPromise();
 
-		this.projectManager.didOpen(params.textDocument.uri, params.textDocument.text);
+		this.projectManager.didOpen(uri, params.textDocument.text);
 	}
 
 	/**
@@ -790,17 +795,18 @@ export class TypeScriptService {
 	 * and language ids.
 	 */
 	async textDocumentDidChange(params: DidChangeTextDocumentParams): Promise<void> {
+		const uri = new URL(params.textDocument.uri);
 		let text = null;
-		params.contentChanges.forEach(change => {
+		for (const change of params.contentChanges) {
 			if (change.range || change.rangeLength) {
-				throw new Error('incremental updates in textDocument/didChange not supported for file ' + params.textDocument.uri);
+				throw new Error('Incremental updates in textDocument/didChange not supported for file ' + uri);
 			}
 			text = change.text;
-		});
+		}
 		if (!text) {
 			return;
 		}
-		this.projectManager.didChange(params.textDocument.uri, text);
+		this.projectManager.didChange(uri, text);
 	}
 
 	/**
@@ -808,10 +814,11 @@ export class TypeScriptService {
 	 * saved in the client.
 	 */
 	async textDocumentDidSave(params: DidSaveTextDocumentParams): Promise<void> {
+		const uri = new URL(params.textDocument.uri);
 
 		// Ensure files needed to suggest completions are fetched
-		await this.projectManager.ensureReferencedFiles(params.textDocument.uri).toPromise();
-		this.projectManager.didSave(params.textDocument.uri);
+		await this.projectManager.ensureReferencedFiles(uri).toPromise();
+		this.projectManager.didSave(uri);
 	}
 
 	/**
@@ -820,11 +827,12 @@ export class TypeScriptService {
 	 * (e.g. if the document's uri is a file uri the truth now exists on disk).
 	 */
 	async textDocumentDidClose(params: DidCloseTextDocumentParams): Promise<void> {
+		const uri = new URL(params.textDocument.uri);
 
 		// Ensure files needed to suggest completions are fetched
-		await this.projectManager.ensureReferencedFiles(params.textDocument.uri).toPromise();
+		await this.projectManager.ensureReferencedFiles(uri).toPromise();
 
-		this.projectManager.didClose(params.textDocument.uri);
+		this.projectManager.didClose(uri);
 	}
 
 	/**
@@ -900,7 +908,7 @@ export class TypeScriptService {
 						name: item.name,
 						kind: util.convertStringtoSymbolKind(item.kind),
 						location: {
-							uri: this._defUri(item.fileName),
+							uri: this._defUri(item.fileName).href,
 							range: {
 								start: ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start),
 								end: ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start + item.textSpan.length)
@@ -924,11 +932,11 @@ export class TypeScriptService {
 	 * Transforms definition's file name to URI. If definition belongs to TypeScript library,
 	 * returns git://github.com/Microsoft/TypeScript URL, otherwise returns file:// one
 	 */
-	private _defUri(filePath: string): string {
+	private _defUri(filePath: string): URL {
 		if (isTypeScriptLibrary(filePath)) {
-			return 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/' + path_.basename(filePath);
+			return new URL('git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/' + path_.basename(filePath));
 		}
-		return util.path2uri(this.root, filePath);
+		return util.path2uri(this.rootUri, filePath);
 	}
 
 	/**
@@ -966,7 +974,7 @@ export class TypeScriptService {
 				name: item.text,
 				kind: util.convertStringtoSymbolKind(item.kind),
 				location: {
-					uri: this._defUri(sourceFile.fileName),
+					uri: this._defUri(sourceFile.fileName).href,
 					range: {
 						start: ts.getLineAndCharacterOfPosition(sourceFile, span.start),
 						end: ts.getLineAndCharacterOfPosition(sourceFile, span.start + span.length)

@@ -1,8 +1,8 @@
 import * as os from 'os';
 import * as path from 'path';
-
 import * as ts from 'typescript';
 import { Position, Range, SymbolKind } from 'vscode-languageserver';
+import { URL } from 'whatwg-url';
 import * as rt from './request-type';
 
 let strict = false;
@@ -79,32 +79,42 @@ export function convertStringtoSymbolKind(kind: string): SymbolKind {
 	}
 }
 
-export function path2uri(root: string, file: string): string {
-	let ret = 'file://';
-	if (!strict && process.platform === 'win32') {
-		ret += '/';
-	}
-	let p;
-	if (root) {
-		p = resolve(root, file);
+/**
+ * Returns the given file path as a URL.
+ * The returned URL uses protocol and host of the passed root URL
+ */
+export function path2uri(rootUri: URL, filePath: string): URL {
+	const parts = filePath.split(/[\\\/]/);
+	const isWindowsUri = parts[0].endsWith(':');
+	// Don't encode colon after Windows drive letter
+	if (isWindowsUri) {
+		parts[0] = '/' + parts[0];
 	} else {
-		p = file;
+		parts[0] = encodeURIComponent(parts[0]);
 	}
-	p = toUnixPath(p).split('/').map((val, i) => i <= 1 && /^[a-z]:$/i.test(val) ? val : encodeURIComponent(val)).join('/');
-	return ret + p;
+	// Encode all other parts
+	for (let i = 1; i < parts.length; i++) {
+		parts[i] = encodeURIComponent(parts[i]);
+	}
+	const uri = new URL(rootUri.href);
+	uri.pathname = parts.join('/');
+	return uri;
 }
 
-export function uri2path(uri: string): string {
-	if (uri.startsWith('file://')) {
-		uri = uri.substring('file://'.length);
-		if (process.platform === 'win32') {
-			if (!strict) {
-				uri = uri.substring(1);
-			}
-		}
-		uri = uri.split('/').map(decodeURIComponent).join('/');
+/**
+ * Returns the path component of the passed URI as a file path.
+ * The OS style and seperator is determined by the presence of a Windows drive letter + colon in the URI.
+ * Does not check the URI protocol.
+ */
+export function uri2path(uri: URL): string {
+	// %-decode parts
+	let filePath = decodeURIComponent(uri.pathname);
+	// Strip the leading slash on Windows
+	const isWindowsUri = /^\/[a-z]:\//i.test(filePath);
+	if (isWindowsUri) {
+		filePath = filePath.substr(1);
 	}
-	return uri;
+	return filePath.replace(/\//g, isWindowsUri ? '\\' : '/');
 }
 
 export function isLocalUri(uri: string): boolean {
