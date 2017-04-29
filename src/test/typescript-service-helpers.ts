@@ -1,6 +1,6 @@
 import * as chai from 'chai';
 import * as ts from 'typescript';
-import { CompletionItemKind, LogMessageParams, TextDocumentIdentifier, TextDocumentItem } from 'vscode-languageserver';
+import { CompletionItemKind, LogMessageParams, PublishDiagnosticsParams, TextDocumentIdentifier, TextDocumentItem } from 'vscode-languageserver';
 import { SymbolKind } from 'vscode-languageserver-types';
 import { CacheGetParams, CacheSetParams, TextDocumentContentParams, WorkspaceFilesParams } from '../request-type';
 import { TypeScriptService, TypeScriptServiceFactory } from '../typescript-service';
@@ -49,6 +49,9 @@ export const initializeTypeScriptService = (createService: TypeScriptServiceFact
 			return Promise.resolve(null);
 		},
 		xcacheSet(params: CacheSetParams): any {
+			// noop
+		},
+		textDocumentPublishDiagnostics(diagnostics: PublishDiagnosticsParams): void {
 			// noop
 		}
 	});
