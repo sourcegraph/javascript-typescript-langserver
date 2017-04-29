@@ -10,7 +10,7 @@ describe('DiagnosticsPublisher', () => {
 	let langClient: LanguageClient & { textDocumentPublishDiagnostics: sinon.SinonSpy };
 	let diagnosticsManager: DiagnosticsPublisher;
 
-	function createTSFileDiagnostic(message: string, file: ts.SourceFile) {
+	function createTSFileDiagnostic(message: string, file: ts.SourceFile): ts.Diagnostic {
 		return {
 			file,
 			messageText: message,
