@@ -46,7 +46,7 @@
     "object-hash": "^1.1.8",
     "opentracing": "felixfbecker/opentracing-javascript#d42e8ac50e3555ca1a9a006bee0fd5856a838a47",
     "semaphore-async-await": "^1.5.1",
-    "typescript": "2.3.0",
+    "typescript": "2.3.2",
     "vscode-jsonrpc": "^3.1.0",
     "vscode-languageserver": "^3.1.0",
     "vscode-languageserver-types": "^3.0.3",
