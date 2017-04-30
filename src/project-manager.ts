@@ -858,15 +858,15 @@ export class ProjectConfiguration {
 	 * the whole project or in some files
 	 */
 	syncProgram(childOf = new Span()): void {
-		const syncProgramSpan = childOf.tracer().startSpan('Sync program', { childOf });
+		const span = childOf.tracer().startSpan('Sync program', { childOf });
 		try {
 			this.program = this.getService().getProgram();
 		} catch (err) {
-			syncProgramSpan.setTag('error', true);
-			syncProgramSpan.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
+			span.setTag('error', true);
+			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
 			this.logger.error(`Cannot create program object for ${this.rootFilePath}`, err);
 		} finally {
-			syncProgramSpan.finish();
+			span.finish();
 		}
 		if (this.program) {
 			this.updateDiagnostics(this.program, childOf);
@@ -874,20 +874,20 @@ export class ProjectConfiguration {
 	}
 
 	updateDiagnostics(program: ts.Program, childOf = new Span()): void {
-		const getDiagnosticsSpan = childOf.tracer().startSpan('Get diagnostics', { childOf });
+		const span = childOf.tracer().startSpan('Update diagnostics', { childOf });
 		let diagnostics: ts.Diagnostic[] | undefined;
 		try {
 			diagnostics = ts.getPreEmitDiagnostics(program);
-			getDiagnosticsSpan.log({ event: 'result', result: diagnostics.length });
+			span.log({ event: 'result', result: diagnostics.length });
+			if (diagnostics !== undefined) {
+				this.diagnosticsHandler.updateFileDiagnostics(diagnostics, span);
+			}
 		} catch (err) {
-			getDiagnosticsSpan.setTag('error', true);
-			getDiagnosticsSpan.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack});
+			span.setTag('error', true);
+			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack});
 			this.logger.error(`Cannot get diagnostics for program at ${this.rootFilePath}`, err);
 		} finally {
-			getDiagnosticsSpan.finish();
-		}
-		if (diagnostics !== undefined) {
-			this.diagnosticsHandler.updateFileDiagnostics(diagnostics, childOf);
+			span.finish();
 		}
 	}
 
