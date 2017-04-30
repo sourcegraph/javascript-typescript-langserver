@@ -858,16 +858,36 @@ export class ProjectConfiguration {
 	 * the whole project or in some files
 	 */
 	syncProgram(childOf = new Span()): void {
-		const span = childOf.tracer().startSpan('Sync program', { childOf });
+		const syncProgramSpan = childOf.tracer().startSpan('Sync program', { childOf });
 		try {
 			this.program = this.getService().getProgram();
-			this.diagnosticsHandler.updateFileDiagnostics(ts.getPreEmitDiagnostics(this.program));
 		} catch (err) {
-			span.setTag('error', true);
-			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
+			syncProgramSpan.setTag('error', true);
+			syncProgramSpan.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
 			this.logger.error(`Cannot create program object for ${this.rootFilePath}`, err);
 		} finally {
-			span.finish();
+			syncProgramSpan.finish();
+		}
+		if (this.program) {
+			this.updateDiagnostics(this.program, childOf);
+		}
+	}
+
+	updateDiagnostics(program: ts.Program, childOf = new Span()): void {
+		const getDiagnosticsSpan = childOf.tracer().startSpan('Get diagnostics', { childOf });
+		let diagnostics: ts.Diagnostic[] | undefined;
+		try {
+			diagnostics = ts.getPreEmitDiagnostics(program);
+			getDiagnosticsSpan.log({ event: 'result', result: diagnostics.length });
+		} catch (err) {
+			getDiagnosticsSpan.setTag('error', true);
+			getDiagnosticsSpan.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack});
+			this.logger.error(`Cannot get diagnostics for program at ${this.rootFilePath}`, err);
+		} finally {
+			getDiagnosticsSpan.finish();
+		}
+		if (diagnostics !== undefined) {
+			this.diagnosticsHandler.updateFileDiagnostics(diagnostics, childOf);
 		}
 	}
 

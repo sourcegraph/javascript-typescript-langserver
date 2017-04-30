@@ -1,3 +1,4 @@
+import { Span } from 'opentracing/lib';
 import * as ts from 'typescript';
 import { DiagnosticSeverity, PublishDiagnosticsParams } from 'vscode-languageserver';
 import { LanguageClient } from './lang-handler';
@@ -7,7 +8,7 @@ import * as util from './util';
  * Receives file diagnostics (typically implemented to send diagnostics to client)
  */
 export interface DiagnosticsHandler {
-	updateFileDiagnostics(diagnostics: ts.Diagnostic[]): void;
+	updateFileDiagnostics(diagnostics: ts.Diagnostic[], span?: Span): void;
 }
 
 /**
@@ -32,7 +33,8 @@ export class DiagnosticsPublisher implements DiagnosticsHandler {
 	 * not present in subsequent updates.
 	 * @param diagnostics
 	 */
-	updateFileDiagnostics(diagnostics: ts.Diagnostic[]): void {
+	updateFileDiagnostics(diagnostics: ts.Diagnostic[], childOf = new Span()): void {
+		const span = childOf.tracer().startSpan('Publish diagnostics', { childOf });
 
 		// categorize diagnostics by file
 		const diagnosticsByFile = this.groupByFile(diagnostics);
@@ -52,6 +54,8 @@ export class DiagnosticsPublisher implements DiagnosticsHandler {
 				this.problemFiles.add(file);
 			}
 		}
+
+		span.finish();
 	}
 
 	/**
