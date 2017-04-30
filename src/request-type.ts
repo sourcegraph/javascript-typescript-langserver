@@ -1,3 +1,4 @@
+import { OpPatch } from 'json-patch';
 import * as vscode from 'vscode-languageserver';
 
 export interface InitializeParams extends vscode.InitializeParams {
@@ -20,6 +21,11 @@ export interface ClientCapabilities extends vscode.ClientCapabilities {
 	 * The client provides support for cache/get and cache/set methods
 	 */
 	xcacheProvider?: boolean;
+
+	/**
+	 * The client supports receiving the result solely through $/partialResult notifications for requests from the client to the server.
+	 */
+	streaming?: boolean;
 }
 
 export interface ServerCapabilities extends vscode.ServerCapabilities {
@@ -27,6 +33,11 @@ export interface ServerCapabilities extends vscode.ServerCapabilities {
 	xdefinitionProvider?: boolean;
 	xdependenciesProvider?: boolean;
 	xpackagesProvider?: boolean;
+
+	/**
+	 * The server supports receiving results solely through $/partialResult notifications for requests from the server to the client.
+	 */
+	streaming?: boolean;
 }
 
 export interface InitializeResult extends vscode.InitializeResult {
@@ -192,4 +203,17 @@ export interface CacheSetParams {
 	 * The value that should be saved
 	 */
 	value: any;
+}
+
+export interface PartialResultParams {
+	/**
+	 * The request id to provide parts of the result for
+	 */
+	id: number | string;
+
+	/**
+	 * A JSON Patch that represents updates to the partial result as specified in RFC6902
+	 * https://tools.ietf.org/html/rfc6902
+	 */
+	patch: OpPatch[];
 }

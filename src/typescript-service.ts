@@ -1,5 +1,6 @@
 import { Observable } from '@reactivex/rxjs';
 import iterate from 'iterare';
+import { AddPatch, OpPatch } from 'json-patch';
 import { toPairs } from 'lodash';
 import { Span } from 'opentracing';
 import * as path from 'path';
@@ -37,7 +38,6 @@ import {
 	InitializeResult,
 	PackageDescriptor,
 	PackageInformation,
-	ReferenceInformation,
 	SymbolDescriptor,
 	SymbolLocationInformation,
 	WorkspaceReferenceParams,
@@ -94,7 +94,7 @@ export class TypeScriptService {
 	/**
 	 * Cached response for empty workspace/symbol query
 	 */
-	private emptyQueryWorkspaceSymbols: Observable<SymbolInformation[]>;
+	private emptyQueryWorkspaceSymbols: Observable<OpPatch>;
 
 	private traceModuleResolution: boolean;
 
@@ -146,8 +146,10 @@ export class TypeScriptService {
 	 * During the `initialize` request the server is allowed to sent the notifications
 	 * `window/showMessage`, `window/logMessage` and `telemetry/event` as well as the
 	 * `window/showMessageRequest` request to the client.
+	 *
+	 * @return Observable of JSON Patches that build an `InitializeResult`
 	 */
-	initialize(params: InitializeParams, span = new Span()): Observable<InitializeResult> {
+	initialize(params: InitializeParams, span = new Span()): Observable<OpPatch> {
 		if (params.rootUri || params.rootPath) {
 			this.root = params.rootPath || uri2path(params.rootUri!);
 			this.rootUri = params.rootUri || path2uri('', params.rootPath!);
@@ -185,7 +187,7 @@ export class TypeScriptService {
 					this.logger.error(err);
 				});
 		}
-		return Observable.of({
+		const result: InitializeResult = {
 			capabilities: {
 				// Tell the client that the server works in FULL text document sync mode
 				textDocumentSync: TextDocumentSyncKind.Full,
@@ -206,7 +208,12 @@ export class TypeScriptService {
 				},
 				xpackagesProvider: true
 			}
-		});
+		};
+		return Observable.of({
+			op: 'add',
+			path: '',
+			value: result
+		} as OpPatch);
 	}
 
 	/**
@@ -224,18 +231,23 @@ export class TypeScriptService {
 	 * The shutdown request is sent from the client to the server. It asks the server to shut down,
 	 * but to not exit (otherwise the response might not be delivered correctly to the client).
 	 * There is a separate exit notification that asks the server to exit.
+	 *
+	 * @return Observable of JSON Patches that build a `null` result
 	 */
-	shutdown(params = {}, span = new Span()): Observable<null> {
+	shutdown(params = {}, span = new Span()): Observable<OpPatch> {
 		this.projectManager.dispose();
 		this.packageManager.dispose();
-		return Observable.of(null);
+		return Observable.of({ op: 'add', path: '', value: null } as AddPatch);
 	}
 
 	/**
 	 * The goto definition request is sent from the client to the server to resolve the definition
 	 * location of a symbol at a given text document position.
+	 *
+	 * @return Observable of JSON Patches that build a `Location[]` result
 	 */
-	textDocumentDefinition(params: TextDocumentPositionParams, span = new Span()): Observable<Location[]> {
+
+	textDocumentDefinition(params: TextDocumentPositionParams, span = new Span()): Observable<OpPatch> {
 		const uri = normalizeUri(params.textDocument.uri);
 
 		// Fetch files needed to resolve definition
@@ -271,7 +283,8 @@ export class TypeScriptService {
 						};
 					});
 			})
-			.toArray();
+			.map((location): OpPatch => ({ op: 'add', path: '/-', value: location }))
+			.startWith({ op: 'add', path: '', value: [] });
 	}
 
 	/**
@@ -283,10 +296,12 @@ export class TypeScriptService {
 	 * is optional. This is useful because the language server might not be able to resolve a goto
 	 * definition request to a concrete location (e.g. due to lack of dependencies) but still may
 	 * know some information about it.
+	 *
+	 * @return Observable of JSON Patches that build a `SymbolLocationInformation[]` result
 	 */
-	textDocumentXdefinition(params: TextDocumentPositionParams, span = new Span()): Observable<SymbolLocationInformation[]> {
-		const uri = normalizeUri(params.textDocument.uri);
 
+	textDocumentXdefinition(params: TextDocumentPositionParams, span = new Span()): Observable<OpPatch> {
+		const uri = normalizeUri(params.textDocument.uri);
 		// Ensure files needed to resolve SymbolLocationInformation are fetched
 		return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
 			.toArray()
@@ -330,7 +345,8 @@ export class TypeScriptService {
 							});
 					});
 			})
-			.toArray();
+			.map(symbol => ({ op: 'add', path: '/-', value: symbol } as AddPatch))
+			.startWith({ op: 'add', path: '', value: [] });
 	}
 
 	/**
@@ -398,8 +414,10 @@ export class TypeScriptService {
 	/**
 	 * The hover request is sent from the client to the server to request hover information at a
 	 * given text document position.
+	 *
+	 * @return Observable of JSON Patches that build a `Hover` result
 	 */
-	textDocumentHover(params: TextDocumentPositionParams, span = new Span()): Observable<Hover> {
+	textDocumentHover(params: TextDocumentPositionParams, span = new Span()): Observable<OpPatch> {
 		const uri = normalizeUri(params.textDocument.uri);
 
 		// Ensure files needed to resolve hover are fetched
@@ -458,7 +476,8 @@ export class TypeScriptService {
 						end
 					}
 				};
-			});
+			})
+			.map(hover => ({ op: 'add', path: '', value: hover }) as AddPatch);
 	}
 
 	/**
@@ -466,9 +485,12 @@ export class TypeScriptService {
 	 * references for the symbol denoted by the given text document position.
 	 *
 	 * Returns all references to the symbol at the position in the own workspace, including references inside node_modules.
+	 *
+	 * @return Observable of JSON Patches that build a `Location[]` result
 	 */
-	textDocumentReferences(params: ReferenceParams, span = new Span()): Observable<Location[]> {
+	textDocumentReferences(params: ReferenceParams, span = new Span()): Observable<OpPatch> {
 		const uri = normalizeUri(params.textDocument.uri);
+
 		// Ensure all files were fetched to collect all references
 		return Observable.from(this.projectManager.ensureOwnFiles(span))
 			.mergeMap(() => {
@@ -498,8 +520,7 @@ export class TypeScriptService {
 						// Filter references in node_modules
 						&& !reference.fileName.includes('/node_modules/')
 					)
-					// Map to Locations
-					.map(reference => {
+					.map((reference): Location => {
 						const sourceFile = program.getSourceFile(reference.fileName);
 						if (!sourceFile) {
 							throw new Error(`Source file ${reference.fileName} does not exist`);
@@ -516,15 +537,19 @@ export class TypeScriptService {
 						};
 					});
 			})
-			.toArray();
+			.map((location: Location): AddPatch => ({ op: 'add', path: '/-', value: location }))
+			// Initialize with array
+			.startWith({ op: 'add', path: '', value: [] });
 	}
 
 	/**
 	 * The workspace symbol request is sent from the client to the server to list project-wide
 	 * symbols matching the query string. The text document parameter specifies the active document
 	 * at time of the query. This can be used to rank or limit results.
+	 *
+	 * @return Observable of JSON Patches that build a `SymbolInformation[]` result
 	 */
-	workspaceSymbol(params: WorkspaceSymbolParams, span = new Span()): Observable<SymbolInformation[]> {
+	workspaceSymbol(params: WorkspaceSymbolParams, span = new Span()): Observable<OpPatch> {
 
 		// Always return max. 50 results
 		// TODO stream 50 results, then re-query and stream the rest
@@ -545,13 +570,13 @@ export class TypeScriptService {
 
 		// Use special logic for DefinitelyTyped
 		return this.isDefinitelyTyped
-			.mergeMap((isDefinitelyTyped): any => {
+			.mergeMap(isDefinitelyTyped => {
 				if (isDefinitelyTyped) {
 					return this._workspaceSymbolDefinitelyTyped({ ...params, limit }, span);
 				}
 
 				// A workspace/symol request searches all symbols in own code, but not in dependencies
-				const symbols = Observable.from(this.projectManager.ensureOwnFiles(span))
+				let patches = Observable.from(this.projectManager.ensureOwnFiles(span))
 					.mergeMap(() =>
 						symbolQuery && symbolQuery.package
 							// If SymbolDescriptor query with PackageDescriptor, search for package.jsons with matching package name
@@ -574,15 +599,14 @@ export class TypeScriptService {
 					// or files from different configurations may refer to the same file(s)
 					.distinct(symbol => hashObject(symbol, { respectType: false } as any))
 					.take(limit)
-					.toArray()
-					.publishReplay()
-					.refCount();
+					.map(symbol => ({ op: 'add', path: '/-', value: symbol }) as AddPatch)
+					.startWith({ op: 'add', path: '', value: [] });
 
 				if (!query && !symbolQuery) {
-					this.emptyQueryWorkspaceSymbols = symbols;
+					patches = this.emptyQueryWorkspaceSymbols = patches.publishReplay().refCount();
 				}
 
-				return symbols;
+				return patches;
 			});
 	}
 
@@ -590,8 +614,10 @@ export class TypeScriptService {
 	 * Specialised version of workspaceSymbol for DefinitelyTyped.
 	 * Searches only in the correct subdirectory for the given PackageDescriptor.
 	 * Will error if not passed a SymbolDescriptor query with an `@types` PackageDescriptor
+	 *
+	 * @return Observable of JSON Patches that build a `SymbolInformation[]` result
 	 */
-	protected _workspaceSymbolDefinitelyTyped(params: WorkspaceSymbolParams, childOf = new Span()): Observable<SymbolInformation[]> {
+	protected _workspaceSymbolDefinitelyTyped(params: WorkspaceSymbolParams, childOf = new Span()): Observable<OpPatch> {
 		const span = childOf.tracer().startSpan('Handle workspace/symbol DefinitelyTyped', { childOf });
 
 		if (!params.symbol || !params.symbol.package || !params.symbol.package.name || !params.symbol.package.name.startsWith('@types/')) {
@@ -620,8 +646,9 @@ export class TypeScriptService {
 				const config = this.projectManager.getConfiguration(uri2path(packageRootUri), 'ts');
 				return this._collectWorkspaceSymbols(config, params.query || symbolQuery, params.limit, span) as any;
 			})
-			.toArray()
-			.catch(err => {
+			.map(symbol => ({ op: 'add', path: '/-', value: symbol }) as AddPatch)
+			.startWith({ op: 'add', path: '', value: [] })
+			.catch<OpPatch, never>(err => {
 				span.setTag('error', true);
 				span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
 				throw err;
@@ -634,8 +661,10 @@ export class TypeScriptService {
 	/**
 	 * The document symbol request is sent from the client to the server to list all symbols found
 	 * in a given text document.
+	 *
+	 * @return Observable of JSON Patches that build a `SymbolInformation[]` result
 	 */
-	textDocumentDocumentSymbol(params: DocumentSymbolParams, span = new Span()): Observable<SymbolInformation[]> {
+	textDocumentDocumentSymbol(params: DocumentSymbolParams, span = new Span()): Observable<OpPatch> {
 		const uri = normalizeUri(params.textDocument.uri);
 
 		// Ensure files needed to resolve symbols are fetched
@@ -653,14 +682,17 @@ export class TypeScriptService {
 				const tree = config.getService().getNavigationTree(fileName);
 				return this._flattenNavigationTreeItem(tree, null, sourceFile) as any;
 			})
-			.toArray();
+			.map(symbol => ({ op: 'add', path: '', value: symbol }) as AddPatch)
+			.startWith({ op: 'add', path: '', value: [] } as AddPatch);
 	}
 
 	/**
 	 * The workspace references request is sent from the client to the server to locate project-wide
 	 * references to a symbol given its description / metadata.
+	 *
+	 * @return Observable of JSON Patches that build a `ReferenceInformation[]` result
 	 */
-	workspaceXreferences(params: WorkspaceReferenceParams, span = new Span()): Observable<ReferenceInformation[]> {
+	workspaceXreferences(params: WorkspaceReferenceParams, span = new Span()): Observable<OpPatch> {
 		const queryWithoutPackage = omit(params.query, 'package');
 		return Observable.from(this.projectManager.ensureAllFiles(span))
 			.mergeMap<void, ProjectConfiguration>(() => {
@@ -740,7 +772,8 @@ export class TypeScriptService {
 							})
 					);
 			})
-			.toArray();
+			.map((reference): AddPatch => ({ op: 'add', path: '/-', value: reference }))
+			.startWith({ op: 'add', path: '', value: [] });
 	}
 
 	/**
@@ -753,8 +786,10 @@ export class TypeScriptService {
 	 * repository of each dependency. In this case, definition resolution requires mapping from
 	 * package descriptor to repository revision URL. A reverse index can be constructed from calls
 	 * to workspace/xpackages to provide an efficient mapping.
+	 *
+	 * @return Observable of JSON Patches that build a `PackageInformation[]` result
 	 */
-	workspaceXpackages(params = {}, span = new Span()): Observable<PackageInformation[]> {
+	workspaceXpackages(params = {}, span = new Span()): Observable<OpPatch> {
 		// Ensure package.json files
 		return Observable.from(this.projectManager.ensureModuleStructure(span))
 			// Iterate all files
@@ -789,20 +824,22 @@ export class TypeScriptService {
 						}
 					}))
 					.toArray()
-					// Map to PackageInformation
-					.map(dependencies => ({
+					.map((dependencies): PackageInformation => ({
 						package: packageDescriptor,
 						dependencies
 					}));
 			})
-			.toArray();
+			.map((packageInfo): AddPatch => ({ op: 'add', path: '/-', value: packageInfo }))
+			.startWith({ op: 'add', path: '', value: [] });
 	}
 
 	/**
 	 * Returns all dependencies of a workspace.
 	 * Superseded by workspace/xpackages
+	 *
+	 * @return Observable of JSON Patches that build a `DependencyReference[]` result
 	 */
-	workspaceXdependencies(params = {}, span = new Span()): Observable<DependencyReference[]> {
+	workspaceXdependencies(params = {}, span = new Span()): Observable<OpPatch> {
 		// Ensure package.json files
 		return Observable.from(this.projectManager.ensureModuleStructure())
 			// Iterate all files
@@ -827,7 +864,8 @@ export class TypeScriptService {
 						}
 					}))
 			)
-			.toArray();
+			.map((dependency): AddPatch => ({ op: 'add', path: '/-', value: dependency }))
+			.startWith({ op: 'add', path: '', value: [] });
 	}
 
 	/**
@@ -842,14 +880,16 @@ export class TypeScriptService {
 	 * the user interface then a 'completionItem/resolve' request is sent with the selected
 	 * completion item as a param. The returned completion item should have the documentation
 	 * property filled in.
+	 *
+	 * @return Observable of JSON Patches that build a `CompletionList` result
 	 */
-	textDocumentCompletion(params: TextDocumentPositionParams, span = new Span()): Observable<CompletionList> {
+	textDocumentCompletion(params: TextDocumentPositionParams, span = new Span()): Observable<OpPatch> {
 		const uri = normalizeUri(params.textDocument.uri);
 
 		// Ensure files needed to suggest completions are fetched
 		return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
 			.toArray()
-			.map((): CompletionList => {
+			.mergeMap(() => {
 
 				const fileName: string = uri2path(uri);
 
@@ -858,19 +898,18 @@ export class TypeScriptService {
 
 				const sourceFile = this._getSourceFile(configuration, fileName, span);
 				if (!sourceFile) {
-					return { isIncomplete: true, items: [] };
+					return [];
 				}
 
 				const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
 				const completions = configuration.getService().getCompletionsAtPosition(fileName, offset);
 
 				if (completions == null) {
-					return { isIncomplete: true, items: [] };
+					return [];
 				}
 
-				return {
-					isIncomplete: false,
-					items: completions.entries.map(entry => {
+				return Observable.from(completions.entries)
+					.map(entry =>  {
 						const item: CompletionItem = { label: entry.name };
 						const kind = completionKinds[entry.kind];
 						if (kind) {
@@ -884,17 +923,20 @@ export class TypeScriptService {
 							item.documentation = ts.displayPartsToString(details.documentation);
 							item.detail = ts.displayPartsToString(details.displayParts);
 						}
-						return item;
+						return { op: 'add', path: '/items/-', value: item } as AddPatch;
 					})
-				};
-			});
+					.startWith({ op: 'add', path: '/isIncomplete', value: false } as AddPatch);
+			})
+			.startWith({ op: 'add', path: '', value: { isIncomplete: true, items: [] } as CompletionList } as AddPatch);
 	}
 
 	/**
 	 * The signature help request is sent from the client to the server to request signature
 	 * information at a given cursor position.
+	 *
+	 * @return Observable of JSON Patches that build a `SignatureHelp` result
 	 */
-	textDocumentSignatureHelp(params: TextDocumentPositionParams, span = new Span()): Observable<SignatureHelp> {
+	textDocumentSignatureHelp(params: TextDocumentPositionParams, span = new Span()): Observable<OpPatch> {
 		const uri = normalizeUri(params.textDocument.uri);
 
 		// Ensure files needed to resolve signature are fetched
@@ -937,7 +979,8 @@ export class TypeScriptService {
 					activeSignature: signatures.selectedItemIndex,
 					activeParameter: signatures.argumentIndex
 				};
-			});
+			})
+			.map(signatureHelp => ({ op: 'add', path: '', value: signatureHelp }) as AddPatch);
 	}
 
 	/**

@@ -1,12 +1,14 @@
 import * as chai from 'chai';
+import * as sinon from 'sinon';
 import * as ts from 'typescript';
-import { CompletionItemKind, TextDocumentIdentifier, TextDocumentItem } from 'vscode-languageserver';
-import { SymbolKind } from 'vscode-languageserver-types';
+import { CompletionItemKind, CompletionList, TextDocumentIdentifier, TextDocumentItem } from 'vscode-languageserver';
+import { Hover, Location, SignatureHelp, SymbolInformation, SymbolKind } from 'vscode-languageserver-types';
 import { LanguageClient, RemoteLanguageClient } from '../lang-handler';
 import { TextDocumentContentParams, WorkspaceFilesParams } from '../request-type';
+import { SymbolLocationInformation } from '../request-type';
 import { TypeScriptService, TypeScriptServiceFactory } from '../typescript-service';
 import chaiAsPromised = require('chai-as-promised');
-import * as sinon from 'sinon';
+import { apply } from 'json-patch';
 chai.use(chaiAsPromised);
 const assert = chai.assert;
 
@@ -102,7 +104,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		describe('textDocumentDefinition()', function (this: TestContext) {
 			specify('in same file', async function (this: TestContext) {
-				const result = await this.service.textDocumentDefinition({
+				const result: Location[] = await this.service.textDocumentDefinition({
 					textDocument: {
 						uri: rootUri + 'a.ts'
 					},
@@ -110,7 +112,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 29
 					}
-				}).toPromise();
+				}).toArray().map(patches => apply(null, patches)).toPromise();
 				assert.deepEqual(result, [{
 					uri: rootUri + 'a.ts',
 					range: {
@@ -126,7 +128,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]);
 			} as any);
 			specify('on keyword (non-null)', async function (this: TestContext) {
-				const result = await this.service.textDocumentDefinition({
+				const result: Location[] = await this.service.textDocumentDefinition({
 					textDocument: {
 						uri: rootUri + 'a.ts'
 					},
@@ -134,11 +136,11 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 0
 					}
-				}).toPromise();
+				}).toArray().map(patches => apply(null, patches)).toPromise();
 				assert.deepEqual(result, []);
 			} as any);
 			specify('in other file', async function (this: TestContext) {
-				const result = await this.service.textDocumentDefinition({
+				const result: Location[] = await this.service.textDocumentDefinition({
 					textDocument: {
 						uri: rootUri + 'foo/c.ts'
 					},
@@ -146,7 +148,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 9
 					}
-				}).toPromise();
+				}).toArray().map(patches => apply(null, patches)).toPromise();
 				assert.deepEqual(result, [{
 					uri: rootUri + 'foo/b.ts',
 					range: {
@@ -164,7 +166,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		} as any);
 		describe('textDocumentXdefinition()', function (this: TestContext) {
 			specify('on interface field reference', async function (this: TestContext) {
-				const result = await this.service.textDocumentXdefinition({
+				const result: SymbolLocationInformation[] = await this.service.textDocumentXdefinition({
 					textDocument: {
 						uri: rootUri + 'e.ts'
 					},
@@ -172,7 +174,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 3,
 						character: 15
 					}
-				}).toPromise();
+				}).toArray().map(patches => apply(null, patches)).toPromise();
 				assert.deepEqual(result, [{
 					location: {
 						uri: rootUri + 'd.ts',
@@ -196,7 +198,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]);
 			} as any);
 			specify('in same file', async function (this: TestContext) {
-				const result = await this.service.textDocumentXdefinition({
+				const result: SymbolLocationInformation[] = await this.service.textDocumentXdefinition({
 					textDocument: {
 						uri: rootUri + 'a.ts'
 					},
@@ -204,7 +206,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 29
 					}
-				}).toPromise();
+				}).toArray().map(patches => apply(null, patches)).toPromise();
 				assert.deepEqual(result, [{
 					location: {
 						uri: rootUri + 'a.ts',
@@ -230,7 +232,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		} as any);
 		describe('textDocumentHover()', function (this: TestContext) {
 			specify('in same file', async function (this: TestContext) {
-				const result = await this.service.textDocumentHover({
+				const result: Hover = await this.service.textDocumentHover({
 					textDocument: {
 						uri: rootUri + 'a.ts'
 					},
@@ -238,7 +240,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 29
 					}
-				}).toPromise();
+				}).toArray().map(patches => apply(null, patches)).toPromise();
 				assert.deepEqual(result, {
 					range: {
 						start: {
@@ -257,7 +259,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				});
 			} as any);
 			specify('in other file', async function (this: TestContext) {
-				const result = await this.service.textDocumentHover({
+				const result: Hover = await this.service.textDocumentHover({
 					textDocument: {
 						uri: rootUri + 'foo/c.ts'
 					},
@@ -265,7 +267,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 9
 					}
-				}).toPromise();
+				}).toArray().map(patches => apply(null, patches)).toPromise();
 				assert.deepEqual(result, {
 					range: {
 						end: {
@@ -284,7 +286,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				});
 			} as any);
 			specify('over keyword (non-null)', async function (this: TestContext) {
-				const result = await this.service.textDocumentHover({
+				const result: Hover = await this.service.textDocumentHover({
 					textDocument: {
 						uri: rootUri + 'a.ts'
 					},
@@ -292,7 +294,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 0
 					}
-				}).toPromise();
+				}).toArray().map(patches => apply(null, patches)).toPromise();
 				assert.deepEqual(result, { contents: [] });
 			} as any);
 			specify('over non-existent file', function (this: TestContext) {
@@ -334,7 +336,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		describe('textDocumentDefinition()', function (this: TestContext) {
 			specify('with tsd.d.ts', async function (this: TestContext) {
-				const result = await this.service.textDocumentDefinition({
+				const result: Location[] = await this.service.textDocumentDefinition({
 					textDocument: {
 						uri: rootUri + 'src/dir/index.ts'
 					},
@@ -342,7 +344,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 20
 					}
-				}).toPromise();
+				}).toArray().map(patches => apply(null, patches)).toPromise();
 				assert.deepEqual(result, [{
 					uri: rootUri + 'typings/dep.d.ts',
 					range: {
@@ -359,7 +361,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			} as any);
 			describe('on file in project root', function (this: TestContext) {
 				specify('on import alias', async function (this: TestContext) {
-					const result = await this.service.textDocumentDefinition({
+					const result: Location[] = await this.service.textDocumentDefinition({
 						textDocument: {
 							uri: rootUri + 'src/a.ts'
 						},
@@ -367,7 +369,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 							line: 0,
 							character: 12
 						}
-					}).toPromise();
+					}).toArray().map(patches => apply(null, patches)).toPromise();
 					assert.deepEqual(result, [{
 						uri: rootUri + 'typings/dep.d.ts',
 						range: {
@@ -383,7 +385,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					}]);
 				} as any);
 				specify('on module name', async function (this: TestContext) {
-					const result = await this.service.textDocumentDefinition({
+					const result: Location[] = await this.service.textDocumentDefinition({
 						textDocument: {
 							uri: rootUri + 'src/a.ts'
 						},
@@ -391,7 +393,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 							line: 0,
 							character: 20
 						}
-					}).toPromise();
+					}).toArray().map(patches => apply(null, patches)).toPromise();
 					assert.deepEqual(result, [{
 						uri: rootUri + 'typings/dep.d.ts',
 						range: {
@@ -501,10 +503,10 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		describe('workspaceSymbol()', function (this: TestContext) {
 			it('should find a symbol by SymbolDescriptor query with name and package name', async function (this: TestContext) {
-				const result = await this.service.workspaceSymbol({
+				const result: SymbolInformation[] = await this.service.workspaceSymbol({
 					symbol: { name: 'resolveCallback', package: { name: '@types/resolve' } },
 					limit: 10
-				}).toPromise();
+				}).toArray().map(patches => apply(null, patches)).toPromise();
 				assert.deepEqual(result, [{
 					kind: SymbolKind.Variable,
 					location: {
@@ -524,10 +526,10 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]);
 			} as any);
 			it('should find a symbol by SymbolDescriptor query with name, package name and empty containerKind', async function (this: TestContext) {
-				const result = await this.service.workspaceSymbol({
+				const result: SymbolInformation[] = await this.service.workspaceSymbol({
 					symbol: { name: 'resolveCallback', containerKind: '', package: { name: '@types/resolve' } },
 					limit: 10
-				}).toPromise();
+				}).toArray().map(patches => apply(null, patches)).toPromise();
 				assert.deepEqual(result, [{
 					kind: SymbolKind.Variable,
 					location: {
@@ -564,7 +566,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		describe('workspaceSymbol()', function (this: TestContext) {
 			describe('with SymbolDescriptor query', function (this: TestContext) {
 				it('should find a symbol by name, kind and package name', async function (this: TestContext) {
-					const result = await this.service.workspaceSymbol({
+					const result: SymbolInformation[] = await this.service.workspaceSymbol({
 						symbol: {
 							name: 'a',
 							kind: 'class',
@@ -572,7 +574,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 								name: 'mypkg'
 							}
 						}
-					}).toPromise();
+					}).toArray().map(patches => apply(null, patches)).toPromise();
 					assert.deepEqual(result, [{
 					kind: SymbolKind.Class,
 						location: {
@@ -592,10 +594,10 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					}]);
 				} as any);
 				it('should find a symbol by name, kind, package name and ignore package version', async function (this: TestContext) {
-					const result = await this.service.workspaceSymbol({
+					const result: SymbolInformation[] = await this.service.workspaceSymbol({
 						symbol: { name: 'a', kind: 'class', package: { name: 'mypkg', version: '203940234' } },
 						limit: 10
-					}).toPromise();
+					}).toArray().map(patches => apply(null, patches)).toPromise();
 					assert.deepEqual(result, [{
 						kind: SymbolKind.Class,
 						location: {
@@ -615,11 +617,11 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					}]);
 				} as any);
 				it('should find a symbol by name', async function (this: TestContext) {
-					const result = await this.service.workspaceSymbol({
+					const result: SymbolInformation[] = await this.service.workspaceSymbol({
 						symbol: {
 							name: 'a'
 						}
-					}).toPromise();
+					}).toArray().map(patches => apply(null, patches)).toPromise();
 					assert.deepEqual(result, [{
 						kind: SymbolKind.Class,
 						location: {
@@ -639,7 +641,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					}]);
 				} as any);
 				it('should return no result if the PackageDescriptor does not match', async function (this: TestContext) {
-					const result = await this.service.workspaceSymbol({
+					const result: SymbolInformation[] = await this.service.workspaceSymbol({
 						symbol: {
 							name: 'a',
 							kind: 'class',
@@ -647,13 +649,13 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 								name: 'not-mypkg'
 							}
 						}
-					}).toPromise();
+					}).toArray().map(patches => apply(null, patches)).toPromise();
 					assert.deepEqual(result, []);
 				} as any);
 			} as any);
 			describe('with text query', function (this: TestContext) {
 				it('should find a symbol', async function (this: TestContext) {
-					const result = await this.service.workspaceSymbol({ query: 'a' }).toPromise();
+					const result: SymbolInformation[] = await this.service.workspaceSymbol({ query: 'a' }).toArray().map(patches => apply(null, patches)).toPromise();
 					assert.deepEqual(result, [{
 						kind: SymbolKind.Class,
 						location: {
@@ -673,7 +675,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					}]);
 				} as any);
 				it('should return all symbols for an empty query excluding dependencies', async function (this: TestContext) {
-					const result = await this.service.workspaceSymbol({ query: '' }).toPromise();
+					const result: SymbolInformation[] = await this.service.workspaceSymbol({ query: '' }).toArray().map(patches => apply(null, patches)).toPromise();
 					assert.deepEqual(result, [
 						{
 							name: 'a',
@@ -818,7 +820,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					]);
 				} as any);
 				it('should limit the result if a limit is passed', async function (this: TestContext) {
-					const result = await this.service.workspaceSymbol({ query: '', limit: 1 }).toPromise();
+					const result: SymbolInformation[] = await this.service.workspaceSymbol({ query: '', limit: 1 }).toArray().map(patches => apply(null, patches)).toPromise();
 					assert.deepEqual(result, [
 						{
 							name: 'a',
@@ -844,7 +846,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		describe('workspaceXreferences()', function (this: TestContext) {
 			it('should return all references to a method', async function (this: TestContext) {
-				const result = await this.service.workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' } }).toPromise();
+				const result = await this.service.workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' } }).toArray().map(patches => apply(null, patches)).toPromise();
 				assert.deepEqual(result, [{
 					symbol: {
 						containerKind: '',
@@ -868,7 +870,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]);
 			} as any);
 			it('should return all references to a method with hinted dependee package name', async function (this: TestContext) {
-				const result = await this.service.workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' }, hints: { dependeePackageName: 'mypkg' } }).toPromise();
+				const result = await this.service.workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' }, hints: { dependeePackageName: 'mypkg' } }).toArray().map(patches => apply(null, patches)).toPromise();
 				assert.deepEqual(result, [{
 					symbol: {
 						containerKind: '',
@@ -892,11 +894,11 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]);
 			} as any);
 			it('should return no references to a method if hinted dependee package name was not found', async function (this: TestContext) {
-				const result = await this.service.workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' }, hints: { dependeePackageName: 'NOT-mypkg' } }).toPromise();
+				const result = await this.service.workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' }, hints: { dependeePackageName: 'NOT-mypkg' } }).toArray().map(patches => apply(null, patches)).toPromise();
 				assert.deepEqual(result, []);
 			} as any);
 			it('should return all references to a symbol from a dependency', async function (this: TestContext) {
-				const result = await this.service.workspaceXreferences({ query: { name: 'x', containerName: '' } }).toPromise();
+				const result = await this.service.workspaceXreferences({ query: { name: 'x', containerName: '' } }).toArray().map(patches => apply(null, patches)).toPromise();
 				assert.deepEqual(result, [{
 					reference: {
 						range: {
@@ -920,7 +922,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]);
 			} as any);
 			it('should return all references to all symbols if empty SymbolDescriptor query is passed', async function (this: TestContext) {
-				const result = await this.service.workspaceXreferences({ query: {} }).toPromise();
+				const result = await this.service.workspaceXreferences({ query: {} }).toArray().map(patches => apply(null, patches)).toPromise();
 				assert.deepEqual(result, [
 					{
 						symbol: {
@@ -1159,7 +1161,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		describe('workspaceXdependencies()', function (this: TestContext) {
 			it('should account for all dependencies', async function (this: TestContext) {
-				const result = await this.service.workspaceXdependencies().toPromise();
+				const result = await this.service.workspaceXdependencies().toArray().map(patches => apply(null, patches)).toPromise();
 				assert.deepEqual(result, [
 					{ attributes: { name: 'babel-code-frame', version: '^6.16.0' }, hints: { dependeePackageName: 'tslint' } },
 					{ attributes: { name: 'findup-sync', version: '~0.3.0' }, hints: { dependeePackageName: 'tslint' } },
@@ -1176,7 +1178,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		} as any);
 		describe('workspaceXpackages()', function (this: TestContext) {
 			it('should accournt for all packages', async function (this: TestContext) {
-				const result = await this.service.workspaceXpackages().toPromise();
+				const result = await this.service.workspaceXpackages().toArray().map(patches => apply(null, patches)).toPromise();
 				assert.deepEqual(result, [{
 					package: {
 						name: 'tslint',
@@ -1216,7 +1218,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		afterEach(shutdownService as any);
 
 		specify('type of parameters should be any[]', async function (this: TestContext) {
-			const result = await this.service.textDocumentHover({
+			const result: Hover = await this.service.textDocumentHover({
 				textDocument: {
 					uri: rootUri + 'a.ts'
 				},
@@ -1224,7 +1226,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 0,
 					character: 5
 				}
-			}).toPromise();
+			}).toArray().map(patches => apply(null, patches)).toPromise();
 			assert.deepEqual(result, {
 				range: {
 					end: {
@@ -1285,7 +1287,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]
 			});
 
-			assert.deepEqual(await this.service.textDocumentHover(hoverParams).toPromise(), {
+			assert.deepEqual(await this.service.textDocumentHover(hoverParams).toArray().map(patches => apply(null, patches)).toPromise(), {
 				range,
 				contents: [
 					{ language: 'typescript', value: 'let parameters: number[]' },
@@ -1323,7 +1325,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}
 			});
 
-			assert.deepEqual(await this.service.textDocumentHover(hoverParams).toPromise(), {
+			assert.deepEqual(await this.service.textDocumentHover(hoverParams).toArray().map(patches => apply(null, patches)).toPromise(), {
 				range,
 				contents: [
 					{ language: 'typescript', value: 'let parameters: any[]' },
@@ -1355,7 +1357,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}
 			};
 
-			assert.deepEqual(await this.service.textDocumentHover(hoverParams).toPromise(), {
+			assert.deepEqual(await this.service.textDocumentHover(hoverParams).toArray().map(patches => apply(null, patches)).toPromise(), {
 				range,
 				contents: [
 					{ language: 'typescript', value: 'let parameters: any[]' },
@@ -1372,7 +1374,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}
 			});
 
-			assert.deepEqual(await this.service.textDocumentHover(hoverParams).toPromise(), {
+			assert.deepEqual(await this.service.textDocumentHover(hoverParams).toArray().map(patches => apply(null, patches)).toPromise(), {
 				range,
 				contents: [
 					{ language: 'typescript', value: 'let parameters: string[]' },
@@ -1390,7 +1392,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]
 			});
 
-			assert.deepEqual(await this.service.textDocumentHover(hoverParams).toPromise(), {
+			assert.deepEqual(await this.service.textDocumentHover(hoverParams).toArray().map(patches => apply(null, patches)).toPromise(), {
 				range,
 				contents: [
 					{ language: 'typescript', value: 'let parameters: number[]' },
@@ -1404,7 +1406,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}
 			});
 
-			assert.deepEqual(await this.service.textDocumentHover(hoverParams).toPromise(), {
+			assert.deepEqual(await this.service.textDocumentHover(hoverParams).toArray().map(patches => apply(null, patches)).toPromise(), {
 				range,
 				contents: [
 					{ language: 'typescript', value: 'let parameters: any[]' },
@@ -1549,7 +1551,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		describe('textDocumentDefinition()', function (this: TestContext) {
 			it('should resolve symbol imported with tripe-slash reference', async function (this: TestContext) {
-				const result = await this.service.textDocumentDefinition({
+				const result: Location[] = await this.service.textDocumentDefinition({
 					textDocument: {
 						uri: rootUri + 'a.ts'
 					},
@@ -1557,7 +1559,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 1,
 						character: 23
 					}
-				}).toPromise();
+				}).toArray().map(patches => apply(null, patches)).toPromise();
 				assert.deepEqual(result, [{
 					// Note: technically this list should also
 					// include the 2nd definition of `foo` in
@@ -1581,7 +1583,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]);
 			} as any);
 			it('should resolve symbol imported with import statement', async function (this: TestContext) {
-				const result = await this.service.textDocumentDefinition({
+				const result: Location[] = await this.service.textDocumentDefinition({
 					textDocument: {
 						uri: rootUri + 'c.ts'
 					},
@@ -1589,7 +1591,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 1,
 						character: 2
 					}
-				}).toPromise();
+				}).toArray().map(patches => apply(null, patches)).toPromise();
 				assert.deepEqual(result, [{
 					uri: rootUri + 'foo/d.ts',
 					range: {
@@ -1605,7 +1607,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]);
 			} as any);
 			it('should resolve definition with missing reference', async function (this: TestContext) {
-				const result = await this.service.textDocumentDefinition({
+				const result: Location[] = await this.service.textDocumentDefinition({
 					textDocument: {
 						uri: rootUri + 'missing/a.ts'
 					},
@@ -1613,7 +1615,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 3,
 						character: 21
 					}
-				}).toPromise();
+				}).toArray().map(patches => apply(null, patches)).toPromise();
 				assert.deepEqual(result, [{
 					uri: rootUri + 'missing/b.ts',
 					range: {
@@ -1632,7 +1634,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				// This test passes only because we expect no response from LSP server
 				// for definition located in file references with depth 3 or more (a -> b -> c -> d (...))
 				// This test will fail once we'll increase (or remove) depth limit
-				const result = await this.service.textDocumentDefinition({
+				const result: Location[] = await this.service.textDocumentDefinition({
 					textDocument: {
 						uri: rootUri + 'deeprefs/a.ts'
 					},
@@ -1640,7 +1642,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 2,
 						character: 8
 					}
-				}).toPromise();
+				}).toArray().map(patches => apply(null, patches)).toPromise();
 				assert.deepEqual(result, [{
 					uri: rootUri + 'deeprefs/e.ts',
 					range: {
@@ -1672,7 +1674,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		describe('textDocumentHover()', function (this: TestContext) {
 			it('should load local library file', async function (this: TestContext) {
-				const result = await this.service.textDocumentHover({
+				const result: Hover = await this.service.textDocumentHover({
 					textDocument: {
 						uri: rootUri + 'a.ts'
 					},
@@ -1680,7 +1682,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 16
 					}
-				}).toPromise();
+				}).toArray().map(patches => apply(null, patches)).toPromise();
 				assert.deepEqual(result, {
 					range: {
 						end: {
@@ -1734,7 +1736,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 16
 					}
-				}).toPromise(), [{
+				}).toArray().map(patches => apply(null, patches)).toPromise(), [{
 					uri: 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/lib.dom.d.ts',
 					range: {
 						start: {
@@ -1768,7 +1770,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 50
 					}
-				}).toPromise(), [{
+				}).toArray().map(patches => apply(null, patches)).toPromise(), [{
 					uri: 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/lib.es5.d.ts',
 					range: {
 						start: {
@@ -1828,7 +1830,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					character: 0
 				},
 				context: { includeDeclaration: false }
-			}).toPromise();
+			}).toArray().map(patches => apply(null, patches)).toPromise();
 			assert.deepEqual(result, []);
 		} as any);
 
@@ -1842,7 +1844,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					character: 5
 				},
 				context: { includeDeclaration: true }
-			}).toPromise();
+			}).toArray().map(patches => apply(null, patches)).toPromise();
 			assert.deepEqual(result, [{
 				range: {
 					end: {
@@ -1868,7 +1870,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					character: 5
 				},
 				context: { includeDeclaration: false }
-			}).toPromise();
+			}).toArray().map(patches => apply(null, patches)).toPromise();
 			assert.deepEqual(result, [{
 				range: {
 					end: {
@@ -1893,7 +1895,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					character: 28
 				},
 				context: { includeDeclaration: false }
-			}).toPromise();
+			}).toArray().map(patches => apply(null, patches)).toPromise();
 			assert.deepEqual(result, [
 				{
 					range: {
@@ -1966,7 +1968,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		afterEach(shutdownService as any);
 
 		it('should provide a valid empty response when no signature is found', async function (this: TestContext) {
-			const result = await this.service.textDocumentSignatureHelp({
+			const result: SignatureHelp = await this.service.textDocumentSignatureHelp({
 				textDocument: {
 					uri: rootUri + 'a.ts'
 				},
@@ -1974,7 +1976,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 0,
 					character: 0
 				}
-			}).toPromise();
+			}).toArray().map(patches => apply(null, patches)).toPromise();
 			assert.deepEqual(result, {
 				signatures: [],
 				activeSignature: 0,
@@ -1983,7 +1985,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		} as any);
 
 		it('should provide signature help with parameters in the same file', async function (this: TestContext) {
-			const result = await this.service.textDocumentSignatureHelp({
+			const result: SignatureHelp = await this.service.textDocumentSignatureHelp({
 				textDocument: {
 					uri: rootUri + 'a.ts'
 				},
@@ -1991,7 +1993,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 15,
 					character: 11
 				}
-			}).toPromise();
+			}).toArray().map(patches => apply(null, patches)).toPromise();
 			assert.deepEqual(result, {
 				signatures: [
 					{
@@ -2012,7 +2014,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		} as any);
 
 		it('should provide signature help from imported symbols', async function (this: TestContext) {
-			const result = await this.service.textDocumentSignatureHelp({
+			const result: SignatureHelp = await this.service.textDocumentSignatureHelp({
 				textDocument: {
 					uri: rootUri + 'uses-import.ts'
 				},
@@ -2020,7 +2022,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 1,
 					character: 4
 				}
-			}).toPromise();
+			}).toArray().map(patches => apply(null, patches)).toPromise();
 			assert.deepEqual(result, {
 				activeSignature: 0,
 				activeParameter: 0,
@@ -2071,7 +2073,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		afterEach(shutdownService as any);
 
 		it('produces completions in the same file', async function (this: TestContext) {
-			const result = await this.service.textDocumentCompletion({
+			const result: CompletionList = await this.service.textDocumentCompletion({
 				textDocument: {
 					uri: rootUri + 'a.ts'
 				},
@@ -2079,7 +2081,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 11,
 					character: 2
 				}
-			}).toPromise();
+			}).toArray().map(patches => apply(null, patches)).toPromise();
 			assert.equal(result.isIncomplete, false);
 			assert.sameDeepMembers(result.items, [
 				{
@@ -2113,7 +2115,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			]);
 		} as any);
 		it('produces completions for imported symbols', async function (this: TestContext) {
-			const result = await this.service.textDocumentCompletion({
+			const result: CompletionList = await this.service.textDocumentCompletion({
 				textDocument: {
 					uri: rootUri + 'uses-import.ts'
 				},
@@ -2121,7 +2123,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 1,
 					character: 2
 				}
-			}).toPromise();
+			}).toArray().map(patches => apply(null, patches)).toPromise();
 			assert.deepEqual(result, {
 				isIncomplete: false,
 				items: [{
@@ -2134,7 +2136,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			});
 		} as any);
 		it('produces completions for referenced symbols', async function (this: TestContext) {
-			const result = await this.service.textDocumentCompletion({
+			const result: CompletionList = await this.service.textDocumentCompletion({
 				textDocument: {
 					uri: rootUri + 'uses-reference.ts'
 				},
@@ -2142,7 +2144,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 1,
 					character: 13
 				}
-			}).toPromise();
+			}).toArray().map(patches => apply(null, patches)).toPromise();
 			assert.deepEqual(result, {
 				isIncomplete: false,
 				items: [{
@@ -2155,7 +2157,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			});
 		} as any);
 		it('produces completions for empty files', async function (this: TestContext) {
-			const result = await this.service.textDocumentCompletion({
+			const result: CompletionList = await this.service.textDocumentCompletion({
 				textDocument: {
 					uri: rootUri + 'empty.ts'
 				},
@@ -2163,7 +2165,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 0,
 					character: 0
 				}
-			}).toPromise();
+			}).toArray().map(patches => apply(null, patches)).toPromise();
 			assert.notDeepEqual(result.items.length, []);
 		} as any);
 	} as any);
@@ -2181,7 +2183,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		afterEach(shutdownService as any);
 
 		it('should accept files with TypeScript keywords in path', async function (this: TestContext) {
-			const result = await this.service.textDocumentHover({
+			const result: Hover = await this.service.textDocumentHover({
 				textDocument: {
 					uri: rootUri + 'keywords-in-path/class/constructor/a.ts'
 				},
@@ -2189,7 +2191,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 0,
 					character: 16
 				}
-			}).toPromise();
+			}).toArray().map(patches => apply(null, patches)).toPromise();
 			assert.deepEqual(result, {
 				range: {
 					start: {
@@ -2208,7 +2210,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			});
 		} as any);
 		it('should accept files with special characters in path', async function (this: TestContext) {
-			const result = await this.service.textDocumentHover({
+			const result: Hover = await this.service.textDocumentHover({
 				textDocument: {
 					uri: rootUri + 'special-characters-in-path/%40foo/b.ts'
 				},
@@ -2216,7 +2218,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 0,
 					character: 16
 				}
-			}).toPromise();
+			}).toArray().map(patches => apply(null, patches)).toPromise();
 			assert.deepEqual(result, {
 				range: {
 					start: {
@@ -2243,7 +2245,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 1,
 					character: 0
 				}
-			}).toPromise();
+			}).toArray().map(patches => apply(null, patches)).toPromise();
 			assert.deepEqual(result, [{
 				range: {
 					start: {

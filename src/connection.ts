@@ -1,11 +1,14 @@
 import { Observable, Subscription } from '@reactivex/rxjs';
 import { EventEmitter } from 'events';
+import { apply, OpPatch } from 'json-patch';
 import { camelCase, omit } from 'lodash';
+import { cloneDeep } from 'lodash';
 import { FORMAT_TEXT_MAP, Span, Tracer } from 'opentracing';
 import { inspect } from 'util';
 import { ErrorCodes, Message, StreamMessageReader as VSCodeStreamMessageReader, StreamMessageWriter as VSCodeStreamMessageWriter } from 'vscode-jsonrpc';
 import { isNotificationMessage, isReponseMessage, isRequestMessage, NotificationMessage, RequestMessage, ResponseMessage } from 'vscode-jsonrpc/lib/messages';
 import { Logger, NoopLogger } from './logging';
+import { InitializeParams, PartialResultParams } from './request-type';
 import { TypeScriptService } from './typescript-service';
 
 /**
@@ -154,6 +157,9 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 	 */
 	let initialized = false;
 
+	/** Whether the client supports streaming with $/partialResult */
+	let streaming = false;
+
 	messageEmitter.on('message', async message => {
 		// Ignore responses
 		if (isReponseMessage(message)) {
@@ -166,6 +172,7 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 		switch (message.method) {
 			case 'initialize':
 				initialized = true;
+				streaming = !!(message.params as InitializeParams).capabilities.streaming;
 				break;
 			case 'shutdown':
 				initialized = false;
@@ -225,52 +232,41 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 			return;
 		}
 		// Call handler method with params and span
-		let observable: Observable<any>;
+		let observable: Observable<OpPatch>;
 		try {
+			// Convert return value to Observable
 			const returnValue = (handler as any)[method](message.params, span);
-			// Convert return value to Observable that emits a single item, the result (or an error)
 			if (returnValue instanceof Observable) {
-				observable = returnValue.take(1);
+				observable = returnValue;
 			} else if (isPromiseLike(returnValue)) {
-				// Convert Promise to Observable
 				observable = Observable.from(returnValue);
 			} else {
-				// Convert synchronous value to Observable
 				observable = Observable.of(returnValue);
 			}
 		} catch (err) {
 			observable = Observable.throw(err);
 		}
 		if (isRequestMessage(message)) {
-			// If request, subscribe to result and send a response
 			const subscription = observable
-				.map(result => {
-					// Log result on span
-					span.log({ event: 'result', result: inspect(result) });
-					// Return result response
-					return {
-						jsonrpc: '2.0',
-						id: message.id,
-						result
-					};
+				.do(patch => {
+					if (streaming) {
+						// Send $/partialResult for partial result patches
+						messageWriter.write({
+							jsonrpc: '2.0',
+							method: '$/partialResult',
+							params: {
+								id: message.id,
+								patch: [patch]
+							} as PartialResultParams
+						});
+					}
 				})
-				.catch(err => {
-					// Set error on span
-					span.setTag('error', true);
-					span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
-					// Log error
-					logger.error(`Handler for ${message.method} failed:`, err, '\nMessage:', message);
-					// Return error response
-					return [{
-						jsonrpc: '2.0',
-						id: message.id,
-						error: {
-							message: err.message + '',
-							code: typeof err.code === 'number' ? err.code : ErrorCodes.UnknownErrorCode,
-							data: omit(err, ['message', 'code'])
-						}
-					}];
-				})
+				// Build up final result for BC
+				// TODO send null if client declared streaming capability
+				// Clone patches to not modify the values of the patches
+				.map(cloneDeep)
+				.toArray()
+				.map(patches => apply(null, patches))
 				.finally(() => {
 					// Finish span
 					span.finish();
@@ -281,9 +277,29 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 						subscriptions.delete(message.id);
 					});
 				})
-				.subscribe(response => {
-					// Send response
-					messageWriter.write(response);
+				.subscribe(result => {
+					// Send final result
+					messageWriter.write({
+						jsonrpc: '2.0',
+						id: message.id,
+						result
+					});
+				}, err => {
+					// Set error on span
+					span.setTag('error', true);
+					span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
+					// Log error
+					logger.error(`Handler for ${message.method} failed:`, err, '\nMessage:', message);
+					// Send error response
+					messageWriter.write({
+						jsonrpc: '2.0',
+						id: message.id,
+						error: {
+							message: err.message + '',
+							code: typeof err.code === 'number' ? err.code : ErrorCodes.UnknownErrorCode,
+							data: omit(err, ['message', 'code'])
+						}
+					});
 				});
 			// Save subscription for $/cancelRequest
 			subscriptions.set(message.id, subscription);
