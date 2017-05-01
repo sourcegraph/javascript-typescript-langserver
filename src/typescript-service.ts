@@ -4,7 +4,6 @@ import { toPairs } from 'lodash';
 import { Span } from 'opentracing';
 import * as path_ from 'path';
 import * as ts from 'typescript';
-import * as url from 'url';
 import {
 	CompletionItem,
 	CompletionItemKind,
@@ -144,8 +143,8 @@ export class TypeScriptService {
 			this.isDefinitelyTyped = (async () => {
 				try {
 					// Fetch root package.json (if exists)
-					const rootUriParts = url.parse(this.rootUri);
-					const packageJsonUri = url.format({ ...rootUriParts, pathname: path_.posix.join(rootUriParts.pathname || '', 'package.json') });
+					const normRootUri = this.rootUri.endsWith('/') ? this.rootUri : this.rootUri + '/';
+					const packageJsonUri = normRootUri + 'package.json';
 					await this.updater.ensure(packageJsonUri);
 					// Check name
 					const packageJson = JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri));
@@ -490,10 +489,9 @@ export class TypeScriptService {
 			}
 
 			// Fetch all files in the package subdirectory
-			const rootUriParts = url.parse(this.rootUri);
+			const normRootUri = this.rootUri.endsWith('/') ? this.rootUri : this.rootUri + '/';
+			const packageRootUri = normRootUri + params.symbol.package.name.substr(1) + '/';
 			// All packages are in the types/ subdirectory
-			const packageRoot = path_.posix.join(rootUriParts.pathname || '', params.symbol.package.name.substr(1)) + '/';
-			const packageRootUri = url.format({ ...rootUriParts, pathname: packageRoot, search: undefined, hash: undefined });
 			await this.updater.ensureStructure(span);
 			await Promise.all(
 				iterate(this.inMemoryFileSystem.uris())
@@ -505,7 +503,7 @@ export class TypeScriptService {
 
 			// Search symbol in configuration
 			// forcing TypeScript mode
-			const config = this.projectManager.getConfiguration(packageRoot, 'ts');
+			const config = this.projectManager.getConfiguration(util.uri2path(packageRootUri), 'ts');
 			return Array.from(this._collectWorkspaceSymbols(config, params.query || symbolQuery, params.limit));
 		} catch (err) {
 			span.setTag('error', true);

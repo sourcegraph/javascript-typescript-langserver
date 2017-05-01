@@ -4,7 +4,6 @@ import { Span } from 'opentracing';
 import * as os from 'os';
 import * as path_ from 'path';
 import * as ts from 'typescript';
-import * as url from 'url';
 import { Disposable } from 'vscode-languageserver';
 import { DiagnosticsHandler } from './diagnostics';
 import { FileSystemUpdater } from './fs';
@@ -327,12 +326,8 @@ export class ProjectManager implements Disposable {
 		if (observable) {
 			return observable;
 		}
-		const parts = url.parse(uri);
-		if (!parts.pathname) {
-			return Observable.throw(new Error(`Invalid URI ${uri}`));
-		}
 		// TypeScript works with file paths, not URIs
-		const filePath = parts.pathname.split('/').map(decodeURIComponent).join('/');
+		const filePath = util.uri2path(uri);
 		observable = Observable.from(this.updater.ensure(uri))
 			.mergeMap(() => {
 				const config = this.getConfiguration(filePath);
@@ -377,7 +372,7 @@ export class ProjectManager implements Disposable {
 				);
 			})
 			// Use same scheme, slashes, host for referenced URI as input file
-			.map(filePath => url.format({ ...parts, pathname: filePath.split(/[\\\/]/).map(encodeURIComponent).join('/'), search: undefined, hash: undefined }))
+			.map(filePath => util.path2uri('', filePath))
 			// Don't cache errors
 			.catch(err => {
 				this.referencedFiles.delete(uri);
