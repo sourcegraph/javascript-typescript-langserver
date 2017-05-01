@@ -1,3 +1,4 @@
+import { Span } from 'opentracing';
 import * as ts from 'typescript';
 import { DiagnosticSeverity, PublishDiagnosticsParams } from 'vscode-languageserver';
 import { LanguageClient } from './lang-handler';
@@ -7,7 +8,7 @@ import * as util from './util';
  * Receives file diagnostics (typically implemented to send diagnostics to client)
  */
 export interface DiagnosticsHandler {
-	updateFileDiagnostics(diagnostics: ts.Diagnostic[]): void;
+	updateFileDiagnostics(diagnostics: ts.Diagnostic[], span?: Span): void;
 }
 
 /**
@@ -32,25 +33,33 @@ export class DiagnosticsPublisher implements DiagnosticsHandler {
 	 * not present in subsequent updates.
 	 * @param diagnostics
 	 */
-	updateFileDiagnostics(diagnostics: ts.Diagnostic[]): void {
+	updateFileDiagnostics(diagnostics: ts.Diagnostic[], childOf = new Span()): void {
+		const span = childOf.tracer().startSpan('Update file diagnostics', { childOf });
 
-		// categorize diagnostics by file
-		const diagnosticsByFile = this.groupByFile(diagnostics);
+		try {
+			// categorize diagnostics by file
+			const diagnosticsByFile = this.groupByFile(diagnostics);
 
-		// add empty diagnostics for fixed files, so client marks them as resolved
-		for (const file of this.problemFiles) {
-			if (!diagnosticsByFile.has(file)) {
-				diagnosticsByFile.set(file, []);
+			// add empty diagnostics for fixed files, so client marks them as resolved
+			for (const file of this.problemFiles) {
+				if (!diagnosticsByFile.has(file)) {
+					diagnosticsByFile.set(file, []);
+				}
 			}
-		}
-		this.problemFiles.clear();
+			this.problemFiles.clear();
 
-		// for each file: publish and set as problem file
-		for (const [file, diagnostics] of diagnosticsByFile) {
-			this.publishFileDiagnostics(file, diagnostics);
-			if (diagnostics.length > 0) {
-				this.problemFiles.add(file);
+			// for each file: publish and set as problem file
+			for (const [file, diagnostics] of diagnosticsByFile) {
+				this.publishFileDiagnostics(file, diagnostics);
+				if (diagnostics.length > 0) {
+					this.problemFiles.add(file);
+				}
 			}
+		} catch (err) {
+			span.setTag('error', true);
+			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack});
+		} finally {
+			span.finish();
 		}
 	}
 

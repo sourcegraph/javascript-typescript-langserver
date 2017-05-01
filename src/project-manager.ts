@@ -861,11 +861,29 @@ export class ProjectConfiguration {
 		const span = childOf.tracer().startSpan('Sync program', { childOf });
 		try {
 			this.program = this.getService().getProgram();
-			this.diagnosticsHandler.updateFileDiagnostics(ts.getPreEmitDiagnostics(this.program));
+			this.updateDiagnostics(this.program, span);
 		} catch (err) {
 			span.setTag('error', true);
 			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
 			this.logger.error(`Cannot create program object for ${this.rootFilePath}`, err);
+		} finally {
+			span.finish();
+		}
+	}
+
+	/**
+	 * Queries an updated program for diagnostics for updating the client.
+	 */
+	private updateDiagnostics(program: ts.Program, childOf = new Span()): void {
+		const span = childOf.tracer().startSpan('Update diagnostics', { childOf });
+		try {
+			const diagnostics = ts.getPreEmitDiagnostics(program);
+			span.log({ event: 'result', result: diagnostics.length });
+			this.diagnosticsHandler.updateFileDiagnostics(diagnostics, span);
+		} catch (err) {
+			span.setTag('error', true);
+			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack});
+			this.logger.error(`Cannot get diagnostics for program at ${this.rootFilePath}`, err);
 		} finally {
 			span.finish();
 		}
