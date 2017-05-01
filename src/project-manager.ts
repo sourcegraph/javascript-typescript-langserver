@@ -871,7 +871,10 @@ export class ProjectConfiguration {
 		}
 	}
 
-	updateDiagnostics(program: ts.Program, childOf = new Span()): void {
+	/**
+	 * Queries an updated program for diagnostics for updating the client.
+	 */
+	private updateDiagnostics(program: ts.Program, childOf = new Span()): void {
 		const span = childOf.tracer().startSpan('Update diagnostics', { childOf });
 		try {
 			const diagnostics = ts.getPreEmitDiagnostics(program);
