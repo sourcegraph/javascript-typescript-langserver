@@ -1,6 +1,6 @@
+import { isMatchWith } from 'lodash';
 import * as os from 'os';
 import * as path from 'path';
-
 import * as ts from 'typescript';
 import { Position, Range, SymbolKind } from 'vscode-languageserver';
 import * as rt from './request-type';
@@ -90,7 +90,7 @@ export function path2uri(root: string, file: string): string {
 	} else {
 		p = file;
 	}
-	p = toUnixPath(p).split('/').map(encodeURIComponent).join('/');
+	p = toUnixPath(p).split('/').map((val, i) => i <= 1 && /^[a-z]:$/i.test(val) ? val : encodeURIComponent(val)).join('/');
 	return ret + p;
 }
 
@@ -139,7 +139,7 @@ export function isPackageJsonFile(filename: string): boolean {
 
 const globalTSPatterns = [
 	/(^|\/)globals?\.d\.ts$/,
-	/node_modules\/\@types\/node\/.*/,
+	/node_modules\/(?:\@|%40)types\/node\/.*/,
 	/(^|\/)typings\/.*/,
 	/(^|\/)tsd\.d\.ts($|\/)/
 ];
@@ -203,34 +203,13 @@ export function defInfoToSymbolDescriptor(d: ts.DefinitionInfo): rt.SymbolDescri
 	};
 }
 
-export function symbolDescriptorMatch(query: Partial<rt.SymbolDescriptor>, sym: rt.SymbolDescriptor): boolean {
-	for (const key of Object.keys(query)) {
-		if ((query as any)[key] === undefined) {
-			continue;
-		}
-		if (key === 'package') {
-			if (!sym.package || !packageDescriptorMatch(query.package!, sym.package)) {
-				return false;
-			}
-			continue;
-		}
-		if ((query as any)[key] !== (sym as any)[key]) {
-			return false;
-		}
-	}
-	return true;
-}
-
-function packageDescriptorMatch(query: rt.PackageDescriptor, sym: rt.PackageDescriptor): boolean {
-	for (const key of Object.keys(query)) {
-		if ((query as any)[key] === undefined) {
-			continue;
-		}
-		if ((query as any)[key] !== (sym as any)[key]) {
-			return false;
-		}
-	}
-	return true;
+/**
+ * Returns true if the passed SymbolDescriptor matches the passed SymbolDescriptor query by
+ * performing a deep comparison
+ */
+export function isSymbolDescriptorMatch(query: Partial<rt.SymbolDescriptor>, symbol: rt.SymbolDescriptor): boolean {
+	// Don't consider query properties that are undefined
+	return isMatchWith(symbol, query, (symbolValue, queryValue): any => queryValue === undefined || undefined);
 }
 
 function stripQuotes(s: string): string {

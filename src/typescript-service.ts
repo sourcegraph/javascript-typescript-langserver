@@ -26,6 +26,7 @@ import {
 	TextDocumentSyncKind
 } from 'vscode-languageserver';
 import { walkMostAST } from './ast';
+import { DiagnosticsPublisher } from './diagnostics';
 import { FileSystem, FileSystemUpdater, LocalFileSystem, RemoteFileSystem } from './fs';
 import { LanguageClient } from './lang-handler';
 import { Logger, LSPLogger } from './logging';
@@ -136,7 +137,8 @@ export class TypeScriptService {
 			this.rootUri = params.rootUri || util.path2uri('', params.rootPath!);
 			this._initializeFileSystems(!this.options.strict && !(params.capabilities.xcontentProvider && params.capabilities.xfilesProvider));
 			this.updater = new FileSystemUpdater(this.fileSystem, this.inMemoryFileSystem);
-			this.projectManager = new pm.ProjectManager(this.root, this.inMemoryFileSystem, this.updater, !!this.options.strict, this.traceModuleResolution, this.logger);
+			const diagnosticsPublisher = new DiagnosticsPublisher(this.client);
+			this.projectManager = new pm.ProjectManager(this.root, this.inMemoryFileSystem, this.updater, diagnosticsPublisher, !!this.options.strict, this.traceModuleResolution, this.logger);
 			// Detect DefinitelyTyped
 			this.isDefinitelyTyped = (async () => {
 				try {
@@ -560,7 +562,7 @@ export class TypeScriptService {
 										// Map to SymbolDescriptor
 										.map(definition => util.defInfoToSymbolDescriptor(definition))
 										// Check if SymbolDescriptor matches
-										.filter(symbol => util.symbolDescriptorMatch(params.query, symbol))
+										.filter(symbol => util.isSymbolDescriptorMatch(params.query, symbol))
 										// Map SymbolDescriptor to ReferenceInformation
 										.map(symbol => ({
 											symbol,
@@ -879,7 +881,7 @@ export class TypeScriptService {
 				const packageDescriptor = packageName && { name: packageName } || undefined;
 				items = iterate(config.getService().getNavigateToItems(query.name || '', limit, undefined, false))
 					// Filter to match SymbolDescriptor
-					.filter(item => util.symbolDescriptorMatch(query, {
+					.filter(item => util.isSymbolDescriptorMatch(query, {
 						kind: item.kind,
 						name: item.name,
 						containerKind: item.containerKind,
