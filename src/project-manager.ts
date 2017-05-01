@@ -861,6 +861,7 @@ export class ProjectConfiguration {
 		const span = childOf.tracer().startSpan('Sync program', { childOf });
 		try {
 			this.program = this.getService().getProgram();
+			this.updateDiagnostics(this.program, span);
 		} catch (err) {
 			span.setTag('error', true);
 			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
@@ -868,20 +869,14 @@ export class ProjectConfiguration {
 		} finally {
 			span.finish();
 		}
-		if (this.program) {
-			this.updateDiagnostics(this.program, childOf);
-		}
 	}
 
 	updateDiagnostics(program: ts.Program, childOf = new Span()): void {
 		const span = childOf.tracer().startSpan('Update diagnostics', { childOf });
-		let diagnostics: ts.Diagnostic[] | undefined;
 		try {
-			diagnostics = ts.getPreEmitDiagnostics(program);
+			const diagnostics = ts.getPreEmitDiagnostics(program);
 			span.log({ event: 'result', result: diagnostics.length });
-			if (diagnostics !== undefined) {
-				this.diagnosticsHandler.updateFileDiagnostics(diagnostics, span);
-			}
+			this.diagnosticsHandler.updateFileDiagnostics(diagnostics, span);
 		} catch (err) {
 			span.setTag('error', true);
 			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack});
