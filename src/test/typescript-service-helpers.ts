@@ -62,14 +62,14 @@ export const initializeTypeScriptService = (createService: TypeScriptServiceFact
 			xcontentProvider: true,
 			xfilesProvider: true
 		}
-	});
+	}).toPromise();
 };
 
 /**
  * Shuts the TypeScriptService down (to be used in `afterEach()`)
  */
 export async function shutdownTypeScriptService(this: TestContext): Promise<void> {
-	await this.service.shutdown();
+	await this.service.shutdown().toPromise();
 }
 
 /**
@@ -113,7 +113,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 29
 					}
-				});
+				}).toPromise();
 				assert.deepEqual(result, [{
 					uri: rootUri + 'a.ts',
 					range: {
@@ -137,7 +137,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 0
 					}
-				});
+				}).toPromise();
 				assert.deepEqual(result, []);
 			} as any);
 			specify('in other file', async function (this: TestContext) {
@@ -149,7 +149,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 9
 					}
-				});
+				}).toPromise();
 				assert.deepEqual(result, [{
 					uri: rootUri + 'foo/b.ts',
 					range: {
@@ -241,7 +241,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 29
 					}
-				});
+				}).toPromise();
 				assert.deepEqual(result, {
 					range: {
 						start: {
@@ -268,7 +268,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 9
 					}
-				});
+				}).toPromise();
 				assert.deepEqual(result, {
 					range: {
 						end: {
@@ -295,7 +295,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 0
 					}
-				});
+				}).toPromise();
 				assert.deepEqual(result, { contents: [] });
 			} as any);
 			specify('over non-existent file', function (this: TestContext) {
@@ -307,7 +307,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 0
 					}
-				}));
+				}).toPromise());
 			} as any);
 		} as any);
 	} as any);
@@ -345,7 +345,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 20
 					}
-				});
+				}).toPromise();
 				assert.deepEqual(result, [{
 					uri: rootUri + 'typings/dep.d.ts',
 					range: {
@@ -370,7 +370,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 							line: 0,
 							character: 12
 						}
-					});
+					}).toPromise();
 					assert.deepEqual(result, [{
 						uri: rootUri + 'typings/dep.d.ts',
 						range: {
@@ -394,7 +394,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 							line: 0,
 							character: 20
 						}
-					});
+					}).toPromise();
 					assert.deepEqual(result, [{
 						uri: rootUri + 'typings/dep.d.ts',
 						range: {
@@ -507,7 +507,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				const result = await this.service.workspaceSymbol({
 					symbol: { name: 'resolveCallback', package: { name: '@types/resolve' } },
 					limit: 10
-				});
+				}).toPromise();
 				assert.deepEqual(result, [{
 					kind: SymbolKind.Variable,
 					location: {
@@ -530,7 +530,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				const result = await this.service.workspaceSymbol({
 					symbol: { name: 'resolveCallback', containerKind: '', package: { name: '@types/resolve' } },
 					limit: 10
-				});
+				}).toPromise();
 				assert.deepEqual(result, [{
 					kind: SymbolKind.Variable,
 					location: {
@@ -575,7 +575,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 								name: 'mypkg'
 							}
 						}
-					});
+					}).toPromise();
 					assert.deepEqual(result, [{
 					kind: SymbolKind.Class,
 						location: {
@@ -598,7 +598,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					const result = await this.service.workspaceSymbol({
 						symbol: { name: 'a', kind: 'class', package: { name: 'mypkg', version: '203940234' } },
 						limit: 10
-					});
+					}).toPromise();
 					assert.deepEqual(result, [{
 						kind: SymbolKind.Class,
 						location: {
@@ -622,7 +622,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						symbol: {
 							name: 'a'
 						}
-					});
+					}).toPromise();
 					assert.deepEqual(result, [{
 						kind: SymbolKind.Class,
 						location: {
@@ -650,13 +650,13 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 								name: 'not-mypkg'
 							}
 						}
-					});
+					}).toPromise();
 					assert.deepEqual(result, []);
 				} as any);
 			} as any);
 			describe('with text query', function (this: TestContext) {
 				it('should find a symbol', async function (this: TestContext) {
-					const result = await this.service.workspaceSymbol({ query: 'a' });
+					const result = await this.service.workspaceSymbol({ query: 'a' }).toPromise();
 					assert.deepEqual(result, [{
 						kind: SymbolKind.Class,
 						location: {
@@ -676,7 +676,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					}]);
 				} as any);
 				it('should return all symbols for an empty query excluding dependencies', async function (this: TestContext) {
-					const result = await this.service.workspaceSymbol({ query: '' });
+					const result = await this.service.workspaceSymbol({ query: '' }).toPromise();
 					assert.deepEqual(result, [
 						{
 							name: 'a',
@@ -821,7 +821,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					]);
 				} as any);
 				it('should limit the result if a limit is passed', async function (this: TestContext) {
-					const result = await this.service.workspaceSymbol({ query: '', limit: 1 });
+					const result = await this.service.workspaceSymbol({ query: '', limit: 1 }).toPromise();
 					assert.deepEqual(result, [
 						{
 							name: 'a',
@@ -1227,7 +1227,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 0,
 					character: 5
 				}
-			});
+			}).toPromise();
 			assert.deepEqual(result, {
 				range: {
 					end: {
@@ -1288,7 +1288,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]
 			});
 
-			assert.deepEqual(await this.service.textDocumentHover(hoverParams), {
+			assert.deepEqual(await this.service.textDocumentHover(hoverParams).toPromise(), {
 				range,
 				contents: [{
 					language: 'typescript',
@@ -1326,7 +1326,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}
 			});
 
-			assert.deepEqual(await this.service.textDocumentHover(hoverParams), {
+			assert.deepEqual(await this.service.textDocumentHover(hoverParams).toPromise(), {
 				range,
 				contents: [{
 					language: 'typescript',
@@ -1358,7 +1358,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}
 			};
 
-			assert.deepEqual(await this.service.textDocumentHover(hoverParams), {
+			assert.deepEqual(await this.service.textDocumentHover(hoverParams).toPromise(), {
 				range,
 				contents: [{
 					language: 'typescript',
@@ -1375,7 +1375,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}
 			});
 
-			assert.deepEqual(await this.service.textDocumentHover(hoverParams), {
+			assert.deepEqual(await this.service.textDocumentHover(hoverParams).toPromise(), {
 				range,
 				contents: [{
 					language: 'typescript',
@@ -1393,7 +1393,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]
 			});
 
-			assert.deepEqual(await this.service.textDocumentHover(hoverParams), {
+			assert.deepEqual(await this.service.textDocumentHover(hoverParams).toPromise(), {
 				range,
 				contents: [{
 					language: 'typescript',
@@ -1407,7 +1407,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}
 			});
 
-			assert.deepEqual(await this.service.textDocumentHover(hoverParams), {
+			assert.deepEqual(await this.service.textDocumentHover(hoverParams).toPromise(), {
 				range,
 				contents: [{
 					language: 'typescript',
@@ -1445,7 +1445,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 1,
 						character: 23
 					}
-				});
+				}).toPromise();
 				assert.deepEqual(result, [{
 					// Note: technically this list should also
 					// include the 2nd definition of `foo` in
@@ -1477,7 +1477,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 1,
 						character: 2
 					}
-				});
+				}).toPromise();
 				assert.deepEqual(result, [{
 					uri: rootUri + 'foo/d.ts',
 					range: {
@@ -1501,7 +1501,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 3,
 						character: 21
 					}
-				});
+				}).toPromise();
 				assert.deepEqual(result, [{
 					uri: rootUri + 'missing/b.ts',
 					range: {
@@ -1528,7 +1528,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 2,
 						character: 8
 					}
-				});
+				}).toPromise();
 				assert.deepEqual(result, [{
 					uri: rootUri + 'deeprefs/e.ts',
 					range: {
@@ -1568,7 +1568,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 16
 					}
-				});
+				}).toPromise();
 				assert.deepEqual(result, {
 					range: {
 						end: {
@@ -1619,7 +1619,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 16
 					}
-				}), [{
+				}).toPromise(), [{
 					uri: 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/lib.dom.d.ts',
 					range: {
 						start: {
@@ -1653,7 +1653,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 50
 					}
-				}), [{
+				}).toPromise(), [{
 					uri: 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/lib.es5.d.ts',
 					range: {
 						start: {
@@ -1859,7 +1859,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 0,
 					character: 0
 				}
-			});
+			}).toPromise();
 			assert.deepEqual(result, {
 				signatures: [],
 				activeSignature: 0,
@@ -1876,7 +1876,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 15,
 					character: 11
 				}
-			});
+			}).toPromise();
 			assert.deepEqual(result, {
 				signatures: [
 					{
@@ -1905,7 +1905,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 1,
 					character: 4
 				}
-			});
+			}).toPromise();
 			assert.deepEqual(result, {
 				activeSignature: 0,
 				activeParameter: 0,
@@ -1964,7 +1964,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 11,
 					character: 2
 				}
-			});
+			}).toPromise();
 			assert.equal(result.isIncomplete, false);
 			assert.sameDeepMembers(result.items, [
 				{
@@ -2006,7 +2006,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 1,
 					character: 2
 				}
-			});
+			}).toPromise();
 			assert.deepEqual(result, {
 				isIncomplete: false,
 				items: [{
@@ -2027,7 +2027,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 1,
 					character: 13
 				}
-			});
+			}).toPromise();
 			assert.deepEqual(result, {
 				isIncomplete: false,
 				items: [{
@@ -2048,7 +2048,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 0,
 					character: 0
 				}
-			});
+			}).toPromise();
 			assert.notDeepEqual(result.items.length, []);
 		} as any);
 	} as any);
@@ -2074,7 +2074,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 0,
 					character: 16
 				}
-			});
+			}).toPromise();
 			assert.deepEqual(result, {
 				range: {
 					start: {
@@ -2101,7 +2101,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 0,
 					character: 16
 				}
-			});
+			}).toPromise();
 			assert.deepEqual(result, {
 				range: {
 					start: {
@@ -2128,7 +2128,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 1,
 					character: 0
 				}
-			});
+			}).toPromise();
 			assert.deepEqual(result, [{
 				range: {
 					start: {

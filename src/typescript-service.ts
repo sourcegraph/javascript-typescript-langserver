@@ -17,7 +17,6 @@ import {
 	Location,
 	MarkedString,
 	ParameterInformation,
-	Range,
 	ReferenceParams,
 	SignatureHelp,
 	SignatureInformation,
@@ -83,7 +82,7 @@ export class TypeScriptService {
 	/**
 	 * Cached response for empty workspace/symbol query
 	 */
-	private emptyQueryWorkspaceSymbols: SymbolInformation[];
+	private emptyQueryWorkspaceSymbols: Observable<SymbolInformation[]>;
 
 	private traceModuleResolution: boolean;
 
@@ -105,10 +104,10 @@ export class TypeScriptService {
 	protected updater: FileSystemUpdater;
 
 	/**
-	 * Resolved with true or false depending on whether the root package.json is named "definitely-typed".
+	 * Emits true or false depending on whether the root package.json is named "definitely-typed".
 	 * On DefinitelyTyped, files are not prefetched and a special workspace/symbol algorithm is used.
 	 */
-	protected isDefinitelyTyped: Promise<boolean>;
+	protected isDefinitelyTyped: Observable<boolean>;
 
 	constructor(protected client: LanguageClient, protected options: TypeScriptServiceOptions = {}) {
 		this.logger = new LSPLogger(client);
@@ -131,7 +130,7 @@ export class TypeScriptService {
 	 * `window/showMessage`, `window/logMessage` and `telemetry/event` as well as the
 	 * `window/showMessageRequest` request to the client.
 	 */
-	async initialize(params: InitializeParams, span = new Span()): Promise<InitializeResult> {
+	initialize(params: InitializeParams, span = new Span()): Observable<InitializeResult> {
 		if (params.rootUri || params.rootPath) {
 			this.root = params.rootPath || util.uri2path(params.rootUri!);
 			this.rootUri = params.rootUri || util.path2uri('', params.rootPath!);
@@ -139,32 +138,34 @@ export class TypeScriptService {
 			this.updater = new FileSystemUpdater(this.fileSystem, this.inMemoryFileSystem);
 			const diagnosticsPublisher = new DiagnosticsPublisher(this.client);
 			this.projectManager = new pm.ProjectManager(this.root, this.inMemoryFileSystem, this.updater, diagnosticsPublisher, !!this.options.strict, this.traceModuleResolution, this.logger);
+
 			// Detect DefinitelyTyped
-			this.isDefinitelyTyped = (async () => {
-				try {
-					// Fetch root package.json (if exists)
-					const normRootUri = this.rootUri.endsWith('/') ? this.rootUri : this.rootUri + '/';
-					const packageJsonUri = normRootUri + 'package.json';
-					await this.updater.ensure(packageJsonUri);
+			// Fetch root package.json (if exists)
+			const normRootUri = this.rootUri.endsWith('/') ? this.rootUri : this.rootUri + '/';
+			const packageJsonUri = normRootUri + 'package.json';
+			this.isDefinitelyTyped = Observable.from(this.updater.ensure(packageJsonUri))
+				.map(() => {
 					// Check name
 					const packageJson = JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri));
 					return packageJson.name === 'definitely-typed';
-				} catch (err) {
-					return false;
-				}
-			})();
+				})
+				.catch(err => [false])
+				.publishReplay()
+				.refCount();
+
 			// Pre-fetch files in the background if not DefinitelyTyped
-			(async () => {
-				try {
-					if (!(await this.isDefinitelyTyped)) {
-						await this.projectManager.ensureOwnFiles(span);
+			this.isDefinitelyTyped
+				.mergeMap(isDefinitelyTyped => {
+					if (!isDefinitelyTyped) {
+						return this.projectManager.ensureOwnFiles(span);
 					}
-				} catch (err) {
+					return [];
+				})
+				.subscribe(undefined, err => {
 					this.logger.error(err);
-				}
-			})();
+				});
 		}
-		return {
+		return Observable.of({
 			capabilities: {
 				// Tell the client that the server works in FULL text document sync mode
 				textDocumentSync: TextDocumentSyncKind.Full,
@@ -185,7 +186,7 @@ export class TypeScriptService {
 				},
 				xpackagesProvider: true
 			}
-		};
+		});
 	}
 
 	/**
@@ -204,49 +205,51 @@ export class TypeScriptService {
 	 * but to not exit (otherwise the response might not be delivered correctly to the client).
 	 * There is a separate exit notification that asks the server to exit.
 	 */
-	async shutdown(params = {}, span = new Span()): Promise<null> {
+	shutdown(params = {}, span = new Span()): Observable<null> {
 		this.projectManager.dispose();
-		return null;
+		return Observable.of(null);
 	}
 
 	/**
 	 * The goto definition request is sent from the client to the server to resolve the definition
 	 * location of a symbol at a given text document position.
 	 */
-	async textDocumentDefinition(params: TextDocumentPositionParams, span = new Span()): Promise<Location[]> {
-		const line = params.position.line;
-		const column = params.position.character;
+	textDocumentDefinition(params: TextDocumentPositionParams, span = new Span()): Observable<Location[]> {
 
 		// Fetch files needed to resolve definition
-		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
+		return this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span)
+			.toArray()
+			.mergeMap(() => {
+				const fileName: string = util.uri2path(params.textDocument.uri);
+				const configuration = this.projectManager.getConfiguration(fileName);
+				configuration.ensureBasicFiles(span);
 
-		const fileName: string = util.uri2path(params.textDocument.uri);
-		const configuration = this.projectManager.getConfiguration(fileName);
-		configuration.ensureBasicFiles(span);
-
-		const sourceFile = this._getSourceFile(configuration, fileName, span);
-		if (!sourceFile) {
-			return [];
-		}
-
-		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
-		const defs: ts.DefinitionInfo[] = configuration.getService().getDefinitionAtPosition(fileName, offset);
-		const ret = [];
-		if (defs) {
-			for (const def of defs) {
-				const sourceFile = this._getSourceFile(configuration, def.fileName, span);
+				const sourceFile = this._getSourceFile(configuration, fileName, span);
 				if (!sourceFile) {
-					throw new Error('expected source file "' + def.fileName + '" to exist in configuration');
+					throw new Error(`Expected source file ${fileName} to exist`);
 				}
-				const start = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start);
-				const end = ts.getLineAndCharacterOfPosition(sourceFile, def.textSpan.start + def.textSpan.length);
-				ret.push(Location.create(this._defUri(def.fileName), {
-					start,
-					end
-				}));
-			}
-		}
-		return ret;
+
+				const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
+				const definitions: ts.DefinitionInfo[] | undefined = configuration.getService().getDefinitionAtPosition(fileName, offset);
+
+				return Observable.from(definitions || [])
+					.map((definition): Location => {
+						const sourceFile = this._getSourceFile(configuration, definition.fileName, span);
+						if (!sourceFile) {
+							throw new Error('expected source file "' + definition.fileName + '" to exist in configuration');
+						}
+						const start = ts.getLineAndCharacterOfPosition(sourceFile, definition.textSpan.start);
+						const end = ts.getLineAndCharacterOfPosition(sourceFile, definition.textSpan.start + definition.textSpan.length);
+						return {
+							uri: this._defUri(definition.fileName),
+							range: {
+								start,
+								end
+							}
+						};
+					});
+			})
+			.toArray();
 	}
 
 	/**
@@ -306,36 +309,44 @@ export class TypeScriptService {
 	 * The hover request is sent from the client to the server to request hover information at a
 	 * given text document position.
 	 */
-	async textDocumentHover(params: TextDocumentPositionParams, span = new Span()): Promise<Hover> {
+	textDocumentHover(params: TextDocumentPositionParams, span = new Span()): Observable<Hover> {
 
 		// Ensure files needed to resolve hover are fetched
-		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
+		return this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span)
+			.toArray()
+			.map((): Hover => {
+				const fileName: string = util.uri2path(params.textDocument.uri);
+				const configuration = this.projectManager.getConfiguration(fileName);
+				configuration.ensureBasicFiles(span);
 
-		const fileName: string = util.uri2path(params.textDocument.uri);
-		const configuration = this.projectManager.getConfiguration(fileName);
-		configuration.ensureBasicFiles(span);
+				const sourceFile = this._getSourceFile(configuration, fileName, span);
+				if (!sourceFile) {
+					throw new Error(`Unknown text document ${params.textDocument.uri}`);
+				}
+				const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
+				const info = configuration.getService().getQuickInfoAtPosition(fileName, offset);
+				if (!info) {
+					return { contents: [] };
+				}
+				const contents: MarkedString[] = [{
+					language: 'typescript',
+					value: ts.displayPartsToString(info.displayParts)
+				}];
+				const documentation = ts.displayPartsToString(info.documentation);
+				if (documentation) {
+					contents.push(documentation);
+				}
+				const start = ts.getLineAndCharacterOfPosition(sourceFile, info.textSpan.start);
+				const end = ts.getLineAndCharacterOfPosition(sourceFile, info.textSpan.start + info.textSpan.length);
 
-		const sourceFile = this._getSourceFile(configuration, fileName, span);
-		if (!sourceFile) {
-			throw new Error(`Unknown text document ${params.textDocument.uri}`);
-		}
-		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
-		const info = configuration.getService().getQuickInfoAtPosition(fileName, offset);
-		if (!info) {
-			return { contents: [] };
-		}
-		const contents: MarkedString[] = [{
-			language: 'typescript',
-			value: ts.displayPartsToString(info.displayParts)
-		}];
-		const documentation = ts.displayPartsToString(info.documentation);
-		if (documentation) {
-			contents.push(documentation);
-		}
-		const start = ts.getLineAndCharacterOfPosition(sourceFile, info.textSpan.start);
-		const end = ts.getLineAndCharacterOfPosition(sourceFile, info.textSpan.start + info.textSpan.length);
-
-		return { contents, range: Range.create(start.line, start.character, end.line, end.character) };
+				return {
+					contents,
+					range: {
+						start,
+						end
+					}
+				};
+			});
 	}
 
 	/**
@@ -400,7 +411,7 @@ export class TypeScriptService {
 	 * symbols matching the query string. The text document parameter specifies the active document
 	 * at time of the query. This can be used to rank or limit results.
 	 */
-	async workspaceSymbol(params: WorkspaceSymbolParams, span = new Span()): Promise<SymbolInformation[]> {
+	workspaceSymbol(params: WorkspaceSymbolParams, span = new Span()): Observable<SymbolInformation[]> {
 
 		// Always return max. 50 results
 		// TODO stream 50 results, then re-query and stream the rest
@@ -414,58 +425,45 @@ export class TypeScriptService {
 			symbolQuery.package = { name: symbolQuery.package.name };
 		}
 
-		// Use special logic for DefinitelyTyped
-		if (await this.isDefinitelyTyped) {
-			return await this._workspaceSymbolDefinitelyTyped({ ...params, limit }, span);
-		}
-
 		// Return cached result for empty query, if available
 		if (!query && !symbolQuery && this.emptyQueryWorkspaceSymbols) {
 			return this.emptyQueryWorkspaceSymbols;
 		}
 
-		// symbolQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
-		if (symbolQuery && !symbolQuery.containerKind) {
-			symbolQuery.containerKind = undefined;
-		}
-
-		// A workspace/symol request searches all symbols in own code, but not in dependencies
-		await this.projectManager.ensureOwnFiles(span);
-
-		// Find configurations to search
-		let configs: Iterable<pm.ProjectConfiguration>;
-		if (symbolQuery && symbolQuery.package && symbolQuery.package.name) {
-			// If PackageDescriptor is given, only search project with the matching package name
-			configs = iterate(this.projectManager.configurations())
-				.filter(config => config.getPackageName() === symbolQuery.package!.name);
-		} else {
-			configs = this.projectManager.configurations();
-		}
-		const seen = new Set<string>();
-		const symbols = iterate(configs)
-			.map(config => this._collectWorkspaceSymbols(config, query || symbolQuery, limit))
-			.flatten<SymbolInformation>()
-			.filter(symbol => !symbol.location.uri.includes('/node_modules/'))
-			// Filter duplicate symbols
-			// There may be few configurations that contain the same file(s)
-			// or files from different configurations may refer to the same file(s)
-			// TODO use observable.distinct()
-			.filter(symbol => {
-				const hash = hashObject(symbol, { respectType: false } as any);
-				if (seen.has(hash)) {
-					return false;
+		// Use special logic for DefinitelyTyped
+		return this.isDefinitelyTyped
+			.mergeMap((isDefinitelyTyped): any => {
+				if (isDefinitelyTyped) {
+					return this._workspaceSymbolDefinitelyTyped({ ...params, limit }, span);
 				}
-				seen.add(hash);
-				return true;
-			})
-			.take(limit)
-			.toArray();
 
-		// Save empty query result
-		if (!query && !symbolQuery) {
-			this.emptyQueryWorkspaceSymbols = symbols;
-		}
-		return symbols;
+				// symbolQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
+				if (symbolQuery && !symbolQuery.containerKind) {
+					symbolQuery.containerKind = undefined;
+				}
+
+				// A workspace/symol request searches all symbols in own code, but not in dependencies
+				const symbols = Observable.from(this.projectManager.ensureOwnFiles(span))
+					.mergeMap<void, pm.ProjectConfiguration>(() => this.projectManager.configurations() as any)
+					// If PackageDescriptor is given, only search project with the matching package name
+					.filter(config => !symbolQuery || !symbolQuery.package || !symbolQuery.package.name || config.getPackageName() === symbolQuery.package!.name)
+					.mergeMap<pm.ProjectConfiguration, SymbolInformation>(config => this._collectWorkspaceSymbols(config, query || symbolQuery, limit) as any)
+					.filter(symbol => !symbol.location.uri.includes('/node_modules/'))
+					// Filter duplicate symbols
+					// There may be few configurations that contain the same file(s)
+					// or files from different configurations may refer to the same file(s)
+					.distinct(symbol => hashObject(symbol, { respectType: false } as any))
+					.take(limit)
+					.toArray()
+					.publishReplay()
+					.refCount();
+
+				if (!query && !symbolQuery) {
+					this.emptyQueryWorkspaceSymbols = symbols;
+				}
+
+				return symbols;
+			});
 	}
 
 	/**
@@ -473,66 +471,73 @@ export class TypeScriptService {
 	 * Searches only in the correct subdirectory for the given PackageDescriptor.
 	 * Will error if not passed a SymbolDescriptor query with an `@types` PackageDescriptor
 	 */
-	protected async _workspaceSymbolDefinitelyTyped(params: WorkspaceSymbolParams, childOf = new Span()): Promise<SymbolInformation[]> {
+	protected _workspaceSymbolDefinitelyTyped(params: WorkspaceSymbolParams, childOf = new Span()): Observable<SymbolInformation[]> {
 		const span = childOf.tracer().startSpan('Handle workspace/symbol DefinitelyTyped', { childOf });
-		try {
-			if (!params.symbol || !params.symbol.package || !params.symbol.package.name || !params.symbol.package.name.startsWith('@types/')) {
-				throw new Error('workspace/symbol on DefinitelyTyped is only supported with a SymbolDescriptor query with an @types PackageDescriptor');
-			}
 
-			const symbolQuery = { ...params.symbol };
-			// Don't match PackageDescriptor on symbols
-			symbolQuery.package = undefined;
-			// symQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
-			if (!symbolQuery.containerKind) {
-				symbolQuery.containerKind = undefined;
-			}
-
-			// Fetch all files in the package subdirectory
-			const normRootUri = this.rootUri.endsWith('/') ? this.rootUri : this.rootUri + '/';
-			const packageRootUri = normRootUri + params.symbol.package.name.substr(1) + '/';
-			// All packages are in the types/ subdirectory
-			await this.updater.ensureStructure(span);
-			await Promise.all(
-				iterate(this.inMemoryFileSystem.uris())
-					.filter(uri => uri.startsWith(packageRootUri))
-					.map(uri => this.updater.ensure(uri, span))
-			);
-			this.projectManager.createConfigurations();
-			span.log({ event: 'fetched package files' });
-
-			// Search symbol in configuration
-			// forcing TypeScript mode
-			const config = this.projectManager.getConfiguration(util.uri2path(packageRootUri), 'ts');
-			return Array.from(this._collectWorkspaceSymbols(config, params.query || symbolQuery, params.limit));
-		} catch (err) {
-			span.setTag('error', true);
-			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
-			throw err;
-		} finally {
-			span.finish();
+		if (!params.symbol || !params.symbol.package || !params.symbol.package.name || !params.symbol.package.name.startsWith('@types/')) {
+			return Observable.throw('workspace/symbol on DefinitelyTyped is only supported with a SymbolDescriptor query with an @types PackageDescriptor');
 		}
+
+		const symbolQuery = { ...params.symbol };
+		// Don't match PackageDescriptor on symbols
+		symbolQuery.package = undefined;
+		// symQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
+		if (!symbolQuery.containerKind) {
+			symbolQuery.containerKind = undefined;
+		}
+
+		// Fetch all files in the package subdirectory
+		// All packages are in the types/ subdirectory
+		const normRootUri = this.rootUri.endsWith('/') ? this.rootUri : this.rootUri + '/';
+		const packageRootUri = normRootUri + params.symbol.package.name.substr(1) + '/';
+
+		return Observable.from(this.updater.ensureStructure(span))
+			.mergeMap(() => Observable.from<string>(this.inMemoryFileSystem.uris() as any))
+			.filter(uri => uri.startsWith(packageRootUri))
+			.mergeMap(uri => this.updater.ensure(uri, span))
+			.toArray()
+			.mergeMap<any, SymbolInformation>(() => {
+				this.projectManager.createConfigurations();
+				span.log({ event: 'fetched package files' });
+
+				// Search symbol in configuration
+				// forcing TypeScript mode
+				const config = this.projectManager.getConfiguration(util.uri2path(packageRootUri), 'ts');
+				return this._collectWorkspaceSymbols(config, params.query || symbolQuery, params.limit) as any;
+			})
+			.toArray()
+			.catch(err => {
+				span.setTag('error', true);
+				span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
+				throw err;
+			})
+			.finally(() => {
+				span.finish();
+			});
 	}
 
 	/**
 	 * The document symbol request is sent from the client to the server to list all symbols found
 	 * in a given text document.
 	 */
-	async textDocumentDocumentSymbol(params: DocumentSymbolParams, span = new Span()): Promise<SymbolInformation[]> {
+	textDocumentDocumentSymbol(params: DocumentSymbolParams, span = new Span()): Observable<SymbolInformation[]> {
 
 		// Ensure files needed to resolve symbols are fetched
-		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
+		return this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span)
+			.toArray()
+			.mergeMap<any, SymbolInformation>(() => {
+				const fileName = util.uri2path(params.textDocument.uri);
 
-		const fileName = util.uri2path(params.textDocument.uri);
-
-		const config = this.projectManager.getConfiguration(fileName);
-		config.ensureBasicFiles(span);
-		const sourceFile = this._getSourceFile(config, fileName, span);
-		if (!sourceFile) {
-			return [];
-		}
-		const tree = config.getService().getNavigationTree(fileName);
-		return Array.from(this._flattenNavigationTreeItem(tree, null, sourceFile));
+				const config = this.projectManager.getConfiguration(fileName);
+				config.ensureBasicFiles(span);
+				const sourceFile = this._getSourceFile(config, fileName, span);
+				if (!sourceFile) {
+					return [];
+				}
+				const tree = config.getService().getNavigationTree(fileName);
+				return this._flattenNavigationTreeItem(tree, null, sourceFile) as any;
+			})
+			.toArray();
 	}
 
 	/**
@@ -690,85 +695,99 @@ export class TypeScriptService {
 	 * completion item as a param. The returned completion item should have the documentation
 	 * property filled in.
 	 */
-	async textDocumentCompletion(params: TextDocumentPositionParams, span = new Span()): Promise<CompletionList> {
+	textDocumentCompletion(params: TextDocumentPositionParams, span = new Span()): Observable<CompletionList> {
 
 		// Ensure files needed to suggest completions are fetched
-		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
+		return this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span)
+			.toArray()
+			.map((): CompletionList => {
 
-		const fileName: string = util.uri2path(params.textDocument.uri);
+				const fileName: string = util.uri2path(params.textDocument.uri);
 
-		const configuration = this.projectManager.getConfiguration(fileName);
-		configuration.ensureBasicFiles(span);
+				const configuration = this.projectManager.getConfiguration(fileName);
+				configuration.ensureBasicFiles(span);
 
-		const sourceFile = this._getSourceFile(configuration, fileName, span);
-		if (!sourceFile) {
-			return CompletionList.create();
-		}
+				const sourceFile = this._getSourceFile(configuration, fileName, span);
+				if (!sourceFile) {
+					return { isIncomplete: true, items: [] };
+				}
 
-		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
-		const completions = configuration.getService().getCompletionsAtPosition(fileName, offset);
+				const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
+				const completions = configuration.getService().getCompletionsAtPosition(fileName, offset);
 
-		if (completions == null) {
-			return CompletionList.create();
-		}
+				if (completions == null) {
+					return { isIncomplete: true, items: [] };
+				}
 
-		return CompletionList.create(completions.entries.map(item => {
-			const ret = CompletionItem.create(item.name);
-			const kind = completionKinds[item.kind];
-			if (kind) {
-				ret.kind = kind;
-			}
-			if (item.sortText) {
-				ret.sortText = item.sortText;
-			}
-			const details = configuration.getService().getCompletionEntryDetails(fileName, offset, item.name);
-			if (details) {
-				ret.documentation = ts.displayPartsToString(details.documentation);
-				ret.detail = ts.displayPartsToString(details.displayParts);
-			}
-			return ret;
-		}));
+				return {
+					isIncomplete: false,
+					items: completions.entries.map(entry => {
+						const item: CompletionItem = { label: entry.name };
+						const kind = completionKinds[entry.kind];
+						if (kind) {
+							item.kind = kind;
+						}
+						if (entry.sortText) {
+							item.sortText = entry.sortText;
+						}
+						const details = configuration.getService().getCompletionEntryDetails(fileName, offset, entry.name);
+						if (details) {
+							item.documentation = ts.displayPartsToString(details.documentation);
+							item.detail = ts.displayPartsToString(details.displayParts);
+						}
+						return item;
+					})
+				};
+			});
 	}
 
 	/**
 	 * The signature help request is sent from the client to the server to request signature
 	 * information at a given cursor position.
 	 */
-	async textDocumentSignatureHelp(params: TextDocumentPositionParams, span = new Span()): Promise<SignatureHelp> {
+	textDocumentSignatureHelp(params: TextDocumentPositionParams, span = new Span()): Observable<SignatureHelp> {
 
 		// Ensure files needed to resolve signature are fetched
-		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
+		return this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span)
+			.toArray()
+			.map((): SignatureHelp => {
 
-		const filePath = util.uri2path(params.textDocument.uri);
-		const configuration = this.projectManager.getConfiguration(filePath);
-		configuration.ensureBasicFiles(span);
+				const filePath = util.uri2path(params.textDocument.uri);
+				const configuration = this.projectManager.getConfiguration(filePath);
+				configuration.ensureBasicFiles(span);
 
-		const sourceFile = this._getSourceFile(configuration, filePath, span);
-		if (!sourceFile) {
-			throw new Error(`expected source file ${filePath} to exist in configuration`);
-		}
-		const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
+				const sourceFile = this._getSourceFile(configuration, filePath, span);
+				if (!sourceFile) {
+					throw new Error(`expected source file ${filePath} to exist in configuration`);
+				}
+				const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
 
-		const signatures: ts.SignatureHelpItems = configuration.getService().getSignatureHelpItems(filePath, offset);
-		if (!signatures) {
-			return { signatures: [], activeParameter: 0, activeSignature: 0 };
-		}
+				const signatures: ts.SignatureHelpItems = configuration.getService().getSignatureHelpItems(filePath, offset);
+				if (!signatures) {
+					return { signatures: [], activeParameter: 0, activeSignature: 0 };
+				}
 
-		const signatureInformations = signatures.items.map(item => {
-			const prefix = ts.displayPartsToString(item.prefixDisplayParts);
-			const params = item.parameters.map(p => ts.displayPartsToString(p.displayParts)).join(', ');
-			const suffix = ts.displayPartsToString(item.suffixDisplayParts);
-			const parameters = item.parameters.map(p => {
-				return ParameterInformation.create(ts.displayPartsToString(p.displayParts), ts.displayPartsToString(p.documentation));
+				const signatureInformations = signatures.items.map((item): SignatureInformation => {
+					const prefix = ts.displayPartsToString(item.prefixDisplayParts);
+					const params = item.parameters.map(p => ts.displayPartsToString(p.displayParts)).join(', ');
+					const suffix = ts.displayPartsToString(item.suffixDisplayParts);
+					const parameters = item.parameters.map((p): ParameterInformation => ({
+						label: ts.displayPartsToString(p.displayParts),
+						documentation: ts.displayPartsToString(p.documentation)
+					}));
+					return {
+						label: prefix + params + suffix,
+						documentation: ts.displayPartsToString(item.documentation),
+						parameters
+					};
+				});
+
+				return {
+					signatures: signatureInformations,
+					activeSignature: signatures.selectedItemIndex,
+					activeParameter: signatures.argumentIndex
+				};
 			});
-			return SignatureInformation.create(prefix + params + suffix, ts.displayPartsToString(item.documentation), ...parameters);
-		});
-
-		return {
-			signatures: signatureInformations,
-			activeSignature: signatures.selectedItemIndex,
-			activeParameter: signatures.argumentIndex
-		};
 	}
 
 	/**
