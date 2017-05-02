@@ -315,7 +315,7 @@ export class ProjectManager implements Disposable {
 		ignore.add(uri);
 		return Observable.from(this.ensureModuleStructure(span))
 			// If max depth was reached, don't go any further
-			.mergeMap(() => maxDepth === 0 ? [] : this.resolveReferencedFiles(uri, span))
+			.mergeMap(() => maxDepth === 0 ? [] : this.resolveReferencedFiles(uri))
 			// Prevent cycles
 			.filter(referencedUri => !ignore.has(referencedUri))
 			// Call method recursively with one less dep level
@@ -506,7 +506,6 @@ export class ProjectManager implements Disposable {
 		}
 		config.ensureConfigFile(span);
 		config.getHost().incProjectVersion();
-		config.syncProgram(span);
 	}
 
 	/**
@@ -526,7 +525,6 @@ export class ProjectManager implements Disposable {
 		config.ensureConfigFile(span);
 		config.ensureSourceFile(filePath);
 		config.getHost().incProjectVersion();
-		config.syncProgram(span);
 	}
 
 	/**
@@ -813,11 +811,24 @@ export class ProjectConfiguration {
 	}
 
 	/**
-	 * Note that it does not perform any parsing or typechecking
+	 * Tells TS service to recompile program (if needed) based on current list of files and compilation options.
+	 * TS service relies on information provided by language servide host to see if there were any changes in
+	 * the whole project or in some files
+	 *
 	 * @return program object (cached result of parsing and typechecking done by TS service)
 	 */
-	getProgram(): ts.Program | undefined {
-		return this.program;
+	getProgram(childOf = new Span()): ts.Program | undefined {
+		const span = childOf.tracer().startSpan('Get program', { childOf });
+		try {
+			return this.getService().getProgram();
+		} catch (err) {
+			span.setTag('error', true);
+			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
+			this.logger.error(`Cannot create program object for ${this.rootFilePath}`, err);
+			throw err;
+		} finally {
+			span.finish();
+		}
 	}
 
 	/**
@@ -828,24 +839,6 @@ export class ProjectConfiguration {
 			throw new Error('project is uninitialized');
 		}
 		return this.host;
-	}
-
-	/**
-	 * Tells TS service to recompile program (if needed) based on current list of files and compilation options.
-	 * TS service relies on information provided by language servide host to see if there were any changes in
-	 * the whole project or in some files
-	 */
-	syncProgram(childOf = new Span()): void {
-		const span = childOf.tracer().startSpan('Sync program', { childOf });
-		try {
-			this.program = this.getService().getProgram();
-		} catch (err) {
-			span.setTag('error', true);
-			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
-			this.logger.error(`Cannot create program object for ${this.rootFilePath}`, err);
-		} finally {
-			span.finish();
-		}
 	}
 
 	private initialized = false;
@@ -895,7 +888,6 @@ export class ProjectConfiguration {
 			this.logger
 		);
 		this.service = ts.createLanguageService(this.host, ts.createDocumentRegistry());
-		this.syncProgram(span);
 		this.initialized = true;
 	}
 
@@ -918,25 +910,19 @@ export class ProjectConfiguration {
 
 		this.init(span);
 
-		const program = this.getProgram();
+		const program = this.getProgram(span);
 		if (!program) {
 			return;
 		}
 
-		let changed = false;
 		for (const uri of this.fs.uris()) {
 			const fileName = uri2path(uri);
 			if (isGlobalTSFile(fileName) || (!isDependencyFile(fileName) && isDeclarationFile(fileName))) {
 				const sourceFile = program.getSourceFile(fileName);
 				if (!sourceFile) {
 					this.getHost().addFile(fileName);
-					changed = true;
 				}
 			}
-		}
-		if (changed) {
-			// requery program object to synchonize LanguageService's data
-			this.syncProgram(span);
 		}
 		this.ensuredBasicFiles = true;
 	}
@@ -947,8 +933,8 @@ export class ProjectConfiguration {
 	 * Ensures a single file is available to the LanguageServiceHost
 	 * @param filePath
 	 */
-	ensureSourceFile(filePath: string): void {
-		const program = this.getProgram();
+	ensureSourceFile(filePath: string, span = new Span()): void {
+		const program = this.getProgram(span);
 		if (!program) {
 			return;
 		}
@@ -969,21 +955,15 @@ export class ProjectConfiguration {
 		if (this.getHost().complete) {
 			return;
 		}
-		const program = this.getProgram();
+		const program = this.getProgram(span);
 		if (!program) {
 			return;
 		}
-		let changed = false;
 		for (const fileName of (this.getHost().expectedFilePaths || [])) {
 			const sourceFile = program.getSourceFile(fileName);
 			if (!sourceFile) {
 				this.getHost().addFile(fileName);
-				changed = true;
 			}
-		}
-		if (changed) {
-			// requery program object to synchonize LanguageService's data
-			this.syncProgram(span);
 		}
 		this.getHost().complete = true;
 		this.ensuredAllFiles = true;

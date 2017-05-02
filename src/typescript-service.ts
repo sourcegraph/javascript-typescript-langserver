@@ -415,7 +415,7 @@ export class TypeScriptService {
 				const configuration = this.projectManager.getConfiguration(fileName);
 				// Ensure all files have been added
 				configuration.ensureAllFiles(span);
-				const program = configuration.getProgram();
+				const program = configuration.getProgram(span);
 				if (!program) {
 					return [];
 				}
@@ -618,7 +618,11 @@ export class TypeScriptService {
 			})
 			.mergeMap((config: ProjectConfiguration) => {
 				config.ensureAllFiles(span);
-				return Observable.from(config.getService().getProgram().getSourceFiles())
+				const program = config.getProgram(span);
+				if (!program) {
+					return Observable.empty();
+				}
+				return Observable.from(program.getSourceFiles())
 					// Ignore dependency files
 					.filter(source => !toUnixPath(source.fileName).includes('/node_modules/'))
 					.mergeMap(source =>
@@ -898,12 +902,12 @@ export class TypeScriptService {
 	 *
 	 * @param uri URI of the file to check
 	 */
-	private _publishDiagnostics(uri: string): void {
+	private _publishDiagnostics(uri: string, span = new Span()): void {
 		const config = this.projectManager.getParentConfiguration(uri);
 		if (!config) {
 			return;
 		}
-		const program = config.getProgram();
+		const program = config.getProgram(span);
 		if (!program) {
 			return;
 		}
@@ -959,7 +963,7 @@ export class TypeScriptService {
 	 * @param span Span for tracing
 	 */
 	private _getSourceFile(configuration: ProjectConfiguration, fileName: string, span = new Span()): ts.SourceFile | undefined {
-		let program = configuration.getProgram();
+		let program = configuration.getProgram(span);
 		if (!program) {
 			return undefined;
 		}
@@ -971,9 +975,7 @@ export class TypeScriptService {
 			return undefined;
 		}
 		configuration.getHost().addFile(fileName);
-		// Update program object
-		configuration.syncProgram(span);
-		program = configuration.getProgram();
+		program = configuration.getProgram(span);
 		return program && program.getSourceFile(fileName);
 	}
 
@@ -993,7 +995,7 @@ export class TypeScriptService {
 			try {
 				config.ensureAllFiles(span);
 
-				const program = config.getProgram();
+				const program = config.getProgram(span);
 				if (!program) {
 					return Observable.empty();
 				}
@@ -1080,8 +1082,8 @@ export class TypeScriptService {
 	/**
 	 * Fetches up to limit navigation bar items from given project, flattens them
 	 */
-	private _getNavigationTreeItems(configuration: ProjectConfiguration): IterableIterator<SymbolInformation> {
-		const program = configuration.getProgram();
+	private _getNavigationTreeItems(configuration: ProjectConfiguration, span = new Span()): IterableIterator<SymbolInformation> {
+		const program = configuration.getProgram(span);
 		if (!program) {
 			return iterate([]);
 		}
