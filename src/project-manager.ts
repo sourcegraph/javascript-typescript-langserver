@@ -874,7 +874,7 @@ export class ProjectConfiguration {
 		try {
 			let diagnostics: ts.Diagnostic[] = [];
 			for (const file of program.getSourceFiles()) {
-				if (!file.fileName.includes('/node_modules/') && util.isJSTSFile(file.fileName)) {
+				if (!/[\/\\]node_modules[\/\\]/.test(file.fileName)) {
 					diagnostics = diagnostics.concat(ts.getPreEmitDiagnostics(program, file));
 				}
 			}
