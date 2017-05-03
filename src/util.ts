@@ -1,4 +1,3 @@
-import { isMatchWith } from 'lodash';
 import * as os from 'os';
 import * as path from 'path';
 import * as ts from 'typescript';
@@ -204,12 +203,36 @@ export function defInfoToSymbolDescriptor(d: ts.DefinitionInfo): rt.SymbolDescri
 }
 
 /**
- * Returns true if the passed SymbolDescriptor matches the passed SymbolDescriptor query by
- * performing a deep comparison
+ * Returns true if the passed SymbolDescriptor has at least the same properties as the passed partial SymbolDescriptor
  */
 export function isSymbolDescriptorMatch(query: Partial<rt.SymbolDescriptor>, symbol: rt.SymbolDescriptor): boolean {
-	// Don't consider query properties that are undefined
-	return isMatchWith(symbol, query, (symbolValue, queryValue): any => queryValue === undefined || undefined);
+	for (const key of Object.keys(query)) {
+		if ((query as any)[key] === undefined) {
+			continue;
+		}
+		if (key === 'package') {
+			if (!symbol.package || !isPackageDescriptorMatch(query.package!, symbol.package)) {
+				return false;
+			}
+			continue;
+		}
+		if ((query as any)[key] !== (symbol as any)[key]) {
+			return false;
+		}
+	}
+	return true;
+}
+
+function isPackageDescriptorMatch(query: Partial<rt.PackageDescriptor>, pkg: rt.PackageDescriptor): boolean {
+	for (const key of Object.keys(query)) {
+		if ((query as any)[key] === undefined) {
+			continue;
+		}
+		if ((query as any)[key] !== (pkg as any)[key]) {
+			return false;
+		}
+	}
+	return true;
 }
 
 function stripQuotes(s: string): string {
