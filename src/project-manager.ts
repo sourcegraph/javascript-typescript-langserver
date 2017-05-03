@@ -872,9 +872,14 @@ export class ProjectConfiguration {
 	private updateDiagnostics(program: ts.Program, childOf = new Span()): void {
 		const span = childOf.tracer().startSpan('Update diagnostics', { childOf });
 		try {
-			const diagnostics = ts.getPreEmitDiagnostics(program);
-			span.log({ event: 'result', result: diagnostics.length });
+			let diagnostics: ts.Diagnostic[] = [];
+			for (const file of program.getSourceFiles()) {
+				if (!/[\/\\]node_modules[\/\\]/.test(file.fileName)) {
+					diagnostics = diagnostics.concat(ts.getPreEmitDiagnostics(program, file));
+				}
+			}
 			this.diagnosticsHandler.updateFileDiagnostics(diagnostics, span);
+			span.log({ event: 'result', result: diagnostics.length });
 		} catch (err) {
 			span.setTag('error', true);
 			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack});
