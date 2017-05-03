@@ -25,12 +25,6 @@ describe('ProjectManager', () => {
 			projectManager = new ProjectManager('/', memfs, updater, true);
 			await projectManager.ensureAllFiles();
 		});
-		it('should resolve package name when package.json is at the same level', () => {
-			assert.equal(projectManager.getConfiguration('/').getPackageName(), 'package-name-1');
-		});
-		it('should resolve package name when package.json is at the upper level', () => {
-			assert.equal(projectManager.getConfiguration('/subdirectory-with-tsconfig/src/dummy.ts').getPackageName(), 'package-name-2');
-		});
 	});
 	describe('ensureReferencedFiles()', () => {
 		beforeEach(() => {

@@ -418,6 +418,25 @@ export class ProjectManager implements Disposable {
 	}
 
 	/**
+	 * Returns the ProjectConfiguration a file belongs to
+	 */
+	getParentConfiguration(uri: string, configType?: ConfigType): ProjectConfiguration | undefined {
+		return this.getConfigurationIfExists(util.uri2path(uri), configType);
+	}
+
+	/**
+	 * Returns all ProjectConfigurations contained in the given directory or one of its childrens
+	 *
+	 * @param uri URI of a directory
+	 */
+	getChildConfigurations(uri: string): IterableIterator<ProjectConfiguration> {
+		const pathPrefix = util.uri2path(uri);
+		return iterate(this.configs.ts).concat(this.configs.js)
+			.filter(([folderPath, config]) => folderPath.startsWith(pathPrefix))
+			.map(([folderPath, config]) => config);
+	}
+
+	/**
 	 * Called when file was opened by client. Current implementation
 	 * does not differenciates open and change events
 	 * @param uri file's URI
@@ -785,25 +804,6 @@ export class ProjectConfiguration {
 		this.service = undefined;
 		this.program = undefined;
 		this.host = undefined;
-	}
-
-	/**
-	 * @return package name (project name) of a given project
-	 */
-	getPackageName(): string | undefined {
-		// package.json may be located at the upper level as well
-		let currentDir = this.rootFilePath;
-		while (true) {
-			const pkgJsonFile = path_.posix.join(currentDir, 'package.json');
-			if (this.fs.fileExists(pkgJsonFile)) {
-				return JSON.parse(this.fs.readFile(pkgJsonFile)).name;
-			}
-			const parentDir = path_.posix.dirname(currentDir);
-			if (parentDir === '.' || parentDir === currentDir || currentDir === this.fs.path) {
-				return undefined;
-			}
-			currentDir = parentDir;
-		}
 	}
 
 	/**

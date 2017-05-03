@@ -45,6 +45,8 @@ import {
 } from './request-type';
 import * as util from './util';
 import hashObject = require('object-hash');
+import { castArray, noop, omit } from 'lodash';
+import { PackageJson, PackageManager } from './packages';
 
 export interface TypeScriptServiceOptions {
 	traceModuleResolution?: boolean;
@@ -109,6 +111,11 @@ export class TypeScriptService {
 	 */
 	protected isDefinitelyTyped: Observable<boolean>;
 
+	/**
+	 * Keeps track of package.jsons in the workspace
+	 */
+	protected packageManager: PackageManager;
+
 	constructor(protected client: LanguageClient, protected options: TypeScriptServiceOptions = {}) {
 		this.logger = new LSPLogger(client);
 	}
@@ -136,13 +143,20 @@ export class TypeScriptService {
 			this.rootUri = params.rootUri || util.path2uri('', params.rootPath!);
 			this._initializeFileSystems(!this.options.strict && !(params.capabilities.xcontentProvider && params.capabilities.xfilesProvider));
 			this.updater = new FileSystemUpdater(this.fileSystem, this.inMemoryFileSystem);
-			this.projectManager = new pm.ProjectManager(this.root, this.inMemoryFileSystem, this.updater, !!this.options.strict, this.traceModuleResolution, this.logger);
-
+			this.projectManager = new pm.ProjectManager(
+				this.root,
+				this.inMemoryFileSystem,
+				this.updater,
+				!!this.options.strict,
+				this.traceModuleResolution,
+				this.logger
+			);
+			this.packageManager = new PackageManager(this.updater, this.inMemoryFileSystem, this.logger);
 			// Detect DefinitelyTyped
 			// Fetch root package.json (if exists)
 			const normRootUri = this.rootUri.endsWith('/') ? this.rootUri : this.rootUri + '/';
 			const packageJsonUri = normRootUri + 'package.json';
-			this.isDefinitelyTyped = Observable.from(this.updater.ensure(packageJsonUri))
+			this.isDefinitelyTyped = Observable.from(this.updater.ensure(packageJsonUri, span))
 				.map(() => {
 					// Check name
 					const packageJson = JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri));
@@ -214,12 +228,13 @@ export class TypeScriptService {
 	 * location of a symbol at a given text document position.
 	 */
 	textDocumentDefinition(params: TextDocumentPositionParams, span = new Span()): Observable<Location[]> {
+		const uri = params.textDocument.uri;
 
 		// Fetch files needed to resolve definition
-		return this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span)
+		return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
 			.toArray()
 			.mergeMap(() => {
-				const fileName: string = util.uri2path(params.textDocument.uri);
+				const fileName: string = util.uri2path(uri);
 				const configuration = this.projectManager.getConfiguration(fileName);
 				configuration.ensureBasicFiles(span);
 
@@ -262,18 +277,20 @@ export class TypeScriptService {
 	 * know some information about it.
 	 */
 	textDocumentXdefinition(params: TextDocumentPositionParams, span = new Span()): Observable<SymbolLocationInformation[]> {
+		const uri = params.textDocument.uri;
+
 		// Ensure files needed to resolve SymbolLocationInformation are fetched
-		return this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span)
+		return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
 			.toArray()
 			.mergeMap(() => {
 				// Convert URI to file path
-				const fileName: string = util.uri2path(params.textDocument.uri);
+				const fileName: string = util.uri2path(uri);
 				// Get closest tsconfig configuration
 				const configuration = this.projectManager.getConfiguration(fileName);
 				configuration.ensureBasicFiles(span);
 				const sourceFile = this._getSourceFile(configuration, fileName, span);
 				if (!sourceFile) {
-					throw new Error(`Unknown text document ${params.textDocument.uri}`);
+					throw new Error(`Unknown text document ${uri}`);
 				}
 				// Convert line/character to offset
 				const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
@@ -309,18 +326,19 @@ export class TypeScriptService {
 	 * given text document position.
 	 */
 	textDocumentHover(params: TextDocumentPositionParams, span = new Span()): Observable<Hover> {
+		const uri = params.textDocument.uri;
 
 		// Ensure files needed to resolve hover are fetched
-		return this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span)
+		return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
 			.toArray()
 			.map((): Hover => {
-				const fileName: string = util.uri2path(params.textDocument.uri);
+				const fileName: string = util.uri2path(uri);
 				const configuration = this.projectManager.getConfiguration(fileName);
 				configuration.ensureBasicFiles(span);
 
 				const sourceFile = this._getSourceFile(configuration, fileName, span);
 				if (!sourceFile) {
-					throw new Error(`Unknown text document ${params.textDocument.uri}`);
+					throw new Error(`Unknown text document ${uri}`);
 				}
 				const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
 				const info = configuration.getService().getQuickInfoAtPosition(fileName, offset);
@@ -355,11 +373,12 @@ export class TypeScriptService {
 	 * Returns all references to the symbol at the position in the own workspace, including references inside node_modules.
 	 */
 	textDocumentReferences(params: ReferenceParams, span = new Span()): Observable<Location[]> {
+		const uri = params.textDocument.uri;
 		// Ensure all files were fetched to collect all references
 		return Observable.from(this.projectManager.ensureOwnFiles(span))
 			.mergeMap(() => {
 				// Convert URI to file path because TypeScript doesn't work with URIs
-				const fileName = util.uri2path(params.textDocument.uri);
+				const fileName = util.uri2path(uri);
 				// Get tsconfig configuration for requested file
 				const configuration = this.projectManager.getConfiguration(fileName);
 				// Ensure all files have been added
@@ -443,10 +462,22 @@ export class TypeScriptService {
 
 				// A workspace/symol request searches all symbols in own code, but not in dependencies
 				const symbols = Observable.from(this.projectManager.ensureOwnFiles(span))
-					.mergeMap<void, pm.ProjectConfiguration>(() => this.projectManager.configurations() as any)
+					.mergeMap(() =>
+						symbolQuery && symbolQuery.package
+							// If SymbolDescriptor query with PackageDescriptor, search for package.jsons with matching package name
+							? Observable.from(this.packageManager.ensureScanned(span))
+								.mergeMap<void, string>(() => this.packageManager.packageJsonUris() as any)
+								.filter(packageJsonUri => !symbolQuery || !symbolQuery.package || !symbolQuery.package.name || (JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri)) as PackageJson).name === symbolQuery.package!.name)
+								// Find their parent and child tsconfigs
+								.mergeMap(packageJsonUri => Observable.merge(
+									castArray<pm.ProjectConfiguration>(this.projectManager.getParentConfiguration(packageJsonUri) || []),
+									this.projectManager.getChildConfigurations(packageJsonUri) as any
+								))
+							// Else search all tsconfigs in the workspace
+							: this.projectManager.configurations() as any
+					)
 					// If PackageDescriptor is given, only search project with the matching package name
-					.filter(config => !symbolQuery || !symbolQuery.package || !symbolQuery.package.name || config.getPackageName() === symbolQuery.package!.name)
-					.mergeMap<pm.ProjectConfiguration, SymbolInformation>(config => this._collectWorkspaceSymbols(config, query || symbolQuery, limit) as any)
+					.mergeMap<pm.ProjectConfiguration, SymbolInformation>(config => this._collectWorkspaceSymbols(config, query || symbolQuery, limit, span) as any)
 					.filter(symbol => !symbol.location.uri.includes('/node_modules/'))
 					// Filter duplicate symbols
 					// There may be few configurations that contain the same file(s)
@@ -502,7 +533,7 @@ export class TypeScriptService {
 				// Search symbol in configuration
 				// forcing TypeScript mode
 				const config = this.projectManager.getConfiguration(util.uri2path(packageRootUri), 'ts');
-				return this._collectWorkspaceSymbols(config, params.query || symbolQuery, params.limit) as any;
+				return this._collectWorkspaceSymbols(config, params.query || symbolQuery, params.limit, span) as any;
 			})
 			.toArray()
 			.catch(err => {
@@ -520,12 +551,13 @@ export class TypeScriptService {
 	 * in a given text document.
 	 */
 	textDocumentDocumentSymbol(params: DocumentSymbolParams, span = new Span()): Observable<SymbolInformation[]> {
+		const uri = params.textDocument.uri;
 
 		// Ensure files needed to resolve symbols are fetched
-		return this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span)
+		return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
 			.toArray()
 			.mergeMap<any, SymbolInformation>(() => {
-				const fileName = util.uri2path(params.textDocument.uri);
+				const fileName = util.uri2path(uri);
 
 				const config = this.projectManager.getConfiguration(fileName);
 				config.ensureBasicFiles(span);
@@ -545,10 +577,25 @@ export class TypeScriptService {
 	 */
 	workspaceXreferences(params: WorkspaceReferenceParams, span = new Span()): Observable<ReferenceInformation[]> {
 		return Observable.from(this.projectManager.ensureAllFiles(span))
-			.mergeMap<void, pm.ProjectConfiguration>(() => this.projectManager.configurations() as any)
-			// If we were hinted that we should only search a specific package, trust it
-			.filter(config => !(params.hints && params.hints.dependeePackageName && params.hints.dependeePackageName !== config.getPackageName()))
-			.mergeMap(config => {
+			.mergeMap<void, pm.ProjectConfiguration>(() => {
+				// if we were hinted that we should only search a specific package, find it and only search the owning tsconfig.json
+				if (params.hints && params.hints.dependeePackageName) {
+					return Observable.from(this.packageManager.ensureScanned(span))
+						.mergeMap<void, string>(() => this.packageManager.packageJsonUris() as any)
+						.filter(uri => (JSON.parse(this.inMemoryFileSystem.getContent(uri)) as PackageJson).name === params.hints!.dependeePackageName)
+						.take(1)
+						.mergeMap<string, pm.ProjectConfiguration>(uri => {
+							const config = this.projectManager.getParentConfiguration(uri);
+							if (!config) {
+								return this.projectManager.configurations() as any;
+							}
+							return [config];
+						});
+				}
+				// else search all tsconfig.jsons
+				return this.projectManager.configurations() as any;
+			})
+			.mergeMap((config: pm.ProjectConfiguration) => {
 				config.ensureAllFiles(span);
 				return Observable.from(config.getService().getProgram().getSourceFiles())
 					// Ignore dependency files
@@ -695,13 +742,14 @@ export class TypeScriptService {
 	 * property filled in.
 	 */
 	textDocumentCompletion(params: TextDocumentPositionParams, span = new Span()): Observable<CompletionList> {
+		const uri = params.textDocument.uri;
 
 		// Ensure files needed to suggest completions are fetched
-		return this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span)
+		return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
 			.toArray()
 			.map((): CompletionList => {
 
-				const fileName: string = util.uri2path(params.textDocument.uri);
+				const fileName: string = util.uri2path(uri);
 
 				const configuration = this.projectManager.getConfiguration(fileName);
 				configuration.ensureBasicFiles(span);
@@ -745,13 +793,14 @@ export class TypeScriptService {
 	 * information at a given cursor position.
 	 */
 	textDocumentSignatureHelp(params: TextDocumentPositionParams, span = new Span()): Observable<SignatureHelp> {
+		const uri = params.textDocument.uri;
 
 		// Ensure files needed to resolve signature are fetched
-		return this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span)
+		return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
 			.toArray()
 			.map((): SignatureHelp => {
 
-				const filePath = util.uri2path(params.textDocument.uri);
+				const filePath = util.uri2path(uri);
 				const configuration = this.projectManager.getConfiguration(filePath);
 				configuration.ensureBasicFiles(span);
 
@@ -829,7 +878,7 @@ export class TypeScriptService {
 	 * @param uri URI of the file to check
 	 */
 	private _publishDiagnostics(uri: string): void {
-		const config = this.projectManager.getConfigurationIfExists(util.uri2path(uri));
+		const config = this.projectManager.getParentConfiguration(uri);
 		if (!config) {
 			return;
 		}
@@ -902,70 +951,92 @@ export class TypeScriptService {
 	}
 
 	/**
-	 * Returns an Iterator for all symbols in a given config
-	 *
-	 * Note: This method is not traced because it returns an Iterator that may produce values lazily
+	 * Returns an Iterator for all symbols in a given config that match a given SymbolDescriptor
 	 *
 	 * @param config The ProjectConfiguration to search
 	 * @param query A text or SymbolDescriptor query
 	 * @param limit An optional limit that is passed to TypeScript
-	 * @return Iterator that emits SymbolInformations
+	 * @return Observable of SymbolInformations
 	 */
-	private _collectWorkspaceSymbols(config: pm.ProjectConfiguration, query?: string | Partial<SymbolDescriptor>, limit = Infinity, span = new Span()): IterableIterator<SymbolInformation> {
-		config.ensureAllFiles(span);
-		const program = config.getProgram();
-		if (!program) {
-			return iterate([]);
-		}
+	private _collectWorkspaceSymbols(config: pm.ProjectConfiguration, query?: string | Partial<SymbolDescriptor>, limit = Infinity, childOf = new Span()): Observable<SymbolInformation> {
+		const span = childOf.tracer().startSpan('Collect workspace symbols', { childOf });
+		span.addTags({ config: config.configFilePath, query, limit });
 
-		if (query) {
-			let items: Iterable<ts.NavigateToItem>;
-			if (typeof query === 'string') {
-				// Query by text query
-				items = config.getService().getNavigateToItems(query, limit, undefined, false);
-			} else {
-				// Query by name
-				const packageName = config.getPackageName();
-				const packageDescriptor = packageName && { name: packageName } || undefined;
-				items = iterate(config.getService().getNavigateToItems(query.name || '', limit, undefined, false))
-					// Filter to match SymbolDescriptor
-					.filter(item => util.isSymbolDescriptorMatch(query, {
-						kind: item.kind,
-						name: item.name,
-						containerKind: item.containerKind,
-						containerName: item.containerName,
-						package: packageDescriptor
-					}));
-			}
-			return iterate(items)
-				// Map NavigateToItems to SymbolInformations
-				.map(item => {
-					const sourceFile = program.getSourceFile(item.fileName);
-					if (!sourceFile) {
-						throw new Error(`Source file ${item.fileName} does not exist`);
+		return (() => {
+			try {
+				config.ensureAllFiles(span);
+
+				const program = config.getProgram();
+				if (!program) {
+					return Observable.empty();
+				}
+
+				if (query) {
+					let items: Observable<ts.NavigateToItem>;
+					if (typeof query === 'string') {
+						// Query by text query
+						items = Observable.from(config.getService().getNavigateToItems(query, limit, undefined, false));
+					} else {
+						const queryWithoutPackage = omit(query, 'package') as SymbolDescriptor;
+						// Query by name
+						items = Observable.from(config.getService().getNavigateToItems(query.name || '', limit, undefined, false))
+							// First filter to match SymbolDescriptor, ignoring PackageDescriptor
+							.filter(item => util.isSymbolDescriptorMatch(queryWithoutPackage, {
+								kind: item.kind,
+								name: item.name,
+								containerKind: item.containerKind,
+								containerName: item.containerName
+							}))
+							// if SymbolDescriptor matched, get package.json and match PackageDescriptor
+							.mergeMap(item => {
+								if (!query.package || !query.package.name) {
+									return [item];
+								}
+								const uri = util.path2uri('', item.fileName);
+								return Observable.from(this.packageManager.getClosestPackageJson(uri, span))
+									.mergeMap(packageJson => packageJson && packageJson.name === query.package!.name! ? [item] : []);
+							});
 					}
-					const symbolInformation: SymbolInformation = {
-						name: item.name,
-						kind: util.convertStringtoSymbolKind(item.kind),
-						location: {
-							uri: this._defUri(item.fileName),
-							range: {
-								start: ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start),
-								end: ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start + item.textSpan.length)
+					return Observable.from(items)
+						// Map NavigateToItems to SymbolInformations
+						.map(item => {
+							const sourceFile = program.getSourceFile(item.fileName);
+							if (!sourceFile) {
+								throw new Error(`Source file ${item.fileName} does not exist`);
 							}
-						}
-					};
-					if (item.containerName) {
-						symbolInformation.containerName = item.containerName;
-					}
-					return symbolInformation;
-				})
-				.filter(symbolInformation => util.isLocalUri(symbolInformation.location.uri));
-		} else {
-			// An empty query uses a different algorithm to iterate all files and aggregate the symbols per-file to get all symbols
-			// TODO make all implementations use this? It has the advantage of being streamable and cancellable
-			return iterate(this._getNavigationTreeItems(config)).take(limit);
-		}
+							const symbolInformation: SymbolInformation = {
+								name: item.name,
+								kind: util.convertStringtoSymbolKind(item.kind),
+								location: {
+									uri: this._defUri(item.fileName),
+									range: {
+										start: ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start),
+										end: ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start + item.textSpan.length)
+									}
+								}
+							};
+							if (item.containerName) {
+								symbolInformation.containerName = item.containerName;
+							}
+							return symbolInformation;
+						})
+						.filter(symbolInformation => util.isLocalUri(symbolInformation.location.uri));
+				} else {
+					// An empty query uses a different algorithm to iterate all files and aggregate the symbols per-file to get all symbols
+					// TODO make all implementations use this? It has the advantage of being streamable and cancellable
+					return Observable.from<SymbolInformation>(this._getNavigationTreeItems(config) as any).take(limit);
+				}
+			} catch (err) {
+				return Observable.throw(err);
+			}
+		})()
+			.do(noop, err => {
+				span.setTag('error', true);
+				span.log({ 'event': 'error', 'error.object': err, 'stack': err.stack, 'message': err.message });
+			})
+			.finally(() => {
+				span.finish();
+			});
 	}
 
 	/**
