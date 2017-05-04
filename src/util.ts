@@ -108,7 +108,7 @@ export function path2uri(root: string, file: string): string {
 		p = file;
 	}
 	p = toUnixPath(p).split('/').map((val, i) => i <= 1 && /^[a-z]:$/i.test(val) ? val : encodeURIComponent(val)).join('/');
-	return ret + p;
+	return normalizeUri(ret + p);
 }
 
 export function uri2path(uri: string): string {
