@@ -1,6 +1,7 @@
 import * as os from 'os';
 import * as path from 'path';
 import * as ts from 'typescript';
+import * as url from 'url';
 import { Position, Range, SymbolKind } from 'vscode-languageserver';
 import * as rt from './request-type';
 
@@ -78,6 +79,23 @@ export function convertStringtoSymbolKind(kind: string): SymbolKind {
 	}
 }
 
+/**
+ * Normalizes URI encoding by encoding _all_ special characters in the pathname
+ */
+export function normalizeUri(uri: string): string {
+	const parts = url.parse(uri);
+	if (!parts.pathname) {
+		return uri;
+	}
+	const pathParts = parts.pathname.split('/').map(segment => encodeURIComponent(decodeURIComponent(segment)));
+	// Decode Windows drive letter colon
+	if (/^[a-z]%3A$/i.test(pathParts[1])) {
+		pathParts[1] = decodeURIComponent(pathParts[1]);
+	}
+	parts.pathname = pathParts.join('/');
+	return url.format(parts);
+}
+
 export function path2uri(root: string, file: string): string {
 	let ret = 'file://';
 	if (!strict && process.platform === 'win32') {
@@ -89,8 +107,11 @@ export function path2uri(root: string, file: string): string {
 	} else {
 		p = file;
 	}
-	p = toUnixPath(p).split('/').map((val, i) => i <= 1 && /^[a-z]:$/i.test(val) ? val : encodeURIComponent(val)).join('/');
-	return ret + p;
+	if (/^[a-z]:[\\\/]/i.test(p)) {
+		p = '/' + p;
+	}
+	p = p.split(/[\\\/]/g).map((val, i) => i <= 1 && /^[a-z]:$/i.test(val) ? val : encodeURIComponent(val)).join('/');
+	return normalizeUri(ret + p);
 }
 
 export function uri2path(uri: string): string {
@@ -104,6 +125,14 @@ export function uri2path(uri: string): string {
 		uri = uri.split('/').map(decodeURIComponent).join('/');
 	}
 	return uri;
+}
+
+export function uriToLocalPath(uri: string): string {
+	uri = uri.substring('file://'.length);
+	if (/^\/[a-z]:\//i.test(uri)) {
+		uri = uri.substring(1);
+	}
+	return uri.split('/').map(decodeURIComponent).join(path.sep);
 }
 
 export function isLocalUri(uri: string): boolean {
