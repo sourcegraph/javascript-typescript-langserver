@@ -159,7 +159,7 @@ export class TypeScriptService {
 			this.isDefinitelyTyped = Observable.from(this.updater.ensure(packageJsonUri, span))
 				.map(() => {
 					// Check name
-					const packageJson = JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri));
+					const packageJson = JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri)) as PackageJson;
 					return packageJson.name === 'definitely-typed';
 				})
 				.catch(err => [false])
