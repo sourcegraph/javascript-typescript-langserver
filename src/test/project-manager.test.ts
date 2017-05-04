@@ -64,4 +64,41 @@ describe('ProjectManager', () => {
 			assert.equal('/src/jsconfig.json', jsConfig.configFilePath);
 		});
 	});
+	describe('getParentConfiguration()', () => {
+		beforeEach(async () => {
+			memfs = new InMemoryFileSystem('/');
+			const localfs = new MapFileSystem(new Map([
+				['file:///tsconfig.json', '{}'],
+				['file:///src/jsconfig.json', '{}']
+			]));
+			const updater = new FileSystemUpdater(localfs, memfs);
+			projectManager = new ProjectManager('/', memfs, updater, true);
+			await projectManager.ensureAllFiles();
+		});
+		it('should resolve best configuration based on file name', () => {
+			const config = projectManager.getParentConfiguration('/src/foo.ts');
+			assert.isDefined(config);
+			assert.equal('/tsconfig.json', config!.configFilePath);
+		});
+	});
+	describe('getChildConfigurations()', () => {
+		beforeEach(async () => {
+			memfs = new InMemoryFileSystem('/');
+			const localfs = new MapFileSystem(new Map([
+				['file:///tsconfig.json', '{}'],
+				['file:///foo/bar/tsconfig.json', '{}'],
+				['file:///foo/baz/tsconfig.json', '{}']
+			]));
+			const updater = new FileSystemUpdater(localfs, memfs);
+			projectManager = new ProjectManager('/', memfs, updater, true);
+			await projectManager.ensureAllFiles();
+		});
+		it('should resolve best configuration based on file name', () => {
+			const configs = Array.from(projectManager.getChildConfigurations('/foo')).map(config => config.configFilePath);
+			assert.deepEqual(configs, [
+				'/foo/bar/tsconfig.json',
+				'/foo/baz/tsconfig.json'
+			]);
+		});
+	});
 });
