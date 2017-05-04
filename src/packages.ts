@@ -28,23 +28,6 @@ export interface PackageJson {
 	};
 }
 
-/**
- * Matches:
- *
- *     /foo/node_modules/(bar)/index.d.ts
- *     /foo/node_modules/bar/node_modules/(baz)/index.d.ts
- *     /foo/node_modules/(@types/bar)/index.ts
- */
-const PACKAGE_NAME_REGEXP = /.*\/node_modules\/((?:@[^\/]+\/)?[^\/]+)\/.*$/;
-
-/**
- * Returns the name of a package that a file is contained in
- */
-export function getPackageName(uri: string): string | undefined {
-	const match = decodeURIComponent(url.parse(uri).pathname || '').match(PACKAGE_NAME_REGEXP);
-	return match && match[1] || undefined;
-}
-
 export class PackageManager {
 
 	/**
@@ -127,9 +110,9 @@ export class PackageManager {
 
 	/**
 	 * Gets the content of the closest package.json known to to the DependencyManager in the ancestors of a URI
-	 * Call `ensureScanned()` before.
 	 */
 	async getClosestPackageJson(uri: string, span = new Span()): Promise<PackageJson | undefined> {
+		await this.ensureScanned(span);
 		const packageJsonUri = this.getClosestPackageJsonUri(uri);
 		if (!packageJsonUri) {
 			return undefined;
