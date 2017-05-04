@@ -1,6 +1,7 @@
 import * as os from 'os';
 import * as path from 'path';
 import * as ts from 'typescript';
+import * as url from 'url';
 import { Position, Range, SymbolKind } from 'vscode-languageserver';
 import * as rt from './request-type';
 
@@ -76,6 +77,23 @@ export function convertStringtoSymbolKind(kind: string): SymbolKind {
 		// case 'external module name'
 		default: return SymbolKind.Variable;
 	}
+}
+
+/**
+ * Normalizes URI encoding by encoding _all_ special characters in the pathname
+ */
+export function normalizeUri(uri: string): string {
+	const parts = url.parse(uri);
+	if (!parts.pathname) {
+		return uri;
+	}
+	const pathParts = parts.pathname.split('/').map(segment => encodeURIComponent(decodeURIComponent(segment)));
+	// Decode Windows drive letter colon
+	if (/^[a-z]%3A$/i.test(pathParts[1])) {
+		pathParts[1] = decodeURIComponent(pathParts[1]);
+	}
+	parts.pathname = pathParts.join('/');
+	return url.format(parts);
 }
 
 export function path2uri(root: string, file: string): string {

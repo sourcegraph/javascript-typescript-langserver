@@ -6,7 +6,7 @@ import iterate from 'iterare';
 import { Span } from 'opentracing';
 import Semaphore from 'semaphore-async-await';
 import { InMemoryFileSystem } from './memfs';
-import { normalizeDir, path2uri, toUnixPath, uri2path } from './util';
+import { normalizeDir, normalizeUri, path2uri, toUnixPath, uri2path } from './util';
 
 export interface FileSystem {
 	/**
@@ -36,7 +36,7 @@ export class RemoteFileSystem implements FileSystem {
 	 */
 	async getWorkspaceFiles(base?: string, childOf = new Span()): Promise<Iterable<string>> {
 		return iterate(await this.client.workspaceXfiles({ base }, childOf))
-			.map(textDocument => textDocument.uri);
+			.map(textDocument => normalizeUri(textDocument.uri));
 	}
 
 	/**
@@ -69,7 +69,7 @@ export class LocalFileSystem implements FileSystem {
 		const files = await new Promise<string[]>((resolve, reject) => {
 			glob('*', { cwd: root, nodir: true, matchBase: true }, (err, matches) => err ? reject(err) : resolve(matches));
 		});
-		return iterate(files).map(file => baseUri + file.split('/').map(encodeURIComponent).join('/'));
+		return iterate(files).map(file => normalizeUri(baseUri + file));
 	}
 
 	async getTextDocumentContent(uri: string): Promise<string> {

@@ -228,7 +228,7 @@ export class TypeScriptService {
 	 * location of a symbol at a given text document position.
 	 */
 	textDocumentDefinition(params: TextDocumentPositionParams, span = new Span()): Observable<Location[]> {
-		const uri = params.textDocument.uri;
+		const uri = util.normalizeUri(params.textDocument.uri);
 
 		// Fetch files needed to resolve definition
 		return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
@@ -277,7 +277,7 @@ export class TypeScriptService {
 	 * know some information about it.
 	 */
 	textDocumentXdefinition(params: TextDocumentPositionParams, span = new Span()): Observable<SymbolLocationInformation[]> {
-		const uri = params.textDocument.uri;
+		const uri = util.normalizeUri(params.textDocument.uri);
 
 		// Ensure files needed to resolve SymbolLocationInformation are fetched
 		return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
@@ -326,7 +326,7 @@ export class TypeScriptService {
 	 * given text document position.
 	 */
 	textDocumentHover(params: TextDocumentPositionParams, span = new Span()): Observable<Hover> {
-		const uri = params.textDocument.uri;
+		const uri = util.normalizeUri(params.textDocument.uri);
 
 		// Ensure files needed to resolve hover are fetched
 		return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
@@ -373,7 +373,7 @@ export class TypeScriptService {
 	 * Returns all references to the symbol at the position in the own workspace, including references inside node_modules.
 	 */
 	textDocumentReferences(params: ReferenceParams, span = new Span()): Observable<Location[]> {
-		const uri = params.textDocument.uri;
+		const uri = util.normalizeUri(params.textDocument.uri);
 		// Ensure all files were fetched to collect all references
 		return Observable.from(this.projectManager.ensureOwnFiles(span))
 			.mergeMap(() => {
@@ -551,7 +551,7 @@ export class TypeScriptService {
 	 * in a given text document.
 	 */
 	textDocumentDocumentSymbol(params: DocumentSymbolParams, span = new Span()): Observable<SymbolInformation[]> {
-		const uri = params.textDocument.uri;
+		const uri = util.normalizeUri(params.textDocument.uri);
 
 		// Ensure files needed to resolve symbols are fetched
 		return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
@@ -742,7 +742,7 @@ export class TypeScriptService {
 	 * property filled in.
 	 */
 	textDocumentCompletion(params: TextDocumentPositionParams, span = new Span()): Observable<CompletionList> {
-		const uri = params.textDocument.uri;
+		const uri = util.normalizeUri(params.textDocument.uri);
 
 		// Ensure files needed to suggest completions are fetched
 		return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
@@ -793,7 +793,7 @@ export class TypeScriptService {
 	 * information at a given cursor position.
 	 */
 	textDocumentSignatureHelp(params: TextDocumentPositionParams, span = new Span()): Observable<SignatureHelp> {
-		const uri = params.textDocument.uri;
+		const uri = util.normalizeUri(params.textDocument.uri);
 
 		// Ensure files needed to resolve signature are fetched
 		return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
@@ -844,7 +844,7 @@ export class TypeScriptService {
 	 * to read the document's truth using the document's uri.
 	 */
 	async textDocumentDidOpen(params: DidOpenTextDocumentParams): Promise<void> {
-		const uri = params.textDocument.uri;
+		const uri = util.normalizeUri(params.textDocument.uri);
 		// Ensure files needed for most operations are fetched
 		await this.projectManager.ensureReferencedFiles(uri).toPromise();
 		this.projectManager.didOpen(uri, params.textDocument.text);
@@ -857,7 +857,7 @@ export class TypeScriptService {
 	 * and language ids.
 	 */
 	async textDocumentDidChange(params: DidChangeTextDocumentParams): Promise<void> {
-		const uri = params.textDocument.uri;
+		const uri = util.normalizeUri(params.textDocument.uri);
 		let text: string | undefined;
 		for (const change of params.contentChanges) {
 			if (change.range || change.rangeLength) {
@@ -900,7 +900,7 @@ export class TypeScriptService {
 	 * saved in the client.
 	 */
 	async textDocumentDidSave(params: DidSaveTextDocumentParams): Promise<void> {
-		const uri = params.textDocument.uri;
+		const uri = util.normalizeUri(params.textDocument.uri);
 
 		// Ensure files needed to suggest completions are fetched
 		await this.projectManager.ensureReferencedFiles(uri).toPromise();
@@ -913,7 +913,7 @@ export class TypeScriptService {
 	 * (e.g. if the document's uri is a file uri the truth now exists on disk).
 	 */
 	async textDocumentDidClose(params: DidCloseTextDocumentParams): Promise<void> {
-		const uri = params.textDocument.uri;
+		const uri = util.normalizeUri(params.textDocument.uri);
 
 		// Ensure files needed to suggest completions are fetched
 		await this.projectManager.ensureReferencedFiles(uri).toPromise();
