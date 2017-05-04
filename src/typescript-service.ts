@@ -25,7 +25,7 @@ import {
 	TextDocumentSyncKind
 } from 'vscode-languageserver';
 import { walkMostAST } from './ast';
-import { DiagnosticsPublisher } from './diagnostics';
+import { convertTsDiagnostic } from './diagnostics';
 import { FileSystem, FileSystemUpdater, LocalFileSystem, RemoteFileSystem } from './fs';
 import { LanguageClient } from './lang-handler';
 import { Logger, LSPLogger } from './logging';
@@ -136,8 +136,7 @@ export class TypeScriptService {
 			this.rootUri = params.rootUri || util.path2uri('', params.rootPath!);
 			this._initializeFileSystems(!this.options.strict && !(params.capabilities.xcontentProvider && params.capabilities.xfilesProvider));
 			this.updater = new FileSystemUpdater(this.fileSystem, this.inMemoryFileSystem);
-			const diagnosticsPublisher = new DiagnosticsPublisher(this.client);
-			this.projectManager = new pm.ProjectManager(this.root, this.inMemoryFileSystem, this.updater, diagnosticsPublisher, !!this.options.strict, this.traceModuleResolution, this.logger);
+			this.projectManager = new pm.ProjectManager(this.root, this.inMemoryFileSystem, this.updater, !!this.options.strict, this.traceModuleResolution, this.logger);
 
 			// Detect DefinitelyTyped
 			// Fetch root package.json (if exists)
@@ -796,11 +795,11 @@ export class TypeScriptService {
 	 * to read the document's truth using the document's uri.
 	 */
 	async textDocumentDidOpen(params: DidOpenTextDocumentParams): Promise<void> {
-
+		const uri = params.textDocument.uri;
 		// Ensure files needed for most operations are fetched
-		await this.projectManager.ensureReferencedFiles(params.textDocument.uri).toPromise();
-
-		this.projectManager.didOpen(params.textDocument.uri, params.textDocument.text);
+		await this.projectManager.ensureReferencedFiles(uri).toPromise();
+		this.projectManager.didOpen(uri, params.textDocument.text);
+		this._publishDiagnostics(uri);
 	}
 
 	/**
@@ -809,17 +808,42 @@ export class TypeScriptService {
 	 * and language ids.
 	 */
 	async textDocumentDidChange(params: DidChangeTextDocumentParams): Promise<void> {
-		let text = null;
-		params.contentChanges.forEach(change => {
+		const uri = params.textDocument.uri;
+		let text: string | undefined;
+		for (const change of params.contentChanges) {
 			if (change.range || change.rangeLength) {
-				throw new Error('incremental updates in textDocument/didChange not supported for file ' + params.textDocument.uri);
+				throw new Error('incremental updates in textDocument/didChange not supported for file ' + uri);
 			}
 			text = change.text;
-		});
+		}
 		if (!text) {
 			return;
 		}
-		this.projectManager.didChange(params.textDocument.uri, text);
+		this.projectManager.didChange(uri, text);
+		this._publishDiagnostics(uri);
+	}
+
+	/**
+	 * Generates and publishes diagnostics for a given file
+	 *
+	 * @param uri URI of the file to check
+	 */
+	private _publishDiagnostics(uri: string): void {
+		const config = this.projectManager.getConfigurationIfExists(util.uri2path(uri));
+		if (!config) {
+			return;
+		}
+		const program = config.getProgram();
+		if (!program) {
+			return;
+		}
+		const sourceFile = program.getSourceFile(util.uri2path(uri));
+		if (!sourceFile) {
+			return;
+		}
+		const tsDiagnostics = ts.getPreEmitDiagnostics(program, sourceFile);
+		const diagnostics = tsDiagnostics.map(convertTsDiagnostic);
+		this.client.textDocumentPublishDiagnostics({ uri, diagnostics });
 	}
 
 	/**
@@ -827,10 +851,11 @@ export class TypeScriptService {
 	 * saved in the client.
 	 */
 	async textDocumentDidSave(params: DidSaveTextDocumentParams): Promise<void> {
+		const uri = params.textDocument.uri;
 
 		// Ensure files needed to suggest completions are fetched
-		await this.projectManager.ensureReferencedFiles(params.textDocument.uri).toPromise();
-		this.projectManager.didSave(params.textDocument.uri);
+		await this.projectManager.ensureReferencedFiles(uri).toPromise();
+		this.projectManager.didSave(uri);
 	}
 
 	/**
@@ -839,11 +864,15 @@ export class TypeScriptService {
 	 * (e.g. if the document's uri is a file uri the truth now exists on disk).
 	 */
 	async textDocumentDidClose(params: DidCloseTextDocumentParams): Promise<void> {
+		const uri = params.textDocument.uri;
 
 		// Ensure files needed to suggest completions are fetched
-		await this.projectManager.ensureReferencedFiles(params.textDocument.uri).toPromise();
+		await this.projectManager.ensureReferencedFiles(uri).toPromise();
 
-		this.projectManager.didClose(params.textDocument.uri);
+		this.projectManager.didClose(uri);
+
+		// Clear diagnostics
+		this.client.textDocumentPublishDiagnostics({ uri, diagnostics: [] });
 	}
 
 	/**
