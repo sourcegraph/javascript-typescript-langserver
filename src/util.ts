@@ -107,7 +107,10 @@ export function path2uri(root: string, file: string): string {
 	} else {
 		p = file;
 	}
-	p = toUnixPath(p).split('/').map((val, i) => i <= 1 && /^[a-z]:$/i.test(val) ? val : encodeURIComponent(val)).join('/');
+	if (/^[a-z]:[\\\/]/i.test(p)) {
+		p = '/' + p;
+	}
+	p = p.split(/[\\\/]/g).map((val, i) => i <= 1 && /^[a-z]:$/i.test(val) ? val : encodeURIComponent(val)).join('/');
 	return normalizeUri(ret + p);
 }
 
@@ -122,6 +125,14 @@ export function uri2path(uri: string): string {
 		uri = uri.split('/').map(decodeURIComponent).join('/');
 	}
 	return uri;
+}
+
+export function uriToLocalPath(uri: string): string {
+	uri = uri.substring('file://'.length);
+	if (/^\/[a-z]:\//i.test(uri)) {
+		uri = uri.substring(1);
+	}
+	return uri.split('/').map(decodeURIComponent).join(path.sep);
 }
 
 export function isLocalUri(uri: string): boolean {

@@ -52,9 +52,6 @@ describe('fs.ts', () => {
 			});
 		});
 		describe('getTextDocumentContent()', () => {
-			it('should read files denoted by relative URI', async () => {
-				assert.equal(await fileSystem.getTextDocumentContent('tweedledee'), 'hi');
-			});
 			it('should read files denoted by absolute URI', async () => {
 				assert.equal(await fileSystem.getTextDocumentContent(baseUri + 'tweedledee'), 'hi');
 			});

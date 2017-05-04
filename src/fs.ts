@@ -6,7 +6,7 @@ import iterate from 'iterare';
 import { Span } from 'opentracing';
 import Semaphore from 'semaphore-async-await';
 import { InMemoryFileSystem } from './memfs';
-import { normalizeDir, normalizeUri, path2uri, toUnixPath, uri2path } from './util';
+import { normalizeDir, normalizeUri, path2uri, uriToLocalPath } from './util';
 
 export interface FileSystem {
 	/**
@@ -59,7 +59,7 @@ export class LocalFileSystem implements FileSystem {
 	 * Converts the URI to an absolute path
 	 */
 	protected resolveUriToPath(uri: string): string {
-		return toUnixPath(path.resolve(this.rootPath, uri2path(uri)));
+		return path.resolve(this.rootPath, uriToLocalPath(uri));
 	}
 
 	async getWorkspaceFiles(base?: string): Promise<Iterable<string>> {
