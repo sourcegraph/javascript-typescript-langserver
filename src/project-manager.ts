@@ -5,7 +5,6 @@ import * as os from 'os';
 import * as path_ from 'path';
 import * as ts from 'typescript';
 import { Disposable } from 'vscode-languageserver';
-import { DiagnosticsHandler } from './diagnostics';
 import { FileSystemUpdater } from './fs';
 import { Logger, NoopLogger } from './logging';
 import { InMemoryFileSystem } from './memfs';
@@ -54,11 +53,6 @@ export class ProjectManager implements Disposable {
 	private updater: FileSystemUpdater;
 
 	/**
-	 * For sending compiler / file diagnostics back to the LSP client
-	 */
-	private diagnosticsHandler: DiagnosticsHandler;
-
-	/**
 	 * URI -> version map. Every time file content is about to change or changed (didChange/didOpen/...), we are incrementing it's version
 	 * signalling that file is changed and file's user must invalidate cached and requery file content
 	 */
@@ -96,11 +90,10 @@ export class ProjectManager implements Disposable {
 	 * @param strict indicates if we are working in strict mode (VFS) or with a local file system
 	 * @param traceModuleResolution allows to enable module resolution tracing (done by TS compiler)
 	 */
-	constructor(rootPath: string, inMemoryFileSystem: InMemoryFileSystem, updater: FileSystemUpdater, diagnosticsHandler: DiagnosticsHandler, strict: boolean, traceModuleResolution?: boolean, protected logger: Logger = new NoopLogger()) {
+	constructor(rootPath: string, inMemoryFileSystem: InMemoryFileSystem, updater: FileSystemUpdater, strict: boolean, traceModuleResolution?: boolean, protected logger: Logger = new NoopLogger()) {
 		this.rootPath = util.toUnixPath(rootPath);
 		this.updater = updater;
 		this.localFs = inMemoryFileSystem;
-		this.diagnosticsHandler = diagnosticsHandler;
 		this.versions = new Map<string, number>();
 		this.strict = strict;
 		this.traceModuleResolution = traceModuleResolution || false;
@@ -401,7 +394,7 @@ export class ProjectManager implements Disposable {
 	 * @param filePath source file path, absolute
 	 * @return closest configuration for a given file path or undefined if there is no such configuration
 	 */
-	private getConfigurationIfExists(filePath: string, configType = this.getConfigurationType(filePath)): ProjectConfiguration | undefined {
+	getConfigurationIfExists(filePath: string, configType = this.getConfigurationType(filePath)): ProjectConfiguration | undefined {
 		let dir = util.toUnixPath(filePath);
 		let config;
 		const configs = this.configs[configType];
@@ -503,7 +496,7 @@ export class ProjectManager implements Disposable {
 			}
 			const configType = this.getConfigurationType(filePath);
 			const configs = this.configs[configType];
-			configs.set(dir, new ProjectConfiguration(this.localFs, this.diagnosticsHandler, dir, this.versions, filePath, undefined, this.traceModuleResolution, this.logger));
+			configs.set(dir, new ProjectConfiguration(this.localFs, dir, this.versions, filePath, undefined, this.traceModuleResolution, this.logger));
 		}
 
 		const rootPath = this.rootPath.replace(/\/+$/, '');
@@ -523,7 +516,7 @@ export class ProjectManager implements Disposable {
 				if (configs.size > 0) {
 					tsConfig.exclude = ['**/*'];
 				}
-				configs.set(rootPath, new ProjectConfiguration(this.localFs, this.diagnosticsHandler, rootPath, this.versions, '', tsConfig, this.traceModuleResolution, this.logger));
+				configs.set(rootPath, new ProjectConfiguration(this.localFs, rootPath, this.versions, '', tsConfig, this.traceModuleResolution, this.logger));
 			}
 
 		}
@@ -732,11 +725,6 @@ export class ProjectConfiguration {
 	private fs: InMemoryFileSystem;
 
 	/**
-	 * Relays diagnostics back to the LanguageClient
-	 */
-	private diagnosticsHandler: DiagnosticsHandler;
-
-	/**
 	 * Relative path to configuration file (tsconfig.json/jsconfig.json)
 	 */
 	configFilePath: string;
@@ -767,9 +755,8 @@ export class ProjectConfiguration {
 	 * @param configFilePath configuration file path, absolute
 	 * @param configContent optional configuration content to use instead of reading configuration file)
 	 */
-	constructor(fs: InMemoryFileSystem, diagnosticsHandler: DiagnosticsHandler, rootFilePath: string, versions: Map<string, number>, configFilePath: string, configContent?: any, traceModuleResolution?: boolean, private logger: Logger = new NoopLogger()) {
+	constructor(fs: InMemoryFileSystem, rootFilePath: string, versions: Map<string, number>, configFilePath: string, configContent?: any, traceModuleResolution?: boolean, private logger: Logger = new NoopLogger()) {
 		this.fs = fs;
-		this.diagnosticsHandler = diagnosticsHandler;
 		this.configFilePath = configFilePath;
 		this.configContent = configContent;
 		this.versions = versions;
@@ -856,34 +843,10 @@ export class ProjectConfiguration {
 		const span = childOf.tracer().startSpan('Sync program', { childOf });
 		try {
 			this.program = this.getService().getProgram();
-			this.updateDiagnostics(this.program, span);
 		} catch (err) {
 			span.setTag('error', true);
 			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
 			this.logger.error(`Cannot create program object for ${this.rootFilePath}`, err);
-		} finally {
-			span.finish();
-		}
-	}
-
-	/**
-	 * Queries an updated program for diagnostics for updating the client.
-	 */
-	private updateDiagnostics(program: ts.Program, childOf = new Span()): void {
-		const span = childOf.tracer().startSpan('Update diagnostics', { childOf });
-		try {
-			let diagnostics: ts.Diagnostic[] = [];
-			for (const file of program.getSourceFiles()) {
-				if (!/[\/\\]node_modules[\/\\]/.test(file.fileName)) {
-					diagnostics = diagnostics.concat(ts.getPreEmitDiagnostics(program, file));
-				}
-			}
-			this.diagnosticsHandler.updateFileDiagnostics(diagnostics, span);
-			span.log({ event: 'result', result: diagnostics.length });
-		} catch (err) {
-			span.setTag('error', true);
-			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack});
-			this.logger.error(`Cannot get diagnostics for program at ${this.rootFilePath}`, err);
 		} finally {
 			span.finish();
 		}

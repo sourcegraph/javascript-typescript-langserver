@@ -1,10 +1,12 @@
 import * as chai from 'chai';
 import * as ts from 'typescript';
-import { CompletionItemKind, LogMessageParams, PublishDiagnosticsParams, TextDocumentIdentifier, TextDocumentItem } from 'vscode-languageserver';
+import { CompletionItemKind, TextDocumentIdentifier, TextDocumentItem } from 'vscode-languageserver';
 import { SymbolKind } from 'vscode-languageserver-types';
-import { CacheGetParams, CacheSetParams, TextDocumentContentParams, WorkspaceFilesParams } from '../request-type';
+import { LanguageClient, RemoteLanguageClient } from '../lang-handler';
+import { TextDocumentContentParams, WorkspaceFilesParams } from '../request-type';
 import { TypeScriptService, TypeScriptServiceFactory } from '../typescript-service';
 import chaiAsPromised = require('chai-as-promised');
+import * as sinon from 'sinon';
 chai.use(chaiAsPromised);
 const assert = chai.assert;
 
@@ -18,6 +20,9 @@ export interface TestContext {
 
 	/** TypeScript service under test */
 	service: TypeScriptService;
+
+	/** Stubbed LanguageClient */
+	client: { [K in keyof LanguageClient]: LanguageClient[K] & sinon.SinonStub };
 }
 
 /**
@@ -27,34 +32,26 @@ export interface TestContext {
  * @param files A Map from URI to file content of files that should be available in the workspace
  */
 export const initializeTypeScriptService = (createService: TypeScriptServiceFactory, rootUri: string, files: Map<string, string>) => async function (this: TestContext): Promise<void> {
-	this.service = createService({
-		textDocumentXcontent(params: TextDocumentContentParams): Promise<TextDocumentItem> {
-			if (!files.has(params.textDocument.uri)) {
-				return Promise.reject(new Error(`Text document ${params.textDocument.uri} does not exist`));
-			}
-			return Promise.resolve({
-				uri: params.textDocument.uri,
-				text: files.get(params.textDocument.uri),
-				version: 1,
-				languageId: ''
-			} as TextDocumentItem);
-		},
-		workspaceXfiles(params: WorkspaceFilesParams): Promise<TextDocumentIdentifier[]> {
-			return Promise.resolve(Array.from(files.keys()).map(uri => ({ uri })));
-		},
-		windowLogMessage(params: LogMessageParams): void {
-			// noop
-		},
-		xcacheGet(params: CacheGetParams): any {
-			return Promise.resolve(null);
-		},
-		xcacheSet(params: CacheSetParams): any {
-			// noop
-		},
-		textDocumentPublishDiagnostics(diagnostics: PublishDiagnosticsParams): void {
-			// noop
+
+	// Stub client
+	this.client = sinon.createStubInstance(RemoteLanguageClient);
+	this.client.textDocumentXcontent.callsFake(async (params: TextDocumentContentParams): Promise<TextDocumentItem> => {
+		if (!files.has(params.textDocument.uri)) {
+			throw new Error(`Text document ${params.textDocument.uri} does not exist`);
 		}
+		return {
+			uri: params.textDocument.uri,
+			text: files.get(params.textDocument.uri)!,
+			version: 1,
+			languageId: ''
+		};
 	});
+	this.client.workspaceXfiles.callsFake(async (params: WorkspaceFilesParams): Promise<TextDocumentIdentifier[]> => {
+		return Array.from(files.keys()).map(uri => ({ uri }));
+	});
+	this.client.xcacheGet.returns(null);
+	this.service = createService(this.client);
+
 	await this.service.initialize({
 		processId: process.pid,
 		rootUri,
@@ -1415,6 +1412,121 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]
 			});
 		} as any);
+	} as any);
+
+	describe('Diagnostics', function (this: TestContext) {
+
+		beforeEach(initializeTypeScriptService(createService, rootUri, new Map([
+			[rootUri + 'src/errors.ts', 'const text: string = 33;']
+		])) as any);
+
+		afterEach(shutdownService as any);
+
+		it('should publish diagnostics on didOpen', async function (this: TestContext) {
+
+			await this.service.textDocumentDidOpen({
+				textDocument: {
+					uri: rootUri + 'src/errors.ts',
+					languageId: 'typescript',
+					text: 'const text: string = 33;',
+					version: 1
+				}
+			});
+
+			sinon.assert.calledOnce(this.client.textDocumentPublishDiagnostics);
+			sinon.assert.calledWithExactly(this.client.textDocumentPublishDiagnostics, {
+				diagnostics: [{
+					message: "Type '33' is not assignable to type 'string'.",
+					range: { end: { character: 10, line: 0 }, start: { character: 6, line: 0 } },
+					severity: 1,
+					source: 'ts',
+					code: 2322
+				}],
+				uri: rootUri + 'src/errors.ts'
+			});
+		} as any);
+
+		it('should publish diagnostics on didChange', async function (this: TestContext) {
+
+			await this.service.textDocumentDidOpen({
+				textDocument: {
+					uri: rootUri + 'src/errors.ts',
+					languageId: 'typescript',
+					text: 'const text: string = 33;',
+					version: 1
+				}
+			});
+
+			this.client.textDocumentPublishDiagnostics.resetHistory();
+
+			await this.service.textDocumentDidChange({
+				textDocument: {
+					uri: rootUri + 'src/errors.ts',
+					version: 2
+				},
+				contentChanges: [
+					{ text: 'const text: boolean = 33;' }
+				]
+			});
+
+			sinon.assert.calledOnce(this.client.textDocumentPublishDiagnostics);
+			sinon.assert.calledWithExactly(this.client.textDocumentPublishDiagnostics, {
+				diagnostics: [{
+					message: "Type '33' is not assignable to type 'boolean'.",
+					range: { end: { character: 10, line: 0 }, start: { character: 6, line: 0 } },
+					severity: 1,
+					source: 'ts',
+					code: 2322
+				}],
+				uri: rootUri + 'src/errors.ts'
+			});
+		} as any);
+
+		it('should publish empty diagnostics on didChange if error was fixed', async function (this: TestContext) {
+
+			await this.service.textDocumentDidOpen({
+				textDocument: {
+					uri: rootUri + 'src/errors.ts',
+					languageId: 'typescript',
+					text: 'const text: string = 33;',
+					version: 1
+				}
+			});
+
+			this.client.textDocumentPublishDiagnostics.resetHistory();
+
+			await this.service.textDocumentDidChange({
+				textDocument: {
+					uri: rootUri + 'src/errors.ts',
+					version: 2
+				},
+				contentChanges: [
+					{ text: 'const text: number = 33;' }
+				]
+			});
+
+			sinon.assert.calledOnce(this.client.textDocumentPublishDiagnostics);
+			sinon.assert.calledWithExactly(this.client.textDocumentPublishDiagnostics, {
+				diagnostics: [],
+				uri: rootUri + 'src/errors.ts'
+			});
+		} as any);
+
+		it('should clear diagnostics on didClose', async function (this: TestContext) {
+
+			await this.service.textDocumentDidClose({
+				textDocument: {
+					uri: rootUri + 'src/errors.ts'
+				}
+			});
+
+			sinon.assert.calledOnce(this.client.textDocumentPublishDiagnostics);
+			sinon.assert.calledWithExactly(this.client.textDocumentPublishDiagnostics, {
+				diagnostics: [],
+				uri: rootUri + 'src/errors.ts'
+			});
+		} as any);
+
 	} as any);
 
 	describe('References and imports', function (this: TestContext) {
