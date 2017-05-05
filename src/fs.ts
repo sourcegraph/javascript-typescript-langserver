@@ -51,6 +51,11 @@ export class RemoteFileSystem implements FileSystem {
 export class LocalFileSystem implements FileSystem {
 
 	/**
+	 * Limits concurrent fetches to not fetch thousands of files in parallel
+	 */
+	private concurrencyLimit = new Semaphore(100);
+
+	/**
 	 * @param rootPath The root directory path that relative URIs should be resolved to
 	 */
 	constructor(private rootPath: string) {}
@@ -72,8 +77,10 @@ export class LocalFileSystem implements FileSystem {
 		return iterate(files).map(file => normalizeUri(baseUri + file));
 	}
 
-	async getTextDocumentContent(uri: string): Promise<string> {
-		return fs.readFile(this.resolveUriToPath(uri), 'utf8');
+	getTextDocumentContent(uri: string): Promise<string> {
+		return this.concurrencyLimit.execute(() =>
+			fs.readFile(this.resolveUriToPath(uri), 'utf8')
+		);
 	}
 }
 
@@ -94,11 +101,6 @@ export class FileSystemUpdater {
 	 */
 	private fetches = new Map<string, Promise<void>>();
 
-	/**
-	 * Limits concurrent fetches to not fetch thousands of files in parallel
-	 */
-	private concurrencyLimit = new Semaphore(100);
-
 	constructor(private remoteFs: FileSystem, private inMemoryFs: InMemoryFileSystem) {}
 
 	/**
@@ -109,16 +111,15 @@ export class FileSystemUpdater {
 	 */
 	async fetch(uri: string, childOf = new Span()): Promise<void> {
 		// Limit concurrent fetches
-		const promise = this.concurrencyLimit.execute(async () => {
+		const promise = (async () => {
 			try {
-				const content = await this.remoteFs.getTextDocumentContent(uri);
+				const content = await this.remoteFs.getTextDocumentContent(uri, childOf);
 				this.inMemoryFs.add(uri, content);
-				this.inMemoryFs.getContent(uri);
 			} catch (err) {
 				this.fetches.delete(uri);
 				throw err;
 			}
-		});
+		})();
 		this.fetches.set(uri, promise);
 		return promise;
 	}
