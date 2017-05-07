@@ -2,13 +2,23 @@ import { Observable } from '@reactivex/rxjs';
 import iterate from 'iterare';
 import { Span } from 'opentracing';
 import * as os from 'os';
-import * as path_ from 'path';
+import * as path from 'path';
 import * as ts from 'typescript';
 import { Disposable } from 'vscode-languageserver';
 import { FileSystemUpdater } from './fs';
 import { Logger, NoopLogger } from './logging';
 import { InMemoryFileSystem } from './memfs';
-import * as util from './util';
+import {
+	isConfigFile,
+	isDeclarationFile,
+	isDependencyFile,
+	isGlobalTSFile,
+	isJSTSFile,
+	isPackageJsonFile,
+	path2uri,
+	toUnixPath,
+	uri2path
+} from './util';
 
 export type ConfigType = 'js' | 'ts';
 
@@ -91,7 +101,7 @@ export class ProjectManager implements Disposable {
 	 * @param traceModuleResolution allows to enable module resolution tracing (done by TS compiler)
 	 */
 	constructor(rootPath: string, inMemoryFileSystem: InMemoryFileSystem, updater: FileSystemUpdater, strict: boolean, traceModuleResolution?: boolean, protected logger: Logger = new NoopLogger()) {
-		this.rootPath = util.toUnixPath(rootPath);
+		this.rootPath = toUnixPath(rootPath);
 		this.updater = updater;
 		this.localFs = inMemoryFileSystem;
 		this.versions = new Map<string, number>();
@@ -154,13 +164,13 @@ export class ProjectManager implements Disposable {
 				// Ensure content of all all global .d.ts, [tj]sconfig.json, package.json files
 				await Promise.all(
 					iterate(this.localFs.uris())
-						.filter(uri => util.isGlobalTSFile(uri) || util.isConfigFile(uri) || util.isPackageJsonFile(uri))
+						.filter(uri => isGlobalTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
 						.map(uri => this.updater.ensure(uri))
 				);
 				// Scan for [tj]sconfig.json files
 				this.createConfigurations();
 				// Reset all compilation state
-				// TODO utilize incremental compilation instead
+				// TODO ze incremental compilation instead
 				for (const config of this.configurations()) {
 					config.reset();
 				}
@@ -200,7 +210,7 @@ export class ProjectManager implements Disposable {
 					await this.updater.ensureStructure(span);
 					await Promise.all(
 						iterate(this.localFs.uris())
-							.filter(uri => !uri.includes('/node_modules/') && util.isJSTSFile(uri) || util.isConfigFile(uri) || util.isPackageJsonFile(uri))
+							.filter(uri => !uri.includes('/node_modules/') && isJSTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
 							.map(uri => this.updater.ensure(uri))
 					);
 					this.createConfigurations();
@@ -231,7 +241,7 @@ export class ProjectManager implements Disposable {
 				await this.updater.ensureStructure(span);
 				await Promise.all(
 					iterate(this.localFs.uris())
-						.filter(uri => util.isJSTSFile(uri) || util.isConfigFile(uri) || util.isPackageJsonFile(uri))
+						.filter(uri => isJSTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
 						.map(uri => this.updater.ensure(uri))
 				);
 				this.createConfigurations();
@@ -320,7 +330,7 @@ export class ProjectManager implements Disposable {
 			return observable;
 		}
 		// TypeScript works with file paths, not URIs
-		const filePath = util.uri2path(uri);
+		const filePath = uri2path(uri);
 		observable = Observable.from(this.updater.ensure(uri))
 			.mergeMap(() => {
 				const config = this.getConfiguration(filePath);
@@ -329,12 +339,12 @@ export class ProjectManager implements Disposable {
 				const info = ts.preProcessFile(contents, true, true);
 				const compilerOpt = config.getHost().getCompilationSettings();
 				// TODO remove platform-specific behavior here, the host OS is not coupled to the client OS
-				const resolver = !this.strict && os.platform() === 'win32' ? path_ : path_.posix;
+				const resolver = !this.strict && os.platform() === 'win32' ? path : path.posix;
 				// Iterate imported files
 				return Observable.merge(
 					// References with `import`
 					Observable.from(info.importedFiles)
-						.map(importedFile => ts.resolveModuleName(util.toUnixPath(importedFile.fileName), filePath, compilerOpt, config.moduleResolutionHost()))
+						.map(importedFile => ts.resolveModuleName(toUnixPath(importedFile.fileName), filePath, compilerOpt, config.moduleResolutionHost()))
 						// false means we didn't find a file defining the module. It
 						// could still exist as an ambient module, which is why we
 						// fetch global*.d.ts files.
@@ -348,7 +358,7 @@ export class ProjectManager implements Disposable {
 						.map(referencedFile => resolver.resolve(
 							this.rootPath,
 							resolver.dirname(filePath),
-							util.toUnixPath(referencedFile.fileName)
+							toUnixPath(referencedFile.fileName)
 						)),
 					// References with `<reference types="..."/>`
 					Observable.from(info.typeReferenceDirectives)
@@ -365,7 +375,7 @@ export class ProjectManager implements Disposable {
 				);
 			})
 			// Use same scheme, slashes, host for referenced URI as input file
-			.map(filePath => util.path2uri('', filePath))
+			.map(filePath => path2uri('', filePath))
 			// Don't cache errors
 			.catch(err => {
 				this.referencedFiles.delete(uri);
@@ -395,7 +405,7 @@ export class ProjectManager implements Disposable {
 	 * @return closest configuration for a given file path or undefined if there is no such configuration
 	 */
 	getConfigurationIfExists(filePath: string, configType = this.getConfigurationType(filePath)): ProjectConfiguration | undefined {
-		let dir = util.toUnixPath(filePath);
+		let dir = toUnixPath(filePath);
 		let config;
 		const configs = this.configs[configType];
 		if (!configs) {
@@ -421,7 +431,7 @@ export class ProjectManager implements Disposable {
 	 * Returns the ProjectConfiguration a file belongs to
 	 */
 	getParentConfiguration(uri: string, configType?: ConfigType): ProjectConfiguration | undefined {
-		return this.getConfigurationIfExists(util.uri2path(uri), configType);
+		return this.getConfigurationIfExists(uri2path(uri), configType);
 	}
 
 	/**
@@ -430,7 +440,7 @@ export class ProjectManager implements Disposable {
 	 * @param uri URI of a directory
 	 */
 	getChildConfigurations(uri: string): IterableIterator<ProjectConfiguration> {
-		const pathPrefix = util.uri2path(uri);
+		const pathPrefix = uri2path(uri);
 		return iterate(this.configs.ts).concat(this.configs.js)
 			.filter(([folderPath, config]) => folderPath.startsWith(pathPrefix))
 			.map(([folderPath, config]) => config);
@@ -451,7 +461,7 @@ export class ProjectManager implements Disposable {
 	 * @param uri file's URI
 	 */
 	didClose(uri: string, span = new Span()) {
-		const filePath = util.uri2path(uri);
+		const filePath = uri2path(uri);
 		this.localFs.didClose(uri);
 		let version = this.versions.get(uri) || 0;
 		this.versions.set(uri, ++version);
@@ -470,7 +480,7 @@ export class ProjectManager implements Disposable {
 	 * @param text file's content
 	 */
 	didChange(uri: string, text: string, span = new Span()) {
-		const filePath = util.uri2path(uri);
+		const filePath = uri2path(uri);
 		this.localFs.didChange(uri, text);
 		let version = this.versions.get(uri) || 0;
 		this.versions.set(uri, ++version);
@@ -499,14 +509,14 @@ export class ProjectManager implements Disposable {
 	 */
 	createConfigurations() {
 		for (const uri of this.localFs.uris()) {
-			const filePath = util.uri2path(uri);
+			const filePath = uri2path(uri);
 			if (!/(^|\/)[tj]sconfig\.json$/.test(filePath)) {
 				continue;
 			}
 			if (/(^|\/)node_modules\//.test(filePath)) {
 				continue;
 			}
-			let dir = util.toUnixPath(filePath);
+			let dir = toUnixPath(filePath);
 			const pos = dir.lastIndexOf('/');
 			if (pos <= 0) {
 				dir = '';
@@ -546,13 +556,13 @@ export class ProjectManager implements Disposable {
 	 * @return configuration type to use for a given file
 	 */
 	private getConfigurationType(filePath: string): ConfigType {
-		const name = path_.posix.basename(filePath);
+		const name = path.posix.basename(filePath);
 		if (name === 'tsconfig.json') {
 			return 'ts';
 		} else if (name === 'jsconfig.json') {
 			return 'js';
 		}
-		const extension = path_.posix.extname(filePath);
+		const extension = path.posix.extname(filePath);
 		if (extension === '.js' || extension === '.jsx') {
 			return 'js';
 		}
@@ -659,9 +669,9 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	 */
 	getScriptVersion(fileName: string): string {
 
-		const uri = util.path2uri(this.rootPath, fileName);
-		if (path_.posix.isAbsolute(fileName) || path_.isAbsolute(fileName)) {
-			fileName = path_.posix.relative(this.rootPath, util.toUnixPath(fileName));
+		const uri = path2uri(this.rootPath, fileName);
+		if (path.posix.isAbsolute(fileName) || path.isAbsolute(fileName)) {
+			fileName = path.posix.relative(this.rootPath, toUnixPath(fileName));
 		}
 		let version = this.versions.get(uri);
 		if (!version) {
@@ -677,7 +687,7 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	getScriptSnapshot(fileName: string): ts.IScriptSnapshot | undefined {
 		let exists = this.fs.fileExists(fileName);
 		if (!exists) {
-			fileName = path_.posix.join(this.rootPath, fileName);
+			fileName = path.posix.join(this.rootPath, fileName);
 			exists = this.fs.fileExists(fileName);
 		}
 		if (!exists) {
@@ -691,7 +701,7 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	}
 
 	getDefaultLibFileName(options: ts.CompilerOptions): string {
-		return util.toUnixPath(ts.getDefaultLibFilePath(options));
+		return toUnixPath(ts.getDefaultLibFilePath(options));
 	}
 
 	trace(message: string) {
@@ -872,7 +882,7 @@ export class ProjectConfiguration {
 		} else {
 			configObject = this.configContent;
 		}
-		let dir = util.toUnixPath(this.configFilePath);
+		let dir = toUnixPath(this.configFilePath);
 		const pos = dir.lastIndexOf('/');
 		if (pos <= 0) {
 			dir = '';
@@ -929,8 +939,8 @@ export class ProjectConfiguration {
 
 		let changed = false;
 		for (const uri of this.fs.uris()) {
-			const fileName = util.uri2path(uri);
-			if (util.isGlobalTSFile(fileName) || (!util.isDependencyFile(fileName) && util.isDeclarationFile(fileName))) {
+			const fileName = uri2path(uri);
+			if (isGlobalTSFile(fileName) || (!isDependencyFile(fileName) && isDeclarationFile(fileName))) {
 				const sourceFile = program.getSourceFile(fileName);
 				if (!sourceFile) {
 					this.getHost().addFile(fileName);
