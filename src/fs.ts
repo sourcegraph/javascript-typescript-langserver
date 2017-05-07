@@ -67,7 +67,7 @@ export class LocalFileSystem implements FileSystem {
 		const root = this.resolveUriToPath(base || path2uri('', this.rootPath));
 		const baseUri = path2uri('', normalizeDir(root)) + '/';
 		const files = await new Promise<string[]>((resolve, reject) => {
-			glob('*', { cwd: root, nodir: true, matchBase: true }, (err, matches) => err ? reject(err) : resolve(matches));
+			glob('*', { cwd: root, nodir: true, matchBase: true, follow: true }, (err, matches) => err ? reject(err) : resolve(matches));
 		});
 		return iterate(files).map(file => normalizeUri(baseUri + file));
 	}
