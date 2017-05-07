@@ -43,7 +43,11 @@ describe('fs.ts', () => {
 			await fs.writeFile(path.join(projectDir, '@types', 'diff', 'index.d.ts'), 'baz');
 
 			// global package is symolinked into project using npm link
-			await fs.symlink(somePackageDir, path.join(projectDir, 'node_modules', 'some_package'));
+			if (process.platform === 'win32') {
+				await fs.symlink(somePackageDir, path.join(projectDir, 'node_modules', 'some_package'), 'junction');
+			} else {
+				await fs.symlink(somePackageDir, path.join(projectDir, 'node_modules', 'some_package'));
+			}
 			fileSystem = new LocalFileSystem(toUnixPath(projectDir));
 		});
 		after(async () => {
