@@ -352,13 +352,35 @@ export class TypeScriptService {
 				}
 				const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
 				const info = configuration.getService().getQuickInfoAtPosition(fileName, offset);
+				this.logger.log(info);
 				if (!info) {
 					return { contents: [] };
 				}
-				const contents: MarkedString[] = [{
-					language: 'typescript',
-					value: ts.displayPartsToString(info.displayParts)
-				}];
+				const contents: (MarkedString | string)[] = [];
+				// Add declaration without the kind
+				const declaration = ts.displayPartsToString(info.displayParts).replace(/^\(.+\)\s+/, '');
+				contents.push({ language: 'typescript', value: declaration });
+				// Add kind with modifiers, e.g. "method (private, ststic)", "class (exported)"
+				if (info.kind) {
+					let kind = '**' + info.kind + '**';
+					const modifiers = info.kindModifiers
+						.split(',')
+						// Filter out some quirks like "constructor (exported)"
+						.filter(mod => mod && (
+							mod !== ts.ScriptElementKindModifier.exportedModifier
+							|| info.kind !== ts.ScriptElementKind.constructorImplementationElement
+						))
+						// Make proper adjectives
+						.map(mod => ({
+							[ts.ScriptElementKindModifier.ambientModifier]: 'ambient',
+							[ts.ScriptElementKindModifier.exportedModifier]: 'exported'
+						})[mod] || mod);
+					if (modifiers.length > 0) {
+						kind += ' _(' + modifiers.join(', ') + ')_';
+					}
+					contents.push(kind);
+				}
+				// Add documentation
 				const documentation = ts.displayPartsToString(info.documentation);
 				if (documentation) {
 					contents.push(documentation);
