@@ -1,9 +1,9 @@
-import * as fs_ from 'fs';
-import * as path_ from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
 import * as ts from 'typescript';
 import { Logger, NoopLogger } from './logging';
-import * as match from './match-files';
-import * as util from './util';
+import { FileSystemEntries, matchFiles } from './match-files';
+import { path2uri, toUnixPath, uri2path } from './util';
 
 /**
  * In-memory file cache node which represents either a folder or a file
@@ -69,7 +69,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 			this.files.set(uri, content);
 		}
 		// Add to directory tree
-		const filePath = util.uri2path(uri);
+		const filePath = uri2path(uri);
 		const components = filePath.split('/').filter(c => c);
 		let node = this.rootNode;
 		for (const [i, component] of components.entries()) {
@@ -94,7 +94,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 * @param uri URI to a file
 	 */
 	has(uri: string): boolean {
-		return this.files.has(uri) || this.fileExists(util.uri2path(uri));
+		return this.files.has(uri) || this.fileExists(uri2path(uri));
 	}
 
 	/**
@@ -107,7 +107,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	getContent(uri: string): string {
 		let content = this.files.get(uri);
 		if (content === undefined) {
-			content = typeScriptLibraries.get(util.uri2path(uri));
+			content = typeScriptLibraries.get(uri2path(uri));
 		}
 		if (content === undefined) {
 			throw new Error(`Content of ${uri} is not available in memory`);
@@ -121,7 +121,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 * @param path File path or URI (both absolute or relative file paths are accepted)
 	 */
 	fileExists(path: string): boolean {
-		return this.readFileIfExists(path) !== undefined || this.files.has(path) || this.files.has(util.path2uri(this.path, path));
+		return this.readFileIfExists(path) !== undefined || this.files.has(path) || this.files.has(path2uri(this.path, path));
 	}
 
 	/**
@@ -139,7 +139,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 * If there is no such file, returns undefined
 	 */
 	private readFileIfExists(path: string): string | undefined {
-		const uri = util.path2uri(this.path, path);
+		const uri = path2uri(this.path, path);
 		let content = this.overlay.get(uri);
 		if (content !== undefined) {
 			return content;
@@ -187,7 +187,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	 * Called by TS service to scan virtual directory when TS service looks for source files that belong to a project
 	 */
 	readDirectory(rootDir: string, extensions: string[], excludes: string[], includes: string[]): string[] {
-		return match.matchFiles(rootDir,
+		return matchFiles(rootDir,
 			extensions,
 			excludes,
 			includes,
@@ -199,7 +199,7 @@ export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResoluti
 	/**
 	 * Called by TS service to scan virtual directory when TS service looks for source files that belong to a project
 	 */
-	getFileSystemEntries(path: string): match.FileSystemEntries {
+	getFileSystemEntries(path: string): FileSystemEntries {
 		const ret: { files: string[], directories: string[] } = { files: [], directories: [] };
 		let node = this.rootNode;
 		const components = path.split('/').filter(c => c);
@@ -235,11 +235,11 @@ export const typeScriptLibraries: Map<string, string> = new Map<string, string>(
 /**
  * Fetching TypeScript library files from local file system
  */
-const path = path_.dirname(ts.getDefaultLibFilePath({ target: ts.ScriptTarget.ES2015 }));
-fs_.readdirSync(path).forEach(file => {
-	const fullPath = path_.join(path, file);
-	if (fs_.statSync(fullPath).isFile()) {
-		typeScriptLibraries.set(util.toUnixPath(fullPath), fs_.readFileSync(fullPath).toString());
+const libPath = path.dirname(ts.getDefaultLibFilePath({ target: ts.ScriptTarget.ES2015 }));
+fs.readdirSync(libPath).forEach(file => {
+	const fullPath = path.join(libPath, file);
+	if (fs.statSync(fullPath).isFile()) {
+		typeScriptLibraries.set(toUnixPath(fullPath), fs.readFileSync(fullPath).toString());
 	}
 });
 
@@ -248,5 +248,5 @@ fs_.readdirSync(path).forEach(file => {
  * @return true if given file belongs to bundled TypeScript libraries
  */
 export function isTypeScriptLibrary(path: string): boolean {
-	return typeScriptLibraries.has(util.toUnixPath(path));
+	return typeScriptLibraries.has(toUnixPath(path));
 }

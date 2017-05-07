@@ -2,8 +2,8 @@ import * as os from 'os';
 import * as path from 'path';
 import * as ts from 'typescript';
 import * as url from 'url';
-import { Position, Range, SymbolKind } from 'vscode-languageserver';
-import * as rt from './request-type';
+import { SymbolKind } from 'vscode-languageserver';
+import { PackageDescriptor, SymbolDescriptor } from './request-type';
 
 let strict = false;
 
@@ -13,18 +13,6 @@ let strict = false;
  */
 export function setStrict(value: boolean) {
 	strict = value;
-}
-
-export function formEmptyRange(): Range {
-	return Range.create(Position.create(0, 0), Position.create(0, 0));
-}
-
-export function formEmptyPosition(): Position {
-	return Position.create(0, 0);
-}
-
-export function formEmptyKind(): number {
-	return SymbolKind.Namespace;
 }
 
 /**
@@ -220,9 +208,9 @@ export function normalizeDir(dir: string) {
 
 /**
  * defInfoToSymbolDescriptor converts from an instance of
- * ts.DefinitionInfo to an instance of rt.SymbolDescriptor
+ * ts.DefinitionInfo to an instance of SymbolDescriptor
  */
-export function defInfoToSymbolDescriptor(d: ts.DefinitionInfo): rt.SymbolDescriptor {
+export function defInfoToSymbolDescriptor(d: ts.DefinitionInfo): SymbolDescriptor {
 	return {
 		kind: d.kind || '',
 		name: stripQuotes(d.name) || '',
@@ -234,7 +222,7 @@ export function defInfoToSymbolDescriptor(d: ts.DefinitionInfo): rt.SymbolDescri
 /**
  * Returns true if the passed SymbolDescriptor has at least the same properties as the passed partial SymbolDescriptor
  */
-export function isSymbolDescriptorMatch(query: Partial<rt.SymbolDescriptor>, symbol: rt.SymbolDescriptor): boolean {
+export function isSymbolDescriptorMatch(query: Partial<SymbolDescriptor>, symbol: SymbolDescriptor): boolean {
 	for (const key of Object.keys(query)) {
 		if ((query as any)[key] === undefined) {
 			continue;
@@ -252,7 +240,7 @@ export function isSymbolDescriptorMatch(query: Partial<rt.SymbolDescriptor>, sym
 	return true;
 }
 
-function isPackageDescriptorMatch(query: Partial<rt.PackageDescriptor>, pkg: rt.PackageDescriptor): boolean {
+function isPackageDescriptorMatch(query: Partial<PackageDescriptor>, pkg: PackageDescriptor): boolean {
 	for (const key of Object.keys(query)) {
 		if ((query as any)[key] === undefined) {
 			continue;
