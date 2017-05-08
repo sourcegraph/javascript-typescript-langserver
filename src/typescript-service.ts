@@ -893,7 +893,12 @@ export class TypeScriptService {
 			return;
 		}
 		const tsDiagnostics = ts.getPreEmitDiagnostics(program, sourceFile);
-		const diagnostics = tsDiagnostics.map(convertTsDiagnostic);
+		const diagnostics = iterate(tsDiagnostics)
+			// TS can report diagnostics without a file and range in some cases
+			// These cannot be represented as LSP Diagnostics since the range and URI is required
+			.filter(diagnostic => !!diagnostic.file)
+			.map(convertTsDiagnostic)
+			.toArray();
 		this.client.textDocumentPublishDiagnostics({ uri, diagnostics });
 	}
 
