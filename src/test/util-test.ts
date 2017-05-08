@@ -36,9 +36,6 @@ describe('util', () => {
 		});
 	});
 	describe('isGlobalTSFile()', () => {
-		it('should match declaration files in node_modules', () => {
-			assert.equal(isGlobalTSFile('/node_modules/@types/not_node/not_node.d.ts'), true);
-		});
 		it('should match the synthetic reference to tsdlib when using importHelpers', () => {
 			assert.equal(isGlobalTSFile('/node_modules/tslib/tslib.d.ts'), true);
 		});

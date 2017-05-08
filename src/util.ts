@@ -155,7 +155,7 @@ export function isPackageJsonFile(filename: string): boolean {
 
 const globalTSPatterns = [
 	/(^|\/)globals?\.d\.ts$/,
-	/node_modules\/(?:\@|%40)types\/.*/,
+	/node_modules\/(?:\@|%40)types\/node\/.*/,
 	/(^|\/)typings\/.*/,
 	/(^|\/)tsd\.d\.ts($|\/)/,
 	/(^|\/)tslib\.d\.ts$/ // for the 'synthetic reference' created by typescript when using importHelpers
