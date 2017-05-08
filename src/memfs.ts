@@ -1,4 +1,3 @@
-import { EventEmitter } from 'events';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as ts from 'typescript';
@@ -17,7 +16,7 @@ export interface FileSystemNode {
 /**
  * In-memory file system, can be served as a ParseConfigHost (thus allowing listing files that belong to project based on tsconfig.json options)
  */
-export class InMemoryFileSystem extends EventEmitter implements ts.ParseConfigHost, ts.ModuleResolutionHost {
+export class InMemoryFileSystem implements ts.ParseConfigHost, ts.ModuleResolutionHost {
 
 	/**
 	 * Contains a Map of all URIs that exist in the workspace, optionally with a content.
@@ -46,15 +45,9 @@ export class InMemoryFileSystem extends EventEmitter implements ts.ParseConfigHo
 	rootNode: FileSystemNode;
 
 	constructor(path: string, private logger: Logger = new NoopLogger()) {
-		super();
 		this.path = path;
 		this.overlay = new Map<string, string>();
 		this.rootNode = { file: false, children: new Map<string, FileSystemNode>() };
-	}
-
-	/** Emitted when a file was added */
-	on(event: 'add', listener: (uri: string, content?: string) => void): this {
-		return super.on(event, listener);
 	}
 
 	/**
@@ -93,7 +86,6 @@ export class InMemoryFileSystem extends EventEmitter implements ts.ParseConfigHo
 				node = n;
 			}
 		}
-		this.emit('add', uri, content);
 	}
 
 	/**

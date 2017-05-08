@@ -551,6 +551,7 @@ export class TypeScriptService {
 			.mergeMap(uri => this.updater.ensure(uri, span))
 			.toArray()
 			.mergeMap<any, SymbolInformation>(() => {
+				this.projectManager.createConfigurations();
 				span.log({ event: 'fetched package files' });
 
 				// Search symbol in configuration

@@ -12,18 +12,6 @@ describe('ProjectManager', () => {
 	let projectManager: ProjectManager;
 	let memfs: InMemoryFileSystem;
 
-	it('should add a ProjectConfiguration when a tsconfig.json is added to the InMemoryFileSystem', () => {
-		memfs = new InMemoryFileSystem('/');
-		const localfs = new MapFileSystem(new Map([
-			['file:///foo/tsconfig.json', '{}']
-		]));
-		const updater = new FileSystemUpdater(localfs, memfs);
-		projectManager = new ProjectManager('/', memfs, updater, true);
-		memfs.add('file:///foo/tsconfig.json', '{}');
-		const configs = Array.from(projectManager.configurations());
-		assert.isDefined(configs.find(config => config.configFilePath === '/foo/tsconfig.json'));
-	});
-
 	describe('getPackageName()', () => {
 		beforeEach(async () => {
 			memfs = new InMemoryFileSystem('/');
