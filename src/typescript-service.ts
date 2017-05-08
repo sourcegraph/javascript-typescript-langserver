@@ -465,11 +465,6 @@ export class TypeScriptService {
 					return this._workspaceSymbolDefinitelyTyped({ ...params, limit }, span);
 				}
 
-				// symbolQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
-				if (symbolQuery && !symbolQuery.containerKind) {
-					symbolQuery.containerKind = undefined;
-				}
-
 				// A workspace/symol request searches all symbols in own code, but not in dependencies
 				const symbols = Observable.from(this.projectManager.ensureOwnFiles(span))
 					.mergeMap(() =>
@@ -522,10 +517,6 @@ export class TypeScriptService {
 		const symbolQuery = { ...params.symbol };
 		// Don't match PackageDescriptor on symbols
 		symbolQuery.package = undefined;
-		// symQuery.containerKind is sometimes empty when symbol.containerKind = 'module'
-		if (!symbolQuery.containerKind) {
-			symbolQuery.containerKind = undefined;
-		}
 
 		// Fetch all files in the package subdirectory
 		// All packages are in the types/ subdirectory
