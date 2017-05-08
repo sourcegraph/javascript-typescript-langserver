@@ -55,6 +55,7 @@ import {
 } from './util';
 import hashObject = require('object-hash');
 import { castArray, noop, omit } from 'lodash';
+import * as url from 'url';
 import { PackageJson, PackageManager } from './packages';
 
 export interface TypeScriptServiceOptions {
@@ -480,7 +481,8 @@ export class TypeScriptService {
 								// Find their parent and child tsconfigs
 								.mergeMap(packageJsonUri => Observable.merge(
 									castArray<ProjectConfiguration>(this.projectManager.getParentConfiguration(packageJsonUri) || []),
-									this.projectManager.getChildConfigurations(packageJsonUri) as any
+									// Search child directories starting at the directory of the package.json
+									this.projectManager.getChildConfigurations(url.resolve(packageJsonUri, '.')) as any
 								))
 							// Else search all tsconfigs in the workspace
 							: this.projectManager.configurations() as any
