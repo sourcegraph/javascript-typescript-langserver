@@ -4,7 +4,7 @@ import { Span } from 'opentracing';
 import * as os from 'os';
 import * as path from 'path';
 import * as ts from 'typescript';
-import { Disposable } from 'vscode-languageserver';
+import { Disposable } from './disposable';
 import { FileSystemUpdater } from './fs';
 import { Logger, NoopLogger } from './logging';
 import { InMemoryFileSystem } from './memfs';
