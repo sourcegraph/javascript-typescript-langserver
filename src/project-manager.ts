@@ -131,7 +131,7 @@ export class ProjectManager implements Disposable {
 		// Whenever a file with content is added to the InMemoryFileSystem, check if it's a tsconfig.json and add a new ProjectConfiguration
 		this.subscriptions.add(
 			Observable.fromEvent<[string, string]>(inMemoryFileSystem, 'add', Array.of)
-				.filter(([uri, content]) => /\/[tj]sconfig\.json/.test(uri) && !uri.includes('/node_modules/'))
+				.filter(([uri, content]) => !!content && /\/[tj]sconfig\.json/.test(uri) && !uri.includes('/node_modules/'))
 				.subscribe(([uri, content]) => {
 					const filePath = uri2path(uri);
 					let dir = toUnixPath(filePath);
