@@ -39,5 +39,14 @@ describe('util', () => {
 		it('should match the synthetic reference to tsdlib when using importHelpers', () => {
 			assert.equal(isGlobalTSFile('/node_modules/tslib/tslib.d.ts'), true);
 		});
+		it('should not include non-declaration files', () => {
+			assert.equal(isGlobalTSFile('/node_modules/@types/node/Readme.MD'), false);
+		});
+		it('should include some libraries from @types with global declarations', () => {
+			assert.equal(isGlobalTSFile('/node_modules/@types/node/index.d.ts'), true);
+			assert.equal(isGlobalTSFile('/node_modules/@types/jest/index.d.ts'), true);
+			assert.equal(isGlobalTSFile('/node_modules/@types/jasmine/index.d.ts'), true);
+			assert.equal(isGlobalTSFile('/node_modules/@types/mocha/index.d.ts'), true);
+		});
 	});
 });
