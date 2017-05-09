@@ -352,7 +352,6 @@ export class TypeScriptService {
 				}
 				const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
 				const info = configuration.getService().getQuickInfoAtPosition(fileName, offset);
-				this.logger.log(info);
 				if (!info) {
 					return { contents: [] };
 				}
