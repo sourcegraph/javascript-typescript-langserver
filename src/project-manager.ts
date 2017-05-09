@@ -1,4 +1,4 @@
-import { Observable } from '@reactivex/rxjs';
+import { Observable, Subscription } from '@reactivex/rxjs';
 import iterate from 'iterare';
 import { Span } from 'opentracing';
 import * as os from 'os';
@@ -95,6 +95,11 @@ export class ProjectManager implements Disposable {
 	private referencedFiles = new Map<string, Observable<string>>();
 
 	/**
+	 * Tracks all Subscriptions that are done in the lifetime of this object to dispose on `dispose()`
+	 */
+	private subscriptions = new Subscription();
+
+	/**
 	 * @param rootPath root path as passed to `initialize`
 	 * @param inMemoryFileSystem File system that keeps structure and contents in memory
 	 * @param strict indicates if we are working in strict mode (VFS) or with a local file system
@@ -107,13 +112,47 @@ export class ProjectManager implements Disposable {
 		this.versions = new Map<string, number>();
 		this.strict = strict;
 		this.traceModuleResolution = traceModuleResolution || false;
+
+		// Create catch-all fallback configs in case there are no tsconfig.json files
+		const trimmedRootPath = this.rootPath.replace(/\/+$/, '');
+		for (const configType of ['js', 'ts'] as ConfigType[]) {
+			const configs = this.configs[configType];
+			const tsConfig: any = {
+				compilerOptions: {
+					module: ts.ModuleKind.CommonJS,
+					allowNonTsExtensions: false,
+					allowJs: configType === 'js'
+				},
+				include: { js: ['**/*.js', '**/*.jsx'], ts: ['**/*.ts', '**/*.tsx'] }[configType]
+			};
+			configs.set(trimmedRootPath, new ProjectConfiguration(this.localFs, trimmedRootPath, this.versions, '', tsConfig, this.traceModuleResolution, this.logger));
+		}
+
+		// Whenever a file with content is added to the InMemoryFileSystem, check if it's a tsconfig.json and add a new ProjectConfiguration
+		this.subscriptions.add(
+			Observable.fromEvent<[string, string]>(inMemoryFileSystem, 'add', Array.of)
+				.filter(([uri, content]) => !!content && /\/[tj]sconfig\.json/.test(uri) && !uri.includes('/node_modules/'))
+				.subscribe(([uri, content]) => {
+					const filePath = uri2path(uri);
+					let dir = toUnixPath(filePath);
+					const pos = dir.lastIndexOf('/');
+					if (pos <= 0) {
+						dir = '';
+					} else {
+						dir = dir.substring(0, pos);
+					}
+					const configType = this.getConfigurationType(filePath);
+					const configs = this.configs[configType];
+					configs.set(dir, new ProjectConfiguration(this.localFs, dir, this.versions, filePath, undefined, this.traceModuleResolution, this.logger));
+				})
+		);
 	}
 
 	/**
-	 * Disposes the object and cancels any asynchronous operations that are still active
+	 * Disposes the object (removes all registered listeners)
 	 */
 	dispose(): void {
-		// TODO unsubscribe subscriptions
+		this.subscriptions.unsubscribe();
 	}
 
 	/**
@@ -167,8 +206,6 @@ export class ProjectManager implements Disposable {
 						.filter(uri => isGlobalTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
 						.map(uri => this.updater.ensure(uri))
 				);
-				// Scan for [tj]sconfig.json files
-				this.createConfigurations();
 				// Reset all compilation state
 				// TODO ze incremental compilation instead
 				for (const config of this.configurations()) {
@@ -213,7 +250,6 @@ export class ProjectManager implements Disposable {
 							.filter(uri => !uri.includes('/node_modules/') && isJSTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
 							.map(uri => this.updater.ensure(uri))
 					);
-					this.createConfigurations();
 				} catch (err) {
 					this.ensuredOwnFiles = undefined;
 					span.setTag('error', true);
@@ -244,7 +280,6 @@ export class ProjectManager implements Disposable {
 						.filter(uri => isJSTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
 						.map(uri => this.updater.ensure(uri))
 				);
-				this.createConfigurations();
 			} catch (err) {
 				this.ensuredAllFiles = undefined;
 				span.setTag('error', true);
@@ -406,7 +441,7 @@ export class ProjectManager implements Disposable {
 	 */
 	getConfigurationIfExists(filePath: string, configType = this.getConfigurationType(filePath)): ProjectConfiguration | undefined {
 		let dir = toUnixPath(filePath);
-		let config;
+		let config: ProjectConfiguration | undefined;
 		const configs = this.configs[configType];
 		if (!configs) {
 			return undefined;
@@ -500,55 +535,6 @@ export class ProjectManager implements Disposable {
 	 */
 	didSave(uri: string) {
 		this.localFs.didSave(uri);
-	}
-
-	/**
-	 * Detects projects and creates projects denoted by tsconfig.json and jsconfig.json fiels.
-	 * Previously detected projects are NOT discarded.
-	 * If there is no root configuration, adds it to catch all orphan files
-	 */
-	createConfigurations() {
-		for (const uri of this.localFs.uris()) {
-			const filePath = uri2path(uri);
-			if (!/(^|\/)[tj]sconfig\.json$/.test(filePath)) {
-				continue;
-			}
-			if (/(^|\/)node_modules\//.test(filePath)) {
-				continue;
-			}
-			let dir = toUnixPath(filePath);
-			const pos = dir.lastIndexOf('/');
-			if (pos <= 0) {
-				dir = '';
-			} else {
-				dir = dir.substring(0, pos);
-			}
-			const configType = this.getConfigurationType(filePath);
-			const configs = this.configs[configType];
-			configs.set(dir, new ProjectConfiguration(this.localFs, dir, this.versions, filePath, undefined, this.traceModuleResolution, this.logger));
-		}
-
-		const rootPath = this.rootPath.replace(/\/+$/, '');
-		for (const configType of ['js', 'ts'] as ConfigType[]) {
-			const configs = this.configs[configType];
-			if (!configs.has(rootPath)) {
-				const tsConfig: any = {
-					compilerOptions: {
-						module: ts.ModuleKind.CommonJS,
-						allowNonTsExtensions: false,
-						allowJs: configType === 'js'
-					}
-				};
-				tsConfig.include = { js: ['**/*.js', '**/*.jsx'], ts: ['**/*.ts', '**/*.tsx'] }[configType];
-				// if there is at least one config, giving no files to default one
-				// TODO: it makes impossible to IntelliSense gulpfile.js if there is a tsconfig.json in subdirectory
-				if (configs.size > 0) {
-					tsConfig.exclude = ['**/*'];
-				}
-				configs.set(rootPath, new ProjectConfiguration(this.localFs, rootPath, this.versions, '', tsConfig, this.traceModuleResolution, this.logger));
-			}
-
-		}
 	}
 
 	/**
