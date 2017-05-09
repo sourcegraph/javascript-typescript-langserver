@@ -1,7 +1,9 @@
 
+import { Observable, Subscription } from '@reactivex/rxjs';
 import { Span } from 'opentracing';
 import * as path from 'path';
 import * as url from 'url';
+import { Disposable } from './disposable';
 import { FileSystemUpdater } from './fs';
 import { Logger, NoopLogger } from './logging';
 import { InMemoryFileSystem } from './memfs';
@@ -28,29 +30,55 @@ export interface PackageJson {
 	};
 }
 
-export class PackageManager {
-
-	/**
-	 * True if the workspace was scanned for package.json files, they were fetched and parsed
-	 */
-	private scanned = false;
+export class PackageManager implements Disposable {
 
 	/**
 	 * Set of package.json URIs _defined_ in the workspace.
-	 * This does not include package.jsons of dependencies and also not package.jsons that node_modules are vendored for
+	 * This does not include package.jsons of dependencies and also not package.jsons that node_modules are vendored for.
+	 * This is updated as new package.jsons are discovered.
 	 */
 	private packages = new Set<string>();
 
 	/**
-	 * The URI of the root package.json, if any
+	 * The URI of the root package.json, if any.
+	 * This is updated as new package.jsons are discovered.
 	 */
 	public rootPackageJsonUri: string | undefined;
+
+	/**
+	 * Subscriptions to unsubscribe from on object disposal
+	 */
+	private subscriptions = new Subscription();
 
 	constructor(
 		private updater: FileSystemUpdater,
 		private inMemoryFileSystem: InMemoryFileSystem,
 		private logger: Logger = new NoopLogger()
-	) { }
+	) {
+		let rootPackageJsonLevel = Infinity;
+		// Find locations of package.jsons _not_ inside node_modules
+		this.subscriptions.add(
+			Observable.fromEvent<[string, string]>(inMemoryFileSystem, 'add', Array.of)
+				.subscribe(([uri, content]) => {
+					const parts = url.parse(uri);
+					if (!parts.pathname	|| !parts.pathname.endsWith('/package.json') || parts.pathname.includes('/node_modules/')) {
+						return;
+					}
+					this.packages.add(uri);
+					this.logger.log(`Found package ${uri}`);
+					// If the current root package.json is further nested than this one, replace it
+					const level = parts.pathname.split('/').length;
+					if (level < rootPackageJsonLevel) {
+						this.rootPackageJsonUri = uri;
+						rootPackageJsonLevel = level;
+					}
+				})
+		);
+	}
+
+	dispose(): void {
+		this.subscriptions.unsubscribe();
+	}
 
 	/**
 	 * Returns an Iterable for all package.jsons in the workspace
@@ -60,65 +88,16 @@ export class PackageManager {
 	}
 
 	/**
-	 * Scans the workspace to find all packages _defined_ in the workspace, saves the content in `packages`
-	 * For each found package, installation is started in the background and tracked in `installations`
-	 *
-	 * @param span OpenTracing span for tracing
-	 */
-	private scan(span = new Span()): void {
-		// Find locations of package.json and node_modules folders
-		const packageJsons = new Set<string>();
-		let rootPackageJsonUri: string | undefined;
-		let rootPackageJsonLevel = Infinity;
-		for (const uri of this.inMemoryFileSystem.uris()) {
-			const parts = url.parse(uri);
-			if (!parts.pathname) {
-				continue;
-			}
-			// Search for package.json files _not_ inside node_modules
-			if (parts.pathname.endsWith('/package.json') && !parts.pathname.includes('/node_modules/')) {
-				packageJsons.add(uri);
-				// If the current root package.json is further nested than this one, replace it
-				const level = parts.pathname.split('/').length;
-				if (level < rootPackageJsonLevel) {
-					rootPackageJsonUri = uri;
-					rootPackageJsonLevel = level;
-				}
-			}
-		}
-		this.rootPackageJsonUri = rootPackageJsonUri;
-		this.logger.log(`Found ${packageJsons.size} package.json in workspace`);
-		this.logger.log(`Root package.json: ${rootPackageJsonUri}`);
-		this.packages.clear();
-		for (const uri of packageJsons) {
-			this.packages.add(uri);
-		}
-		this.scanned = true;
-	}
-
-	/**
-	 * Ensures all package.json have been detected, loaded and installations kicked off
-	 *
-	 * @param span OpenTracing span for tracing
-	 */
-	async ensureScanned(span = new Span()): Promise<void> {
-		await this.updater.ensureStructure(span);
-		if (!this.scanned) {
-			this.scan(span);
-		}
-	}
-
-	/**
 	 * Gets the content of the closest package.json known to to the DependencyManager in the ancestors of a URI
 	 */
 	async getClosestPackageJson(uri: string, span = new Span()): Promise<PackageJson | undefined> {
-		await this.ensureScanned(span);
+		await this.updater.ensureStructure();
 		const packageJsonUri = this.getClosestPackageJsonUri(uri);
 		if (!packageJsonUri) {
 			return undefined;
 		}
-		this.updater.ensure(packageJsonUri, span);
-		return JSON.parse(await this.inMemoryFileSystem.getContent(packageJsonUri));
+		await this.updater.ensure(packageJsonUri, span);
+		return JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri));
 	}
 
 	/**

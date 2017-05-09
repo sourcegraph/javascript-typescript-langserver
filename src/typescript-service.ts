@@ -230,6 +230,7 @@ export class TypeScriptService {
 	 */
 	shutdown(params = {}, span = new Span()): Observable<null> {
 		this.projectManager.dispose();
+		this.packageManager.dispose();
 		return Observable.of(null);
 	}
 
@@ -491,8 +492,7 @@ export class TypeScriptService {
 					.mergeMap(() =>
 						symbolQuery && symbolQuery.package
 							// If SymbolDescriptor query with PackageDescriptor, search for package.jsons with matching package name
-							? Observable.from(this.packageManager.ensureScanned(span))
-								.mergeMap<void, string>(() => this.packageManager.packageJsonUris() as any)
+							? Observable.from<string>(this.packageManager.packageJsonUris() as any)
 								.filter(packageJsonUri => !symbolQuery || !symbolQuery.package || !symbolQuery.package.name || (JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri)) as PackageJson).name === symbolQuery.package!.name)
 								// Find their parent and child tsconfigs
 								.mergeMap(packageJsonUri => Observable.merge(
@@ -602,8 +602,7 @@ export class TypeScriptService {
 			.mergeMap<void, ProjectConfiguration>(() => {
 				// if we were hinted that we should only search a specific package, find it and only search the owning tsconfig.json
 				if (params.hints && params.hints.dependeePackageName) {
-					return Observable.from(this.packageManager.ensureScanned(span))
-						.mergeMap<void, string>(() => this.packageManager.packageJsonUris() as any)
+					return Observable.from<string>(this.packageManager.packageJsonUris() as any)
 						.filter(uri => (JSON.parse(this.inMemoryFileSystem.getContent(uri)) as PackageJson).name === params.hints!.dependeePackageName)
 						.take(1)
 						.mergeMap<string, ProjectConfiguration>(uri => {
