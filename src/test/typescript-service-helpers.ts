@@ -250,10 +250,10 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 							character: 30
 						}
 					},
-					contents: [{
-						language: 'typescript',
-						value: 'const abc: 1'
-					}]
+					contents: [
+						{ language: 'typescript', value: 'const abc: 1' },
+						'**const**'
+					]
 				});
 			} as any);
 			specify('in other file', async function (this: TestContext) {
@@ -277,10 +277,10 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 							character: 8
 						}
 					},
-					contents: [{
-						language: 'typescript',
-						value: 'import Foo'
-					}]
+					contents: [
+						{ language: 'typescript', value: 'import Foo' },
+						'**alias**'
+					]
 				});
 			} as any);
 			specify('over keyword (non-null)', async function (this: TestContext) {
@@ -1236,10 +1236,10 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0
 					}
 				},
-				contents: [{
-					language: 'typescript',
-					value: 'let parameters: any[]'
-				}]
+				contents: [
+					{ language: 'typescript', value: 'let parameters: any[]' },
+					'**let**'
+				]
 			});
 		} as any);
 	} as any);
@@ -1287,10 +1287,10 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 			assert.deepEqual(await this.service.textDocumentHover(hoverParams).toPromise(), {
 				range,
-				contents: [{
-					language: 'typescript',
-					value: 'let parameters: number[]'
-				}]
+				contents: [
+					{ language: 'typescript', value: 'let parameters: number[]' },
+					'**let**'
+				]
 			});
 		} as any);
 
@@ -1325,10 +1325,10 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 			assert.deepEqual(await this.service.textDocumentHover(hoverParams).toPromise(), {
 				range,
-				contents: [{
-					language: 'typescript',
-					value: 'let parameters: any[]'
-				}]
+				contents: [
+					{ language: 'typescript', value: 'let parameters: any[]' },
+					'**let**'
+				]
 			});
 		} as any);
 
@@ -1357,10 +1357,10 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 			assert.deepEqual(await this.service.textDocumentHover(hoverParams).toPromise(), {
 				range,
-				contents: [{
-					language: 'typescript',
-					value: 'let parameters: any[]'
-				}]
+				contents: [
+					{ language: 'typescript', value: 'let parameters: any[]' },
+					'**let**'
+				]
 			});
 
 			await this.service.textDocumentDidOpen({
@@ -1374,10 +1374,10 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 			assert.deepEqual(await this.service.textDocumentHover(hoverParams).toPromise(), {
 				range,
-				contents: [{
-					language: 'typescript',
-					value: 'let parameters: string[]'
-				}]
+				contents: [
+					{ language: 'typescript', value: 'let parameters: string[]' },
+					'**let**'
+				]
 			});
 
 			await this.service.textDocumentDidChange({
@@ -1392,10 +1392,10 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 			assert.deepEqual(await this.service.textDocumentHover(hoverParams).toPromise(), {
 				range,
-				contents: [{
-					language: 'typescript',
-					value: 'let parameters: number[]'
-				}]
+				contents: [
+					{ language: 'typescript', value: 'let parameters: number[]' },
+					'**let**'
+				]
 			});
 
 			await this.service.textDocumentDidClose({
@@ -1406,10 +1406,10 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 			assert.deepEqual(await this.service.textDocumentHover(hoverParams).toPromise(), {
 				range,
-				contents: [{
-					language: 'typescript',
-					value: 'let parameters: any[]'
-				}]
+				contents: [
+					{ language: 'typescript', value: 'let parameters: any[]' },
+					'**let**'
+				]
 			});
 		} as any);
 	} as any);
@@ -1692,34 +1692,37 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 							line: 0
 						}
 					},
-					contents: [{
-						language: 'typescript',
-						value: [
-							'interface Node',
-							'var Node: {',
-							'    new (): Node;',
-							'    prototype: Node;',
-							'    readonly ATTRIBUTE_NODE: number;',
-							'    readonly CDATA_SECTION_NODE: number;',
-							'    readonly COMMENT_NODE: number;',
-							'    readonly DOCUMENT_FRAGMENT_NODE: number;',
-							'    readonly DOCUMENT_NODE: number;',
-							'    readonly DOCUMENT_POSITION_CONTAINED_BY: number;',
-							'    readonly DOCUMENT_POSITION_CONTAINS: number;',
-							'    readonly DOCUMENT_POSITION_DISCONNECTED: number;',
-							'    readonly DOCUMENT_POSITION_FOLLOWING: number;',
-							'    readonly DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC: number;',
-							'    readonly DOCUMENT_POSITION_PRECEDING: number;',
-							'    readonly DOCUMENT_TYPE_NODE: number;',
-							'    readonly ELEMENT_NODE: number;',
-							'    readonly ENTITY_NODE: number;',
-							'    readonly ENTITY_REFERENCE_NODE: number;',
-							'    readonly NOTATION_NODE: number;',
-							'    readonly PROCESSING_INSTRUCTION_NODE: number;',
-							'    readonly TEXT_NODE: number;',
-							'}'
-						].join('\n')
-					}]
+					contents: [
+						{
+							language: 'typescript',
+							value: [
+								'interface Node',
+								'var Node: {',
+								'    new (): Node;',
+								'    prototype: Node;',
+								'    readonly ATTRIBUTE_NODE: number;',
+								'    readonly CDATA_SECTION_NODE: number;',
+								'    readonly COMMENT_NODE: number;',
+								'    readonly DOCUMENT_FRAGMENT_NODE: number;',
+								'    readonly DOCUMENT_NODE: number;',
+								'    readonly DOCUMENT_POSITION_CONTAINED_BY: number;',
+								'    readonly DOCUMENT_POSITION_CONTAINS: number;',
+								'    readonly DOCUMENT_POSITION_DISCONNECTED: number;',
+								'    readonly DOCUMENT_POSITION_FOLLOWING: number;',
+								'    readonly DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC: number;',
+								'    readonly DOCUMENT_POSITION_PRECEDING: number;',
+								'    readonly DOCUMENT_TYPE_NODE: number;',
+								'    readonly ELEMENT_NODE: number;',
+								'    readonly ENTITY_NODE: number;',
+								'    readonly ENTITY_REFERENCE_NODE: number;',
+								'    readonly NOTATION_NODE: number;',
+								'    readonly PROCESSING_INSTRUCTION_NODE: number;',
+								'    readonly TEXT_NODE: number;',
+								'}'
+							].join('\n')
+						},
+						'**var** _(ambient)_'
+					]
 				});
 			} as any);
 			it('should resolve TS libraries to github URL', async function (this: TestContext) {
@@ -2198,10 +2201,10 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						character: 17
 					}
 				},
-				contents: [{
-					language: 'typescript',
-					value: 'function a(): void'
-				}]
+				contents: [
+					{ language: 'typescript', value: 'function a(): void' },
+					'**function** _(exported)_'
+				]
 			});
 		} as any);
 		it('should accept files with special characters in path', async function (this: TestContext) {
@@ -2225,10 +2228,10 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						character: 17
 					}
 				},
-				contents: [{
-					language: 'typescript',
-					value: 'function b(): void'
-				}]
+				contents: [
+					{ language: 'typescript', value: 'function b(): void' },
+					'**function** _(exported)_'
+				]
 			});
 		} as any);
 		it('should handle Windows-style paths in triple slash references', async function (this: TestContext) {
