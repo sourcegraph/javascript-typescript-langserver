@@ -20,15 +20,31 @@ describe('fs.ts', () => {
 			temporaryDir = await new Promise<string>((resolve, reject) => {
 				temp.mkdir('local-fs', (err: Error, dirPath: string) => err ? reject(err) : resolve(dirPath));
 			});
-			baseUri = path2uri('', temporaryDir) + '/';
-			await fs.mkdir(path.join(temporaryDir, 'foo'));
-			await fs.mkdir(path.join(temporaryDir, '@types'));
-			await fs.mkdir(path.join(temporaryDir, '@types', 'diff'));
-			await fs.writeFile(path.join(temporaryDir, 'tweedledee'), 'hi');
-			await fs.writeFile(path.join(temporaryDir, 'tweedledum'), 'bye');
-			await fs.writeFile(path.join(temporaryDir, 'foo', 'bar.ts'), 'baz');
-			await fs.writeFile(path.join(temporaryDir, '@types', 'diff', 'index.d.ts'), 'baz');
-			fileSystem = new LocalFileSystem(toUnixPath(temporaryDir));
+
+			// global packages contains a package
+			const globalPackagesDir = path.join(temporaryDir, 'node_modules');
+			await fs.mkdir(globalPackagesDir);
+			const somePackageDir = path.join(globalPackagesDir, 'some_package');
+			await fs.mkdir(somePackageDir);
+			await fs.mkdir(path.join(somePackageDir, 'src'));
+			await fs.writeFile(path.join(somePackageDir, 'src', 'function.ts'), 'foo');
+
+			// the project dir
+			const projectDir = path.join(temporaryDir, 'project');
+			baseUri = path2uri('', projectDir) + '/';
+			await fs.mkdir(projectDir);
+			await fs.mkdir(path.join(projectDir, 'foo'));
+			await fs.mkdir(path.join(projectDir, '@types'));
+			await fs.mkdir(path.join(projectDir, '@types', 'diff'));
+			await fs.mkdir(path.join(projectDir, 'node_modules'));
+			await fs.writeFile(path.join(projectDir, 'tweedledee'), 'hi');
+			await fs.writeFile(path.join(projectDir, 'tweedledum'), 'bye');
+			await fs.writeFile(path.join(projectDir, 'foo', 'bar.ts'), 'baz');
+			await fs.writeFile(path.join(projectDir, '@types', 'diff', 'index.d.ts'), 'baz');
+
+			// global package is symolinked into project using npm link
+			await fs.symlink(somePackageDir, path.join(projectDir, 'node_modules', 'some_package'), 'junction');
+			fileSystem = new LocalFileSystem(toUnixPath(projectDir));
 		});
 		after(async () => {
 			await new Promise<void>((resolve, reject) => {
@@ -42,7 +58,8 @@ describe('fs.ts', () => {
 					baseUri + 'tweedledee',
 					baseUri + 'tweedledum',
 					baseUri + 'foo/bar.ts',
-					baseUri + '%40types/diff/index.d.ts'
+					baseUri + '%40types/diff/index.d.ts',
+					baseUri + 'node_modules/some_package/src/function.ts'
 				]);
 			});
 			it('should return all files under specific root', async () => {
