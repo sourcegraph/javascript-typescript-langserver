@@ -1,10 +1,10 @@
-import { Observable } from '@reactivex/rxjs';
+import { Observable, Subscription } from '@reactivex/rxjs';
 import iterate from 'iterare';
 import { Span } from 'opentracing';
 import * as os from 'os';
 import * as path from 'path';
 import * as ts from 'typescript';
-import { Disposable } from 'vscode-languageserver';
+import { Disposable } from './disposable';
 import { FileSystemUpdater } from './fs';
 import { Logger, NoopLogger } from './logging';
 import { InMemoryFileSystem } from './memfs';
@@ -95,6 +95,11 @@ export class ProjectManager implements Disposable {
 	private referencedFiles = new Map<string, Observable<string>>();
 
 	/**
+	 * Tracks all Subscriptions that are done in the lifetime of this object to dispose on `dispose()`
+	 */
+	private subscriptions = new Subscription();
+
+	/**
 	 * @param rootPath root path as passed to `initialize`
 	 * @param inMemoryFileSystem File system that keeps structure and contents in memory
 	 * @param strict indicates if we are working in strict mode (VFS) or with a local file system
@@ -107,13 +112,47 @@ export class ProjectManager implements Disposable {
 		this.versions = new Map<string, number>();
 		this.strict = strict;
 		this.traceModuleResolution = traceModuleResolution || false;
+
+		// Create catch-all fallback configs in case there are no tsconfig.json files
+		const trimmedRootPath = this.rootPath.replace(/\/+$/, '');
+		for (const configType of ['js', 'ts'] as ConfigType[]) {
+			const configs = this.configs[configType];
+			const tsConfig: any = {
+				compilerOptions: {
+					module: ts.ModuleKind.CommonJS,
+					allowNonTsExtensions: false,
+					allowJs: configType === 'js'
+				},
+				include: { js: ['**/*.js', '**/*.jsx'], ts: ['**/*.ts', '**/*.tsx'] }[configType]
+			};
+			configs.set(trimmedRootPath, new ProjectConfiguration(this.localFs, trimmedRootPath, this.versions, '', tsConfig, this.traceModuleResolution, this.logger));
+		}
+
+		// Whenever a file with content is added to the InMemoryFileSystem, check if it's a tsconfig.json and add a new ProjectConfiguration
+		this.subscriptions.add(
+			Observable.fromEvent<[string, string]>(inMemoryFileSystem, 'add', Array.of)
+				.filter(([uri, content]) => !!content && /\/[tj]sconfig\.json/.test(uri) && !uri.includes('/node_modules/'))
+				.subscribe(([uri, content]) => {
+					const filePath = uri2path(uri);
+					let dir = toUnixPath(filePath);
+					const pos = dir.lastIndexOf('/');
+					if (pos <= 0) {
+						dir = '';
+					} else {
+						dir = dir.substring(0, pos);
+					}
+					const configType = this.getConfigurationType(filePath);
+					const configs = this.configs[configType];
+					configs.set(dir, new ProjectConfiguration(this.localFs, dir, this.versions, filePath, undefined, this.traceModuleResolution, this.logger));
+				})
+		);
 	}
 
 	/**
-	 * Disposes the object and cancels any asynchronous operations that are still active
+	 * Disposes the object (removes all registered listeners)
 	 */
 	dispose(): void {
-		// TODO unsubscribe subscriptions
+		this.subscriptions.unsubscribe();
 	}
 
 	/**
@@ -167,8 +206,6 @@ export class ProjectManager implements Disposable {
 						.filter(uri => isGlobalTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
 						.map(uri => this.updater.ensure(uri))
 				);
-				// Scan for [tj]sconfig.json files
-				this.createConfigurations();
 				// Reset all compilation state
 				// TODO ze incremental compilation instead
 				for (const config of this.configurations()) {
@@ -213,7 +250,6 @@ export class ProjectManager implements Disposable {
 							.filter(uri => !uri.includes('/node_modules/') && isJSTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
 							.map(uri => this.updater.ensure(uri))
 					);
-					this.createConfigurations();
 				} catch (err) {
 					this.ensuredOwnFiles = undefined;
 					span.setTag('error', true);
@@ -244,7 +280,6 @@ export class ProjectManager implements Disposable {
 						.filter(uri => isJSTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
 						.map(uri => this.updater.ensure(uri))
 				);
-				this.createConfigurations();
 			} catch (err) {
 				this.ensuredAllFiles = undefined;
 				span.setTag('error', true);
@@ -280,7 +315,7 @@ export class ProjectManager implements Disposable {
 		ignore.add(uri);
 		return Observable.from(this.ensureModuleStructure(span))
 			// If max depth was reached, don't go any further
-			.mergeMap(() => maxDepth === 0 ? [] : this.resolveReferencedFiles(uri, span))
+			.mergeMap(() => maxDepth === 0 ? [] : this.resolveReferencedFiles(uri))
 			// Prevent cycles
 			.filter(referencedUri => !ignore.has(referencedUri))
 			// Call method recursively with one less dep level
@@ -406,7 +441,7 @@ export class ProjectManager implements Disposable {
 	 */
 	getConfigurationIfExists(filePath: string, configType = this.getConfigurationType(filePath)): ProjectConfiguration | undefined {
 		let dir = toUnixPath(filePath);
-		let config;
+		let config: ProjectConfiguration | undefined;
 		const configs = this.configs[configType];
 		if (!configs) {
 			return undefined;
@@ -471,7 +506,6 @@ export class ProjectManager implements Disposable {
 		}
 		config.ensureConfigFile(span);
 		config.getHost().incProjectVersion();
-		config.syncProgram(span);
 	}
 
 	/**
@@ -491,7 +525,6 @@ export class ProjectManager implements Disposable {
 		config.ensureConfigFile(span);
 		config.ensureSourceFile(filePath);
 		config.getHost().incProjectVersion();
-		config.syncProgram(span);
 	}
 
 	/**
@@ -500,55 +533,6 @@ export class ProjectManager implements Disposable {
 	 */
 	didSave(uri: string) {
 		this.localFs.didSave(uri);
-	}
-
-	/**
-	 * Detects projects and creates projects denoted by tsconfig.json and jsconfig.json fiels.
-	 * Previously detected projects are NOT discarded.
-	 * If there is no root configuration, adds it to catch all orphan files
-	 */
-	createConfigurations() {
-		for (const uri of this.localFs.uris()) {
-			const filePath = uri2path(uri);
-			if (!/(^|\/)[tj]sconfig\.json$/.test(filePath)) {
-				continue;
-			}
-			if (/(^|\/)node_modules\//.test(filePath)) {
-				continue;
-			}
-			let dir = toUnixPath(filePath);
-			const pos = dir.lastIndexOf('/');
-			if (pos <= 0) {
-				dir = '';
-			} else {
-				dir = dir.substring(0, pos);
-			}
-			const configType = this.getConfigurationType(filePath);
-			const configs = this.configs[configType];
-			configs.set(dir, new ProjectConfiguration(this.localFs, dir, this.versions, filePath, undefined, this.traceModuleResolution, this.logger));
-		}
-
-		const rootPath = this.rootPath.replace(/\/+$/, '');
-		for (const configType of ['js', 'ts'] as ConfigType[]) {
-			const configs = this.configs[configType];
-			if (!configs.has(rootPath)) {
-				const tsConfig: any = {
-					compilerOptions: {
-						module: ts.ModuleKind.CommonJS,
-						allowNonTsExtensions: false,
-						allowJs: configType === 'js'
-					}
-				};
-				tsConfig.include = { js: ['**/*.js', '**/*.jsx'], ts: ['**/*.ts', '**/*.tsx'] }[configType];
-				// if there is at least one config, giving no files to default one
-				// TODO: it makes impossible to IntelliSense gulpfile.js if there is a tsconfig.json in subdirectory
-				if (configs.size > 0) {
-					tsConfig.exclude = ['**/*'];
-				}
-				configs.set(rootPath, new ProjectConfiguration(this.localFs, rootPath, this.versions, '', tsConfig, this.traceModuleResolution, this.logger));
-			}
-
-		}
 	}
 
 	/**
@@ -827,11 +811,24 @@ export class ProjectConfiguration {
 	}
 
 	/**
-	 * Note that it does not perform any parsing or typechecking
+	 * Tells TS service to recompile program (if needed) based on current list of files and compilation options.
+	 * TS service relies on information provided by language servide host to see if there were any changes in
+	 * the whole project or in some files
+	 *
 	 * @return program object (cached result of parsing and typechecking done by TS service)
 	 */
-	getProgram(): ts.Program | undefined {
-		return this.program;
+	getProgram(childOf = new Span()): ts.Program | undefined {
+		const span = childOf.tracer().startSpan('Get program', { childOf });
+		try {
+			return this.getService().getProgram();
+		} catch (err) {
+			span.setTag('error', true);
+			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
+			this.logger.error(`Cannot create program object for ${this.rootFilePath}`, err);
+			throw err;
+		} finally {
+			span.finish();
+		}
 	}
 
 	/**
@@ -842,24 +839,6 @@ export class ProjectConfiguration {
 			throw new Error('project is uninitialized');
 		}
 		return this.host;
-	}
-
-	/**
-	 * Tells TS service to recompile program (if needed) based on current list of files and compilation options.
-	 * TS service relies on information provided by language servide host to see if there were any changes in
-	 * the whole project or in some files
-	 */
-	syncProgram(childOf = new Span()): void {
-		const span = childOf.tracer().startSpan('Sync program', { childOf });
-		try {
-			this.program = this.getService().getProgram();
-		} catch (err) {
-			span.setTag('error', true);
-			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
-			this.logger.error(`Cannot create program object for ${this.rootFilePath}`, err);
-		} finally {
-			span.finish();
-		}
 	}
 
 	private initialized = false;
@@ -909,7 +888,6 @@ export class ProjectConfiguration {
 			this.logger
 		);
 		this.service = ts.createLanguageService(this.host, ts.createDocumentRegistry());
-		this.syncProgram(span);
 		this.initialized = true;
 	}
 
@@ -932,25 +910,19 @@ export class ProjectConfiguration {
 
 		this.init(span);
 
-		const program = this.getProgram();
+		const program = this.getProgram(span);
 		if (!program) {
 			return;
 		}
 
-		let changed = false;
 		for (const uri of this.fs.uris()) {
 			const fileName = uri2path(uri);
 			if (isGlobalTSFile(fileName) || (!isDependencyFile(fileName) && isDeclarationFile(fileName))) {
 				const sourceFile = program.getSourceFile(fileName);
 				if (!sourceFile) {
 					this.getHost().addFile(fileName);
-					changed = true;
 				}
 			}
-		}
-		if (changed) {
-			// requery program object to synchonize LanguageService's data
-			this.syncProgram(span);
 		}
 		this.ensuredBasicFiles = true;
 	}
@@ -961,8 +933,8 @@ export class ProjectConfiguration {
 	 * Ensures a single file is available to the LanguageServiceHost
 	 * @param filePath
 	 */
-	ensureSourceFile(filePath: string): void {
-		const program = this.getProgram();
+	ensureSourceFile(filePath: string, span = new Span()): void {
+		const program = this.getProgram(span);
 		if (!program) {
 			return;
 		}
@@ -983,21 +955,15 @@ export class ProjectConfiguration {
 		if (this.getHost().complete) {
 			return;
 		}
-		const program = this.getProgram();
+		const program = this.getProgram(span);
 		if (!program) {
 			return;
 		}
-		let changed = false;
 		for (const fileName of (this.getHost().expectedFilePaths || [])) {
 			const sourceFile = program.getSourceFile(fileName);
 			if (!sourceFile) {
 				this.getHost().addFile(fileName);
-				changed = true;
 			}
-		}
-		if (changed) {
-			// requery program object to synchonize LanguageService's data
-			this.syncProgram(span);
 		}
 		this.getHost().complete = true;
 		this.ensuredAllFiles = true;

@@ -225,7 +225,7 @@ export function defInfoToSymbolDescriptor(d: ts.DefinitionInfo): SymbolDescripto
  */
 export function isSymbolDescriptorMatch(query: Partial<SymbolDescriptor>, symbol: SymbolDescriptor): boolean {
 	for (const key of Object.keys(query)) {
-		if ((query as any)[key] === undefined) {
+		if (!(query as any)[key]) {
 			continue;
 		}
 		if (key === 'package') {
