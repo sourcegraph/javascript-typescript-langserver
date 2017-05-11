@@ -248,6 +248,15 @@ export class TypeScriptService {
 	 */
 
 	textDocumentDefinition(params: TextDocumentPositionParams, span = new Span()): Observable<OpPatch> {
+		return this._getDefinitionLocations(params, span)
+			.map((location: Location): OpPatch => ({ op: 'add', path: '/-', value: location }))
+			.startWith({ op: 'add', path: '', value: [] });
+	}
+
+	/**
+	 * Returns an Observable of all definition locations found for a symbol.
+	 */
+	protected _getDefinitionLocations(params: TextDocumentPositionParams, span = new Span()): Observable<Location> {
 		const uri = normalizeUri(params.textDocument.uri);
 
 		// Fetch files needed to resolve definition
@@ -282,9 +291,7 @@ export class TypeScriptService {
 							}
 						};
 					});
-			})
-			.map((location): OpPatch => ({ op: 'add', path: '/-', value: location }))
-			.startWith({ op: 'add', path: '', value: [] });
+			});
 	}
 
 	/**
@@ -301,6 +308,15 @@ export class TypeScriptService {
 	 */
 
 	textDocumentXdefinition(params: TextDocumentPositionParams, span = new Span()): Observable<OpPatch> {
+		return this._getSymbolLocationInformations(params, span)
+			.map(symbol => ({ op: 'add', path: '/-', value: symbol } as AddPatch))
+			.startWith({ op: 'add', path: '', value: [] });
+	}
+
+	/**
+	 * Returns an Observable of SymbolLocationInformations for the definition of a symbol at the given position
+	 */
+	protected _getSymbolLocationInformations(params: TextDocumentPositionParams, span = new Span()): Observable<SymbolLocationInformation> {
 		const uri = normalizeUri(params.textDocument.uri);
 		// Ensure files needed to resolve SymbolLocationInformation are fetched
 		return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
@@ -344,9 +360,7 @@ export class TypeScriptService {
 								};
 							});
 					});
-			})
-			.map(symbol => ({ op: 'add', path: '/-', value: symbol } as AddPatch))
-			.startWith({ op: 'add', path: '', value: [] });
+			});
 	}
 
 	/**
@@ -418,6 +432,14 @@ export class TypeScriptService {
 	 * @return Observable of JSON Patches that build a `Hover` result
 	 */
 	textDocumentHover(params: TextDocumentPositionParams, span = new Span()): Observable<OpPatch> {
+		return this._getHover(params, span)
+			.map(hover => ({ op: 'add', path: '', value: hover }) as AddPatch);
+	}
+
+	/**
+	 * Returns an Observable for a Hover at the given position
+	 */
+	protected _getHover(params: TextDocumentPositionParams, span = new Span()): Observable<Hover> {
 		const uri = normalizeUri(params.textDocument.uri);
 
 		// Ensure files needed to resolve hover are fetched
@@ -476,8 +498,7 @@ export class TypeScriptService {
 						end
 					}
 				};
-			})
-			.map(hover => ({ op: 'add', path: '', value: hover }) as AddPatch);
+			});
 	}
 
 	/**
