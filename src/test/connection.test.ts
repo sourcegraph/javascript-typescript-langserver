@@ -50,7 +50,6 @@ describe('connection', () => {
 			emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'initialize', params: { capabilities: {} } });
 			await new Promise(resolve => setTimeout(resolve, 0));
 			sinon.assert.calledOnce(handler.initialize);
-			sinon.assert.calledOnce(writer.write);
 			sinon.assert.calledWithExactly(writer.write, sinon.match({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } }));
 		});
 		it('should ignore exit notifications', async () => {
@@ -107,7 +106,6 @@ describe('connection', () => {
 			emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params });
 			sinon.assert.calledOnce(hoverStub);
 			sinon.assert.calledWithExactly(hoverStub, params, sinon.match.instanceOf(Span));
-			sinon.assert.calledOnce(writer.write);
 			sinon.assert.calledWithExactly(writer.write, sinon.match({ jsonrpc: '2.0', id: 1, result: [123] }));
 		});
 		it('should call a handler on request and send the thrown error of the returned Observable', async () => {
@@ -147,7 +145,6 @@ describe('connection', () => {
 			emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params: [1, 2] });
 			sinon.assert.calledOnce(hoverStub);
 			sinon.assert.calledWithExactly(hoverStub, [1, 2], sinon.match.instanceOf(Span));
-			sinon.assert.calledOnce(writer.write);
 			sinon.assert.calledWithExactly(writer.write, sinon.match({ jsonrpc: '2.0', id: 1, result: 2 }));
 		});
 		it('should call a handler on request and send the result of the returned Observable', async () => {
@@ -162,7 +159,6 @@ describe('connection', () => {
 			emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params });
 			sinon.assert.calledOnce(hoverStub);
 			sinon.assert.calledWithExactly(hoverStub, params, sinon.match.instanceOf(Span));
-			sinon.assert.calledOnce(writer.write);
 			sinon.assert.calledWithExactly(writer.write, sinon.match({ jsonrpc: '2.0', id: 1, result: 2 }));
 		});
 		it('should unsubscribe from the returned Observable when $/cancelRequest was sent and return a RequestCancelled error', async () => {

@@ -249,17 +249,16 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 		if (isRequestMessage(message)) {
 			const subscription = observable
 				.do(patch => {
-					if (streaming) {
-						// Send $/partialResult for partial result patches
-						messageWriter.write({
-							jsonrpc: '2.0',
-							method: '$/partialResult',
-							params: {
-								id: message.id,
-								patch: [patch]
-							} as PartialResultParams
-						});
-					}
+					// Send $/partialResult for partial result patches
+					// TODO only send if client supports it
+					messageWriter.write({
+						jsonrpc: '2.0',
+						method: '$/partialResult',
+						params: {
+							id: message.id,
+							patch: [patch]
+						} as PartialResultParams
+					});
 				})
 				// Build up final result for BC
 				// TODO send null if client declared streaming capability
