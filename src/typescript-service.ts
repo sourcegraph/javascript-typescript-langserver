@@ -73,6 +73,29 @@ export interface TypeScriptServiceOptions {
 
 export type TypeScriptServiceFactory = (client: LanguageClient, options?: TypeScriptServiceOptions) => TypeScriptService;
 
+// defaults from https://github.com/Microsoft/vscode/blob/master/tsfmt.json
+// A formattingProvider could be implemented to read editorconfig etc.
+const formatSettings: ts.FormatCodeSettings = {
+	indentSize: 4,
+	tabSize: 4,
+	newLineCharacter: '\n',
+	convertTabsToSpaces: false,
+	indentStyle: ts.IndentStyle.Smart,
+	insertSpaceAfterCommaDelimiter: true,
+	insertSpaceAfterSemicolonInForStatements: true,
+	insertSpaceBeforeAndAfterBinaryOperators: true,
+	insertSpaceAfterKeywordsInControlFlowStatements: true,
+	insertSpaceAfterFunctionKeywordForAnonymousFunctions: false,
+	insertSpaceBeforeFunctionParenthesis: false,
+	insertSpaceAfterOpeningAndBeforeClosingNonemptyParenthesis: false,
+	insertSpaceAfterOpeningAndBeforeClosingNonemptyBrackets: false,
+	insertSpaceAfterOpeningAndBeforeClosingNonemptyBraces: true,
+	insertSpaceAfterOpeningAndBeforeClosingTemplateStringBraces: false,
+	insertSpaceAfterOpeningAndBeforeClosingJsxExpressionBraces: false,
+	placeOpenBraceOnNewLineForFunctions: false,
+	placeOpenBraceOnNewLineForControlBlocks: false
+};
+
 /**
  * Handles incoming requests and return responses. There is a one-to-one-to-one
  * correspondence between TCP connection, TypeScriptService instance, and
@@ -1017,63 +1040,45 @@ export class TypeScriptService {
 			.map(signatureHelp => ({ op: 'add', path: '', value: signatureHelp }) as AddPatch);
 	}
 
-	async textDocumentCodeAction(params: CodeActionParams, span = new Span()): Promise<Command[]> {
-		await this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span).toPromise();
+	textDocumentCodeAction(params: CodeActionParams, span = new Span()): Observable<OpPatch> {
+		return this.projectManager.ensureReferencedFiles(params.textDocument.uri, undefined, undefined, span)
+			.toArray()
+			.map((): Command[] => {
+				const filePath = uri2path(params.textDocument.uri);
+				const configuration = this.projectManager.getConfiguration(filePath);
+				configuration.ensureBasicFiles(span);
 
-		const filePath = uri2path(params.textDocument.uri);
-		const configuration = this.projectManager.getConfiguration(filePath);
-		configuration.ensureBasicFiles(span);
+				const sourceFile = this._getSourceFile(configuration, filePath, span);
+				if (!sourceFile) {
+					throw new Error(`expected source file ${filePath} to exist in configuration`);
+				}
 
-		const sourceFile = this._getSourceFile(configuration, filePath, span);
-		if (!sourceFile) {
-			throw new Error(`expected source file ${filePath} to exist in configuration`);
-		}
+				const start: number = ts.getPositionOfLineAndCharacter(sourceFile, params.range.start.line, params.range.start.character);
+				const end: number = ts.getPositionOfLineAndCharacter(sourceFile, params.range.end.line, params.range.end.character);
+				const errorCodes: number[] = [];
+				for (const diagnostic of params.context.diagnostics) {
+					if (typeof(diagnostic.code) === 'number') {
+						errorCodes.push(diagnostic.code);
+					}
+				}
 
-		const start: number = ts.getPositionOfLineAndCharacter(sourceFile, params.range.start.line, params.range.start.character);
-		const end: number = ts.getPositionOfLineAndCharacter(sourceFile, params.range.end.line, params.range.end.character);
-		const errorCodes: number[] = [];
-		for (const diagnostic of params.context.diagnostics) {
-			if (typeof(diagnostic.code) === 'number') {
-				errorCodes.push(diagnostic.code);
-			}
-		}
+				const fixes: ts.CodeAction[] = configuration.getService().getCodeFixesAtPosition(filePath, start, end, errorCodes, formatSettings);
+				if (!fixes) {
+					return [];
+				}
 
-		// defaults from https://github.com/Microsoft/vscode/blob/master/tsfmt.json
-		// A formattingProvider could be implemented to read editorconfig etc.
-		const formatSettings: ts.FormatCodeSettings = {
-			indentSize: 4,
-			tabSize: 4,
-			newLineCharacter: '\n',
-			convertTabsToSpaces: false,
-			indentStyle: ts.IndentStyle.Smart,
-			insertSpaceAfterCommaDelimiter: true,
-			insertSpaceAfterSemicolonInForStatements: true,
-			insertSpaceBeforeAndAfterBinaryOperators: true,
-			insertSpaceAfterKeywordsInControlFlowStatements: true,
-			insertSpaceAfterFunctionKeywordForAnonymousFunctions: false,
-			insertSpaceBeforeFunctionParenthesis: false,
-			insertSpaceAfterOpeningAndBeforeClosingNonemptyParenthesis: false,
-			insertSpaceAfterOpeningAndBeforeClosingNonemptyBrackets: false,
-			insertSpaceAfterOpeningAndBeforeClosingNonemptyBraces: true,
-			insertSpaceAfterOpeningAndBeforeClosingTemplateStringBraces: false,
-			insertSpaceAfterOpeningAndBeforeClosingJsxExpressionBraces: false,
-			placeOpenBraceOnNewLineForFunctions: false,
-			placeOpenBraceOnNewLineForControlBlocks: false
-		};
-
-		const fixes: ts.CodeAction[] = configuration.getService().getCodeFixesAtPosition(filePath, start, end, errorCodes, formatSettings);
-		if (!fixes) {
-			return [];
-		}
-
-		return fixes.map(fix => Command.create(fix.description, 'codeFix', ...fix.changes));
+				return fixes.map(fix => Command.create(fix.description, 'codeFix', ...fix.changes));
+			})
+			.map(command => ({ op: 'add', path: '', value: command }) as AddPatch);
 	}
 
-	async workspaceExecuteCommand(params: ExecuteCommandParams, span = new Span()): Promise<void> {
+	workspaceExecuteCommand(params: ExecuteCommandParams, span = new Span()): Observable<OpPatch> {
 		switch (params.command) {
 			case 'codeFix':
 				if (params.arguments && params.arguments.length === 1) {
-					return this.executeCodeFixCommand(params.arguments, span);
+					return Observable
+						.fromPromise(this.executeCodeFixCommand(params.arguments, span))
+						.map(result => ({op: 'add', path: '', value: result }) as OpPatch);
 				} else {
 					throw new Error(`Command ${params.command} requires arguments`);
 				}
@@ -1123,27 +1128,31 @@ export class TypeScriptService {
 		return this.client.workspaceApplyEdit(params).then(r => undefined);
 	}
 
-	async textDocumentRename(params: RenameParams, span = new Span()): Promise<WorkspaceEdit> {
-		await this.projectManager.ensureOwnFiles(span);
+	textDocumentRename(params: RenameParams, span = new Span()): Observable<OpPatch> {
+		return Observable
+				.fromPromise(this.projectManager.ensureOwnFiles(span))
+				.map((): WorkspaceEdit => {
 
-		const filePath = uri2path(params.textDocument.uri);
-		const configuration = this.projectManager.getConfiguration(filePath);
-		configuration.ensureAllFiles(span);
+					const filePath = uri2path(params.textDocument.uri);
+					const configuration = this.projectManager.getConfiguration(filePath);
+					configuration.ensureAllFiles(span);
 
-		const sourceFile = this._getSourceFile(configuration, filePath, span);
-		if (!sourceFile) {
-			throw new Error(`expected source file ${filePath} to exist in configuration`);
-		}
+					const sourceFile = this._getSourceFile(configuration, filePath, span);
+					if (!sourceFile) {
+						throw new Error(`expected source file ${filePath} to exist in configuration`);
+					}
 
-		const position: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
+					const position: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
 
-		const renameInfo = configuration.getService().getRenameInfo(filePath, position);
-		if (!renameInfo.canRename) {
-			throw new Error('Cannot rename: invalid symbol');
-		}
-		const locations = configuration.getService().findRenameLocations(filePath, position, false, false);
+					const renameInfo = configuration.getService().getRenameInfo(filePath, position);
+					if (!renameInfo.canRename) {
+						throw new Error('Cannot rename: invalid symbol');
+					}
+					const locations = configuration.getService().findRenameLocations(filePath, position, false, false);
 
-		return this.renameInLocations(configuration, params.newName, locations, span);
+					return this.renameInLocations(configuration, params.newName, locations, span);
+				})
+				.map(edits => ({op: 'add', path: '', value: edits}) as OpPatch);
 	}
 
 	renameInLocations(configuration: ProjectConfiguration, newName: string, locations: ts.RenameLocation[], span: Span): WorkspaceEdit {

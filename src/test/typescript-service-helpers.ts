@@ -2209,7 +2209,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						character: 1
 					},
 					newName: 'asdf'
-				});
+				}).toArray().map(patches => apply(null, patches)).toPromise();
 			} catch (e) {
 				assert.equal(e.message, 'Cannot rename: invalid symbol');
 				threw = true;
@@ -2228,7 +2228,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					character: 6
 				},
 				newName: 'B'
-			});
+			}).toArray().map(patches => apply(null, patches)).toPromise();
 			assert.deepEqual(result, {
 				changes: {
 					[rootUri + 'a.ts']: [{
@@ -2269,7 +2269,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					character: 16
 				},
 				newName: 'f'
-			});
+			}).toArray().map(patches => apply(null, patches)).toPromise();
 			assert.deepEqual(result, {
 				changes: {
 					[rootUri + 'import.ts']: [{
@@ -2366,7 +2366,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				context: {
 					diagnostics: [firstDiagnostic]
 				}
-			});
+			}).toArray().map(patches => apply(null, patches)).toPromise();
 			assert.lengthOf(actions, 1);
 			assert.sameDeepMembers(actions, [
 				{
@@ -2405,7 +2405,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		afterEach(shutdownService as any);
 
 		it('should return edits for a codeFix command', async function (this: TestContext) {
-			await this.service.workspaceExecuteCommand({
+			const result = await this.service.workspaceExecuteCommand({
 				command: 'codeFix',
 				arguments: [
 					{
@@ -2418,7 +2418,10 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						]
 					}
 				]
-			});
+			}).toArray().map(patches => apply(null, patches)).toPromise();
+
+			assert.isUndefined(result);
+
 			sinon.assert.called(this.client.workspaceApplyEdit);
 			const workspaceEdit = this.client.workspaceApplyEdit.lastCall.args[0];
 			assert.deepEqual(workspaceEdit, {
