@@ -46,6 +46,7 @@ import {
 import {
 	convertStringtoSymbolKind,
 	defInfoToSymbolDescriptor,
+	getMatchingPropertyCount,
 	isLocalUri,
 	isSymbolDescriptorMatch,
 	normalizeUri,
@@ -595,10 +596,11 @@ export class TypeScriptService {
 				if (isDefinitelyTyped) {
 					return this._workspaceSymbolDefinitelyTyped({ ...params, limit }, span);
 				}
-
+				/** A sorted array that keeps track of symbol scores to determine the index to insert the symbol at */
+				const scores: number[] = [];
 				// A workspace/symol request searches all symbols in own code, but not in dependencies
 				let patches = Observable.from(this.projectManager.ensureOwnFiles(span))
-					.mergeMap(() =>
+					.mergeMap<void, ProjectConfiguration>(() =>
 						symbolQuery && symbolQuery.package
 							// If SymbolDescriptor query with PackageDescriptor, search for package.jsons with matching package name
 							? Observable.from<string>(this.packageManager.packageJsonUris() as any)
@@ -613,14 +615,26 @@ export class TypeScriptService {
 							: this.projectManager.configurations() as any
 					)
 					// If PackageDescriptor is given, only search project with the matching package name
-					.mergeMap<ProjectConfiguration, SymbolInformation>(config => this._collectWorkspaceSymbols(config, query || symbolQuery, limit, span) as any)
-					.filter(symbol => !symbol.location.uri.includes('/node_modules/'))
+					.mergeMap(config => this._collectWorkspaceSymbols(config, query || symbolQuery, limit, span))
+					.filter(([score, symbol]) => !symbol.location.uri.includes('/node_modules/'))
 					// Filter duplicate symbols
 					// There may be few configurations that contain the same file(s)
 					// or files from different configurations may refer to the same file(s)
 					.distinct(symbol => hashObject(symbol, { respectType: false } as any))
 					.take(limit)
-					.map(symbol => ({ op: 'add', path: '/-', value: symbol }) as AddPatch)
+					.map(([score, symbol]) => {
+						// Find out at which index to insert the symbol by score
+						for (const [i, s] of scores.entries()) {
+							if (s < score) {
+								// Track this score
+								scores.splice(i, 0, score);
+								// Insert at the index so sorting order by score is maintained
+								return { op: 'add', path: '/' + i, value: symbol } as AddPatch;
+							}
+						}
+						scores.push(score);
+						return { op: 'add', path: '/-', value: symbol } as AddPatch;
+					})
 					.startWith({ op: 'add', path: '', value: [] });
 
 				if (!query && !symbolQuery) {
@@ -654,20 +668,34 @@ export class TypeScriptService {
 		const normRootUri = this.rootUri.endsWith('/') ? this.rootUri : this.rootUri + '/';
 		const packageRootUri = normRootUri + params.symbol.package.name.substr(1) + '/';
 
+		/** A sorted array that keeps track of symbol scores to determine the index to insert the symbol at */
+		const scores: number[] = [];
 		return Observable.from(this.updater.ensureStructure(span))
 			.mergeMap(() => Observable.from<string>(this.inMemoryFileSystem.uris() as any))
 			.filter(uri => uri.startsWith(packageRootUri))
 			.mergeMap(uri => this.updater.ensure(uri, span))
 			.toArray()
-			.mergeMap<any, SymbolInformation>(() => {
+			.mergeMap(() => {
 				span.log({ event: 'fetched package files' });
 
 				// Search symbol in configuration
 				// forcing TypeScript mode
 				const config = this.projectManager.getConfiguration(uri2path(packageRootUri), 'ts');
-				return this._collectWorkspaceSymbols(config, params.query || symbolQuery, params.limit, span) as any;
+				return this._collectWorkspaceSymbols(config, params.query || symbolQuery, params.limit, span);
 			})
-			.map(symbol => ({ op: 'add', path: '/-', value: symbol }) as AddPatch)
+			.map(([score, symbol]) => {
+				// Find out at which index to insert the symbol by score
+				for (const [i, s] of scores.entries()) {
+					if (s < score) {
+						// Track this score
+						scores.splice(i, 0, score);
+						// Insert at the index so sorting order by score is maintained
+						return { op: 'add', path: '/' + i, value: symbol } as AddPatch;
+					}
+				}
+				scores.push(score);
+				return { op: 'add', path: '/-', value: symbol } as AddPatch;
+			})
 			.startWith({ op: 'add', path: '', value: [] })
 			.catch<OpPatch, never>(err => {
 				span.setTag('error', true);
@@ -1128,7 +1156,7 @@ export class TypeScriptService {
 	 * @param limit An optional limit that is passed to TypeScript
 	 * @return Observable of SymbolInformations
 	 */
-	private _collectWorkspaceSymbols(config: ProjectConfiguration, query?: string | Partial<SymbolDescriptor>, limit = Infinity, childOf = new Span()): Observable<SymbolInformation> {
+	private _collectWorkspaceSymbols(config: ProjectConfiguration, query?: string | Partial<SymbolDescriptor>, limit = Infinity, childOf = new Span()): Observable<[number, SymbolInformation]> {
 		const span = childOf.tracer().startSpan('Collect workspace symbols', { childOf });
 		span.addTags({ config: config.configFilePath, query, limit });
 
@@ -1142,35 +1170,40 @@ export class TypeScriptService {
 				}
 
 				if (query) {
-					let items: Observable<ts.NavigateToItem>;
+					let items: Observable<[number, ts.NavigateToItem]>;
 					if (typeof query === 'string') {
 						// Query by text query
-						items = Observable.from(config.getService().getNavigateToItems(query, limit, undefined, false));
+						items = Observable.from(config.getService().getNavigateToItems(query, limit, undefined, false))
+							// Same score for all
+							.map(item => [1, item]);
 					} else {
 						const queryWithoutPackage = omit(query, 'package') as SymbolDescriptor;
 						// Query by name
 						items = Observable.from(config.getService().getNavigateToItems(query.name || '', limit, undefined, false))
-							// First filter to match SymbolDescriptor, ignoring PackageDescriptor
-							.filter(item => isSymbolDescriptorMatch(queryWithoutPackage, {
+							// Get a score how good the symbol matches the SymbolDescriptor (ignoring PackageDescriptor)
+							.map((item): [number, ts.NavigateToItem] => [getMatchingPropertyCount(queryWithoutPackage, {
 								kind: item.kind,
 								name: item.name,
 								containerKind: item.containerKind,
 								containerName: item.containerName
-							}))
-							// if SymbolDescriptor matched, get package.json and match PackageDescriptor name
+							}), item])
+							// If score === 0, no properties matched
+							.filter(([score, symbol]) => score > 0)
+							// If SymbolDescriptor matched, get package.json and match PackageDescriptor name
 							// TODO get and match full PackageDescriptor (version)
-							.mergeMap(item => {
+							.mergeMap(([score, item]) => {
 								if (!query.package || !query.package.name) {
-									return [item];
+									return [[score, item]];
 								}
 								const uri = path2uri('', item.fileName);
 								return Observable.from(this.packageManager.getClosestPackageJson(uri, span))
-									.mergeMap(packageJson => packageJson && packageJson.name === query.package!.name! ? [item] : []);
+									// If PackageDescriptor matches, increase score
+									.map((packageJson): [number, ts.NavigateToItem] => packageJson && packageJson.name === query.package!.name! ? [score + 1, item] : [score, item]);
 							});
 					}
 					return Observable.from(items)
 						// Map NavigateToItems to SymbolInformations
-						.map(item => {
+						.map(([score, item]) => {
 							const sourceFile = program.getSourceFile(item.fileName);
 							if (!sourceFile) {
 								throw new Error(`Source file ${item.fileName} does not exist`);
@@ -1189,13 +1222,16 @@ export class TypeScriptService {
 							if (item.containerName) {
 								symbolInformation.containerName = item.containerName;
 							}
-							return symbolInformation;
+							return [score, symbolInformation] as [number, SymbolInformation];
 						})
-						.filter(symbolInformation => isLocalUri(symbolInformation.location.uri));
+						.filter(([score, symbolInformation]) => isLocalUri(symbolInformation.location.uri));
 				} else {
 					// An empty query uses a different algorithm to iterate all files and aggregate the symbols per-file to get all symbols
 					// TODO make all implementations use this? It has the advantage of being streamable and cancellable
-					return Observable.from<SymbolInformation>(this._getNavigationTreeItems(config) as any).take(limit);
+					return Observable.from<SymbolInformation>(this._getNavigationTreeItems(config) as any)
+						// Same score for all
+						.map(symbol => [1, symbol])
+						.take(limit);
 				}
 			} catch (err) {
 				return Observable.throw(err);
