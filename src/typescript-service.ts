@@ -622,18 +622,15 @@ export class TypeScriptService {
 					// or files from different configurations may refer to the same file(s)
 					.distinct(symbol => hashObject(symbol, { respectType: false } as any))
 					.take(limit)
+					// Find out at which index to insert the symbol to maintain sorting order by score
 					.map(([score, symbol]) => {
-						// Find out at which index to insert the symbol by score
-						for (const [i, s] of scores.entries()) {
-							if (s < score) {
-								// Track this score
-								scores.splice(i, 0, score);
-								// Insert at the index so sorting order by score is maintained
-								return { op: 'add', path: '/' + i, value: symbol } as AddPatch;
-							}
+						const index = scores.findIndex(s => s < score);
+						if (index === -1) {
+							scores.push(score);
+							return { op: 'add', path: '/-', value: symbol } as AddPatch;
 						}
-						scores.push(score);
-						return { op: 'add', path: '/-', value: symbol } as AddPatch;
+						scores.splice(index, 0, score);
+						return { op: 'add', path: '/' + index, value: symbol } as AddPatch;
 					})
 					.startWith({ op: 'add', path: '', value: [] });
 
@@ -683,18 +680,15 @@ export class TypeScriptService {
 				const config = this.projectManager.getConfiguration(uri2path(packageRootUri), 'ts');
 				return this._collectWorkspaceSymbols(config, params.query || symbolQuery, params.limit, span);
 			})
+			// Find out at which index to insert the symbol to maintain sorting order by score
 			.map(([score, symbol]) => {
-				// Find out at which index to insert the symbol by score
-				for (const [i, s] of scores.entries()) {
-					if (s < score) {
-						// Track this score
-						scores.splice(i, 0, score);
-						// Insert at the index so sorting order by score is maintained
-						return { op: 'add', path: '/' + i, value: symbol } as AddPatch;
-					}
+				const index = scores.findIndex(s => s < score);
+				if (index === -1) {
+					scores.push(score);
+					return { op: 'add', path: '/-', value: symbol } as AddPatch;
 				}
-				scores.push(score);
-				return { op: 'add', path: '/-', value: symbol } as AddPatch;
+				scores.splice(index, 0, score);
+				return { op: 'add', path: '/' + index, value: symbol } as AddPatch;
 			})
 			.startWith({ op: 'add', path: '', value: [] })
 			.catch<OpPatch, never>(err => {
