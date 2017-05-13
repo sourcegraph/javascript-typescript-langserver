@@ -46,7 +46,7 @@ import {
 import {
 	convertStringtoSymbolKind,
 	defInfoToSymbolDescriptor,
-	getMatchingPropertyCount,
+	getMatchScore,
 	isLocalUri,
 	isSymbolDescriptorMatch,
 	normalizeUri,
@@ -1135,7 +1135,7 @@ export class TypeScriptService {
 						// Query by name
 						items = Observable.from(config.getService().getNavigateToItems(query.name || '', limit, undefined, false))
 							// Get a score how good the symbol matches the SymbolDescriptor (ignoring PackageDescriptor)
-							.map((item): [number, ts.NavigateToItem] => [getMatchingPropertyCount(queryWithoutPackage, {
+							.map((item): [number, ts.NavigateToItem] => [getMatchScore(queryWithoutPackage, {
 								kind: item.kind,
 								name: item.name,
 								containerKind: item.containerKind,

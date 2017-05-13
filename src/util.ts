@@ -221,20 +221,20 @@ export function defInfoToSymbolDescriptor(d: ts.DefinitionInfo): SymbolDescripto
 }
 
 /**
- * Compares a SymbolDescriptor to a SymbolDescriptor query and returns a numeric score defining how well the query matches.
+ * Compares two values and returns a numeric score defining of how well they match.
  * Every property that matches increases the score by 1.
  */
-export function getMatchingPropertyCount(query: any, symbol: any): number {
-	if (!query) {
+export function getMatchScore(query: any, value: any): number {
+	// If query is a scalar value, compare by identity and return 0 or 1
+	if (typeof query !== 'object' || query === null) {
+		return +(query === value);
+	}
+	// If value is scalar, return no match
+	if (typeof value !== 'object' && value !== null) {
 		return 0;
 	}
-	if (typeof query !== 'object' && query !== null) {
-		return +(query === symbol);
-	}
-	if (typeof symbol !== 'object' && symbol !== null) {
-		return 0;
-	}
-	return Object.keys(query).reduce((score, key) => score + getMatchingPropertyCount(query[key], symbol[key]), 0);
+	// Both values are objects, compare each property and sum the scores
+	return Object.keys(query).reduce((score, key) => score + getMatchScore(query[key], value[key]), 0);
 }
 
 /**

@@ -1,11 +1,10 @@
 import * as assert from 'assert';
-import { getMatchingPropertyCount, isGlobalTSFile, isSymbolDescriptorMatch } from '../util';
+import { getMatchScore, isGlobalTSFile, isSymbolDescriptorMatch } from '../util';
 
 describe('util', () => {
-	describe('getSymbolSimilarity()', () => {
-		it('should return a score of 3 if 3 properties match', () => {
-			const score = getMatchingPropertyCount({
-				containerKind: undefined,
+	describe('getMatchScore()', () => {
+		it('should return a score of 4 if 4 properties match', () => {
+			const score = getMatchScore({
 				containerName: 'ts',
 				kind: 'interface',
 				name: 'Program',
@@ -17,10 +16,10 @@ describe('util', () => {
 				name: 'Program',
 				package: undefined
 			});
-			assert.equal(score, 3);
+			assert.equal(score, 4);
 		});
-		it('should return a score of 2 if 2 properties match and one does not', () => {
-			const score = getMatchingPropertyCount({
+		it('should return a score of 4 if 4 properties match and 1 does not', () => {
+			const score = getMatchScore({
 				containerKind: '',
 				containerName: 'util',
 				kind: 'var',
@@ -33,10 +32,10 @@ describe('util', () => {
 				name: 'colors',
 				package: undefined
 			});
-			assert.equal(score, 2);
+			assert.equal(score, 4);
 		});
 		it('should return a score of 3 if 3 properties match deeply', () => {
-			const score = getMatchingPropertyCount({
+			const score = getMatchScore({
 				name: 'a',
 				kind: 'class',
 				package: { name: 'mypkg' },
