@@ -22,7 +22,7 @@ import {
 	Location,
 	MarkedString,
 	ParameterInformation,
-	Range as LSRange,
+	Range,
 	ReferenceParams,
 	RenameParams,
 	SignatureHelp,
@@ -1091,7 +1091,7 @@ export class TypeScriptService {
 		const start = ts.getLineAndCharacterOfPosition(sourceFile, textChange.span.start);
 		if (textChange.span.length) {
 			const end = ts.getLineAndCharacterOfPosition(sourceFile, textChange.span.start + textChange.span.length);
-			const range = LSRange.create(start, end);
+			const range = Range.create(start, end);
 			if (textChange.newText) {
 				return TextEdit.replace(range, textChange.newText);
 			} else {
@@ -1178,7 +1178,7 @@ export class TypeScriptService {
 	createRenameEdit(newText: string, sourceFile: ts.SourceFile, span: ts.TextSpan): TextEdit {
 		const start = ts.getLineAndCharacterOfPosition(sourceFile, span.start);
 		const end = ts.getLineAndCharacterOfPosition(sourceFile, span.start + span.length);
-		return TextEdit.replace(LSRange.create(start, end), newText);
+		return TextEdit.replace(Range.create(start, end), newText);
 	}
 
 	/**
