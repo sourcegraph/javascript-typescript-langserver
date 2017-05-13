@@ -19,6 +19,22 @@ describe('util', () => {
 			});
 			assert.equal(score, 3);
 		});
+		it('should return a score of 2 if 2 properties match and one does not', () => {
+			const score = getMatchingPropertyCount({
+				containerKind: '',
+				containerName: 'util',
+				kind: 'var',
+				name: 'colors',
+				package: undefined
+			}, {
+				containerKind: '',
+				containerName: '',
+				kind: 'var',
+				name: 'colors',
+				package: undefined
+			});
+			assert.equal(score, 3);
+		});
 		it('should return a score of 3 if 3 properties match deeply', () => {
 			const score = getMatchingPropertyCount({
 				name: 'a',
