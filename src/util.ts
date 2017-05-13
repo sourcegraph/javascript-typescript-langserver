@@ -8,6 +8,13 @@ import { PackageDescriptor, SymbolDescriptor } from './request-type';
 let strict = false;
 
 /**
+ * Encodes a JSON Pointer Component as per https://tools.ietf.org/html/rfc6901#section-3
+ */
+export function encodeJsonPointerComponent(component: string): string {
+	return component.replace(/~/g, '~0').replace(/\//g, '~1');
+}
+
+/**
  * Toggles "strict" flag, affects how we are parsing/generating URLs.
  * In strict mode we using "file://PATH", otherwise on Windows we are using "file:///PATH"
  */

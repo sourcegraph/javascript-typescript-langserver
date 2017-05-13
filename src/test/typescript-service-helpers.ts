@@ -2,14 +2,14 @@ import * as chai from 'chai';
 import * as sinon from 'sinon';
 import * as ts from 'typescript';
 import { CompletionItemKind, CompletionList, TextDocumentIdentifier, TextDocumentItem } from 'vscode-languageserver';
-import { Hover, Location, SignatureHelp, SymbolInformation, SymbolKind } from 'vscode-languageserver-types';
+import { Hover, Location, SignatureHelp, SymbolInformation, SymbolKind, WorkspaceEdit } from 'vscode-languageserver-types';
 import { LanguageClient, RemoteLanguageClient } from '../lang-handler';
 import { TextDocumentContentParams, WorkspaceFilesParams } from '../request-type';
 import { SymbolLocationInformation } from '../request-type';
 import { TypeScriptService, TypeScriptServiceFactory } from '../typescript-service';
 import chaiAsPromised = require('chai-as-promised');
 import { apply } from 'json-patch';
-import { ITestCallbackContext } from 'mocha';
+import { ISuiteCallbackContext, ITestCallbackContext } from 'mocha';
 chai.use(chaiAsPromised);
 const assert = chai.assert;
 
@@ -2171,6 +2171,144 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			assert.notDeepEqual(result.items.length, []);
 		});
 	} as any);
+
+	describe('textDocumentRename()', function (this: TestContext & ISuiteCallbackContext) {
+		beforeEach(initializeTypeScriptService(createService, rootUri, new Map([
+			[rootUri + 'package.json', JSON.stringify({ name: 'mypkg' })],
+			[rootUri + 'a.ts', [
+				'class A {',
+				'	/** foo doc*/',
+				'    foo() {}',
+				'	/** bar doc*/',
+				'    bar(): number { return 1; }',
+				'	/** baz doc*/',
+				'    baz(): string { return ""; }',
+				'	/** qux doc*/',
+				'    qux: number;',
+				'}',
+				'const a = new A();',
+				'a.'
+			].join('\n')],
+			[rootUri + 'uses-import.ts', [
+				'import {d} from "./import"',
+				'const x = d();'
+			].join('\n')],
+			[rootUri + 'import.ts', 'export function d(): number { return 55; }']
+		])) as any);
+
+		afterEach(shutdownService as any);
+
+		it('should error on an invalid symbol', async function (this: TestContext & ITestCallbackContext) {
+			await assert.isRejected(
+				this.service.textDocumentRename({
+					textDocument: {
+						uri: rootUri + 'a.ts'
+					},
+					position: {
+						line: 0,
+						character: 1
+					},
+					newName: 'asdf'
+				}).toArray().map(patches => apply(null, patches)).toPromise(),
+				'This symbol cannot be renamed'
+			);
+		});
+		it('should return a correct WorkspaceEdit to rename a class', async function (this: TestContext & ITestCallbackContext) {
+			const result: WorkspaceEdit = await this.service.textDocumentRename({
+				textDocument: {
+					uri: rootUri + 'a.ts'
+				},
+				position: {
+					line: 0,
+					character: 6
+				},
+				newName: 'B'
+			}).toArray().map(patches => apply(null, patches)).toPromise();
+			assert.deepEqual(result, {
+				changes: {
+					[rootUri + 'a.ts']: [{
+						newText: 'B',
+						range: {
+							end: {
+								character: 7,
+								line: 0
+							},
+							start: {
+								character: 6,
+								line: 0
+							}
+						}
+					}, {
+						newText: 'B',
+						range: {
+							end: {
+								character: 15,
+								line: 10
+							},
+							start: {
+								character: 14,
+								line: 10
+							}
+						}
+					}]
+				}
+			});
+		});
+		it('should return a correct WorkspaceEdit to rename an imported function', async function (this: TestContext & ITestCallbackContext) {
+			const result: WorkspaceEdit = await this.service.textDocumentRename({
+				textDocument: {
+					uri: rootUri + 'import.ts'
+				},
+				position: {
+					line: 0,
+					character: 16
+				},
+				newName: 'f'
+			}).toArray().map(patches => apply(null, patches)).toPromise();
+			assert.deepEqual(result, {
+				changes: {
+					[rootUri + 'import.ts']: [{
+						newText: 'f',
+						range: {
+							end: {
+								character: 17,
+								line: 0
+							},
+							start: {
+								character: 16,
+								line: 0
+							}
+						}
+					}],
+					[rootUri + 'uses-import.ts']: [{
+						newText: 'f',
+						range: {
+							end: {
+								character: 9,
+								line: 0
+							},
+							start: {
+								character: 8,
+								line: 0
+							}
+						}
+					}, {
+						newText: 'f',
+						range: {
+							end: {
+								character: 11,
+								line: 1
+							},
+							start: {
+								character: 10,
+								line: 1
+							}
+						}
+					}]
+				}
+			});
+		});
+	});
 
 	describe('Special file names', function (this: TestContext) {
 
