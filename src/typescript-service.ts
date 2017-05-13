@@ -49,10 +49,10 @@ import {
 import {
 	convertStringtoSymbolKind,
 	defInfoToSymbolDescriptor,
-	encodeJsonPointerComponent,
 	getMatchScore,
 	isLocalUri,
 	isSymbolDescriptorMatch,
+	JSONPTR,
 	normalizeUri,
 	path2uri,
 	toUnixPath,
@@ -1037,10 +1037,10 @@ export class TypeScriptService {
 				// if file has no edit yet, initialize array
 				if (!editUris.has(uri)) {
 					editUris.add(uri);
-					return { op: 'add', path: `/changes/${encodeJsonPointerComponent(uri)}`, value: [edit] };
+					return { op: 'add', path: JSONPTR`/changes/${uri}`, value: [edit] };
 				}
 				// else append to array
-				return { op: 'add', path: `/changes/${encodeJsonPointerComponent(uri)}/-`, value: edit };
+				return { op: 'add', path: JSONPTR`/changes/${uri}/-`, value: edit };
 			})
 			.startWith({ op: 'add', path: '', value: { changes: {} } as WorkspaceEdit } as AddPatch);
 	}

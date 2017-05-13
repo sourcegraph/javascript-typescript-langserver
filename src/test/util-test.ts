@@ -1,7 +1,14 @@
 import * as assert from 'assert';
-import { getMatchScore, isGlobalTSFile, isSymbolDescriptorMatch } from '../util';
+import { getMatchScore, isGlobalTSFile, isSymbolDescriptorMatch, JSONPTR } from '../util';
 
 describe('util', () => {
+	describe('JSONPTR', () => {
+		it('should escape JSON Pointer components', () => {
+			const uri = 'file:///foo/~bar';
+			const pointer = JSONPTR`/changes/${uri}/-`;
+			assert.equal(pointer, '/changes/file:~1~1~1foo~1~0bar/-');
+		});
+	});
 	describe('getMatchScore()', () => {
 		it('should return a score of 4 if 4 properties match', () => {
 			const score = getMatchScore({

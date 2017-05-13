@@ -8,10 +8,10 @@ import { PackageDescriptor, SymbolDescriptor } from './request-type';
 let strict = false;
 
 /**
- * Encodes a JSON Pointer Component as per https://tools.ietf.org/html/rfc6901#section-3
+ * Template string tag to escape JSON Pointer components as per https://tools.ietf.org/html/rfc6901#section-3
  */
-export function encodeJsonPointerComponent(component: string): string {
-	return component.replace(/~/g, '~0').replace(/\//g, '~1');
+export function JSONPTR(strings: TemplateStringsArray, ...toEscape: string[]): string {
+	return strings.reduce((prev, curr, i) => prev + toEscape[i - 1].replace(/~/g, '~0').replace(/\//g, '~1') + curr);
 }
 
 /**
