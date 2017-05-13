@@ -33,7 +33,7 @@ describe('util', () => {
 				name: 'colors',
 				package: undefined
 			});
-			assert.equal(score, 3);
+			assert.equal(score, 2);
 		});
 		it('should return a score of 3 if 3 properties match deeply', () => {
 			const score = getMatchingPropertyCount({
