@@ -577,34 +577,52 @@ export class TypeScriptService {
 		// TODO stream 50 results, then re-query and stream the rest
 		const limit = Math.min(params.limit || Infinity, 50);
 
-		const query = params.query;
-		const symbolQuery = params.symbol && { ...params.symbol };
-
-		if (symbolQuery && symbolQuery.package) {
-			// Strip all fields except name from PackageDescriptor
-			symbolQuery.package = { name: symbolQuery.package.name };
-		}
-
 		// Return cached result for empty query, if available
-		if (!query && !symbolQuery && this.emptyQueryWorkspaceSymbols) {
+		if (!params.query && !params.symbol && this.emptyQueryWorkspaceSymbols) {
 			return this.emptyQueryWorkspaceSymbols;
 		}
 
-		// Use special logic for DefinitelyTyped
-		return this.isDefinitelyTyped
-			.mergeMap(isDefinitelyTyped => {
+		/** A sorted array that keeps track of symbol match scores to determine the index to insert the symbol at */
+		const scores: number[] = [];
+
+		let observable = this.isDefinitelyTyped
+			.mergeMap((isDefinitelyTyped: boolean): Observable<[number, SymbolInformation]> => {
+				// Use special logic for DefinitelyTyped
+				// Search only in the correct subdirectory for the given PackageDescriptor
 				if (isDefinitelyTyped) {
-					return this._workspaceSymbolDefinitelyTyped({ ...params, limit }, span);
+					// Error if not passed a SymbolDescriptor query with an `@types` PackageDescriptor
+					if (!params.symbol || !params.symbol.package || !params.symbol.package.name || !params.symbol.package.name.startsWith('@types/')) {
+						return Observable.throw('workspace/symbol on DefinitelyTyped is only supported with a SymbolDescriptor query with an @types PackageDescriptor');
+					}
+
+					// Fetch all files in the package subdirectory
+					// All packages are in the types/ subdirectory
+					const normRootUri = this.rootUri.endsWith('/') ? this.rootUri : this.rootUri + '/';
+					const packageRootUri = normRootUri + params.symbol.package.name.substr(1) + '/';
+
+					return Observable.from(this.updater.ensureStructure(span))
+						.mergeMap(() => Observable.from<string>(this.inMemoryFileSystem.uris() as any))
+						.filter(uri => uri.startsWith(packageRootUri))
+						.mergeMap(uri => this.updater.ensure(uri, span))
+						.toArray()
+						.mergeMap(() => {
+							span.log({ event: 'fetched package files' });
+							const config = this.projectManager.getParentConfiguration(packageRootUri, 'ts');
+							if (!config) {
+								throw new Error(`Could not find tsconfig for ${packageRootUri}`);
+							}
+							// Don't match PackageDescriptor on symbols
+							return this._getSymbolsInConfig(config, params.query || omit(params.symbol!, 'package'), limit, span);
+						});
 				}
-				/** A sorted array that keeps track of symbol scores to determine the index to insert the symbol at */
-				const scores: number[] = [];
-				// A workspace/symol request searches all symbols in own code, but not in dependencies
-				let patches = Observable.from(this.projectManager.ensureOwnFiles(span))
+				// Regular workspace symbol search
+				// Search all symbols in own code, but not in dependencies
+				return Observable.from(this.projectManager.ensureOwnFiles(span))
 					.mergeMap<void, ProjectConfiguration>(() =>
-						symbolQuery && symbolQuery.package
+						params.symbol && params.symbol.package && params.symbol.package.name
 							// If SymbolDescriptor query with PackageDescriptor, search for package.jsons with matching package name
 							? Observable.from<string>(this.packageManager.packageJsonUris() as any)
-								.filter(packageJsonUri => !symbolQuery || !symbolQuery.package || !symbolQuery.package.name || (JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri)) as PackageJson).name === symbolQuery.package!.name)
+								.filter(packageJsonUri => (JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri)) as PackageJson).name === params.symbol!.package!.name)
 								// Find their parent and child tsconfigs
 								.mergeMap(packageJsonUri => Observable.merge(
 									castArray<ProjectConfiguration>(this.projectManager.getParentConfiguration(packageJsonUri) || []),
@@ -615,71 +633,15 @@ export class TypeScriptService {
 							: this.projectManager.configurations() as any
 					)
 					// If PackageDescriptor is given, only search project with the matching package name
-					.mergeMap(config => this._collectWorkspaceSymbols(config, query || symbolQuery, limit, span))
-					.filter(([score, symbol]) => !symbol.location.uri.includes('/node_modules/'))
-					// Filter duplicate symbols
-					// There may be few configurations that contain the same file(s)
-					// or files from different configurations may refer to the same file(s)
-					.distinct(symbol => hashObject(symbol, { respectType: false } as any))
-					.take(limit)
-					// Find out at which index to insert the symbol to maintain sorting order by score
-					.map(([score, symbol]) => {
-						const index = scores.findIndex(s => s < score);
-						if (index === -1) {
-							scores.push(score);
-							return { op: 'add', path: '/-', value: symbol } as AddPatch;
-						}
-						scores.splice(index, 0, score);
-						return { op: 'add', path: '/' + index, value: symbol } as AddPatch;
-					})
-					.startWith({ op: 'add', path: '', value: [] });
-
-				if (!query && !symbolQuery) {
-					patches = this.emptyQueryWorkspaceSymbols = patches.publishReplay().refCount();
-				}
-
-				return patches;
-			});
-	}
-
-	/**
-	 * Specialised version of workspaceSymbol for DefinitelyTyped.
-	 * Searches only in the correct subdirectory for the given PackageDescriptor.
-	 * Will error if not passed a SymbolDescriptor query with an `@types` PackageDescriptor
-	 *
-	 * @return Observable of JSON Patches that build a `SymbolInformation[]` result
-	 */
-	protected _workspaceSymbolDefinitelyTyped(params: WorkspaceSymbolParams, childOf = new Span()): Observable<OpPatch> {
-		const span = childOf.tracer().startSpan('Handle workspace/symbol DefinitelyTyped', { childOf });
-
-		if (!params.symbol || !params.symbol.package || !params.symbol.package.name || !params.symbol.package.name.startsWith('@types/')) {
-			return Observable.throw('workspace/symbol on DefinitelyTyped is only supported with a SymbolDescriptor query with an @types PackageDescriptor');
-		}
-
-		const symbolQuery = { ...params.symbol };
-		// Don't match PackageDescriptor on symbols
-		symbolQuery.package = undefined;
-
-		// Fetch all files in the package subdirectory
-		// All packages are in the types/ subdirectory
-		const normRootUri = this.rootUri.endsWith('/') ? this.rootUri : this.rootUri + '/';
-		const packageRootUri = normRootUri + params.symbol.package.name.substr(1) + '/';
-
-		/** A sorted array that keeps track of symbol scores to determine the index to insert the symbol at */
-		const scores: number[] = [];
-		return Observable.from(this.updater.ensureStructure(span))
-			.mergeMap(() => Observable.from<string>(this.inMemoryFileSystem.uris() as any))
-			.filter(uri => uri.startsWith(packageRootUri))
-			.mergeMap(uri => this.updater.ensure(uri, span))
-			.toArray()
-			.mergeMap(() => {
-				span.log({ event: 'fetched package files' });
-
-				// Search symbol in configuration
-				// forcing TypeScript mode
-				const config = this.projectManager.getConfiguration(uri2path(packageRootUri), 'ts');
-				return this._collectWorkspaceSymbols(config, params.query || symbolQuery, params.limit, span);
+					.mergeMap(config => this._getSymbolsInConfig(config, params.query || params.symbol, limit, span));
 			})
+			// Filter symbols found in dependencies
+			.filter(([score, symbol]) => !symbol.location.uri.includes('/node_modules/'))
+			// Filter duplicate symbols
+			// There may be few configurations that contain the same file(s)
+			// or files from different configurations may refer to the same file(s)
+			.distinct(symbol => hashObject(symbol, { respectType: false } as any))
+			.take(limit)
 			// Find out at which index to insert the symbol to maintain sorting order by score
 			.map(([score, symbol]) => {
 				const index = scores.findIndex(s => s < score);
@@ -690,15 +652,13 @@ export class TypeScriptService {
 				scores.splice(index, 0, score);
 				return { op: 'add', path: '/' + index, value: symbol } as AddPatch;
 			})
-			.startWith({ op: 'add', path: '', value: [] })
-			.catch<OpPatch, never>(err => {
-				span.setTag('error', true);
-				span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
-				throw err;
-			})
-			.finally(() => {
-				span.finish();
-			});
+			.startWith({ op: 'add', path: '', value: [] });
+
+		if (!params.query && !params.symbol) {
+			observable = this.emptyQueryWorkspaceSymbols = observable.publishReplay().refCount();
+		}
+
+		return observable;
 	}
 
 	/**
@@ -1150,8 +1110,8 @@ export class TypeScriptService {
 	 * @param limit An optional limit that is passed to TypeScript
 	 * @return Observable of SymbolInformations
 	 */
-	private _collectWorkspaceSymbols(config: ProjectConfiguration, query?: string | Partial<SymbolDescriptor>, limit = Infinity, childOf = new Span()): Observable<[number, SymbolInformation]> {
-		const span = childOf.tracer().startSpan('Collect workspace symbols', { childOf });
+	protected _getSymbolsInConfig(config: ProjectConfiguration, query?: string | Partial<SymbolDescriptor>, limit = Infinity, childOf = new Span()): Observable<[number, SymbolInformation]> {
+		const span = childOf.tracer().startSpan('Get symbols in config', { childOf });
 		span.addTags({ config: config.configFilePath, query, limit });
 
 		return (() => {
