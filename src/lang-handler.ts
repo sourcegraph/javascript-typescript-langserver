@@ -64,7 +64,7 @@ export interface LanguageClient {
 	 * Can occur as as a result of rename or executeCommand (code action).
 	 * @param params The edits to apply to the workspace
 	 */
-	workspaceApplyEdit(params: ApplyWorkspaceEditParams): Promise<ApplyWorkspaceEditResponse>;
+	workspaceApplyEdit(params: ApplyWorkspaceEditParams, childOf?: Span): Promise<ApplyWorkspaceEditResponse>;
 }
 
 /**
@@ -197,11 +197,12 @@ export class RemoteLanguageClient {
 	}
 
 	/**
-	 * Requests a set of text changes to be applied to documents in the workspace
-	 * Can occur as as a result of rename or executeCommand (code action).
-	 * @param params The edits to apply to the workspace
+	 * The workspace/applyEdit request is sent from the server to the client to modify resource on
+	 * the client side.
+	 *
+	 * @param params The edits to apply.
 	 */
-	workspaceApplyEdit(params: ApplyWorkspaceEditParams): Promise<ApplyWorkspaceEditResponse> {
-		return this.request('workspace/applyEdit', params).toPromise();
+	workspaceApplyEdit(params: ApplyWorkspaceEditParams, childOf = new Span()): Promise<ApplyWorkspaceEditResponse> {
+		return this.request('workspace/applyEdit', params, childOf).toPromise();
 	}
 }

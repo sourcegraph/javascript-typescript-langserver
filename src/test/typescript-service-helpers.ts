@@ -2,7 +2,7 @@ import * as chai from 'chai';
 import * as sinon from 'sinon';
 import * as ts from 'typescript';
 import { CompletionItemKind, CompletionList, DiagnosticSeverity, TextDocumentIdentifier, TextDocumentItem, WorkspaceEdit } from 'vscode-languageserver';
-import { Hover, Location, SignatureHelp, SymbolInformation, SymbolKind } from 'vscode-languageserver-types';
+import { Command, Diagnostic, Hover, Location, SignatureHelp, SymbolInformation, SymbolKind } from 'vscode-languageserver-types';
 import { LanguageClient, RemoteLanguageClient } from '../lang-handler';
 import { TextDocumentContentParams, WorkspaceFilesParams } from '../request-type';
 import { SymbolLocationInformation } from '../request-type';
@@ -2311,14 +2311,14 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		});
 	});
 
-	describe('textDocumentCodeAction()', function (this: TestContext) {
+	describe('textDocumentCodeAction()', function (this: TestContext & ISuiteCallbackContext) {
 		beforeEach(initializeTypeScriptService(createService, rootUri, new Map([
-			[rootUri + 'package.json', '{ "name": "mypkg" }'],
+			[rootUri + 'package.json', JSON.stringify({ name: 'mypkg' })],
 			[rootUri + 'a.ts', [
 				'class A {',
-				'  constructor() {',
-				'    missingThis = 33;',
-				'  }',
+				'\tconstructor() {',
+				'\t\tmissingThis = 33;',
+				'\t}',
 				'}',
 				'const a = new A();'
 			].join('\n')]
@@ -2326,17 +2326,17 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		afterEach(shutdownService as any);
 
-		it('suggests a missing this', async function (this: TestContext) {
+		it('suggests a missing this', async function (this: TestContext & ITestCallbackContext) {
 			await this.service.textDocumentDidOpen({
 				textDocument: {
 					uri: rootUri + 'a.ts',
 					languageId: 'typescript',
 					text: [
 						'class A {',
-						' missingThis: number;',
-						'  constructor() {',
-						'    missingThis = 33;',
-						'  }',
+						'\tmissingThis: number;',
+						'\tconstructor() {',
+						'\t\tmissingThis = 33;',
+						'\t}',
 						'}',
 						'const a = new A();'
 					].join('\n'),
@@ -2344,7 +2344,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}
 			});
 
-			const firstDiagnostic = {
+			const firstDiagnostic: Diagnostic = {
 				range: {
 					start: { line: 3, character: 4 },
 					end: { line: 3, character: 15 }
@@ -2354,7 +2354,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				code: 2663,
 				source: 'ts'
 			};
-			const actions = await this.service.textDocumentCodeAction({
+			const actions: Command[] = await this.service.textDocumentCodeAction({
 				textDocument: {
 					uri: rootUri + 'a.ts'
 				},
@@ -2363,31 +2363,24 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					diagnostics: [firstDiagnostic]
 				}
 			}).toArray().map(patches => apply(null, patches)).toPromise();
-			assert.lengthOf(actions, 1);
-			assert.sameDeepMembers(actions, [
-				{
-					title: 'Add \'this.\' to unresolved variable.',
-					command: 'codeFix',
-					arguments: [
-						{
-							fileName: uri2path(rootUri + 'a.ts'),
-							textChanges: [
-								{
-									span: { start: 50, length: 15 },
-									newText: '\t  this.missingThis'
-								}
-							]
-						}
-					]
-				}
-			]);
+			assert.deepEqual(actions, [{
+				title: 'Add \'this.\' to unresolved variable.',
+				command: 'codeFix',
+				arguments: [{
+					fileName: uri2path(rootUri + 'a.ts'),
+					textChanges: [{
+						span: { start: 49, length: 13 },
+						newText: '\t\tthis.missingThis'
+					}]
+				}]
+			}]);
 
-		} as any);
-	} as any);
+		});
+	});
 
-	describe('workspaceExecuteCommand()', function (this: TestContext) {
+	describe('workspaceExecuteCommand()', function (this: TestContext & ISuiteCallbackContext) {
 		beforeEach(initializeTypeScriptService(createService, rootUri, new Map([
-			[rootUri + 'package.json', '{ "name": "mypkg" }'],
+			[rootUri + 'package.json', JSON.stringify({ name: 'mypkg' })],
 			[rootUri + 'a.ts', [
 				'class A {',
 				'  constructor() {',
@@ -2400,47 +2393,43 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		afterEach(shutdownService as any);
 
-		it('should return edits for a codeFix command', async function (this: TestContext) {
-			const result = await this.service.workspaceExecuteCommand({
-				command: 'codeFix',
-				arguments: [
-					{
+		describe('codeFix', () => {
+			it('should apply a WorkspaceEdit for the passed FileTextChanges', async function (this: TestContext & ITestCallbackContext) {
+				await this.service.workspaceExecuteCommand({
+					command: 'codeFix',
+					arguments: [{
 						fileName: uri2path(rootUri + 'a.ts'),
-						textChanges: [
-							{
-								span: { start: 50, length: 15 },
-								newText: '\t  this.missingThis'
-							}
-						]
-					}
-				]
-			}).toArray().map(patches => apply(null, patches)).toPromise();
-
-			assert.isUndefined(result);
-
-			sinon.assert.called(this.client.workspaceApplyEdit);
-			const workspaceEdit = this.client.workspaceApplyEdit.lastCall.args[0];
-			assert.deepEqual(workspaceEdit, {
-				edit: {
-					changes: {
-						[rootUri + 'a.ts']: [{
-							newText: '\t  this.missingThis',
-							range: {
-								end: {
-									character: 9,
-									line: 5
-								},
-								start: {
-									character: 0,
-									line: 3
-								}
-							}
+						textChanges: [{
+							span: { start: 50, length: 15 },
+							newText: '\t\tthis.missingThis'
 						}]
+					}]
+				}).toArray().map(patches => apply(null, patches)).toPromise();
+
+				sinon.assert.calledOnce(this.client.workspaceApplyEdit);
+				const workspaceEdit = this.client.workspaceApplyEdit.lastCall.args[0];
+				assert.deepEqual(workspaceEdit, {
+					edit: {
+						changes: {
+							[rootUri + 'a.ts']: [{
+								newText: '\t\tthis.missingThis',
+								range: {
+									end: {
+										character: 9,
+										line: 5
+									},
+									start: {
+										character: 0,
+										line: 3
+									}
+								}
+							}]
+						}
 					}
-				}
+				});
 			});
-		} as any);
-	} as any);
+		});
+	});
 
 	describe('Special file names', function (this: TestContext) {
 
