@@ -249,6 +249,7 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 		if (isRequestMessage(message)) {
 			const subscription = observable
 				.do(patch => {
+					span.log({ event: 'partialResult', patch });
 					// Send $/partialResult for partial result patches
 					// TODO only send if client supports it
 					messageWriter.write({
