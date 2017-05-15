@@ -6,14 +6,18 @@ import { Span } from 'opentracing';
 import * as path from 'path';
 import * as ts from 'typescript';
 import {
+	CodeActionParams,
+	Command,
 	CompletionItem,
 	CompletionItemKind,
 	CompletionList,
+	DidChangeConfigurationParams,
 	DidChangeTextDocumentParams,
 	DidCloseTextDocumentParams,
 	DidOpenTextDocumentParams,
 	DidSaveTextDocumentParams,
 	DocumentSymbolParams,
+	ExecuteCommandParams,
 	Hover,
 	Location,
 	MarkedString,
@@ -59,7 +63,7 @@ import {
 	uri2path
 } from './util';
 import hashObject = require('object-hash');
-import { castArray, noop, omit } from 'lodash';
+import { castArray, merge, noop, omit } from 'lodash';
 import * as url from 'url';
 import { extractDefinitelyTypedPackageName, extractNodeModulesPackageName, PackageJson, PackageManager } from './packages';
 
@@ -69,6 +73,13 @@ export interface TypeScriptServiceOptions {
 }
 
 export type TypeScriptServiceFactory = (client: LanguageClient, options?: TypeScriptServiceOptions) => TypeScriptService;
+
+/**
+ * Settings synced through `didChangeConfiguration`
+ */
+export interface Settings {
+	format: ts.FormatCodeSettings;
+}
 
 /**
  * Handles incoming requests and return responses. There is a one-to-one-to-one
@@ -130,6 +141,29 @@ export class TypeScriptService {
 	 * Keeps track of package.jsons in the workspace
 	 */
 	protected packageManager: PackageManager;
+
+	/**
+	 * Settings synced though `didChangeConfiguration`
+	 */
+	protected settings: Settings = {
+		format: {
+			tabSize: 4,
+			indentSize: 4,
+			newLineCharacter: '\n',
+			convertTabsToSpaces: false,
+			insertSpaceAfterCommaDelimiter: true,
+			insertSpaceAfterSemicolonInForStatements: true,
+			insertSpaceBeforeAndAfterBinaryOperators: true,
+			insertSpaceAfterKeywordsInControlFlowStatements: true,
+			insertSpaceAfterFunctionKeywordForAnonymousFunctions: true,
+			insertSpaceAfterOpeningAndBeforeClosingNonemptyParenthesis: false,
+			insertSpaceAfterOpeningAndBeforeClosingNonemptyBrackets: false,
+			insertSpaceAfterOpeningAndBeforeClosingTemplateStringBraces: false,
+			insertSpaceBeforeFunctionParenthesis: false,
+			placeOpenBraceOnNewLineForFunctions: false,
+			placeOpenBraceOnNewLineForControlBlocks: false
+		}
+	};
 
 	constructor(protected client: LanguageClient, protected options: TypeScriptServiceOptions = {}) {
 		this.logger = new LSPLogger(client);
@@ -211,6 +245,11 @@ export class TypeScriptService {
 					resolveProvider: false,
 					triggerCharacters: ['.']
 				},
+				codeActionProvider: true,
+				renameProvider: true,
+				executeCommandProvider: {
+					commands: []
+				},
 				xpackagesProvider: true
 			}
 		};
@@ -243,6 +282,14 @@ export class TypeScriptService {
 		this.projectManager.dispose();
 		this.packageManager.dispose();
 		return Observable.of({ op: 'add', path: '', value: null } as AddPatch);
+	}
+
+	/**
+	 * A notification sent from the client to the server to signal the change of configuration
+	 * settings.
+	 */
+	didChangeConfiguration(params: DidChangeConfigurationParams): void {
+		merge(this.settings, params.settings);
 	}
 
 	/**
@@ -988,6 +1035,106 @@ export class TypeScriptService {
 				};
 			})
 			.map(signatureHelp => ({ op: 'add', path: '', value: signatureHelp }) as AddPatch);
+	}
+
+	/**
+	 * The code action request is sent from the client to the server to compute commands for a given
+	 * text document and range. These commands are typically code fixes to either fix problems or to
+	 * beautify/refactor code.
+	 *
+	 * @return Observable of JSON Patches that build a `Command[]` result
+	 */
+	textDocumentCodeAction(params: CodeActionParams, span = new Span()): Observable<OpPatch> {
+		const uri = normalizeUri(params.textDocument.uri);
+		return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
+			.toArray()
+			.mergeMap(() => {
+				const configuration = this.projectManager.getParentConfiguration(uri);
+				if (!configuration) {
+					throw new Error(`Could not find tsconfig for ${uri}`);
+				}
+				configuration.ensureBasicFiles(span);
+
+				const filePath = uri2path(uri);
+				const sourceFile = this._getSourceFile(configuration, filePath, span);
+				if (!sourceFile) {
+					throw new Error(`Expected source file ${filePath} to exist in configuration`);
+				}
+
+				const start = ts.getPositionOfLineAndCharacter(sourceFile, params.range.start.line, params.range.start.character);
+				const end = ts.getPositionOfLineAndCharacter(sourceFile, params.range.end.line, params.range.end.character);
+
+				const errorCodes = iterate(params.context.diagnostics)
+					.map(diagnostic => diagnostic.code)
+					.filter(code => typeof code === 'number')
+					.toArray() as number[];
+
+				return configuration.getService().getCodeFixesAtPosition(filePath, start, end, errorCodes, this.settings.format || {}) || [];
+			})
+			.map((action: ts.CodeAction): AddPatch => ({
+				op: 'add',
+				path: '/-',
+				value: {
+					title: action.description,
+					command: 'codeFix',
+					arguments: action.changes
+				} as Command
+			}))
+			.startWith({ op: 'add', path: '', value: [] } as AddPatch);
+	}
+
+	/**
+	 * The workspace/executeCommand request is sent from the client to the server to trigger command
+	 * execution on the server. In most cases the server creates a WorkspaceEdit structure and
+	 * applies the changes to the workspace using the request workspace/applyEdit which is sent from
+	 * the server to the client.
+	 */
+	workspaceExecuteCommand(params: ExecuteCommandParams, span = new Span()): Observable<OpPatch> {
+		switch (params.command) {
+			case 'codeFix':
+				if (!params.arguments || params.arguments.length < 1) {
+					return Observable.throw(new Error(`Command ${params.command} requires arguments`));
+				}
+				return this.executeCodeFixCommand(params.arguments, span);
+			default:
+				return Observable.throw(new Error(`Unknown command ${params.command}`));
+		}
+	}
+
+	/**
+	 * Executes the `codeFix` command
+	 *
+	 * @return Observable of JSON Patches for `null` result
+	 */
+	executeCodeFixCommand(fileTextChanges: ts.FileTextChanges[], span = new Span()): Observable<OpPatch> {
+		if (fileTextChanges.length === 0) {
+			return Observable.throw(new Error('No changes supplied for code fix command'));
+		}
+
+		return Observable.from(this.projectManager.ensureOwnFiles(span))
+			.mergeMap(() => {
+				const configuration = this.projectManager.getConfiguration(fileTextChanges[0].fileName);
+				configuration.ensureBasicFiles(span);
+
+				const changes: {[uri: string]: TextEdit[]} = {};
+				for (const change of fileTextChanges) {
+					const sourceFile = this._getSourceFile(configuration, change.fileName, span);
+					if (!sourceFile) {
+						throw new Error(`Expected source file ${change.fileName} to exist in configuration`);
+					}
+					const uri = path2uri(this.root, change.fileName);
+					changes[uri] = change.textChanges.map(({ span, newText }): TextEdit => ({
+						range: {
+							start: ts.getLineAndCharacterOfPosition(sourceFile, span.start),
+							end: ts.getLineAndCharacterOfPosition(sourceFile, span.start + span.length)
+						},
+						newText
+					}));
+				}
+
+				return this.client.workspaceApplyEdit({ edit: { changes }}, span);
+			})
+			.map(() => ({ op: 'add', path: '', value: null }) as AddPatch);
 	}
 
 	/**
