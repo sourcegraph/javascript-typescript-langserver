@@ -8,6 +8,13 @@ import { PackageDescriptor, SymbolDescriptor } from './request-type';
 let strict = false;
 
 /**
+ * Template string tag to escape JSON Pointer components as per https://tools.ietf.org/html/rfc6901#section-3
+ */
+export function JSONPTR(strings: TemplateStringsArray, ...toEscape: string[]): string {
+	return strings.reduce((prev, curr, i) => prev + toEscape[i - 1].replace(/~/g, '~0').replace(/\//g, '~1') + curr);
+}
+
+/**
  * Toggles "strict" flag, affects how we are parsing/generating URLs.
  * In strict mode we using "file://PATH", otherwise on Windows we are using "file:///PATH"
  */

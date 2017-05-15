@@ -19,11 +19,14 @@ import {
 	MarkedString,
 	ParameterInformation,
 	ReferenceParams,
+	RenameParams,
 	SignatureHelp,
 	SignatureInformation,
 	SymbolInformation,
 	TextDocumentPositionParams,
-	TextDocumentSyncKind
+	TextDocumentSyncKind,
+	TextEdit,
+	WorkspaceEdit
 } from 'vscode-languageserver';
 import { walkMostAST } from './ast';
 import { convertTsDiagnostic } from './diagnostics';
@@ -49,6 +52,7 @@ import {
 	getMatchScore,
 	isLocalUri,
 	isSymbolDescriptorMatch,
+	JSONPTR,
 	normalizeUri,
 	path2uri,
 	toUnixPath,
@@ -984,6 +988,61 @@ export class TypeScriptService {
 				};
 			})
 			.map(signatureHelp => ({ op: 'add', path: '', value: signatureHelp }) as AddPatch);
+	}
+
+	/**
+	 * The rename request is sent from the client to the server to perform a workspace-wide rename of a symbol.
+	 *
+	 * @return Observable of JSON Patches that build a `WorkspaceEdit` result
+	 */
+	textDocumentRename(params: RenameParams, span = new Span()): Observable<OpPatch> {
+		const uri = normalizeUri(params.textDocument.uri);
+		const editUris = new Set<string>();
+		return Observable.fromPromise(this.projectManager.ensureOwnFiles(span))
+			.mergeMap(() => {
+
+				const filePath = uri2path(uri);
+				const configuration = this.projectManager.getParentConfiguration(params.textDocument.uri);
+				if (!configuration) {
+					throw new Error(`tsconfig.json not found for ${filePath}`);
+				}
+				configuration.ensureAllFiles(span);
+
+				const sourceFile = this._getSourceFile(configuration, filePath, span);
+				if (!sourceFile) {
+					throw new Error(`Expected source file ${filePath} to exist in configuration`);
+				}
+
+				const position = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character);
+
+				const renameInfo = configuration.getService().getRenameInfo(filePath, position);
+				if (!renameInfo.canRename) {
+					throw new Error('This symbol cannot be renamed');
+				}
+
+				return Observable.from(configuration.getService().findRenameLocations(filePath, position, false, true))
+					.map((location: ts.RenameLocation): [string, TextEdit] => {
+						const sourceFile = this._getSourceFile(configuration, location.fileName, span);
+						if (!sourceFile) {
+							throw new Error(`expected source file ${location.fileName} to exist in configuration`);
+						}
+						const editUri = path2uri(this.root, location.fileName);
+						const start = ts.getLineAndCharacterOfPosition(sourceFile, location.textSpan.start);
+						const end = ts.getLineAndCharacterOfPosition(sourceFile, location.textSpan.start + location.textSpan.length);
+						const edit: TextEdit = { range: { start, end }, newText: params.newName };
+						return [editUri, edit];
+					});
+			})
+			.map(([uri, edit]): AddPatch => {
+				// if file has no edit yet, initialize array
+				if (!editUris.has(uri)) {
+					editUris.add(uri);
+					return { op: 'add', path: JSONPTR`/changes/${uri}`, value: [edit] };
+				}
+				// else append to array
+				return { op: 'add', path: JSONPTR`/changes/${uri}/-`, value: edit };
+			})
+			.startWith({ op: 'add', path: '', value: { changes: {} } as WorkspaceEdit } as AddPatch);
 	}
 
 	/**
