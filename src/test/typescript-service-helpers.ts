@@ -9,6 +9,7 @@ import { SymbolLocationInformation } from '../request-type';
 import { TypeScriptService, TypeScriptServiceFactory } from '../typescript-service';
 import chaiAsPromised = require('chai-as-promised');
 import { apply } from 'json-patch';
+import { ITestCallbackContext } from 'mocha';
 chai.use(chaiAsPromised);
 const assert = chai.assert;
 
@@ -2156,7 +2157,8 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]
 			});
 		} as any);
-		it('produces completions for empty files', async function (this: TestContext) {
+		it('produces completions for empty files', async function (this: TestContext & ITestCallbackContext) {
+			this.timeout(10000);
 			const result: CompletionList = await this.service.textDocumentCompletion({
 				textDocument: {
 					uri: rootUri + 'empty.ts'
@@ -2167,7 +2169,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}
 			}).toArray().map(patches => apply(null, patches)).toPromise();
 			assert.notDeepEqual(result.items.length, []);
-		} as any);
+		});
 	} as any);
 
 	describe('Special file names', function (this: TestContext) {
