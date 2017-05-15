@@ -1,7 +1,7 @@
 import * as chai from 'chai';
 import * as sinon from 'sinon';
 import * as ts from 'typescript';
-import { CompletionItemKind, CompletionList, TextDocumentIdentifier, TextDocumentItem } from 'vscode-languageserver';
+import { CompletionItemKind, CompletionList, DiagnosticSeverity, TextDocumentIdentifier, TextDocumentItem } from 'vscode-languageserver';
 import { Hover, Location, SignatureHelp, SymbolInformation, SymbolKind } from 'vscode-languageserver-types';
 import { LanguageClient, RemoteLanguageClient } from '../lang-handler';
 import { TextDocumentContentParams, WorkspaceFilesParams } from '../request-type';
@@ -16,7 +16,7 @@ const assert = chai.assert;
 /**
  * Enforcing strict mode to make tests pass on Windows
  */
-import { setStrict } from '../util';
+import { setStrict, uri2path } from '../util';
 setStrict(true);
 
 export interface TestContext {
@@ -53,6 +53,7 @@ export const initializeTypeScriptService = (createService: TypeScriptServiceFact
 		return Array.from(files.keys()).map(uri => ({ uri }));
 	});
 	this.client.xcacheGet.returns(null);
+	this.client.workspaceApplyEdit.returns(Promise.resolve({applied: true}));
 	this.service = createService(this.client);
 
 	await this.service.initialize({
@@ -2170,6 +2171,281 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			}).toArray().map(patches => apply(null, patches)).toPromise();
 			assert.notDeepEqual(result.items.length, []);
 		});
+	} as any);
+
+	describe('textDocumentRename()', function (this: TestContext) {
+		beforeEach(initializeTypeScriptService(createService, rootUri, new Map([
+			[rootUri + 'package.json', '{ "name": "mypkg" }'],
+			[rootUri + 'a.ts', [
+				'class A {',
+				'	/** foo doc*/',
+				'    foo() {}',
+				'	/** bar doc*/',
+				'    bar(): number { return 1; }',
+				'	/** baz doc*/',
+				'    baz(): string { return ""; }',
+				'	/** qux doc*/',
+				'    qux: number;',
+				'}',
+				'const a = new A();',
+				'a.'
+			].join('\n')],
+			[rootUri + 'uses-import.ts', [
+				'import {d} from "./import"',
+				'const x = d();'
+			].join('\n')],
+			[rootUri + 'import.ts', 'export function d(): number { return 55; }']
+		])) as any);
+
+		afterEach(shutdownService as any);
+
+		it('handles rename on invalid symbol', async function (this: TestContext) {
+			let threw = false;
+			try {
+				await this.service.textDocumentRename({
+					textDocument: {
+						uri: rootUri + 'a.ts'
+					},
+					position: {
+						line: 0,
+						character: 1
+					},
+					newName: 'asdf'
+				}).toArray().map(patches => apply(null, patches)).toPromise();
+			} catch (e) {
+				assert.equal(e.message, 'Cannot rename: invalid symbol');
+				threw = true;
+			}
+			if (!threw) {
+				assert.fail('expected Error not thrown');
+			}
+		} as any);
+		it('handles rename on a class', async function (this: TestContext) {
+			const result = await this.service.textDocumentRename({
+				textDocument: {
+					uri: rootUri + 'a.ts'
+				},
+				position: {
+					line: 0,
+					character: 6
+				},
+				newName: 'B'
+			}).toArray().map(patches => apply(null, patches)).toPromise();
+			assert.deepEqual(result, {
+				changes: {
+					[rootUri + 'a.ts']: [{
+						newText: 'B',
+						range: {
+							end: {
+								character: 7,
+								line: 0
+							},
+							start: {
+								character: 6,
+								line: 0
+							}
+						}
+					}, {
+						newText: 'B',
+						range: {
+							end: {
+								character: 15,
+								line: 10
+							},
+							start: {
+								character: 14,
+								line: 10
+							}
+						}
+					}]
+				}
+			});
+		} as any);
+		it('handles rename on an imported function', async function (this: TestContext) {
+			const result = await this.service.textDocumentRename({
+				textDocument: {
+					uri: rootUri + 'import.ts'
+				},
+				position: {
+					line: 0,
+					character: 16
+				},
+				newName: 'f'
+			}).toArray().map(patches => apply(null, patches)).toPromise();
+			assert.deepEqual(result, {
+				changes: {
+					[rootUri + 'import.ts']: [{
+						newText: 'f',
+						range: {
+							end: {
+								character: 17,
+								line: 0
+							},
+							start: {
+								character: 16,
+								line: 0
+							}
+						}
+					}],
+					[rootUri + 'uses-import.ts']: [{
+						newText: 'f',
+						range: {
+							end: {
+								character: 9,
+								line: 0
+							},
+							start: {
+								character: 8,
+								line: 0
+							}
+						}
+					}, {
+						newText: 'f',
+						range: {
+							end: {
+								character: 11,
+								line: 1
+							},
+							start: {
+								character: 10,
+								line: 1
+							}
+						}
+					}]
+				}
+			});
+		} as any);
+	} as any);
+
+	describe('textDocumentCodeAction()', function (this: TestContext) {
+		beforeEach(initializeTypeScriptService(createService, rootUri, new Map([
+			[rootUri + 'package.json', '{ "name": "mypkg" }'],
+			[rootUri + 'a.ts', [
+				'class A {',
+				'  constructor() {',
+				'    missingThis = 33;',
+				'  }',
+				'}',
+				'const a = new A();'
+			].join('\n')]
+		])) as any);
+
+		afterEach(shutdownService as any);
+
+		it('suggests a missing this', async function (this: TestContext) {
+			await this.service.textDocumentDidOpen({
+				textDocument: {
+					uri: rootUri + 'a.ts',
+					languageId: 'typescript',
+					text: [
+						'class A {',
+						' missingThis: number;',
+						'  constructor() {',
+						'    missingThis = 33;',
+						'  }',
+						'}',
+						'const a = new A();'
+					].join('\n'),
+					version: 1
+				}
+			});
+
+			const firstDiagnostic = {
+				range: {
+					start: { line: 3, character: 4 },
+					end: { line: 3, character: 15 }
+				},
+				message: 'Cannot find name \'missingThis\'. Did you mean the instance member \'this.missingThis\'?',
+				severity: DiagnosticSeverity.Error,
+				code: 2663,
+				source: 'ts'
+			};
+			const actions = await this.service.textDocumentCodeAction({
+				textDocument: {
+					uri: rootUri + 'a.ts'
+				},
+				range: firstDiagnostic.range,
+				context: {
+					diagnostics: [firstDiagnostic]
+				}
+			}).toArray().map(patches => apply(null, patches)).toPromise();
+			assert.lengthOf(actions, 1);
+			assert.sameDeepMembers(actions, [
+				{
+					title: 'Add \'this.\' to unresolved variable.',
+					command: 'codeFix',
+					arguments: [
+						{
+							fileName: uri2path(rootUri + 'a.ts'),
+							textChanges: [
+								{
+									span: { start: 50, length: 15 },
+									newText: '\t  this.missingThis'
+								}
+							]
+						}
+					]
+				}
+			]);
+
+		} as any);
+	} as any);
+
+	describe('workspaceExecuteCommand()', function (this: TestContext) {
+		beforeEach(initializeTypeScriptService(createService, rootUri, new Map([
+			[rootUri + 'package.json', '{ "name": "mypkg" }'],
+			[rootUri + 'a.ts', [
+				'class A {',
+				'  constructor() {',
+				'    missingThis = 33;',
+				'  }',
+				'}',
+				'const a = new A();'
+			].join('\n')]
+		])) as any);
+
+		afterEach(shutdownService as any);
+
+		it('should return edits for a codeFix command', async function (this: TestContext) {
+			const result = await this.service.workspaceExecuteCommand({
+				command: 'codeFix',
+				arguments: [
+					{
+						fileName: uri2path(rootUri + 'a.ts'),
+						textChanges: [
+							{
+								span: { start: 50, length: 15 },
+								newText: '\t  this.missingThis'
+							}
+						]
+					}
+				]
+			}).toArray().map(patches => apply(null, patches)).toPromise();
+
+			assert.isUndefined(result);
+
+			sinon.assert.called(this.client.workspaceApplyEdit);
+			const workspaceEdit = this.client.workspaceApplyEdit.lastCall.args[0];
+			assert.deepEqual(workspaceEdit, {
+				edit: {
+					changes: {
+						[rootUri + 'a.ts']: [{
+							newText: '\t  this.missingThis',
+							range: {
+								end: {
+									character: 9,
+									line: 5
+								},
+								start: {
+									character: 0,
+									line: 3
+								}
+							}
+						}]
+					}
+				}
+			});
+		} as any);
 	} as any);
 
 	describe('Special file names', function (this: TestContext) {
