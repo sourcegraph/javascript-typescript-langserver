@@ -1,7 +1,55 @@
 import * as assert from 'assert';
-import { isGlobalTSFile, isSymbolDescriptorMatch } from '../util';
+import { getMatchScore, isGlobalTSFile, isSymbolDescriptorMatch } from '../util';
 
 describe('util', () => {
+	describe('getMatchScore()', () => {
+		it('should return a score of 4 if 4 properties match', () => {
+			const score = getMatchScore({
+				containerName: 'ts',
+				kind: 'interface',
+				name: 'Program',
+				package: undefined
+			}, {
+				containerKind: 'module',
+				containerName: 'ts',
+				kind: 'interface',
+				name: 'Program',
+				package: undefined
+			});
+			assert.equal(score, 4);
+		});
+		it('should return a score of 4 if 4 properties match and 1 does not', () => {
+			const score = getMatchScore({
+				containerKind: '',
+				containerName: 'util',
+				kind: 'var',
+				name: 'colors',
+				package: undefined
+			}, {
+				containerKind: '',
+				containerName: '',
+				kind: 'var',
+				name: 'colors',
+				package: undefined
+			});
+			assert.equal(score, 4);
+		});
+		it('should return a score of 3 if 3 properties match deeply', () => {
+			const score = getMatchScore({
+				name: 'a',
+				kind: 'class',
+				package: { name: 'mypkg' },
+				containerKind: undefined
+			}, {
+				kind: 'class',
+				name: 'a',
+				containerKind: '',
+				containerName: '',
+				package: { name: 'mypkg' }
+			});
+			assert.equal(score, 3);
+		});
+	});
 	describe('isSymbolDescriptorMatch()', () => {
 		it('should return true for a matching query', () => {
 			const matches = isSymbolDescriptorMatch({

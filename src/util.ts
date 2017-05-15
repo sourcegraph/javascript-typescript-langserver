@@ -221,6 +221,23 @@ export function defInfoToSymbolDescriptor(d: ts.DefinitionInfo): SymbolDescripto
 }
 
 /**
+ * Compares two values and returns a numeric score defining of how well they match.
+ * Every property that matches increases the score by 1.
+ */
+export function getMatchScore(query: any, value: any): number {
+	// If query is a scalar value, compare by identity and return 0 or 1
+	if (typeof query !== 'object' || query === null) {
+		return +(query === value);
+	}
+	// If value is scalar, return no match
+	if (typeof value !== 'object' && value !== null) {
+		return 0;
+	}
+	// Both values are objects, compare each property and sum the scores
+	return Object.keys(query).reduce((score, key) => score + getMatchScore(query[key], value[key]), 0);
+}
+
+/**
  * Returns true if the passed SymbolDescriptor has at least the same properties as the passed partial SymbolDescriptor
  */
 export function isSymbolDescriptorMatch(query: Partial<SymbolDescriptor>, symbol: SymbolDescriptor): boolean {
