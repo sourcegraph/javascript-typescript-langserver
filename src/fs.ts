@@ -1,12 +1,11 @@
 import * as fs from 'mz/fs';
-import * as path from 'path';
 import { LanguageClient } from './lang-handler';
 import glob = require('glob');
 import iterate from 'iterare';
 import { Span } from 'opentracing';
 import Semaphore from 'semaphore-async-await';
 import { InMemoryFileSystem } from './memfs';
-import { normalizeDir, normalizeUri, path2uri, uriToLocalPath } from './util';
+import { normalizeUri, uriToLocalPath } from './util';
 
 export interface FileSystem {
 	/**
@@ -51,25 +50,31 @@ export class RemoteFileSystem implements FileSystem {
 export class LocalFileSystem implements FileSystem {
 
 	/**
-	 * @param rootPath The root directory path that relative URIs should be resolved to
+	 * @param rootUri The root URI that is used if `base` is not specified
 	 */
-	constructor(private rootPath: string) {}
+	constructor(private rootUri: string) {}
 
 	/**
-	 * Converts the URI to an absolute path
+	 * Converts the URI to an absolute path on the local disk
 	 */
 	protected resolveUriToPath(uri: string): string {
-		return path.resolve(this.rootPath, uriToLocalPath(uri));
+		return uriToLocalPath(uri);
 	}
 
-	async getWorkspaceFiles(base?: string): Promise<Iterable<string>> {
-		// Even if no base provided, still need to call resolveUriToPath which may be overridden
-		const root = this.resolveUriToPath(base || path2uri('', this.rootPath));
-		const baseUri = path2uri('', normalizeDir(root)) + '/';
+	async getWorkspaceFiles(base = this.rootUri): Promise<Iterable<string>> {
+		if (!base.endsWith('/')) {
+			base += '/';
+		}
+		const cwd = this.resolveUriToPath(base);
 		const files = await new Promise<string[]>((resolve, reject) => {
-			glob('*', { cwd: root, nodir: true, matchBase: true, follow: true }, (err, matches) => err ? reject(err) : resolve(matches));
+			glob('*', {
+				cwd,
+				nodir: true,
+				matchBase: true,
+				follow: true
+			}, (err, matches) => err ? reject(err) : resolve(matches));
 		});
-		return iterate(files).map(file => normalizeUri(baseUri + file));
+		return iterate(files).map(file => normalizeUri(base + file));
 	}
 
 	async getTextDocumentContent(uri: string): Promise<string> {

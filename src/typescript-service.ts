@@ -192,6 +192,10 @@ export class TypeScriptService {
 		if (params.rootUri || params.rootPath) {
 			this.root = params.rootPath || uri2path(params.rootUri!);
 			this.rootUri = params.rootUri || path2uri('', params.rootPath!);
+			// The root URI always refers to a directory
+			if (!this.rootUri.endsWith('/')) {
+				this.rootUri += '/';
+			}
 			this._initializeFileSystems(!this.options.strict && !(params.capabilities.xcontentProvider && params.capabilities.xfilesProvider));
 			this.updater = new FileSystemUpdater(this.fileSystem, this.inMemoryFileSystem);
 			this.projectManager = new ProjectManager(
@@ -267,7 +271,7 @@ export class TypeScriptService {
 	 * @param accessDisk Whether the language server is allowed to access the local file system
 	 */
 	protected _initializeFileSystems(accessDisk: boolean): void {
-		this.fileSystem = accessDisk ? new LocalFileSystem(uri2path(this.root)) : new RemoteFileSystem(this.client);
+		this.fileSystem = accessDisk ? new LocalFileSystem(this.rootUri) : new RemoteFileSystem(this.client);
 		this.inMemoryFileSystem = new InMemoryFileSystem(this.root);
 	}
 
