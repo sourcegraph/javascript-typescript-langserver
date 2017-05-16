@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as rimraf from 'rimraf';
 import * as temp from 'temp';
 import { LocalFileSystem } from '../fs';
-import { path2uri, toUnixPath } from '../util';
+import { path2uri } from '../util';
 import chaiAsPromised = require('chai-as-promised');
 chai.use(chaiAsPromised);
 const assert = chai.assert;
@@ -14,7 +14,7 @@ describe('fs.ts', () => {
 	describe('LocalFileSystem', () => {
 		let temporaryDir: string;
 		let fileSystem: LocalFileSystem;
-		let baseUri: string;
+		let rootUri: string;
 
 		before(async () => {
 			temporaryDir = await new Promise<string>((resolve, reject) => {
@@ -31,7 +31,7 @@ describe('fs.ts', () => {
 
 			// the project dir
 			const projectDir = path.join(temporaryDir, 'project');
-			baseUri = path2uri('', projectDir) + '/';
+			rootUri = path2uri('', projectDir) + '/';
 			await fs.mkdir(projectDir);
 			await fs.mkdir(path.join(projectDir, 'foo'));
 			await fs.mkdir(path.join(projectDir, '@types'));
@@ -44,7 +44,7 @@ describe('fs.ts', () => {
 
 			// global package is symolinked into project using npm link
 			await fs.symlink(somePackageDir, path.join(projectDir, 'node_modules', 'some_package'), 'junction');
-			fileSystem = new LocalFileSystem(toUnixPath(projectDir));
+			fileSystem = new LocalFileSystem(rootUri);
 		});
 		after(async () => {
 			await new Promise<void>((resolve, reject) => {
@@ -54,23 +54,25 @@ describe('fs.ts', () => {
 
 		describe('getWorkspaceFiles()', () => {
 			it('should return all files in the workspace', async () => {
-				assert.sameMembers(iterate(await fileSystem.getWorkspaceFiles()).toArray(), [
-					baseUri + 'tweedledee',
-					baseUri + 'tweedledum',
-					baseUri + 'foo/bar.ts',
-					baseUri + '%40types/diff/index.d.ts',
-					baseUri + 'node_modules/some_package/src/function.ts'
+				const files = iterate(await fileSystem.getWorkspaceFiles()).toArray();
+				assert.sameMembers(files, [
+					rootUri + 'tweedledee',
+					rootUri + 'tweedledum',
+					rootUri + 'foo/bar.ts',
+					rootUri + '%40types/diff/index.d.ts',
+					rootUri + 'node_modules/some_package/src/function.ts'
 				]);
 			});
 			it('should return all files under specific root', async () => {
-				assert.sameMembers(iterate(await fileSystem.getWorkspaceFiles(baseUri + 'foo')).toArray(), [
-					baseUri + 'foo/bar.ts'
+				const files = iterate(await fileSystem.getWorkspaceFiles(rootUri + 'foo')).toArray();
+				assert.sameMembers(files, [
+					rootUri + 'foo/bar.ts'
 				]);
 			});
 		});
 		describe('getTextDocumentContent()', () => {
 			it('should read files denoted by absolute URI', async () => {
-				assert.equal(await fileSystem.getTextDocumentContent(baseUri + 'tweedledee'), 'hi');
+				assert.equal(await fileSystem.getTextDocumentContent(rootUri + 'tweedledee'), 'hi');
 			});
 		});
 	});
