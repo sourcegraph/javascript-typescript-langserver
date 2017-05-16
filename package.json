@@ -63,7 +63,7 @@
     "@types/node": "7.0.14",
     "@types/object-hash": "0.5.28",
     "@types/rimraf": "0.0.28",
-    "@types/sinon": "2.2.1",
+    "@types/sinon": "2.2.2",
     "@types/temp": "0.8.29",
     "mocha": "^3.2.0",
     "nyc": "^10.1.2",
