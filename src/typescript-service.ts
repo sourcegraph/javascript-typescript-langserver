@@ -58,6 +58,7 @@ import {
 	isSymbolDescriptorMatch,
 	JSONPTR,
 	normalizeUri,
+	observableFromIterable,
 	path2uri,
 	toUnixPath,
 	uri2path
@@ -656,7 +657,7 @@ export class TypeScriptService {
 					const packageRootUri = normRootUri + params.symbol.package.name.substr(1) + '/';
 
 					return Observable.from(this.updater.ensureStructure(span))
-						.mergeMap(() => Observable.from<string>(this.inMemoryFileSystem.uris() as any))
+						.mergeMap(() => observableFromIterable(this.inMemoryFileSystem.uris()))
 						.filter(uri => uri.startsWith(packageRootUri))
 						.mergeMap(uri => this.updater.ensure(uri, span))
 						.toArray()
@@ -673,19 +674,19 @@ export class TypeScriptService {
 				// Regular workspace symbol search
 				// Search all symbols in own code, but not in dependencies
 				return Observable.from(this.projectManager.ensureOwnFiles(span))
-					.mergeMap<void, ProjectConfiguration>(() =>
+					.mergeMap(() =>
 						params.symbol && params.symbol.package && params.symbol.package.name
 							// If SymbolDescriptor query with PackageDescriptor, search for package.jsons with matching package name
-							? Observable.from<string>(this.packageManager.packageJsonUris() as any)
+							? observableFromIterable(this.packageManager.packageJsonUris())
 								.filter(packageJsonUri => (JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri)) as PackageJson).name === params.symbol!.package!.name)
 								// Find their parent and child tsconfigs
 								.mergeMap(packageJsonUri => Observable.merge(
 									castArray<ProjectConfiguration>(this.projectManager.getParentConfiguration(packageJsonUri) || []),
 									// Search child directories starting at the directory of the package.json
-									this.projectManager.getChildConfigurations(url.resolve(packageJsonUri, '.')) as any
+									observableFromIterable(this.projectManager.getChildConfigurations(url.resolve(packageJsonUri, '.')))
 								))
 							// Else search all tsconfigs in the workspace
-							: this.projectManager.configurations() as any
+							: observableFromIterable(this.projectManager.configurations())
 					)
 					// If PackageDescriptor is given, only search project with the matching package name
 					.mergeMap(config => this._getSymbolsInConfig(config, params.query || params.symbol, limit, span));
@@ -728,7 +729,7 @@ export class TypeScriptService {
 		// Ensure files needed to resolve symbols are fetched
 		return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
 			.toArray()
-			.mergeMap<any, SymbolInformation>(() => {
+			.mergeMap(() => {
 				const fileName = uri2path(uri);
 
 				const config = this.projectManager.getConfiguration(fileName);
@@ -738,7 +739,7 @@ export class TypeScriptService {
 					return [];
 				}
 				const tree = config.getService().getNavigationTree(fileName);
-				return this._flattenNavigationTreeItem(tree, null, sourceFile) as any;
+				return observableFromIterable(this._flattenNavigationTreeItem(tree, null, sourceFile));
 			})
 			.map(symbol => ({ op: 'add', path: '', value: symbol }) as AddPatch)
 			.startWith({ op: 'add', path: '', value: [] } as AddPatch);
@@ -756,19 +757,19 @@ export class TypeScriptService {
 			.mergeMap<void, ProjectConfiguration>(() => {
 				// if we were hinted that we should only search a specific package, find it and only search the owning tsconfig.json
 				if (params.hints && params.hints.dependeePackageName) {
-					return Observable.from<string>(this.packageManager.packageJsonUris() as any)
+					return observableFromIterable(this.packageManager.packageJsonUris())
 						.filter(uri => (JSON.parse(this.inMemoryFileSystem.getContent(uri)) as PackageJson).name === params.hints!.dependeePackageName)
 						.take(1)
 						.mergeMap<string, ProjectConfiguration>(uri => {
 							const config = this.projectManager.getParentConfiguration(uri);
 							if (!config) {
-								return this.projectManager.configurations() as any;
+								return observableFromIterable(this.projectManager.configurations());
 							}
 							return [config];
 						});
 				}
 				// else search all tsconfig.jsons
-				return this.projectManager.configurations() as any;
+				return observableFromIterable(this.projectManager.configurations());
 			})
 			.mergeMap((config: ProjectConfiguration) => {
 				config.ensureAllFiles(span);
@@ -781,7 +782,7 @@ export class TypeScriptService {
 					.filter(source => !toUnixPath(source.fileName).includes('/node_modules/'))
 					.mergeMap(source =>
 						// Iterate AST of source file
-						Observable.from<ts.Node>(walkMostAST(source) as any)
+						observableFromIterable(walkMostAST(source))
 							// Filter Identifier Nodes
 							// TODO: include string-interpolated references
 							.filter((node): node is ts.Identifier => node.kind === ts.SyntaxKind.Identifier)
@@ -851,7 +852,7 @@ export class TypeScriptService {
 		// Ensure package.json files
 		return Observable.from(this.projectManager.ensureModuleStructure(span))
 			// Iterate all files
-			.mergeMap<void, string>(() => this.inMemoryFileSystem.uris() as any)
+			.mergeMap(() => observableFromIterable(this.inMemoryFileSystem.uris()))
 			// Filter own package.jsons
 			.filter(uri => uri.includes('/package.json') && !uri.includes('/node_modules/'))
 			// Map to contents of package.jsons
@@ -901,7 +902,7 @@ export class TypeScriptService {
 		// Ensure package.json files
 		return Observable.from(this.projectManager.ensureModuleStructure())
 			// Iterate all files
-			.mergeMap<void, string>(() => this.inMemoryFileSystem.uris() as any)
+			.mergeMap(() => observableFromIterable(this.inMemoryFileSystem.uris()))
 			// Filter own package.jsons
 			.filter(uri => uri.includes('/package.json') && !uri.includes('/node_modules/'))
 			// Ensure contents of own package.jsons
@@ -1392,7 +1393,7 @@ export class TypeScriptService {
 				} else {
 					// An empty query uses a different algorithm to iterate all files and aggregate the symbols per-file to get all symbols
 					// TODO make all implementations use this? It has the advantage of being streamable and cancellable
-					return Observable.from<SymbolInformation>(this._getNavigationTreeItems(config) as any)
+					return observableFromIterable(this._getNavigationTreeItems(config))
 						// Same score for all
 						.map(symbol => [1, symbol])
 						.take(limit);

@@ -1,3 +1,4 @@
+import { Observable } from '@reactivex/rxjs';
 import * as os from 'os';
 import * as path from 'path';
 import * as ts from 'typescript';
@@ -6,6 +7,14 @@ import { SymbolKind } from 'vscode-languageserver';
 import { PackageDescriptor, SymbolDescriptor } from './request-type';
 
 let strict = false;
+
+/**
+ * Converts an Iterable to an Observable.
+ * Workaround for https://github.com/ReactiveX/rxjs/issues/2306
+ */
+export function observableFromIterable<T>(iterable: Iterable<T>): Observable<T> {
+	return Observable.from(iterable as any);
+}
 
 /**
  * Template string tag to escape JSON Pointer components as per https://tools.ietf.org/html/rfc6901#section-3
