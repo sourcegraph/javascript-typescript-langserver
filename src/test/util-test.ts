@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { getMatchScore, isGlobalTSFile, isSymbolDescriptorMatch, JSONPTR } from '../util';
+import { getMatchingPropertyCount, getPropertyCount, isGlobalTSFile, isSymbolDescriptorMatch, JSONPTR } from '../util';
 
 describe('util', () => {
 	describe('JSONPTR', () => {
@@ -9,9 +9,9 @@ describe('util', () => {
 			assert.equal(pointer, '/changes/file:~1~1~1foo~1~0bar/-');
 		});
 	});
-	describe('getMatchScore()', () => {
+	describe('getMatchingPropertyCount()', () => {
 		it('should return a score of 4 if 4 properties match', () => {
-			const score = getMatchScore({
+			const score = getMatchingPropertyCount({
 				containerName: 'ts',
 				kind: 'interface',
 				name: 'Program',
@@ -26,7 +26,7 @@ describe('util', () => {
 			assert.equal(score, 4);
 		});
 		it('should return a score of 4 if 4 properties match and 1 does not', () => {
-			const score = getMatchScore({
+			const score = getMatchingPropertyCount({
 				containerKind: '',
 				containerName: 'util',
 				kind: 'var',
@@ -42,7 +42,7 @@ describe('util', () => {
 			assert.equal(score, 4);
 		});
 		it('should return a score of 3 if 3 properties match deeply', () => {
-			const score = getMatchScore({
+			const score = getMatchingPropertyCount({
 				name: 'a',
 				kind: 'class',
 				package: { name: 'mypkg' },
@@ -55,6 +55,19 @@ describe('util', () => {
 				package: { name: 'mypkg' }
 			});
 			assert.equal(score, 3);
+		});
+	});
+	describe('getPropertyCount()', () => {
+		it('should return the amount of leaf properties', () => {
+			const count = getPropertyCount({
+				name: 'a', // 1
+				kind: 'class', // 2
+				package: {
+					name: 'mypkg' // 3
+				},
+				containerKind: '' // 4
+			});
+			assert.equal(count, 4);
 		});
 	});
 	describe('isSymbolDescriptorMatch()', () => {

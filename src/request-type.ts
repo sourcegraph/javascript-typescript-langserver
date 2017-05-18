@@ -99,11 +99,6 @@ export interface WorkspaceSymbolParams {
 	 * A set of properties that describe the symbol to look up.
 	 */
 	symbol?: Partial<SymbolDescriptor>;
-
-	/**
-	 * The number of items to which to restrict the results set size.
-	 */
-	limit?: number;
 }
 
 /*
