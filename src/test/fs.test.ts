@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as rimraf from 'rimraf';
 import * as temp from 'temp';
 import { LocalFileSystem } from '../fs';
-import { resolvepath2uri } from '../util';
+import { path2uri } from '../util';
 import chaiAsPromised = require('chai-as-promised');
 chai.use(chaiAsPromised);
 const assert = chai.assert;
@@ -31,7 +31,7 @@ describe('fs.ts', () => {
 
 			// the project dir
 			const projectDir = path.join(temporaryDir, 'project');
-			rootUri = resolvepath2uri('', projectDir) + '/';
+			rootUri = path2uri(projectDir) + '/';
 			await fs.mkdir(projectDir);
 			await fs.mkdir(path.join(projectDir, 'foo'));
 			await fs.mkdir(path.join(projectDir, '@types'));
@@ -42,7 +42,7 @@ describe('fs.ts', () => {
 			await fs.writeFile(path.join(projectDir, 'foo', 'bar.ts'), 'baz');
 			await fs.writeFile(path.join(projectDir, '@types', 'diff', 'index.d.ts'), 'baz');
 
-			// global package is symolinked into project using npm link
+			// global package is symlinked into project using npm link
 			await fs.symlink(somePackageDir, path.join(projectDir, 'node_modules', 'some_package'), 'junction');
 			fileSystem = new LocalFileSystem(rootUri);
 		});
