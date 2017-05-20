@@ -5,7 +5,6 @@ import { MessageEmitter, MessageLogOptions, MessageWriter, registerLanguageHandl
 import { RemoteLanguageClient } from './lang-handler';
 import { FileLogger, StderrLogger } from './logging';
 import { TypeScriptService, TypeScriptServiceOptions } from './typescript-service';
-import * as util from './util';
 
 const packageJson = require('../package.json');
 const program = require('commander');
@@ -16,8 +15,6 @@ program
 	.option('-t, --trace', 'print all requests and responses')
 	.option('-l, --logfile [file]', 'log to this file')
 	.parse(process.argv);
-
-util.setStrict(program.strict);
 
 const logger = program.logfile ? new FileLogger(program.logfile) : new StderrLogger();
 const options: TypeScriptServiceOptions & MessageLogOptions & RegisterLanguageHandlerOptions = {

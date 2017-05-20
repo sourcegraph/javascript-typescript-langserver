@@ -7,17 +7,13 @@ import { LanguageClient, RemoteLanguageClient } from '../lang-handler';
 import { TextDocumentContentParams, WorkspaceFilesParams } from '../request-type';
 import { SymbolLocationInformation } from '../request-type';
 import { TypeScriptService, TypeScriptServiceFactory } from '../typescript-service';
+import { uri2path } from '../util';
 import chaiAsPromised = require('chai-as-promised');
 import { apply } from 'json-patch';
 import { ISuiteCallbackContext, ITestCallbackContext } from 'mocha';
+
 chai.use(chaiAsPromised);
 const assert = chai.assert;
-
-/**
- * Enforcing strict mode to make tests pass on Windows
- */
-import { uri2path } from '../util';
-// setStrict(true);
 
 export interface TestContext {
 
