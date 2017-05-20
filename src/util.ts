@@ -1,6 +1,7 @@
 import { Observable } from '@reactivex/rxjs';
 import * as os from 'os';
 import * as path from 'path';
+import { compareTwoStrings } from 'string-similarity';
 import * as ts from 'typescript';
 import * as url from 'url';
 import { PackageDescriptor, SymbolDescriptor } from './request-type';
@@ -188,12 +189,12 @@ export function normalizeDir(dir: string) {
  * defInfoToSymbolDescriptor converts from an instance of
  * ts.DefinitionInfo to an instance of SymbolDescriptor
  */
-export function defInfoToSymbolDescriptor(d: ts.DefinitionInfo): SymbolDescriptor {
+export function defInfoToSymbolDescriptor(d: ts.DefinitionInfo, rootPath: string): SymbolDescriptor {
 	return {
 		kind: d.kind || '',
-		name: stripQuotes(d.name) || '',
+		name: d.name ? d.name.replace(rootPath, '') : '',
 		containerKind: d.containerKind || '',
-		containerName: (d.containerName ? stripFileInfo(lastDotCmp(stripQuotes(d.containerName))) : '')
+		containerName: d.containerName ? d.containerName.replace(rootPath, '') : ''
 	};
 }
 
@@ -202,6 +203,12 @@ export function defInfoToSymbolDescriptor(d: ts.DefinitionInfo): SymbolDescripto
  * E.g. if 2 of 4 properties in the query match, will return 2
  */
 export function getMatchingPropertyCount(query: any, value: any): number {
+	// Compare strings by similarity
+	// This allows to match a path like "lib/foo/bar.d.ts" with "src/foo/bar.ts"
+	// Last check is a workaround for https://github.com/aceakash/string-similarity/issues/6
+	if (typeof query === 'string' && typeof value === 'string' && !(query.length <= 1 && value.length <= 1)) {
+		return compareTwoStrings(query, value);
+	}
 	// If query is a scalar value, compare by identity and return 0 or 1
 	if (typeof query !== 'object' || query === null) {
 		return +(query === value);
@@ -256,26 +263,4 @@ function isPackageDescriptorMatch(query: Partial<PackageDescriptor>, pkg: Packag
 		}
 	}
 	return true;
-}
-
-export function stripQuotes(s: string): string {
-	if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
-		return s.substring(1, s.length - 1);
-	}
-	return s;
-}
-
-function lastDotCmp(s: string): string {
-	const cmps = s.split('.');
-	return cmps[cmps.length - 1];
-}
-
-/**
- * Strips file part (if any) from container name (last component of container path)
- * For example TS may return the following name: /node_modules/vscode-jsonrpc/lib/cancellation.
- * We consider that if name contains path separtor then container name is empty
- * @param containerName
- */
-function stripFileInfo(containerName: string): string {
-	return toUnixPath(containerName).indexOf('/') < 0 ? containerName : '';
 }

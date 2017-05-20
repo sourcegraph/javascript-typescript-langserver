@@ -407,7 +407,7 @@ export class TypeScriptService {
 								if (!sourceFile) {
 									throw new Error(`Expected source file ${definition.fileName} to exist in configuration`);
 								}
-								const symbol = defInfoToSymbolDescriptor(definition);
+								const symbol = defInfoToSymbolDescriptor(definition, this.root);
 								if (packageDescriptor) {
 									symbol.package = packageDescriptor;
 								}
@@ -743,7 +743,7 @@ export class TypeScriptService {
 				const tree = config.getService().getNavigationTree(fileName);
 				return observableFromIterable(walkNavigationTree(tree))
 					.filter(({ tree, parent }) => navigationTreeIsSymbol(tree))
-					.map(({ tree, parent }) => navigationTreeToSymbolInformation(tree, parent, sourceFile));
+					.map(({ tree, parent }) => navigationTreeToSymbolInformation(tree, parent, sourceFile, this.root));
 			})
 			.map(symbol => ({ op: 'add', path: '', value: symbol }) as AddPatch)
 			.startWith({ op: 'add', path: '', value: [] } as AddPatch);
@@ -795,7 +795,7 @@ export class TypeScriptService {
 									// Get DefinitionInformations at the node
 									return Observable.from(config.getService().getDefinitionAtPosition(source.fileName, node.pos + 1) || [])
 										.mergeMap(definition => {
-											const symbol = defInfoToSymbolDescriptor(definition);
+											const symbol = defInfoToSymbolDescriptor(definition, this.root);
 											// Check if SymbolDescriptor without PackageDescriptor matches
 											if (!isSymbolDescriptorMatch(queryWithoutPackage, symbol)) {
 												return [];
@@ -1344,7 +1344,7 @@ export class TypeScriptService {
 						// Exclude dependencies and standard library
 						.filter(item => !isTypeScriptLibrary(item.fileName) && !item.fileName.includes('/node_modules/'))
 						// Same score for all
-						.map(item => [1, navigateToItemToSymbolInformation(item, program)] as [number, SymbolInformation]);
+						.map(item => [1, navigateToItemToSymbolInformation(item, program, this.root)] as [number, SymbolInformation]);
 				} else {
 					const queryWithoutPackage = query && omit(query, 'package') as SymbolDescriptor;
 					// Require at least 2 properties to match (or all if less provided)
@@ -1370,7 +1370,7 @@ export class TypeScriptService {
 									matchedNodes = nodes
 										// Get a score how good the symbol matches the SymbolDescriptor (ignoring PackageDescriptor)
 										.map(({ tree, parent }) => {
-											const symbolDescriptor = navigationTreeToSymbolDescriptor(tree, parent);
+											const symbolDescriptor = navigationTreeToSymbolDescriptor(tree, parent, this.root);
 											const score = getMatchingPropertyCount(queryWithoutPackage, symbolDescriptor);
 											return { score, tree, parent };
 										})
@@ -1394,7 +1394,7 @@ export class TypeScriptService {
 										.filter(({ score }) => score >= minScore);
 								}
 								return matchedNodes
-									.map(({ score, tree, parent }) => [score, navigationTreeToSymbolInformation(tree, parent, sourceFile)] as [number, SymbolInformation]);
+									.map(({ score, tree, parent }) => [score, navigationTreeToSymbolInformation(tree, parent, sourceFile, this.root)] as [number, SymbolInformation]);
 							} catch (e) {
 								this.logger.error('Could not get navigation tree for file', sourceFile.fileName);
 								return [];

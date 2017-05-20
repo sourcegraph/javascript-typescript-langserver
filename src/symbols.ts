@@ -3,7 +3,7 @@ import * as ts from 'typescript';
 import { SymbolInformation, SymbolKind } from 'vscode-languageserver-types';
 import { isTypeScriptLibrary } from './memfs';
 import { SymbolDescriptor } from './request-type';
-import { path2uri, stripQuotes } from './util';
+import { path2uri } from './util';
 
 /**
  * Transforms definition's file name to URI. If definition belongs to the in-memory TypeScript library,
@@ -18,14 +18,16 @@ export function locationUri(filePath: string): string {
 
 /**
  * Returns an LSP SymbolInformation for a TypeScript NavigateToItem
+ *
+ * @param rootPath The workspace rootPath to remove from symbol names and containerNames
  */
-export function navigateToItemToSymbolInformation(item: ts.NavigateToItem, program: ts.Program): SymbolInformation {
+export function navigateToItemToSymbolInformation(item: ts.NavigateToItem, program: ts.Program, rootPath: string): SymbolInformation {
 	const sourceFile = program.getSourceFile(item.fileName);
 	if (!sourceFile) {
 		throw new Error(`Source file ${item.fileName} does not exist`);
 	}
 	const symbolInformation: SymbolInformation = {
-		name: item.name,
+		name: item.name ? item.name.replace(rootPath, '') : '',
 		kind: stringtoSymbolKind(item.kind),
 		location: {
 			uri: locationUri(sourceFile.fileName),
@@ -36,7 +38,7 @@ export function navigateToItemToSymbolInformation(item: ts.NavigateToItem, progr
 		}
 	};
 	if (item.containerName) {
-		symbolInformation.containerName = item.containerName;
+		symbolInformation.containerName = item.containerName.replace(rootPath, '');
 	}
 	return symbolInformation;
 }
@@ -85,13 +87,13 @@ export function stringtoSymbolKind(kind: string): SymbolKind {
 /**
  * Returns an LSP SymbolInformation for a TypeScript NavigationTree node
  */
-export function navigationTreeToSymbolInformation(tree: ts.NavigationTree, parent: ts.NavigationTree | undefined, sourceFile: ts.SourceFile): SymbolInformation {
+export function navigationTreeToSymbolInformation(tree: ts.NavigationTree, parent: ts.NavigationTree | undefined, sourceFile: ts.SourceFile, rootPath: string): SymbolInformation {
 	const span = tree.spans[0];
 	if (!span) {
 		throw new Error('NavigationTree has no TextSpan');
 	}
 	const symbolInformation: SymbolInformation = {
-		name: tree.text,
+		name: tree.text ? tree.text.replace(rootPath, '') : '',
 		kind: stringtoSymbolKind(tree.kind),
 		location: {
 			uri: locationUri(sourceFile.fileName),
@@ -101,8 +103,8 @@ export function navigationTreeToSymbolInformation(tree: ts.NavigationTree, paren
 			}
 		}
 	};
-	if (parent && navigationTreeIsSymbol(parent)) {
-		symbolInformation.containerName = parent.text;
+	if (parent && navigationTreeIsSymbol(parent) && parent.text) {
+		symbolInformation.containerName = parent.text.replace(rootPath, '');
 	}
 	return symbolInformation;
 }
@@ -110,17 +112,16 @@ export function navigationTreeToSymbolInformation(tree: ts.NavigationTree, paren
 /**
  * Returns a SymbolDescriptor for a TypeScript NavigationTree node
  */
-export function navigationTreeToSymbolDescriptor(tree: ts.NavigationTree, parent?: ts.NavigationTree): SymbolDescriptor {
-	// TODO remove quote stripping here and in defInfoToSymbolDescriptor
+export function navigationTreeToSymbolDescriptor(tree: ts.NavigationTree, parent: ts.NavigationTree | undefined, rootPath: string): SymbolDescriptor {
 	const symbolDescriptor: SymbolDescriptor = {
 		kind: tree.kind,
-		name: stripQuotes(tree.text),
+		name: tree.text ? tree.text.replace(rootPath, '') : '',
 		containerKind: '',
 		containerName: ''
 	};
 	if (parent && navigationTreeIsSymbol(parent)) {
 		symbolDescriptor.containerKind = parent.kind;
-		symbolDescriptor.containerName = stripQuotes(parent.text);
+		symbolDescriptor.containerName = parent.text.replace(rootPath, '');
 	}
 	return symbolDescriptor;
 }

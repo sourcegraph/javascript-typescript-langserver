@@ -47,6 +47,7 @@
     "object-hash": "^1.1.8",
     "opentracing": "^0.14.0",
     "semaphore-async-await": "^1.5.1",
+    "string-similarity": "^1.1.0",
     "typescript": "2.3.2",
     "vscode-jsonrpc": "^3.1.0",
     "vscode-languageserver": "^3.1.0",

@@ -192,7 +192,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						}
 					},
 					symbol: {
-						containerName: 'I',
+						containerName: 'd.I',
 						containerKind: '',
 						kind: 'property',
 						name: 'target'
@@ -916,7 +916,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					},
 					symbol: {
 						containerKind: '',
-						containerName: '',
+						containerName: '"node_modules/dep/dep"',
 						kind: 'var',
 						name: 'x'
 					}
@@ -1004,7 +1004,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						},
 						symbol: {
 							containerKind: '',
-							containerName: '',
+							containerName: '"node_modules/dep/dep"',
 							kind: 'var',
 							name: 'x'
 						}
