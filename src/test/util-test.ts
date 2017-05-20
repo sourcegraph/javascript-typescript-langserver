@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import { getMatchingPropertyCount, getPropertyCount, isGlobalTSFile, isSymbolDescriptorMatch, JSONPTR, path2uri, resolvepath2uri, uri2path } from '../util';
 
-describe.only('util', () => {
+describe('util', () => {
 	describe('JSONPTR', () => {
 		it('should escape JSON Pointer components', () => {
 			const uri = 'file:///foo/~bar';
