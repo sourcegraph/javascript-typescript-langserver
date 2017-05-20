@@ -77,7 +77,7 @@ export class InMemoryFileSystem extends EventEmitter implements ts.ParseConfigHo
 		}
 		// Add to directory tree
 		const filePath = uri2path(uri);
-		const components = filePath.split('/').filter(c => c);
+		const components = filePath.split(/[\/\\]/).filter(c => c);
 		let node = this.rootNode;
 		for (const [i, component] of components.entries()) {
 			const n = node.children.get(component);
