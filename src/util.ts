@@ -1,12 +1,9 @@
 import { Observable } from '@reactivex/rxjs';
-import * as os from 'os';
 import * as path from 'path';
 import * as ts from 'typescript';
 import * as url from 'url';
 import { SymbolKind } from 'vscode-languageserver';
 import { PackageDescriptor, SymbolDescriptor } from './request-type';
-
-let strict = false;
 
 /**
  * Converts an Iterable to an Observable.
@@ -21,14 +18,6 @@ export function observableFromIterable<T>(iterable: Iterable<T>): Observable<T> 
  */
 export function JSONPTR(strings: TemplateStringsArray, ...toEscape: string[]): string {
 	return strings.reduce((prev, curr, i) => prev + toEscape[i - 1].replace(/~/g, '~0').replace(/\//g, '~1') + curr);
-}
-
-/**
- * Toggles "strict" flag, affects how we are parsing/generating URLs.
- * In strict mode we using "file://PATH", otherwise on Windows we are using "file:///PATH"
- */
-export function setStrict(value: boolean) {
-	strict = value;
 }
 
 /**
@@ -158,12 +147,6 @@ export function uri2path(uri: string): string {
 		} else {
 			return uri.split('/').map(decodeURIComponent).join('/');
 		}
-		// if (process.platform === 'win32') {
-		// 	if (!strict) {
-		// 		uri = uri.substring(1);
-		// 	}
-		// }
-		// TODO: How about returning proper windows paths here?
 	}
 	// TODO: reject non-acceptable uris instead of silently returning them
 	return uri;
@@ -179,14 +162,6 @@ export function uriToLocalPath(uri: string): string {
 
 export function isLocalUri(uri: string): boolean {
 	return uri.startsWith('file://');
-}
-
-export function resolve(root: string, file: string): string {
-	if (!strict || os.platform() !== 'win32') {
-		return path.resolve(root, file);
-	} else {
-		return path.posix.resolve(root, file);
-	}
 }
 
 function platformSensitiveResolve(root: string, file: string): string {
