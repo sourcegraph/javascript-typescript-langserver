@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as rimraf from 'rimraf';
 import * as temp from 'temp';
 import { LocalFileSystem } from '../fs';
-import { path2uri } from '../util';
+import { resolvepath2uri } from '../util';
 import chaiAsPromised = require('chai-as-promised');
 chai.use(chaiAsPromised);
 const assert = chai.assert;
@@ -31,7 +31,7 @@ describe('fs.ts', () => {
 
 			// the project dir
 			const projectDir = path.join(temporaryDir, 'project');
-			rootUri = path2uri('', projectDir) + '/';
+			rootUri = resolvepath2uri('', projectDir) + '/';
 			await fs.mkdir(projectDir);
 			await fs.mkdir(path.join(projectDir, 'foo'));
 			await fs.mkdir(path.join(projectDir, '@types'));

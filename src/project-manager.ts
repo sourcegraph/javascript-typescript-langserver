@@ -15,7 +15,7 @@ import {
 	isGlobalTSFile,
 	isJSTSFile,
 	isPackageJsonFile,
-	path2uri,
+	resolvepath2uri,
 	toUnixPath,
 	uri2path
 } from './util';
@@ -410,7 +410,7 @@ export class ProjectManager implements Disposable {
 				);
 			})
 			// Use same scheme, slashes, host for referenced URI as input file
-			.map(filePath => path2uri('', filePath))
+			.map(filePath => resolvepath2uri('', filePath))
 			// Don't cache errors
 			.catch(err => {
 				this.referencedFiles.delete(uri);
@@ -659,7 +659,7 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	 */
 	getScriptVersion(fileName: string): string {
 
-		const uri = path2uri(this.rootPath, fileName);
+		const uri = resolvepath2uri(this.rootPath, fileName);
 		if (path.posix.isAbsolute(fileName) || path.isAbsolute(fileName)) {
 			fileName = path.posix.relative(this.rootPath, toUnixPath(fileName));
 		}
