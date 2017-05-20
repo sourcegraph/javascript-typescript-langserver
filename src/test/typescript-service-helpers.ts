@@ -16,8 +16,8 @@ const assert = chai.assert;
 /**
  * Enforcing strict mode to make tests pass on Windows
  */
-import { setStrict, uri2path } from '../util';
-setStrict(true);
+import { uri2path } from '../util';
+// setStrict(true);
 
 export interface TestContext {
 

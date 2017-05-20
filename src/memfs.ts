@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as ts from 'typescript';
 import { Logger, NoopLogger } from './logging';
 import { FileSystemEntries, matchFiles } from './match-files';
-import { path2uri, toUnixPath, uri2path } from './util';
+import { resolvepath2uri, toUnixPath, uri2path } from './util';
 
 /**
  * In-memory file cache node which represents either a folder or a file
@@ -129,7 +129,7 @@ export class InMemoryFileSystem extends EventEmitter implements ts.ParseConfigHo
 	 * @param path File path or URI (both absolute or relative file paths are accepted)
 	 */
 	fileExists(path: string): boolean {
-		return this.readFileIfExists(path) !== undefined || this.files.has(path) || this.files.has(path2uri(this.path, path));
+		return this.readFileIfExists(path) !== undefined || this.files.has(path) || this.files.has(resolvepath2uri(this.path, path));
 	}
 
 	/**
@@ -147,7 +147,7 @@ export class InMemoryFileSystem extends EventEmitter implements ts.ParseConfigHo
 	 * If there is no such file, returns undefined
 	 */
 	private readFileIfExists(path: string): string | undefined {
-		const uri = path2uri(this.path, path);
+		const uri = resolvepath2uri(this.path, path);
 		let content = this.overlay.get(uri);
 		if (content !== undefined) {
 			return content;

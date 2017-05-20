@@ -62,34 +62,67 @@ export function normalizeUri(uri: string): string {
 	return url.format(parts);
 }
 
-export function path2uri(root: string, file: string): string {
-	let ret = 'file://';
-	if (!strict && process.platform === 'win32') {
-		ret += '/';
-	}
+export function resolvepath2uri(root: string, file: string): string {
+	const scheme = 'file://';
+	// if (!strict && process.platform === 'win32') {
+	// 	ret += '/';
+	// }
 	let p;
 	if (root) {
 		p = resolve(root, file);
 	} else {
 		p = file;
 	}
+	// add extra slash if drive letter is detected.
 	if (/^[a-z]:[\\\/]/i.test(p)) {
 		p = '/' + p;
 	}
 	p = p.split(/[\\\/]/g).map((val, i) => i <= 1 && /^[a-z]:$/i.test(val) ? val : encodeURIComponent(val)).join('/');
-	return normalizeUri(ret + p);
+	return normalizeUri(scheme + p);
+}
+
+/**
+ * From sindresorhus's file-url but with resolve and strict functionality removed
+ * @param path an absolute path
+ */
+export function path2uri(path: string): string {
+	if (typeof path !== 'string') {
+		throw new TypeError(`Expected a string, got ${typeof path}`);
+	}
+
+	// TODO: this should only accept absolute paths!
+
+	let pathName = path;
+	pathName = pathName.replace(/\\/g, '/');
+
+	// Windows drive letter must be prefixed with a slash
+	if (pathName[0] !== '/') {
+		pathName = `/${pathName}`;
+	}
+
+	// Escape required characters for path components
+	// See: https://tools.ietf.org/html/rfc3986#section-3.3
+	return encodeURI(`file://${pathName}`).replace(/[?#@]/g, encodeURIComponent);
 }
 
 export function uri2path(uri: string): string {
 	if (uri.startsWith('file://')) {
 		uri = uri.substring('file://'.length);
-		if (process.platform === 'win32') {
-			if (!strict) {
-				uri = uri.substring(1);
-			}
+
+		// if we have a /c:/ left, then return a windows path.
+		if (/^\/[a-z]:[\/]/i.test(uri)) {
+			return uri.substring(1).split('/').map(decodeURIComponent).join('\\');
+		} else {
+			return uri.split('/').map(decodeURIComponent).join('/');
 		}
-		uri = uri.split('/').map(decodeURIComponent).join('/');
+		// if (process.platform === 'win32') {
+		// 	if (!strict) {
+		// 		uri = uri.substring(1);
+		// 	}
+		// }
+		// TODO: How about returning proper windows paths here?
 	}
+	// TODO: reject non-acceptable uris instead of silently returning them
 	return uri;
 }
 
