@@ -100,6 +100,11 @@ export function normalizeUri(uri: string): string {
 	return url.format(parts);
 }
 
+/**
+ * Produces a URI after resolving a relative path.
+ * @param root the path to resolve from: eg c:\Users\myself
+ * @param file the relative or absolute path to resolve
+ */
 export function resolvepath2uri(root: string, file: string): string {
 	const scheme = 'file://';
 	// if (!strict && process.platform === 'win32') {
@@ -107,7 +112,7 @@ export function resolvepath2uri(root: string, file: string): string {
 	// }
 	let p;
 	if (root) {
-		p = resolve(root, file);
+		p = platformSensitiveResolve(root, file);
 	} else {
 		p = file;
 	}
@@ -182,8 +187,17 @@ export function resolve(root: string, file: string): string {
 	} else {
 		return path.posix.resolve(root, file);
 	}
-
 }
+
+function platformSensitiveResolve(root: string, file: string): string {
+	if (/^[a-z]:\\/i.test(root)) {
+		return path.win32.resolve(root, file);
+	} else if (path.posix.isAbsolute(root)) {
+		return path.posix.resolve(root, file);
+	}
+	throw new Error('root must be absolute!');
+}
+
 const jstsPattern = /\.[tj]sx?$/;
 
 export function isJSTSFile(filename: string): boolean {
