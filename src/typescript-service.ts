@@ -1370,7 +1370,7 @@ export class TypeScriptService {
 									matchedNodes = nodes
 										// Get a score how good the symbol matches the SymbolDescriptor (ignoring PackageDescriptor)
 										.map(({ tree, parent }) => {
-											const symbolDescriptor = navigationTreeToSymbolDescriptor(tree, parent, this.root);
+											const symbolDescriptor = navigationTreeToSymbolDescriptor(tree, parent, sourceFile.fileName, this.root);
 											const score = getMatchingPropertyCount(queryWithoutPackage, symbolDescriptor);
 											return { score, tree, parent };
 										})

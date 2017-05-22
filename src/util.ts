@@ -186,16 +186,31 @@ export function normalizeDir(dir: string) {
 }
 
 /**
- * defInfoToSymbolDescriptor converts from an instance of
- * ts.DefinitionInfo to an instance of SymbolDescriptor
+ * Converts a ts.DefinitionInfo to a SymbolDescriptor
  */
-export function defInfoToSymbolDescriptor(d: ts.DefinitionInfo, rootPath: string): SymbolDescriptor {
-	return {
-		kind: d.kind || '',
-		name: d.name ? d.name.replace(rootPath, '') : '',
-		containerKind: d.containerKind || '',
-		containerName: d.containerName ? d.containerName.replace(rootPath, '') : ''
+export function defInfoToSymbolDescriptor(info: ts.DefinitionInfo, rootPath: string): SymbolDescriptor {
+	const symbolDescriptor: SymbolDescriptor = {
+		kind: info.kind || '',
+		name: info.name || '',
+		containerKind: info.containerKind || '',
+		containerName: info.containerName || ''
 	};
+	// If the symbol is an external module representing a file, set name to the file path
+	if (info.kind === ts.ScriptElementKind.moduleElement && info.name && /[\\\/]/.test(info.name)) {
+		symbolDescriptor.name = '"' + info.fileName.replace(/(?:\.d)?\.tsx?$/, '') + '"';
+	}
+	// If the symbol itself is not a module and there is no containerKind
+	// then the container is an external module named by the file name (without file extension)
+	if (info.kind !== ts.ScriptElementKind.moduleElement && !info.containerKind) {
+		if (!info.containerName) {
+			symbolDescriptor.containerName = '"' + info.fileName.replace(/(?:\.d)?\.tsx?$/, '') + '"';
+		}
+		symbolDescriptor.containerKind = ts.ScriptElementKind.moduleElement;
+	}
+	// Make paths relative to root paths
+	symbolDescriptor.containerName = symbolDescriptor.containerName.replace(rootPath, '');
+	symbolDescriptor.name = symbolDescriptor.name.replace(rootPath, '');
+	return symbolDescriptor;
 }
 
 /**

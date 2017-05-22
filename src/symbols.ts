@@ -112,7 +112,7 @@ export function navigationTreeToSymbolInformation(tree: ts.NavigationTree, paren
 /**
  * Returns a SymbolDescriptor for a TypeScript NavigationTree node
  */
-export function navigationTreeToSymbolDescriptor(tree: ts.NavigationTree, parent: ts.NavigationTree | undefined, rootPath: string): SymbolDescriptor {
+export function navigationTreeToSymbolDescriptor(tree: ts.NavigationTree, parent: ts.NavigationTree | undefined, fileName: string, rootPath: string): SymbolDescriptor {
 	const symbolDescriptor: SymbolDescriptor = {
 		kind: tree.kind,
 		name: tree.text ? tree.text.replace(rootPath, '') : '',
@@ -121,8 +121,23 @@ export function navigationTreeToSymbolDescriptor(tree: ts.NavigationTree, parent
 	};
 	if (parent && navigationTreeIsSymbol(parent)) {
 		symbolDescriptor.containerKind = parent.kind;
-		symbolDescriptor.containerName = parent.text.replace(rootPath, '');
+		symbolDescriptor.containerName = parent.text;
 	}
+	// If the symbol is an external module representing a file, set name to the file path
+	if (tree.kind === ts.ScriptElementKind.moduleElement && tree.text && /[\\\/]/.test(tree.text)) {
+		symbolDescriptor.name = '"' + fileName.replace(/(?:\.d)?\.tsx?$/, '') + '"';
+	}
+	// If the symbol itself is not a module and there is no containerKind
+	// then the container is an external module named by the file name (without file extension)
+	if (symbolDescriptor.kind !== ts.ScriptElementKind.moduleElement && !symbolDescriptor.containerKind) {
+		if (!symbolDescriptor.containerName) {
+			symbolDescriptor.containerName = '"' + fileName.replace(/(?:\.d)?\.tsx?$/, '') + '"';
+		}
+		symbolDescriptor.containerKind = ts.ScriptElementKind.moduleElement;
+	}
+	// Make all paths that may occur in module names relative to the workspace rootPath
+	symbolDescriptor.name = symbolDescriptor.name.replace(rootPath, '');
+	symbolDescriptor.containerName = symbolDescriptor.containerName.replace(rootPath, '');
 	return symbolDescriptor;
 }
 
