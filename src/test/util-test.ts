@@ -25,6 +25,14 @@ describe('util', () => {
 			});
 			assert.equal(score, 4);
 		});
+		it('should return a score of 0.6 if a string property is 60% similar', () => {
+			const score = getMatchingPropertyCount({
+				filePath: 'lib/foo.d.ts'
+			}, {
+				filePath: 'src/foo.ts'
+			});
+			assert.equal(score, 0.6);
+		});
 		it('should return a score of 4 if 4 properties match and 1 does not', () => {
 			const score = getMatchingPropertyCount({
 				containerKind: '',
@@ -77,12 +85,14 @@ describe('util', () => {
 				containerName: 'ts',
 				kind: 'interface',
 				name: 'Program',
+				filePath: 'foo/bar.ts',
 				package: undefined
 			}, {
 				containerKind: 'module',
 				containerName: 'ts',
 				kind: 'interface',
 				name: 'Program',
+				filePath: 'foo/bar.ts',
 				package: undefined
 			});
 			assert.equal(matches, true);
@@ -92,12 +102,14 @@ describe('util', () => {
 				name: 'a',
 				kind: 'class',
 				package: { name: 'mypkg' },
+				filePath: 'foo/bar.ts',
 				containerKind: undefined
 			}, {
 				kind: 'class',
 				name: 'a',
 				containerKind: '',
 				containerName: '',
+				filePath: 'foo/bar.ts',
 				package: { name: 'mypkg' }
 			});
 			assert.equal(matches, true);

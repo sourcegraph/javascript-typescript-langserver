@@ -71,17 +71,39 @@ export interface WorkspaceFilesParams {
  * metadata about the symbol.
  */
 export interface SymbolDescriptor {
-	kind: string;
-	name: string;
-	containerKind: string;
-	containerName: string;
-	package?: PackageDescriptor;
-}
 
-export namespace SymbolDescriptor {
-	export function create(kind: string, name: string, containerKind: string, containerName: string, pkg?: PackageDescriptor): SymbolDescriptor {
-		return { kind, name, containerKind, containerName, package: pkg };
-	}
+	/**
+	 * The kind of the symbol as a ts.ScriptElementKind
+	 */
+	kind: string;
+
+	/**
+	 * The name of the symbol as returned from TS
+	 */
+	name: string;
+
+	/**
+	 * The kind of the symbol the symbol is contained in, as a ts.ScriptElementKind.
+	 * Is an empty string if the symbol has no container.
+	 */
+	containerKind: string;
+
+	/**
+	 * The name of the symbol the symbol is contained in, as returned from TS.
+	 * Is an empty string if the symbol has no container.
+	 */
+	containerName: string;
+
+	/**
+	 * The file path of the file where the symbol is defined in, relative to the workspace rootPath.
+	 */
+	filePath: string;
+
+	/**
+	 * A PackageDescriptor describing the package this symbol belongs to.
+	 * Is `undefined` if the symbol does not belong to a package.
+	 */
+	package?: PackageDescriptor;
 }
 
 /*
