@@ -1,5 +1,5 @@
 import * as chai from 'chai';
-import * as sinon from 'Sinon';
+import * as sinon from 'sinon';
 import glob = require('glob');
 import { RemoteLanguageClient } from '../lang-handler';
 import { TypeScriptService } from '../typescript-service';
