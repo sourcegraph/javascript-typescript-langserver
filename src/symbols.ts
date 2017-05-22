@@ -125,7 +125,7 @@ export function navigationTreeToSymbolDescriptor(tree: ts.NavigationTree, parent
 		symbolDescriptor.containerName = parent.text;
 	}
 	// If the symbol is an external module representing a file, set name to the file path
-	if (tree.kind === ts.ScriptElementKind.moduleElement && tree.text && /[\\\/]/.test(tree.text)) {
+	if (tree.kind === ts.ScriptElementKind.moduleElement && !tree.text) {
 		symbolDescriptor.name = '"' + filePath.replace(/(?:\.d)?\.tsx?$/, '') + '"';
 	}
 	// If the symbol itself is not a module and there is no containerKind
