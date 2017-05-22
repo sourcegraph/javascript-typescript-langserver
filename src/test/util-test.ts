@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { getMatchScore, isGlobalTSFile, isSymbolDescriptorMatch, JSONPTR } from '../util';
+import { getMatchingPropertyCount, getPropertyCount, isGlobalTSFile, isSymbolDescriptorMatch, JSONPTR } from '../util';
 
 describe('util', () => {
 	describe('JSONPTR', () => {
@@ -9,9 +9,9 @@ describe('util', () => {
 			assert.equal(pointer, '/changes/file:~1~1~1foo~1~0bar/-');
 		});
 	});
-	describe('getMatchScore()', () => {
+	describe('getMatchingPropertyCount()', () => {
 		it('should return a score of 4 if 4 properties match', () => {
-			const score = getMatchScore({
+			const score = getMatchingPropertyCount({
 				containerName: 'ts',
 				kind: 'interface',
 				name: 'Program',
@@ -25,8 +25,16 @@ describe('util', () => {
 			});
 			assert.equal(score, 4);
 		});
+		it('should return a score of 0.6 if a string property is 60% similar', () => {
+			const score = getMatchingPropertyCount({
+				filePath: 'lib/foo.d.ts'
+			}, {
+				filePath: 'src/foo.ts'
+			});
+			assert.equal(score, 0.6);
+		});
 		it('should return a score of 4 if 4 properties match and 1 does not', () => {
-			const score = getMatchScore({
+			const score = getMatchingPropertyCount({
 				containerKind: '',
 				containerName: 'util',
 				kind: 'var',
@@ -42,7 +50,7 @@ describe('util', () => {
 			assert.equal(score, 4);
 		});
 		it('should return a score of 3 if 3 properties match deeply', () => {
-			const score = getMatchScore({
+			const score = getMatchingPropertyCount({
 				name: 'a',
 				kind: 'class',
 				package: { name: 'mypkg' },
@@ -57,6 +65,19 @@ describe('util', () => {
 			assert.equal(score, 3);
 		});
 	});
+	describe('getPropertyCount()', () => {
+		it('should return the amount of leaf properties', () => {
+			const count = getPropertyCount({
+				name: 'a', // 1
+				kind: 'class', // 2
+				package: {
+					name: 'mypkg' // 3
+				},
+				containerKind: '' // 4
+			});
+			assert.equal(count, 4);
+		});
+	});
 	describe('isSymbolDescriptorMatch()', () => {
 		it('should return true for a matching query', () => {
 			const matches = isSymbolDescriptorMatch({
@@ -64,12 +85,14 @@ describe('util', () => {
 				containerName: 'ts',
 				kind: 'interface',
 				name: 'Program',
+				filePath: 'foo/bar.ts',
 				package: undefined
 			}, {
 				containerKind: 'module',
 				containerName: 'ts',
 				kind: 'interface',
 				name: 'Program',
+				filePath: 'foo/bar.ts',
 				package: undefined
 			});
 			assert.equal(matches, true);
@@ -79,12 +102,14 @@ describe('util', () => {
 				name: 'a',
 				kind: 'class',
 				package: { name: 'mypkg' },
+				filePath: 'foo/bar.ts',
 				containerKind: undefined
 			}, {
 				kind: 'class',
 				name: 'a',
 				containerKind: '',
 				containerName: '',
+				filePath: 'foo/bar.ts',
 				package: { name: 'mypkg' }
 			});
 			assert.equal(matches, true);

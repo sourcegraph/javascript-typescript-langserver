@@ -3,7 +3,6 @@ import iterate from 'iterare';
 import { AddPatch, OpPatch } from 'json-patch';
 import { toPairs } from 'lodash';
 import { Span } from 'opentracing';
-import * as path from 'path';
 import * as ts from 'typescript';
 import {
 	CodeActionParams,
@@ -51,10 +50,9 @@ import {
 	WorkspaceSymbolParams
 } from './request-type';
 import {
-	convertStringtoSymbolKind,
 	defInfoToSymbolDescriptor,
-	getMatchScore,
-	isLocalUri,
+	getMatchingPropertyCount,
+	getPropertyCount,
 	isSymbolDescriptorMatch,
 	JSONPTR,
 	normalizeUri,
@@ -67,6 +65,14 @@ import hashObject = require('object-hash');
 import { castArray, merge, noop, omit } from 'lodash';
 import * as url from 'url';
 import { extractDefinitelyTypedPackageName, extractNodeModulesPackageName, PackageJson, PackageManager } from './packages';
+import {
+	locationUri,
+	navigateToItemToSymbolInformation,
+	navigationTreeIsSymbol,
+	navigationTreeToSymbolDescriptor,
+	navigationTreeToSymbolInformation,
+	walkNavigationTree
+} from './symbols';
 
 export interface TypeScriptServiceOptions {
 	traceModuleResolution?: boolean;
@@ -341,7 +347,7 @@ export class TypeScriptService {
 						const start = ts.getLineAndCharacterOfPosition(sourceFile, definition.textSpan.start);
 						const end = ts.getLineAndCharacterOfPosition(sourceFile, definition.textSpan.start + definition.textSpan.length);
 						return {
-							uri: this._defUri(definition.fileName),
+							uri: locationUri(definition.fileName),
 							range: {
 								start,
 								end
@@ -393,7 +399,7 @@ export class TypeScriptService {
 				// Query TypeScript for references
 				return Observable.from(configuration.getService().getDefinitionAtPosition(fileName, offset) || [])
 					.mergeMap((definition: ts.DefinitionInfo): Observable<SymbolLocationInformation> => {
-						const definitionUri = this._defUri(definition.fileName);
+						const definitionUri = locationUri(definition.fileName);
 						// Get the PackageDescriptor
 						return this._getPackageDescriptor(definitionUri)
 							.map((packageDescriptor: PackageDescriptor | undefined): SymbolLocationInformation => {
@@ -401,7 +407,7 @@ export class TypeScriptService {
 								if (!sourceFile) {
 									throw new Error(`Expected source file ${definition.fileName} to exist in configuration`);
 								}
-								const symbol = defInfoToSymbolDescriptor(definition);
+								const symbol = defInfoToSymbolDescriptor(definition, this.root);
 								if (packageDescriptor) {
 									symbol.package = packageDescriptor;
 								}
@@ -629,10 +635,6 @@ export class TypeScriptService {
 	 */
 	workspaceSymbol(params: WorkspaceSymbolParams, span = new Span()): Observable<OpPatch> {
 
-		// Always return max. 50 results
-		// TODO stream 50 results, then re-query and stream the rest
-		const limit = Math.min(params.limit || Infinity, 50);
-
 		// Return cached result for empty query, if available
 		if (!params.query && !params.symbol && this.emptyQueryWorkspaceSymbols) {
 			return this.emptyQueryWorkspaceSymbols;
@@ -668,7 +670,7 @@ export class TypeScriptService {
 								throw new Error(`Could not find tsconfig for ${packageRootUri}`);
 							}
 							// Don't match PackageDescriptor on symbols
-							return this._getSymbolsInConfig(config, params.query || omit(params.symbol!, 'package'), limit, span);
+							return this._getSymbolsInConfig(config, omit(params.symbol!, 'package'), span);
 						});
 				}
 				// Regular workspace symbol search
@@ -689,15 +691,15 @@ export class TypeScriptService {
 							: observableFromIterable(this.projectManager.configurations())
 					)
 					// If PackageDescriptor is given, only search project with the matching package name
-					.mergeMap(config => this._getSymbolsInConfig(config, params.query || params.symbol, limit, span));
+					.mergeMap(config => this._getSymbolsInConfig(config, params.query || params.symbol, span));
 			})
-			// Filter symbols found in dependencies
-			.filter(([score, symbol]) => !symbol.location.uri.includes('/node_modules/'))
 			// Filter duplicate symbols
 			// There may be few configurations that contain the same file(s)
 			// or files from different configurations may refer to the same file(s)
 			.distinct(symbol => hashObject(symbol, { respectType: false } as any))
-			.take(limit)
+			// Limit the total amount of symbols returned for text or empty queries
+			// Higher limit for programmatic symbol queries because it could exclude results with a higher score
+			.take(params.symbol ? 1000 : 100)
 			// Find out at which index to insert the symbol to maintain sorting order by score
 			.map(([score, symbol]) => {
 				const index = scores.findIndex(s => s < score);
@@ -739,7 +741,9 @@ export class TypeScriptService {
 					return [];
 				}
 				const tree = config.getService().getNavigationTree(fileName);
-				return observableFromIterable(this._flattenNavigationTreeItem(tree, null, sourceFile));
+				return observableFromIterable(walkNavigationTree(tree))
+					.filter(({ tree, parent }) => navigationTreeIsSymbol(tree))
+					.map(({ tree, parent }) => navigationTreeToSymbolInformation(tree, parent, sourceFile, this.root));
 			})
 			.map(symbol => ({ op: 'add', path: '', value: symbol }) as AddPatch)
 			.startWith({ op: 'add', path: '', value: [] } as AddPatch);
@@ -791,7 +795,7 @@ export class TypeScriptService {
 									// Get DefinitionInformations at the node
 									return Observable.from(config.getService().getDefinitionAtPosition(source.fileName, node.pos + 1) || [])
 										.mergeMap(definition => {
-											const symbol = defInfoToSymbolDescriptor(definition);
+											const symbol = defInfoToSymbolDescriptor(definition, this.root);
 											// Check if SymbolDescriptor without PackageDescriptor matches
 											if (!isSymbolDescriptorMatch(queryWithoutPackage, symbol)) {
 												return [];
@@ -814,7 +818,7 @@ export class TypeScriptService {
 										.map(symbol => ({
 											symbol,
 											reference: {
-												uri: this._defUri(source.fileName),
+												uri: locationUri(source.fileName),
 												range: {
 													start: ts.getLineAndCharacterOfPosition(source, node.pos + 1),
 													end: ts.getLineAndCharacterOfPosition(source, node.end)
@@ -1314,16 +1318,15 @@ export class TypeScriptService {
 	}
 
 	/**
-	 * Returns an Iterator for all symbols in a given config that match a given SymbolDescriptor
+	 * Returns an Observable for all symbols in a given config that match a given SymbolDescriptor or text query
 	 *
 	 * @param config The ProjectConfiguration to search
 	 * @param query A text or SymbolDescriptor query
-	 * @param limit An optional limit that is passed to TypeScript
-	 * @return Observable of SymbolInformations
+	 * @return Observable of [match score, SymbolInformation]
 	 */
-	protected _getSymbolsInConfig(config: ProjectConfiguration, query?: string | Partial<SymbolDescriptor>, limit = Infinity, childOf = new Span()): Observable<[number, SymbolInformation]> {
+	protected _getSymbolsInConfig(config: ProjectConfiguration, query?: string | Partial<SymbolDescriptor>, childOf = new Span()): Observable<[number, SymbolInformation]> {
 		const span = childOf.tracer().startSpan('Get symbols in config', { childOf });
-		span.addTags({ config: config.configFilePath, query, limit });
+		span.addTags({ config: config.configFilePath, query });
 
 		return (() => {
 			try {
@@ -1334,69 +1337,69 @@ export class TypeScriptService {
 					return Observable.empty();
 				}
 
-				if (query) {
-					let items: Observable<[number, ts.NavigateToItem]>;
-					if (typeof query === 'string') {
-						// Query by text query
-						items = Observable.from(config.getService().getNavigateToItems(query, limit, undefined, false))
-							// Same score for all
-							.map(item => [1, item]);
-					} else {
-						const queryWithoutPackage = omit(query, 'package') as SymbolDescriptor;
-						// Query by name
-						items = Observable.from(config.getService().getNavigateToItems(query.name || '', limit, undefined, false))
-							// Get a score how good the symbol matches the SymbolDescriptor (ignoring PackageDescriptor)
-							.map((item): [number, ts.NavigateToItem] => [getMatchScore(queryWithoutPackage, {
-								kind: item.kind,
-								name: item.name,
-								containerKind: item.containerKind,
-								containerName: item.containerName
-							}), item])
-							// If score === 0, no properties matched
-							.filter(([score, symbol]) => score > 0)
-							// If SymbolDescriptor matched, get package.json and match PackageDescriptor name
-							// TODO get and match full PackageDescriptor (version)
-							.mergeMap(([score, item]) => {
-								if (!query.package || !query.package.name) {
-									return [[score, item]];
-								}
-								const uri = path2uri('', item.fileName);
-								return Observable.from(this.packageManager.getClosestPackageJson(uri, span))
-									// If PackageDescriptor matches, increase score
-									.map((packageJson): [number, ts.NavigateToItem] => packageJson && packageJson.name === query.package!.name! ? [score + 1, item] : [score, item]);
-							});
-					}
-					return Observable.from(items)
-						// Map NavigateToItems to SymbolInformations
-						.map(([score, item]) => {
-							const sourceFile = program.getSourceFile(item.fileName);
-							if (!sourceFile) {
-								throw new Error(`Source file ${item.fileName} does not exist`);
-							}
-							const symbolInformation: SymbolInformation = {
-								name: item.name,
-								kind: convertStringtoSymbolKind(item.kind),
-								location: {
-									uri: this._defUri(item.fileName),
-									range: {
-										start: ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start),
-										end: ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start + item.textSpan.length)
-									}
-								}
-							};
-							if (item.containerName) {
-								symbolInformation.containerName = item.containerName;
-							}
-							return [score, symbolInformation] as [number, SymbolInformation];
-						})
-						.filter(([score, symbolInformation]) => isLocalUri(symbolInformation.location.uri));
-				} else {
-					// An empty query uses a different algorithm to iterate all files and aggregate the symbols per-file to get all symbols
-					// TODO make all implementations use this? It has the advantage of being streamable and cancellable
-					return observableFromIterable(this._getNavigationTreeItems(config))
+				if (typeof query === 'string') {
+					// Query by text query
+					// Limit the amount of symbols searched for text queries
+					return Observable.from(config.getService().getNavigateToItems(query, 100, undefined, false))
+						// Exclude dependencies and standard library
+						.filter(item => !isTypeScriptLibrary(item.fileName) && !item.fileName.includes('/node_modules/'))
 						// Same score for all
-						.map(symbol => [1, symbol])
-						.take(limit);
+						.map(item => [1, navigateToItemToSymbolInformation(item, program, this.root)] as [number, SymbolInformation]);
+				} else {
+					const queryWithoutPackage = query && omit(query, 'package') as SymbolDescriptor;
+					// Require at least 2 properties to match (or all if less provided)
+					const minScore = Math.min(2, getPropertyCount(query));
+					const program = config.getProgram(span);
+					if (!program) {
+						return Observable.empty();
+					}
+					const service = config.getService();
+					return Observable.from(program.getSourceFiles())
+						// Exclude dependencies and standard library
+						.filter(sourceFile => !isTypeScriptLibrary(sourceFile.fileName) && !sourceFile.fileName.includes('/node_modules/'))
+						.mergeMap(sourceFile => {
+							try {
+								const tree = service.getNavigationTree(sourceFile.fileName);
+								const nodes = observableFromIterable(walkNavigationTree(tree))
+									.filter(({ tree, parent }) => navigationTreeIsSymbol(tree));
+								let matchedNodes: Observable<{ score: number, tree: ts.NavigationTree, parent?: ts.NavigationTree }>;
+								if (!query) {
+									matchedNodes = nodes
+										.map(({ tree, parent }) => ({ score: 1, tree, parent }));
+								} else {
+									matchedNodes = nodes
+										// Get a score how good the symbol matches the SymbolDescriptor (ignoring PackageDescriptor)
+										.map(({ tree, parent }) => {
+											const symbolDescriptor = navigationTreeToSymbolDescriptor(tree, parent, sourceFile.fileName, this.root);
+											const score = getMatchingPropertyCount(queryWithoutPackage, symbolDescriptor);
+											return { score, tree, parent };
+										})
+										// If SymbolDescriptor matched, get package.json and match PackageDescriptor name
+										// TODO get and match full PackageDescriptor (version)
+										.mergeMap(({ score, tree, parent }) => {
+											if (!query.package || !query.package.name) {
+												return [{ score, tree, parent }];
+											}
+											const uri = path2uri('', sourceFile.fileName);
+											return Observable.from(this.packageManager.getClosestPackageJson(uri, span))
+												// If PackageDescriptor matches, increase score
+												.map(packageJson => {
+													if (packageJson && packageJson.name === query.package!.name!) {
+														score++;
+													}
+													return { score, tree, parent };
+												});
+										})
+										// Require a minimum score to not return thousands of results
+										.filter(({ score }) => score >= minScore);
+								}
+								return matchedNodes
+									.map(({ score, tree, parent }) => [score, navigationTreeToSymbolInformation(tree, parent, sourceFile, this.root)] as [number, SymbolInformation]);
+							} catch (e) {
+								this.logger.error('Could not get navigation tree for file', sourceFile.fileName);
+								return [];
+							}
+						});
 				}
 			} catch (err) {
 				return Observable.throw(err);
@@ -1409,90 +1412,6 @@ export class TypeScriptService {
 			.finally(() => {
 				span.finish();
 			});
-	}
-
-	/**
-	 * Transforms definition's file name to URI. If definition belongs to TypeScript library,
-	 * returns git://github.com/Microsoft/TypeScript URL, otherwise returns file:// one
-	 */
-	private _defUri(filePath: string): string {
-		if (isTypeScriptLibrary(filePath)) {
-			return 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/' + path.basename(filePath);
-		}
-		return path2uri(this.root, filePath);
-	}
-
-	/**
-	 * Fetches up to limit navigation bar items from given project, flattens them
-	 */
-	private _getNavigationTreeItems(configuration: ProjectConfiguration, span = new Span()): IterableIterator<SymbolInformation> {
-		const program = configuration.getProgram(span);
-		if (!program) {
-			return iterate([]);
-		}
-		return iterate(program.getSourceFiles())
-			// Exclude navigation items from TypeScript libraries
-			.filter(sourceFile => !isTypeScriptLibrary(sourceFile.fileName))
-			.map(sourceFile => {
-				try {
-					const tree = configuration.getService().getNavigationTree(sourceFile.fileName);
-					return this._flattenNavigationTreeItem(tree, null, sourceFile);
-				} catch (e) {
-					this.logger.error('Could not get navigation tree for file', sourceFile.fileName);
-					return [];
-				}
-			})
-			.flatten<SymbolInformation>();
-	}
-
-	/**
-	 * Flattens navigation tree by emitting acceptable NavigationTreeItems as SymbolInformations.
-	 * Some items (source files, modules) may be excluded
-	 */
-	private *_flattenNavigationTreeItem(item: ts.NavigationTree, parent: ts.NavigationTree | null, sourceFile: ts.SourceFile): IterableIterator<SymbolInformation> {
-		const acceptable = TypeScriptService.isAcceptableNavigationTreeItem(item);
-		if (acceptable) {
-			const span = item.spans[0];
-			const symbolInformation: SymbolInformation = {
-				name: item.text,
-				kind: convertStringtoSymbolKind(item.kind),
-				location: {
-					uri: this._defUri(sourceFile.fileName),
-					range: {
-						start: ts.getLineAndCharacterOfPosition(sourceFile, span.start),
-						end: ts.getLineAndCharacterOfPosition(sourceFile, span.start + span.length)
-					}
-				}
-			};
-			if (parent) {
-				symbolInformation.containerName = parent.text;
-			}
-			yield symbolInformation;
-		}
-		if (item.childItems) {
-			for (const childItem of item.childItems) {
-				yield* this._flattenNavigationTreeItem(childItem, acceptable ? item : null, sourceFile);
-			}
-		}
-	}
-
-	/**
-	 * @return true if navigation tree item is acceptable for inclusion into workspace/symbols
-	 */
-	private static isAcceptableNavigationTreeItem(item: ts.NavigationTree): boolean {
-		// modules and source files should be excluded
-		if ([ts.ScriptElementKind.moduleElement, 'sourcefile'].indexOf(item.kind) >= 0) {
-			return false;
-		}
-		// special items may start with ", (, [, or <
-		if (/^[<\(\[\"]/.test(item.text)) {
-			return false;
-		}
-		// magic words
-		if (['default', 'constructor', 'new()'].indexOf(item.text) >= 0) {
-			return false;
-		}
-		return true;
 	}
 }
 

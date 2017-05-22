@@ -1,9 +1,9 @@
 import { Observable } from '@reactivex/rxjs';
 import * as os from 'os';
 import * as path from 'path';
+import { compareTwoStrings } from 'string-similarity';
 import * as ts from 'typescript';
 import * as url from 'url';
-import { SymbolKind } from 'vscode-languageserver';
 import { PackageDescriptor, SymbolDescriptor } from './request-type';
 
 let strict = false;
@@ -43,44 +43,6 @@ export function docstring(parts: ts.SymbolDisplayPart[]): string {
  */
 export function toUnixPath(filePath: string): string {
 	return filePath.replace(/\\/g, '/');
-}
-
-export function convertStringtoSymbolKind(kind: string): SymbolKind {
-	switch (kind) {
-		case 'module': return SymbolKind.Module;
-		case 'class': return SymbolKind.Class;
-		case 'local class': return SymbolKind.Class;
-		case 'interface': return SymbolKind.Interface;
-		case 'enum': return SymbolKind.Enum;
-		case 'enum member': return SymbolKind.Constant;
-		case 'var': return SymbolKind.Variable;
-		case 'local var': return SymbolKind.Variable;
-		case 'function': return SymbolKind.Function;
-		case 'local function': return SymbolKind.Function;
-		case 'method': return SymbolKind.Method;
-		case 'getter': return SymbolKind.Method;
-		case 'setter': return SymbolKind.Method;
-		case 'property': return SymbolKind.Property;
-		case 'constructor': return SymbolKind.Constructor;
-		case 'parameter': return SymbolKind.Variable;
-		case 'type parameter': return SymbolKind.Variable;
-		case 'alias': return SymbolKind.Variable;
-		case 'let': return SymbolKind.Variable;
-		case 'const': return SymbolKind.Constant;
-		case 'JSX attribute': return SymbolKind.Property;
-		// case 'script'
-		// case 'keyword'
-		// case 'type'
-		// case 'call'
-		// case 'index'
-		// case 'construct'
-		// case 'primitive type'
-		// case 'label'
-		// case 'directory'
-		// case 'external module name'
-		// case 'external module name'
-		default: return SymbolKind.Variable;
-	}
 }
 
 /**
@@ -224,23 +186,44 @@ export function normalizeDir(dir: string) {
 }
 
 /**
- * defInfoToSymbolDescriptor converts from an instance of
- * ts.DefinitionInfo to an instance of SymbolDescriptor
+ * Converts a ts.DefinitionInfo to a SymbolDescriptor
  */
-export function defInfoToSymbolDescriptor(d: ts.DefinitionInfo): SymbolDescriptor {
-	return {
-		kind: d.kind || '',
-		name: stripQuotes(d.name) || '',
-		containerKind: d.containerKind || '',
-		containerName: (d.containerName ? stripFileInfo(lastDotCmp(stripQuotes(d.containerName))) : '')
+export function defInfoToSymbolDescriptor(info: ts.DefinitionInfo, rootPath: string): SymbolDescriptor {
+	const symbolDescriptor: SymbolDescriptor = {
+		kind: info.kind || '',
+		name: info.name || '',
+		containerKind: info.containerKind || '',
+		containerName: info.containerName || '',
+		filePath: info.fileName
 	};
+	// If the symbol is an external module representing a file, set name to the file path
+	if (info.kind === ts.ScriptElementKind.moduleElement && info.name && /[\\\/]/.test(info.name)) {
+		symbolDescriptor.name = '"' + info.fileName.replace(/(?:\.d)?\.tsx?$/, '') + '"';
+	}
+	// If the symbol itself is not a module and there is no containerKind
+	// then the container is an external module named by the file name (without file extension)
+	if (info.kind !== ts.ScriptElementKind.moduleElement && !info.containerKind && !info.containerName) {
+		symbolDescriptor.containerName = '"' + info.fileName.replace(/(?:\.d)?\.tsx?$/, '') + '"';
+		symbolDescriptor.containerKind = ts.ScriptElementKind.moduleElement;
+	}
+	// Make paths relative to root paths
+	symbolDescriptor.containerName = symbolDescriptor.containerName.replace(rootPath, '');
+	symbolDescriptor.name = symbolDescriptor.name.replace(rootPath, '');
+	symbolDescriptor.filePath = symbolDescriptor.filePath.replace(rootPath, '');
+	return symbolDescriptor;
 }
 
 /**
- * Compares two values and returns a numeric score defining of how well they match.
- * Every property that matches increases the score by 1.
+ * Compares two values and returns a numeric score between 0 and 1 defining of how well they match.
+ * E.g. if 2 of 4 properties in the query match, will return 2
  */
-export function getMatchScore(query: any, value: any): number {
+export function getMatchingPropertyCount(query: any, value: any): number {
+	// Compare strings by similarity
+	// This allows to match a path like "lib/foo/bar.d.ts" with "src/foo/bar.ts"
+	// Last check is a workaround for https://github.com/aceakash/string-similarity/issues/6
+	if (typeof query === 'string' && typeof value === 'string' && !(query.length <= 1 && value.length <= 1)) {
+		return compareTwoStrings(query, value);
+	}
 	// If query is a scalar value, compare by identity and return 0 or 1
 	if (typeof query !== 'object' || query === null) {
 		return +(query === value);
@@ -250,7 +233,18 @@ export function getMatchScore(query: any, value: any): number {
 		return 0;
 	}
 	// Both values are objects, compare each property and sum the scores
-	return Object.keys(query).reduce((score, key) => score + getMatchScore(query[key], value[key]), 0);
+	return Object.keys(query).reduce((score, key) => score + getMatchingPropertyCount(query[key], value[key]), 0);
+}
+
+/**
+ * Returns the maximum score that could be achieved with the given query (the amount of "leaf" properties)
+ * E.g. for `{ name, kind, package: { name }}` will return 3
+ */
+export function getPropertyCount(query: any): number {
+	if (typeof query === 'object' && query !== null) {
+		return Object.keys(query).reduce((score, key) => score + getPropertyCount(query[key]), 0);
+	}
+	return 1;
 }
 
 /**
@@ -284,26 +278,4 @@ function isPackageDescriptorMatch(query: Partial<PackageDescriptor>, pkg: Packag
 		}
 	}
 	return true;
-}
-
-function stripQuotes(s: string): string {
-	if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
-		return s.substring(1, s.length - 1);
-	}
-	return s;
-}
-
-function lastDotCmp(s: string): string {
-	const cmps = s.split('.');
-	return cmps[cmps.length - 1];
-}
-
-/**
- * Strips file part (if any) from container name (last component of container path)
- * For example TS may return the following name: /node_modules/vscode-jsonrpc/lib/cancellation.
- * We consider that if name contains path separtor then container name is empty
- * @param containerName
- */
-function stripFileInfo(containerName: string): string {
-	return toUnixPath(containerName).indexOf('/') < 0 ? containerName : '';
 }
