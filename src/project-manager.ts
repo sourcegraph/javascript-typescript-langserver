@@ -379,7 +379,7 @@ export class ProjectManager implements Disposable {
 				return Observable.merge(
 					// References with `import`
 					Observable.from(info.importedFiles)
-						.map(importedFile => ts.resolveModuleName(toUnixPath(importedFile.fileName), filePath, compilerOpt, config.moduleResolutionHost()))
+						.map(importedFile => ts.resolveModuleName(importedFile.fileName, toUnixPath(filePath), compilerOpt, config.moduleResolutionHost()))
 						// false means we didn't find a file defining the module. It
 						// could still exist as an ambient module, which is why we
 						// fetch global*.d.ts files.
