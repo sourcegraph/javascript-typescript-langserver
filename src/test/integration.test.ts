@@ -38,7 +38,7 @@ describe.only('running against this project', () => {
 
 			assert.isAtLeast(fileContent.length, 1);
 
-			const resp = await service.textDocumentDidOpen({
+			await service.textDocumentDidOpen({
 				textDocument: {
 					uri: fileUri,
 					languageId: 'typescript',
@@ -50,6 +50,12 @@ describe.only('running against this project', () => {
 			{
 				diagnostics: [],
 				uri: fileUri
+			});
+
+			const resp = await service.textDocumentDidClose({
+				textDocument: {
+					uri: fileUri
+				}
 			});
 			return resp;
 		});
