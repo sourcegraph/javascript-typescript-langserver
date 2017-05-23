@@ -114,7 +114,9 @@ export class ProjectManager implements Disposable {
 		this.traceModuleResolution = traceModuleResolution || false;
 
 		// Create catch-all fallback configs in case there are no tsconfig.json files
+		// They are removed once at least one tsconfig.json is found
 		const trimmedRootPath = this.rootPath.replace(/\/+$/, '');
+		const fallbackConfigs: {js?: ProjectConfiguration, ts?: ProjectConfiguration} = {};
 		for (const configType of ['js', 'ts'] as ConfigType[]) {
 			const configs = this.configs[configType];
 			const tsConfig: any = {
@@ -125,7 +127,9 @@ export class ProjectManager implements Disposable {
 				},
 				include: { js: ['**/*.js', '**/*.jsx'], ts: ['**/*.ts', '**/*.tsx'] }[configType]
 			};
-			configs.set(trimmedRootPath, new ProjectConfiguration(this.localFs, trimmedRootPath, this.versions, '', tsConfig, this.traceModuleResolution, this.logger));
+			const config = new ProjectConfiguration(this.localFs, trimmedRootPath, this.versions, '', tsConfig, this.traceModuleResolution, this.logger);
+			configs.set(trimmedRootPath, config);
+			fallbackConfigs[configType] = config;
 		}
 
 		// Whenever a file with content is added to the InMemoryFileSystem, check if it's a tsconfig.json and add a new ProjectConfiguration
@@ -144,6 +148,10 @@ export class ProjectManager implements Disposable {
 					const configType = this.getConfigurationType(filePath);
 					const configs = this.configs[configType];
 					configs.set(dir, new ProjectConfiguration(this.localFs, dir, this.versions, filePath, undefined, this.traceModuleResolution, this.logger));
+					// Remove catch-all config (if exists)
+					if (configs.get(trimmedRootPath) === fallbackConfigs[configType]) {
+						configs.delete(trimmedRootPath);
+					}
 				})
 		);
 	}
