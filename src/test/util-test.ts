@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { getMatchingPropertyCount, getPropertyCount, isGlobalTSFile, isSymbolDescriptorMatch, JSONPTR, path2uri, resolvepath2uri, uri2path } from '../util';
+import { getMatchingPropertyCount, getPropertyCount, isGlobalTSFile, isSymbolDescriptorMatch, JSONPTR, path2uri, uri2path } from '../util';
 
 describe('util', () => {
 	describe('JSONPTR', () => {
@@ -127,32 +127,6 @@ describe('util', () => {
 			assert.equal(isGlobalTSFile('/node_modules/@types/jest/index.d.ts'), true);
 			assert.equal(isGlobalTSFile('/node_modules/@types/jasmine/index.d.ts'), true);
 			assert.equal(isGlobalTSFile('/node_modules/@types/mocha/index.d.ts'), true);
-		});
-	});
-	describe('resolvepath2uri()', () => {
-		it('should convert a Unix file path to a URI', () => {
-			const uri = resolvepath2uri('', '/baz/qux');
-			assert.equal(uri, 'file:///baz/qux');
-		});
-		it('should convert a Windows file path to a URI', () => {
-			const uri = resolvepath2uri('', 'C:\\baz\\qux');
-			assert.equal(uri, 'file:///C:/baz/qux');
-		});
-		it('should resolve a relative Unix file path to a URI', () => {
-			const uri = resolvepath2uri('/foo/bar', '../baz/qux');
-			assert.equal(uri, 'file:///foo/baz/qux');
-		});
-		it('should resolve a relative Windows file path to a URI', () => {
-			const uri = resolvepath2uri('c:\\foo\\bar', '..\\baz\\qux');
-			assert.equal(uri, 'file:///c:/foo/baz/qux');
-		});
-		it('should encode special characters', () => {
-			const uri = resolvepath2uri('', '/💩');
-			assert.equal(uri, 'file:///%F0%9F%92%A9');
-		});
-		it('should encode unreserved special characters', () => {
-			const uri = resolvepath2uri('', '/@baz');
-			assert.equal(uri, 'file:///%40baz');
 		});
 	});
 	describe('path2uri()', () => {

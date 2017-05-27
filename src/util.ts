@@ -53,30 +53,6 @@ export function normalizeUri(uri: string): string {
 }
 
 /**
- * Produces a URI after resolving a relative path.
- * @param root the path to resolve from: eg c:\Users\myself
- * @param file the relative or absolute path to resolve
- */
-export function resolvepath2uri(root: string, file: string): string {
-	const scheme = 'file://';
-	// if (!strict && process.platform === 'win32') {
-	// 	ret += '/';
-	// }
-	let p;
-	if (root) {
-		p = platformSensitiveResolve(root, file);
-	} else {
-		p = file;
-	}
-	// add extra slash if drive letter is detected.
-	if (/^[a-z]:[\\\/]/i.test(p)) {
-		p = '/' + p;
-	}
-	p = p.split(/[\\\/]/g).map((val, i) => i <= 1 && /^[a-z]:$/i.test(val) ? val : encodeURIComponent(val)).join('/');
-	return normalizeUri(scheme + p);
-}
-
-/**
  * From sindresorhus's file-url but with resolve and strict functionality removed
  * @param path an absolute path
  */
@@ -97,6 +73,8 @@ export function path2uri(path: string): string {
 
 	// Escape required characters for path components
 	// See: https://tools.ietf.org/html/rfc3986#section-3.3
+
+	// TODO: use encoding consistent with other methods in project
 	return encodeURI(`file://${pathName}`).replace(/[?#@]/g, encodeURIComponent);
 }
 
@@ -120,20 +98,6 @@ export function uriToLocalPath(uri: string): string {
 		uri = uri.substring(1);
 	}
 	return uri.split('/').map(decodeURIComponent).join(path.sep);
-}
-
-/**
- * Resolves a relative file from a root path in a platform-sensitive manner by detecting windows roots
- * @param root an absolute path, eg. /Users on OS-X vs. C:\Users on windows
- * @param file the platform-correct relative path (eg. myself/myfile.ts on OS-X vs myself\myfile.ts on Windows)
- */
-function platformSensitiveResolve(root: string, file: string): string {
-	if (/^[a-z]:\\/i.test(root)) {
-		return path.win32.resolve(root, file);
-	} else if (path.posix.isAbsolute(root)) {
-		return path.posix.resolve(root, file);
-	}
-	throw new Error('root must be an absolute path!');
 }
 
 const jstsPattern = /\.[tj]sx?$/;

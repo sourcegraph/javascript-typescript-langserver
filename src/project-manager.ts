@@ -15,7 +15,7 @@ import {
 	isGlobalTSFile,
 	isJSTSFile,
 	isPackageJsonFile,
-	resolvepath2uri,
+	path2uri,
 	toUnixPath,
 	uri2path
 } from './util';
@@ -410,7 +410,7 @@ export class ProjectManager implements Disposable {
 				);
 			})
 			// Use same scheme, slashes, host for referenced URI as input file
-			.map(filePath => resolvepath2uri('', filePath))
+			.map(filePath => path2uri(filePath))
 			// Don't cache errors
 			.catch(err => {
 				this.referencedFiles.delete(uri);
@@ -655,14 +655,10 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	}
 
 	/**
-	 * @param fileName relative or absolute file path
+	 * @param fileName absolute file path
 	 */
-	getScriptVersion(fileName: string): string {
-
-		const uri = resolvepath2uri(this.rootPath, fileName);
-		if (path.posix.isAbsolute(fileName) || path.isAbsolute(fileName)) {
-			fileName = path.posix.relative(this.rootPath, toUnixPath(fileName));
-		}
+	getScriptVersion(filePath: string): string {
+		const uri = path2uri(filePath);
 		let version = this.versions.get(uri);
 		if (!version) {
 			version = 1;
@@ -672,18 +668,14 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	}
 
 	/**
-	 * @param fileName relative or absolute file path
+	 * @param filePath absolute file path
 	 */
-	getScriptSnapshot(fileName: string): ts.IScriptSnapshot | undefined {
-		let exists = this.fs.fileExists(fileName);
-		if (!exists) {
-			fileName = path.posix.join(this.rootPath, fileName);
-			exists = this.fs.fileExists(fileName);
-		}
+	getScriptSnapshot(filePath: string): ts.IScriptSnapshot | undefined {
+		const exists = this.fs.fileExists(filePath);
 		if (!exists) {
 			return undefined;
 		}
-		return ts.ScriptSnapshot.fromString(this.fs.readFile(fileName));
+		return ts.ScriptSnapshot.fromString(this.fs.readFile(filePath));
 	}
 
 	getCurrentDirectory(): string {
