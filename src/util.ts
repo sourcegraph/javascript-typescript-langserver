@@ -29,6 +29,7 @@ export function docstring(parts: ts.SymbolDisplayPart[]): string {
 
 /**
  * Normalizes path to match POSIX standard (slashes)
+ * This conversion should only be necessary to convert windows paths when calling TS APIs.
  */
 export function toUnixPath(filePath: string): string {
 	return filePath.replace(/\\/g, '/');
@@ -110,8 +111,7 @@ export function uri2path(uri: string): string {
 			return uri.split('/').map(decodeURIComponent).join('/');
 		}
 	}
-	// TODO: reject non-acceptable uris instead of silently returning them
-	return uri;
+	throw new Error('Cannot resolve non-file uri to path: ' + uri);
 }
 
 export function uriToLocalPath(uri: string): string {
@@ -122,17 +122,18 @@ export function uriToLocalPath(uri: string): string {
 	return uri.split('/').map(decodeURIComponent).join(path.sep);
 }
 
-export function isLocalUri(uri: string): boolean {
-	return uri.startsWith('file://');
-}
-
+/**
+ * Resolves a relative file from a root path in a platform-sensitive manner by detecting windows roots
+ * @param root an absolute path, eg. /Users on OS-X vs. C:\Users on windows
+ * @param file the platform-correct relative path (eg. myself/myfile.ts on OS-X vs myself\myfile.ts on Windows)
+ */
 function platformSensitiveResolve(root: string, file: string): string {
 	if (/^[a-z]:\\/i.test(root)) {
 		return path.win32.resolve(root, file);
 	} else if (path.posix.isAbsolute(root)) {
 		return path.posix.resolve(root, file);
 	}
-	throw new Error('root must be absolute!');
+	throw new Error('root must be an absolute path!');
 }
 
 const jstsPattern = /\.[tj]sx?$/;
@@ -211,6 +212,7 @@ export function normalizeDir(dir: string) {
  * Converts a ts.DefinitionInfo to a SymbolDescriptor
  */
 export function defInfoToSymbolDescriptor(info: ts.DefinitionInfo, rootPath: string): SymbolDescriptor {
+	const rootUnixPath = toUnixPath(rootPath);
 	const symbolDescriptor: SymbolDescriptor = {
 		kind: info.kind || '',
 		name: info.name || '',
@@ -229,9 +231,9 @@ export function defInfoToSymbolDescriptor(info: ts.DefinitionInfo, rootPath: str
 		symbolDescriptor.containerKind = ts.ScriptElementKind.moduleElement;
 	}
 	// Make paths relative to root paths
-	symbolDescriptor.containerName = symbolDescriptor.containerName.replace(rootPath, '');
-	symbolDescriptor.name = symbolDescriptor.name.replace(rootPath, '');
-	symbolDescriptor.filePath = symbolDescriptor.filePath.replace(rootPath, '');
+	symbolDescriptor.containerName = symbolDescriptor.containerName.replace(rootUnixPath, '');
+	symbolDescriptor.name = symbolDescriptor.name.replace(rootUnixPath, '');
+	symbolDescriptor.filePath = symbolDescriptor.filePath.replace(rootUnixPath, '');
 	return symbolDescriptor;
 }
 
