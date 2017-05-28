@@ -132,7 +132,7 @@ export class InMemoryFileSystem extends EventEmitter implements ts.ParseConfigHo
 	 */
 	fileExists(path: string): boolean {
 		const uri = path2uri(path);
-		return this.files.has(uri) || typeScriptLibraries.has(path);
+		return this.overlay.has(uri) || this.files.has(uri) || typeScriptLibraries.has(path);
 	}
 
 	/**
