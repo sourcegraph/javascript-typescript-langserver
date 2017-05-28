@@ -613,7 +613,7 @@ export class TypeScriptService {
 						const start = ts.getLineAndCharacterOfPosition(sourceFile, reference.textSpan.start);
 						const end = ts.getLineAndCharacterOfPosition(sourceFile, reference.textSpan.start + reference.textSpan.length);
 						return {
-							uri: path2uri(reference.fileName), // resolvepath2uri(this.root, reference.fileName),
+							uri: path2uri(reference.fileName),
 							range: {
 								start,
 								end
@@ -1131,7 +1131,7 @@ export class TypeScriptService {
 					if (!sourceFile) {
 						throw new Error(`Expected source file ${change.fileName} to exist in configuration`);
 					}
-					const uri = path2uri(change.fileName); // resolvepath2uri(this.root, change.fileName);
+					const uri = path2uri(change.fileName);
 					changes[uri] = change.textChanges.map(({ span, newText }): TextEdit => ({
 						range: {
 							start: ts.getLineAndCharacterOfPosition(sourceFile, span.start),
@@ -1182,7 +1182,7 @@ export class TypeScriptService {
 						if (!sourceFile) {
 							throw new Error(`expected source file ${location.fileName} to exist in configuration`);
 						}
-						const editUri = path2uri(location.fileName); // resolvepath2uri(this.root, location.fileName);
+						const editUri = path2uri(location.fileName);
 						const start = ts.getLineAndCharacterOfPosition(sourceFile, location.textSpan.start);
 						const end = ts.getLineAndCharacterOfPosition(sourceFile, location.textSpan.start + location.textSpan.length);
 						const edit: TextEdit = { range: { start, end }, newText: params.newName };
