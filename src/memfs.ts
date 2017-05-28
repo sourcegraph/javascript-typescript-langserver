@@ -110,11 +110,12 @@ export class InMemoryFileSystem extends EventEmitter implements ts.ParseConfigHo
 	 * Returns the file content for the given URI.
 	 * Will throw an Error if no available in-memory.
 	 * Use FileSystemUpdater.ensure() to ensure that the file is available.
-	 *
-	 * TODO take overlay into account
 	 */
 	getContent(uri: string): string {
-		let content = this.files.get(uri);
+		let content = this.overlay.get(uri);
+		if (content === undefined) {
+			content = this.files.get(uri);
+		}
 		if (content === undefined) {
 			content = typeScriptLibraries.get(uri2path(uri));
 		}
