@@ -130,6 +130,9 @@ describe('util', () => {
 		});
 	});
 	describe('path2uri()', () => {
+		it('should throw an error if a non-absolute uri is passed in', () => {
+			assert.throws(() => path2uri('baz/qux'));
+		});
 		it('should convert a Unix file path to a URI', () => {
 			const uri = path2uri('/baz/qux');
 			assert.equal(uri, 'file:///baz/qux');

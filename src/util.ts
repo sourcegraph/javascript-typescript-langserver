@@ -53,29 +53,21 @@ export function normalizeUri(uri: string): string {
 }
 
 /**
- * From sindresorhus's file-url but with resolve and strict functionality removed
+ * Converts an abolute path to a file:// uri.
  * @param path an absolute path
  */
 export function path2uri(path: string): string {
-	if (typeof path !== 'string') {
-		throw new TypeError(`Expected a string, got ${typeof path}`);
+	// Require a leading slash, on windows prefixed with drive letter
+	if (!/^([a-z]:)?[\\\/]/i.test(path)) {
+		throw new Error(`Expected an absolute uri, got ${path}`);
 	}
 
-	// TODO: this should only accept absolute paths!
+	const [firstSegment, ...remainingSegments] = path.split(/[\\\/]/);
 
-	let pathName = path;
-	pathName = pathName.replace(/\\/g, '/');
+	// if the first segment is a Windows drive letter, prefix with a slash
+	const root = firstSegment === '' ? '' : '/' + firstSegment;
 
-	// Windows drive letter must be prefixed with a slash
-	if (pathName[0] !== '/') {
-		pathName = `/${pathName}`;
-	}
-
-	// Escape required characters for path components
-	// See: https://tools.ietf.org/html/rfc3986#section-3.3
-
-	// TODO: use encoding consistent with other methods in project
-	return encodeURI(`file://${pathName}`).replace(/[?#@]/g, encodeURIComponent);
+	return 'file://' + root + '/' + remainingSegments.map(encodeURIComponent).join('/');
 }
 
 export function uri2path(uri: string): string {
@@ -83,21 +75,13 @@ export function uri2path(uri: string): string {
 		uri = uri.substring('file://'.length);
 
 		// if we have a /c:/ left, then return a windows path.
-		if (/^\/[a-z]:[\/]/i.test(uri)) {
+		if (/^\/[a-z]:\//i.test(uri)) {
 			return uri.substring(1).split('/').map(decodeURIComponent).join('\\');
 		} else {
 			return uri.split('/').map(decodeURIComponent).join('/');
 		}
 	}
 	throw new Error('Cannot resolve non-file uri to path: ' + uri);
-}
-
-export function uriToLocalPath(uri: string): string {
-	uri = uri.substring('file://'.length);
-	if (/^\/[a-z]:\//i.test(uri)) {
-		uri = uri.substring(1);
-	}
-	return uri.split('/').map(decodeURIComponent).join(path.sep);
 }
 
 const jstsPattern = /\.[tj]sx?$/;
