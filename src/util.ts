@@ -52,21 +52,27 @@ export function normalizeUri(uri: string): string {
 }
 
 /**
- * Converts an abolute path to a file:// uri.
+ * Converts an abolute path to a file:// uri
+ *
  * @param path an absolute path
  */
 export function path2uri(path: string): string {
 	// Require a leading slash, on windows prefixed with drive letter
-	if (!/^([a-z]:)?[\\\/]/i.test(path)) {
-		throw new Error(`Expected an absolute uri, got ${path}`);
+	if (!/^(?:[a-z]:)?[\\\/]/i.test(path)) {
+		throw new Error(`${path} is not an absolute path`);
 	}
 
-	const [firstSegment, ...remainingSegments] = path.split(/[\\\/]/);
+	const parts = path.split(/[\\\/]/);
 
-	// if the first segment is a Windows drive letter, prefix with a slash
-	const root = firstSegment === '' ? '' : '/' + firstSegment;
+	// If the first segment is a Windows drive letter, prefix with a slash and skip encoding
+	let head = parts.shift()!;
+	if (head !== '') {
+		head = '/' + head;
+	} else {
+		head = encodeURIComponent(head);
+	}
 
-	return 'file://' + root + '/' + remainingSegments.map(encodeURIComponent).join('/');
+	return `file://${head}/${parts.map(encodeURIComponent).join('/')}`;
 }
 
 /**
