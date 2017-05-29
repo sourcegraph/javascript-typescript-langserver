@@ -69,6 +69,10 @@ export function path2uri(path: string): string {
 	return 'file://' + root + '/' + remainingSegments.map(encodeURIComponent).join('/');
 }
 
+/**
+ * Converts a uri to an absolute path
+ * @param uri a file:// uri
+ */
 export function uri2path(uri: string): string {
 	if (uri.startsWith('file://')) {
 		uri = uri.substring('file://'.length);
