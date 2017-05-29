@@ -1,4 +1,4 @@
-import { Observable } from '@reactivex/rxjs';
+import { Observable, Scheduler } from '@reactivex/rxjs';
 import iterate from 'iterare';
 import { AddPatch, OpPatch } from 'json-patch';
 import { toPairs } from 'lodash';
@@ -685,10 +685,12 @@ export class TypeScriptService {
 								.mergeMap(packageJsonUri => Observable.merge(
 									castArray<ProjectConfiguration>(this.projectManager.getParentConfiguration(packageJsonUri) || []),
 									// Search child directories starting at the directory of the package.json
-									observableFromIterable(this.projectManager.getChildConfigurations(url.resolve(packageJsonUri, '.')))
+									observableFromIterable(this.projectManager.getChildConfigurations(url.resolve(packageJsonUri, '.')), Scheduler.async),
+									// Iterate ProjectConfigurations async to allow cancellation requests to be handled in between
+									Scheduler.async
 								))
 							// Else search all tsconfigs in the workspace
-							: observableFromIterable(this.projectManager.configurations())
+							: observableFromIterable(this.projectManager.configurations(), Scheduler.async)
 					)
 					// If PackageDescriptor is given, only search project with the matching package name
 					.mergeMap(config => this._getSymbolsInConfig(config, params.query || params.symbol, span));
@@ -761,19 +763,19 @@ export class TypeScriptService {
 			.mergeMap<void, ProjectConfiguration>(() => {
 				// if we were hinted that we should only search a specific package, find it and only search the owning tsconfig.json
 				if (params.hints && params.hints.dependeePackageName) {
-					return observableFromIterable(this.packageManager.packageJsonUris())
+					return observableFromIterable(this.packageManager.packageJsonUris(), Scheduler.async)
 						.filter(uri => (JSON.parse(this.inMemoryFileSystem.getContent(uri)) as PackageJson).name === params.hints!.dependeePackageName)
 						.take(1)
 						.mergeMap<string, ProjectConfiguration>(uri => {
 							const config = this.projectManager.getParentConfiguration(uri);
 							if (!config) {
-								return observableFromIterable(this.projectManager.configurations());
+								return observableFromIterable(this.projectManager.configurations(), Scheduler.async);
 							}
 							return [config];
 						});
 				}
 				// else search all tsconfig.jsons
-				return observableFromIterable(this.projectManager.configurations());
+				return observableFromIterable(this.projectManager.configurations(), Scheduler.async);
 			})
 			.mergeMap((config: ProjectConfiguration) => {
 				config.ensureAllFiles(span);
@@ -781,7 +783,7 @@ export class TypeScriptService {
 				if (!program) {
 					return Observable.empty();
 				}
-				return Observable.from(program.getSourceFiles())
+				return Observable.from(program.getSourceFiles(), Scheduler.async)
 					// Ignore dependency files
 					.filter(source => !toUnixPath(source.fileName).includes('/node_modules/'))
 					.mergeMap(source =>

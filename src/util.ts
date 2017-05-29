@@ -1,4 +1,5 @@
 import { Observable } from '@reactivex/rxjs';
+import { IScheduler } from '@reactivex/rxjs/dist/cjs/Scheduler';
 import * as os from 'os';
 import * as path from 'path';
 import { compareTwoStrings } from 'string-similarity';
@@ -12,8 +13,8 @@ let strict = false;
  * Converts an Iterable to an Observable.
  * Workaround for https://github.com/ReactiveX/rxjs/issues/2306
  */
-export function observableFromIterable<T>(iterable: Iterable<T>): Observable<T> {
-	return Observable.from(iterable as any);
+export function observableFromIterable<T>(iterable: Iterable<T>, scheduler?: IScheduler): Observable<T> {
+	return Observable.from(iterable as any, scheduler);
 }
 
 /**
