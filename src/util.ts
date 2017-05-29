@@ -76,21 +76,25 @@ export function path2uri(path: string): string {
 }
 
 /**
- * Converts a uri to an absolute path
+ * Converts a uri to an absolute path.
+ * The OS style is determined by the URI. E.g. `file:///c:/foo` always results in `c:\foo`
+ *
  * @param uri a file:// uri
  */
 export function uri2path(uri: string): string {
-	if (uri.startsWith('file://')) {
-		uri = uri.substring('file://'.length);
-
-		// if we have a /c:/ left, then return a windows path.
-		if (/^\/[a-z]:\//i.test(uri)) {
-			return uri.substring(1).split('/').map(decodeURIComponent).join('\\');
-		} else {
-			return uri.split('/').map(decodeURIComponent).join('/');
-		}
+	const parts = url.parse(uri);
+	if (parts.protocol !== 'file:') {
+		throw new Error('Cannot resolve non-file uri to path: ' + uri);
 	}
-	throw new Error('Cannot resolve non-file uri to path: ' + uri);
+
+	let filePath = parts.pathname || '';
+
+	// If the path starts with a drive letter, return a Windows path
+	if (/^\/[a-z]:\//i.test(filePath)) {
+		filePath = filePath.substr(1).replace(/\//g, '\\');
+	}
+
+	return decodeURIComponent(filePath);
 }
 
 const jstsPattern = /\.[tj]sx?$/;
