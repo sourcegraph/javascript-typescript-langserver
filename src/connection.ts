@@ -131,7 +131,7 @@ export interface RegisterLanguageHandlerOptions {
 
 	logger?: Logger;
 
- 	/** An opentracing-compatible tracer */
+	/** An opentracing-compatible tracer */
 	tracer?: Tracer;
 }
 

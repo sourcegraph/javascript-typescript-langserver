@@ -161,9 +161,9 @@ export interface SymbolLocationInformation {
  * interfaces, etc.
  */
 export interface ReferenceInformation {
-	 /**
-	  * The location in the workspace where the `symbol` is referenced.
-	  */
+	/**
+	 * The location in the workspace where the `symbol` is referenced.
+	 */
 	reference: vscode.Location;
 
 	/**
