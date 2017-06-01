@@ -118,7 +118,6 @@ export class FileSystemUpdater {
 			try {
 				const content = await this.remoteFs.getTextDocumentContent(uri);
 				this.inMemoryFs.add(uri, content);
-				this.inMemoryFs.getContent(uri);
 			} catch (err) {
 				this.fetches.delete(uri);
 				throw err;
