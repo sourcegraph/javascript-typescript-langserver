@@ -853,44 +853,63 @@ export class TypeScriptService {
 	 * @return Observable of JSON Patches that build a `PackageInformation[]` result
 	 */
 	workspaceXpackages(params = {}, span = new Span()): Observable<OpPatch> {
-		// Ensure package.json files
-		return Observable.from(this.projectManager.ensureModuleStructure(span))
-			// Iterate all files
-			.mergeMap(() => observableFromIterable(this.inMemoryFileSystem.uris()))
-			// Filter own package.jsons
-			.filter(uri => uri.includes('/package.json') && !uri.includes('/node_modules/'))
-			// Map to contents of package.jsons
-			.mergeMap(uri => this.packageManager.getPackageJson(uri))
-			// Map each package.json to a PackageInformation
-			.mergeMap(packageJson => {
-				if (!packageJson.name) {
-					return [];
+		return this.isDefinitelyTyped
+			.mergeMap((isDefinitelyTyped: boolean): Observable<PackageInformation> => {
+				// In DefinitelyTyped, report all @types/ packages
+				if (isDefinitelyTyped) {
+					const typesUri = url.resolve(this.rootUri, 'types/');
+					return observableFromIterable(this.inMemoryFileSystem.uris())
+						// Find all types/ subdirectories
+						.filter(uri => uri.startsWith(typesUri))
+						// Get the directory names
+						.map((uri): PackageInformation => ({
+							package: {
+								name: '@types/' + decodeURIComponent(uri.substr(typesUri.length).split('/')[0])
+								// TODO report a version by looking at subfolders like v6
+							},
+							// TODO parse /// <reference types="node" /> comments in .d.ts files for collecting dependencies between @types packages
+							dependencies: []
+						}));
 				}
-				const packageDescriptor: PackageDescriptor = {
-					name: packageJson.name,
-					version: packageJson.version,
-					repoURL: typeof packageJson.repository === 'object' && packageJson.repository.url || undefined
-				};
-				// Collect all dependencies for this package.json
-				return Observable.of<keyof  PackageJson>('dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies')
-					.filter(key => !!packageJson[key])
-					// Get [name, version] pairs
-					.mergeMap(key => toPairs(packageJson[key]) as [string, string][])
-					// Map to DependencyReferences
-					.map(([name, version]): DependencyReference => ({
-						attributes: {
-							name,
-							version
-						},
-						hints: {
-							dependeePackageName: packageJson.name
+				// For other workspaces, search all package.json files
+				return Observable.from(this.projectManager.ensureModuleStructure(span))
+					// Iterate all files
+					.mergeMap(() => observableFromIterable(this.inMemoryFileSystem.uris()))
+					// Filter own package.jsons
+					.filter(uri => uri.includes('/package.json') && !uri.includes('/node_modules/'))
+					// Map to contents of package.jsons
+					.mergeMap(uri => this.packageManager.getPackageJson(uri))
+					// Map each package.json to a PackageInformation
+					.mergeMap(packageJson => {
+						if (!packageJson.name) {
+							return [];
 						}
-					}))
-					.toArray()
-					.map((dependencies): PackageInformation => ({
-						package: packageDescriptor,
-						dependencies
-					}));
+						const packageDescriptor: PackageDescriptor = {
+							name: packageJson.name,
+							version: packageJson.version,
+							repoURL: typeof packageJson.repository === 'object' && packageJson.repository.url || undefined
+						};
+						// Collect all dependencies for this package.json
+						return Observable.of<keyof  PackageJson>('dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies')
+							.filter(key => !!packageJson[key])
+							// Get [name, version] pairs
+							.mergeMap(key => toPairs(packageJson[key]) as [string, string][])
+							// Map to DependencyReferences
+							.map(([name, version]): DependencyReference => ({
+								attributes: {
+									name,
+									version
+								},
+								hints: {
+									dependeePackageName: packageJson.name
+								}
+							}))
+							.toArray()
+							.map((dependencies): PackageInformation => ({
+								package: packageDescriptor,
+								dependencies
+							}));
+					});
 			})
 			.map((packageInfo): AddPatch => ({ op: 'add', path: '/-', value: packageInfo }))
 			.startWith({ op: 'add', path: '', value: [] });
@@ -1349,10 +1368,7 @@ export class TypeScriptService {
 					const queryWithoutPackage = query && omit(query, 'package') as SymbolDescriptor;
 					// Require at least 2 properties to match (or all if less provided)
 					const minScore = Math.min(2, getPropertyCount(query));
-					const program = config.getProgram(span);
-					if (!program) {
-						return Observable.empty();
-					}
+					const minScoreWithoutPackage = Math.min(2, getPropertyCount(queryWithoutPackage));
 					const service = config.getService();
 					return Observable.from(program.getSourceFiles())
 						// Exclude dependencies and standard library
@@ -1374,6 +1390,8 @@ export class TypeScriptService {
 											const score = getMatchingPropertyCount(queryWithoutPackage, symbolDescriptor);
 											return { score, tree, parent };
 										})
+										// Require the minimum score without the PackageDescriptor name
+										.filter(({ score }) => score >= minScoreWithoutPackage)
 										// If SymbolDescriptor matched, get package.json and match PackageDescriptor name
 										// TODO get and match full PackageDescriptor (version)
 										.mergeMap(({ score, tree, parent }) => {
