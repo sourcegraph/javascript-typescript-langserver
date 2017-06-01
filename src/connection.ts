@@ -1,4 +1,4 @@
-import { Observable, Subscription } from '@reactivex/rxjs';
+import { Observable, Subscription, Symbol } from '@reactivex/rxjs';
 import { EventEmitter } from 'events';
 import { apply, OpPatch } from 'json-patch';
 import { camelCase, omit } from 'lodash';
@@ -30,6 +30,13 @@ function hasMeta(candidate: any): candidate is HasMeta {
  */
 function isPromiseLike(candidate: any): candidate is PromiseLike<any> {
 	return typeof candidate === 'object' && candidate !== null && typeof candidate.then === 'function';
+}
+
+/**
+ * Returns true if the passed argument is an object with a `[Symbol.observable]` method
+ */
+function isObservable(candidate: any): candidate is Observable<any> {
+	return typeof candidate === 'object' && candidate !== null && typeof candidate[Symbol.observable] === 'function';
 }
 
 export interface MessageLogOptions {
@@ -236,7 +243,7 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 		try {
 			// Convert return value to Observable
 			const returnValue = (handler as any)[method](message.params, span);
-			if (returnValue instanceof Observable) {
+			if (isObservable(returnValue)) {
 				observable = returnValue;
 			} else if (isPromiseLike(returnValue)) {
 				observable = Observable.from(returnValue);
