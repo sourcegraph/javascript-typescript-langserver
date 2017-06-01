@@ -88,7 +88,7 @@ describe('ProjectManager', () => {
 			await projectManager.ensureAllFiles();
 		});
 		it('should resolve best configuration based on file name', () => {
-			const config = projectManager.getParentConfiguration('/src/foo.ts');
+			const config = projectManager.getParentConfiguration('file:///src/foo.ts');
 			assert.isDefined(config);
 			assert.equal('/tsconfig.json', config!.configFilePath);
 		});
@@ -106,7 +106,7 @@ describe('ProjectManager', () => {
 			await projectManager.ensureAllFiles();
 		});
 		it('should resolve best configuration based on file name', () => {
-			const configs = Array.from(projectManager.getChildConfigurations('/foo')).map(config => config.configFilePath);
+			const configs = Array.from(projectManager.getChildConfigurations('file:///foo')).map(config => config.configFilePath);
 			assert.deepEqual(configs, [
 				'/foo/bar/tsconfig.json',
 				'/foo/baz/tsconfig.json'

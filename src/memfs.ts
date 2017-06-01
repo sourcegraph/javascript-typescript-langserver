@@ -76,8 +76,9 @@ export class InMemoryFileSystem extends EventEmitter implements ts.ParseConfigHo
 			this.files.set(uri, content);
 		}
 		// Add to directory tree
+		// TODO: convert this to use URIs.
 		const filePath = uri2path(uri);
-		const components = filePath.split('/').filter(c => c);
+		const components = filePath.split(/[\/\\]/).filter(c => c);
 		let node = this.rootNode;
 		for (const [i, component] of components.entries()) {
 			const n = node.children.get(component);
@@ -109,11 +110,12 @@ export class InMemoryFileSystem extends EventEmitter implements ts.ParseConfigHo
 	 * Returns the file content for the given URI.
 	 * Will throw an Error if no available in-memory.
 	 * Use FileSystemUpdater.ensure() to ensure that the file is available.
-	 *
-	 * TODO take overlay into account
 	 */
 	getContent(uri: string): string {
-		let content = this.files.get(uri);
+		let content = this.overlay.get(uri);
+		if (content === undefined) {
+			content = this.files.get(uri);
+		}
 		if (content === undefined) {
 			content = typeScriptLibraries.get(uri2path(uri));
 		}
@@ -129,7 +131,8 @@ export class InMemoryFileSystem extends EventEmitter implements ts.ParseConfigHo
 	 * @param path File path or URI (both absolute or relative file paths are accepted)
 	 */
 	fileExists(path: string): boolean {
-		return this.readFileIfExists(path) !== undefined || this.files.has(path) || this.files.has(path2uri(this.path, path));
+		const uri = path2uri(path);
+		return this.overlay.has(uri) || this.files.has(uri) || typeScriptLibraries.has(path);
 	}
 
 	/**
@@ -147,7 +150,7 @@ export class InMemoryFileSystem extends EventEmitter implements ts.ParseConfigHo
 	 * If there is no such file, returns undefined
 	 */
 	private readFileIfExists(path: string): string | undefined {
-		const uri = path2uri(this.path, path);
+		const uri = path2uri(path);
 		let content = this.overlay.get(uri);
 		if (content !== undefined) {
 			return content;

@@ -3,7 +3,6 @@
 import { FileLogger, StdioLogger } from './logging';
 import { serve, ServeOptions } from './server';
 import { TypeScriptService, TypeScriptServiceOptions } from './typescript-service';
-import * as util from './util';
 const program = require('commander');
 const packageJson = require('../package.json');
 
@@ -18,8 +17,6 @@ program
 	.option('-t, --trace', 'print all requests and responses')
 	.option('-l, --logfile [file]', 'log to this file')
 	.parse(process.argv);
-
-util.setStrict(program.strict);
 
 const options: ServeOptions & TypeScriptServiceOptions = {
 	clusterSize: program.cluster || numCPUs,

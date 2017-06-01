@@ -13,7 +13,7 @@ export function locationUri(filePath: string): string {
 	if (isTypeScriptLibrary(filePath)) {
 		return 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/' + filePath.split(/[\/\\]/g).pop();
 	}
-	return path2uri('', filePath);
+	return path2uri(filePath);
 }
 
 /**

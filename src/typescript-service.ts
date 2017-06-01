@@ -198,7 +198,7 @@ export class TypeScriptService {
 	initialize(params: InitializeParams, span = new Span()): Observable<OpPatch> {
 		if (params.rootUri || params.rootPath) {
 			this.root = params.rootPath || uri2path(params.rootUri!);
-			this.rootUri = params.rootUri || path2uri('', params.rootPath!);
+			this.rootUri = params.rootUri || path2uri(params.rootPath!);
 			// The root URI always refers to a directory
 			if (!this.rootUri.endsWith('/')) {
 				this.rootUri += '/';
@@ -279,7 +279,7 @@ export class TypeScriptService {
 	 */
 	protected _initializeFileSystems(accessDisk: boolean): void {
 		this.fileSystem = accessDisk ? new LocalFileSystem(this.rootUri) : new RemoteFileSystem(this.client);
-		this.inMemoryFileSystem = new InMemoryFileSystem(this.root);
+		this.inMemoryFileSystem = new InMemoryFileSystem(this.root, this.logger);
 	}
 
 	/**
@@ -613,7 +613,7 @@ export class TypeScriptService {
 						const start = ts.getLineAndCharacterOfPosition(sourceFile, reference.textSpan.start);
 						const end = ts.getLineAndCharacterOfPosition(sourceFile, reference.textSpan.start + reference.textSpan.length);
 						return {
-							uri: path2uri(this.root, reference.fileName),
+							uri: path2uri(reference.fileName),
 							range: {
 								start,
 								end
@@ -806,7 +806,7 @@ export class TypeScriptService {
 											}
 											// If SymbolDescriptor matched and the query contains a PackageDescriptor, get package.json and match PackageDescriptor name
 											// TODO match full PackageDescriptor (version)
-											const uri = path2uri('', definition.fileName);
+											const uri = path2uri(definition.fileName);
 											return this._getPackageDescriptor(uri)
 												.mergeMap(packageDescriptor => {
 													symbol.package = packageDescriptor;
@@ -1150,7 +1150,7 @@ export class TypeScriptService {
 					if (!sourceFile) {
 						throw new Error(`Expected source file ${change.fileName} to exist in configuration`);
 					}
-					const uri = path2uri(this.root, change.fileName);
+					const uri = path2uri(change.fileName);
 					changes[uri] = change.textChanges.map(({ span, newText }): TextEdit => ({
 						range: {
 							start: ts.getLineAndCharacterOfPosition(sourceFile, span.start),
@@ -1201,7 +1201,7 @@ export class TypeScriptService {
 						if (!sourceFile) {
 							throw new Error(`expected source file ${location.fileName} to exist in configuration`);
 						}
-						const editUri = path2uri(this.root, location.fileName);
+						const editUri = path2uri(location.fileName);
 						const start = ts.getLineAndCharacterOfPosition(sourceFile, location.textSpan.start);
 						const end = ts.getLineAndCharacterOfPosition(sourceFile, location.textSpan.start + location.textSpan.length);
 						const edit: TextEdit = { range: { start, end }, newText: params.newName };
@@ -1398,7 +1398,7 @@ export class TypeScriptService {
 											if (!query.package || !query.package.name) {
 												return [{ score, tree, parent }];
 											}
-											const uri = path2uri('', sourceFile.fileName);
+											const uri = path2uri(sourceFile.fileName);
 											return Observable.from(this.packageManager.getClosestPackageJson(uri, span))
 												// If PackageDescriptor matches, increase score
 												.map(packageJson => {
