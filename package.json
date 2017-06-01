@@ -54,7 +54,7 @@
     "vscode-languageserver-types": "^3.0.3"
   },
   "devDependencies": {
-    "@types/chai": "3.4.35",
+    "@types/chai": "4.0.0",
     "@types/chai-as-promised": "0.0.30",
     "@types/chalk": "0.4.31",
     "@types/glob": "5.0.30",
