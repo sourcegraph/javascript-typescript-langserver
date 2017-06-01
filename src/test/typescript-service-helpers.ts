@@ -2184,7 +2184,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					character: 0
 				}
 			}).toArray().map(patches => apply(null, patches)).toPromise();
-			assert.notDeepEqual(result.items.length, []);
+			assert.notDeepEqual(result.items, []);
 		});
 	} as any);
 
