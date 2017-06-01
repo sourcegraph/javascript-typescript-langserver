@@ -259,7 +259,7 @@ export class ProjectManager implements Disposable {
 					);
 				})();
 			}
-			return this.ensuredOwnFiles;
+			await this.ensuredOwnFiles;
 		} catch (err) {
 			this.ensuredOwnFiles = undefined;
 			span.setTag('error', true);
@@ -274,7 +274,7 @@ export class ProjectManager implements Disposable {
 	 * Ensures all files were fetched from the remote file system.
 	 * Invalidates project configurations after execution
 	 */
-	ensureAllFiles(childOf = new Span()): Promise<void> {
+	async ensureAllFiles(childOf = new Span()): Promise<void> {
 		const span = childOf.tracer().startSpan('Ensure all files', { childOf });
 		try {
 			if (!this.ensuredAllFiles) {
@@ -287,7 +287,7 @@ export class ProjectManager implements Disposable {
 						);
 				})();
 			}
-			return this.ensuredAllFiles;
+			await this.ensuredAllFiles;
 		} catch (err) {
 			this.ensuredAllFiles = undefined;
 			span.setTag('error', true);
