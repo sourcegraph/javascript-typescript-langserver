@@ -1349,10 +1349,7 @@ export class TypeScriptService {
 					const queryWithoutPackage = query && omit(query, 'package') as SymbolDescriptor;
 					// Require at least 2 properties to match (or all if less provided)
 					const minScore = Math.min(2, getPropertyCount(query));
-					const program = config.getProgram(span);
-					if (!program) {
-						return Observable.empty();
-					}
+					const minScoreWithoutPackage = Math.min(2, getPropertyCount(queryWithoutPackage));
 					const service = config.getService();
 					return Observable.from(program.getSourceFiles())
 						// Exclude dependencies and standard library
@@ -1374,6 +1371,8 @@ export class TypeScriptService {
 											const score = getMatchingPropertyCount(queryWithoutPackage, symbolDescriptor);
 											return { score, tree, parent };
 										})
+										// Require the minimum score without the PackageDescriptor name
+										.filter(({ score }) => score >= minScoreWithoutPackage)
 										// If SymbolDescriptor matched, get package.json and match PackageDescriptor name
 										// TODO get and match full PackageDescriptor (version)
 										.mergeMap(({ score, tree, parent }) => {
