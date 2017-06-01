@@ -201,36 +201,35 @@ export class ProjectManager implements Disposable {
 	 * Then creates new ProjectConfigurations, resets existing and invalidates file references.
 	 */
 	ensureModuleStructure(childOf = new Span()): Promise<void> {
-		if (this.ensuredModuleStructure) {
-			return this.ensuredModuleStructure;
-		}
-		this.ensuredModuleStructure = (async () => {
-			const span = childOf.tracer().startSpan('Ensure module structure', { childOf });
-			try {
-				await this.updater.ensureStructure();
-				// Ensure content of all all global .d.ts, [tj]sconfig.json, package.json files
-				await Promise.all(
-					iterate(this.localFs.uris())
-						.filter(uri => isGlobalTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
-						.map(uri => this.updater.ensure(uri))
-				);
-				// Reset all compilation state
-				// TODO ze incremental compilation instead
-				for (const config of this.configurations()) {
-					config.reset();
-				}
-				// Require re-processing of file references
-				this.invalidateReferencedFiles();
-			} catch (err) {
-				this.ensuredModuleStructure = undefined;
-				span.setTag('error', true);
-				span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
-				throw err;
-			} finally {
-				span.finish();
+		const span = childOf.tracer().startSpan('Ensure module structure', { childOf });
+		try {
+			if (!this.ensuredModuleStructure) {
+				this.ensuredModuleStructure = (async () => {
+					await this.updater.ensureStructure();
+					// Ensure content of all all global .d.ts, [tj]sconfig.json, package.json files
+					await Promise.all(
+						iterate(this.localFs.uris())
+							.filter(uri => isGlobalTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
+							.map(uri => this.updater.ensure(uri))
+					);
+					// Reset all compilation state
+					// TODO ze incremental compilation instead
+					for (const config of this.configurations()) {
+						config.reset();
+					}
+					// Require re-processing of file references
+					this.invalidateReferencedFiles();
+				})();
 			}
-		})();
-		return this.ensuredModuleStructure;
+			return this.ensuredModuleStructure;
+		} catch (err) {
+			this.ensuredModuleStructure = undefined;
+			span.setTag('error', true);
+			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
+			throw err;
+		} finally {
+			span.finish();
+		}
 	}
 
 	/**
@@ -248,27 +247,27 @@ export class ProjectManager implements Disposable {
 	 * Invalidates project configurations after execution
 	 */
 	async ensureOwnFiles(childOf = new Span()): Promise<void> {
-		if (!this.ensuredOwnFiles) {
-			this.ensuredOwnFiles = (async () => {
-				const span = childOf.tracer().startSpan('Ensure own files', { childOf });
-				try {
+		const span = childOf.tracer().startSpan('Ensure own files', { childOf });
+		try {
+			if (!this.ensuredOwnFiles) {
+				this.ensuredOwnFiles = (async () => {
 					await this.updater.ensureStructure(span);
 					await Promise.all(
 						iterate(this.localFs.uris())
 							.filter(uri => !uri.includes('/node_modules/') && isJSTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
 							.map(uri => this.updater.ensure(uri))
 					);
-				} catch (err) {
-					this.ensuredOwnFiles = undefined;
-					span.setTag('error', true);
-					span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
-					throw err;
-				} finally {
-					span.finish();
-				}
-			})();
+				})();
+			}
+			return this.ensuredOwnFiles;
+		} catch (err) {
+			this.ensuredOwnFiles = undefined;
+			span.setTag('error', true);
+			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
+			throw err;
+		} finally {
+			span.finish();
 		}
-		return this.ensuredOwnFiles;
 	}
 
 	/**
@@ -276,28 +275,27 @@ export class ProjectManager implements Disposable {
 	 * Invalidates project configurations after execution
 	 */
 	ensureAllFiles(childOf = new Span()): Promise<void> {
-		if (this.ensuredAllFiles) {
-			return this.ensuredAllFiles;
-		}
-		this.ensuredAllFiles = (async () => {
-			const span = childOf.tracer().startSpan('Ensure all files', { childOf });
-			try {
-				await this.updater.ensureStructure(span);
-				await Promise.all(
-					iterate(this.localFs.uris())
-						.filter(uri => isJSTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
-						.map(uri => this.updater.ensure(uri))
-				);
-			} catch (err) {
-				this.ensuredAllFiles = undefined;
-				span.setTag('error', true);
-				span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
-				throw err;
-			} finally {
-				span.finish();
+		const span = childOf.tracer().startSpan('Ensure all files', { childOf });
+		try {
+			if (!this.ensuredAllFiles) {
+				this.ensuredAllFiles = (async () => {
+						await this.updater.ensureStructure(span);
+						await Promise.all(
+							iterate(this.localFs.uris())
+								.filter(uri => isJSTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
+								.map(uri => this.updater.ensure(uri))
+						);
+				})();
 			}
-		})();
-		return this.ensuredAllFiles;
+			return this.ensuredAllFiles;
+		} catch (err) {
+			this.ensuredAllFiles = undefined;
+			span.setTag('error', true);
+			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
+			throw err;
+		} finally {
+			span.finish();
+		}
 	}
 
 	/**
