@@ -1,5 +1,5 @@
 
-import { Observable } from '@reactivex/rxjs';
+import { Observable, Subject } from '@reactivex/rxjs';
 import * as assert from 'assert';
 import { EventEmitter } from 'events';
 import jsonpatch from 'fast-json-patch';
@@ -260,20 +260,19 @@ describe('connection', () => {
 			it('should call a handler on request and send partial results of the returned Observable', async () => {
 				const handler: { [K in keyof TypeScriptService]: TypeScriptService[K] & sinon.SinonStub } = sinon.createStubInstance(TypeScriptService);
 				handler.initialize.returns(Observable.of({ op: 'add', path: '', value: { capabilities: { streaming: true }}}));
-				handler.textDocumentHover.returns(Observable.of<jsonpatch.Operation>(
-					{ op: 'add', path: '', value: [] },
-					{ op: 'add', path: '/-', value: 123 }
-				));
+
+				const hoverSubject = new Subject();
+				handler.textDocumentHover.returns(hoverSubject);
+
 				const emitter = new EventEmitter();
 				const writer = {
 					write: sinon.spy()
 				};
-				registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as any);
-				emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'initialize', params: { capabilities: { streaming: true }}});
-				emitter.emit('message', { jsonrpc: '2.0', id: 2, method: 'textDocument/hover', params: [1, 2] });
-				sinon.assert.calledOnce(handler.textDocumentHover);
 
-				sinon.assert.callCount(writer.write, 5);
+				registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as any);
+
+				// Send initialize
+				emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'initialize', params: { capabilities: { streaming: true }}});
 				assert.deepEqual(writer.write.args[0], [{
 					jsonrpc: '2.0',
 					method: '$/partialResult',
@@ -287,16 +286,29 @@ describe('connection', () => {
 					id: 1,
 					result: { capabilities: { streaming: true } }
 				}], 'Expected to send final result for initialize');
+
+				// Send hover
+				emitter.emit('message', { jsonrpc: '2.0', id: 2, method: 'textDocument/hover', params: [1, 2] });
+				sinon.assert.calledOnce(handler.textDocumentHover);
+
+				// Simulate initializing JSON Patch Operation
+				hoverSubject.next({ op: 'add', path: '', value: [] });
 				assert.deepEqual(writer.write.args[2], [{
 					jsonrpc: '2.0',
 					method: '$/partialResult',
 					params: { id: 2, patch: [{ op: 'add', path: '', value: [] }] }
 				}], 'Expected to send partial result that initializes array');
+
+				// Simulate streamed value
+				hoverSubject.next({ op: 'add', path: '/-', value: 123 });
 				assert.deepEqual(writer.write.args[3], [{
 					jsonrpc: '2.0',
 					method: '$/partialResult',
 					params: { id: 2, patch: [{ op: 'add', path: '/-', value: 123 }] }
 				}], 'Expected to send partial result that adds 123 to array');
+
+				// Complete Subject to trigger final response
+				hoverSubject.complete();
 				assert.deepEqual(writer.write.args[4], [{
 					jsonrpc: '2.0',
 					id: 2,
