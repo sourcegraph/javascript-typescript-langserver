@@ -269,7 +269,7 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 				})
 				// Build up final result for BC
 				// TODO send null if client declared streaming capability
-				.reduceOperations<any>()
+				.reduce<jsonpatch.Operation, any>(jsonpatch.applyReducer, null)
 				.finally(() => {
 					// Finish span
 					span.finish();
