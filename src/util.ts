@@ -1,4 +1,5 @@
 import { Observable } from '@reactivex/rxjs';
+import jsonpatch from 'fast-json-patch';
 import { compareTwoStrings } from 'string-similarity';
 import * as ts from 'typescript';
 import * as url from 'url';
@@ -16,7 +17,7 @@ export function observableFromIterable<T>(iterable: Iterable<T>): Observable<T> 
  * Template string tag to escape JSON Pointer components as per https://tools.ietf.org/html/rfc6901#section-3
  */
 export function JSONPTR(strings: TemplateStringsArray, ...toEscape: string[]): string {
-	return strings.reduce((prev, curr, i) => prev + toEscape[i - 1].replace(/~/g, '~0').replace(/\//g, '~1') + curr);
+	return strings.reduce((left, right, i) => left + jsonpatch.escapePathComponent(toEscape[i - 1]) + right);
 }
 
 /**
