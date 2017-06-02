@@ -2,7 +2,7 @@
 import { Observable } from '@reactivex/rxjs';
 import * as assert from 'assert';
 import { EventEmitter } from 'events';
-import { OpPatch } from 'json-patch';
+import jsonpatch from 'fast-json-patch';
 import { Span } from 'opentracing';
 import * as sinon from 'sinon';
 import { PassThrough } from 'stream';
@@ -93,7 +93,7 @@ describe('connection', () => {
 		});
 		it('should call a handler on request and send the result of the returned Observable', async () => {
 			const handler: TypeScriptService = Object.create(TypeScriptService.prototype);
-			const hoverStub = sinon.stub(handler, 'textDocumentHover').returns(Observable.of<OpPatch>(
+			const hoverStub = sinon.stub(handler, 'textDocumentHover').returns(Observable.of<jsonpatch.Operation>(
 				{ op: 'add', path: '', value: [] },
 				{ op: 'add', path: '/-', value: 123 }
 			));
@@ -260,7 +260,7 @@ describe('connection', () => {
 			it('should call a handler on request and send partial results of the returned Observable', async () => {
 				const handler: { [K in keyof TypeScriptService]: TypeScriptService[K] & sinon.SinonStub } = sinon.createStubInstance(TypeScriptService);
 				handler.initialize.returns(Observable.of({ op: 'add', path: '', value: { capabilities: { streaming: true }}}));
-				handler.textDocumentHover.returns(Observable.of<OpPatch>(
+				handler.textDocumentHover.returns(Observable.of<jsonpatch.Operation>(
 					{ op: 'add', path: '', value: [] },
 					{ op: 'add', path: '/-', value: 123 }
 				));
