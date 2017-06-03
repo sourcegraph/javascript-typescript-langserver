@@ -141,7 +141,12 @@ export class InMemoryFileSystem extends EventEmitter implements ts.ParseConfigHo
 	 * If there is no such file, returns empty string to match expected signature
 	 */
 	readFile(path: string): string {
-		return this.readFileIfExists(path) || '';
+		const content = this.readFileIfExists(path);
+		if (content === undefined) {
+			this.logger.warn(`readFile ${path} requested by TypeScript but content not available`);
+			return '';
+		}
+		return content;
 	}
 
 	/**
