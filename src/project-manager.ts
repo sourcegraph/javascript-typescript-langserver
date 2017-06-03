@@ -8,6 +8,7 @@ import { Disposable } from './disposable';
 import { FileSystemUpdater } from './fs';
 import { Logger, NoopLogger } from './logging';
 import { InMemoryFileSystem } from './memfs';
+import { traceObservable, tracePromise, traceSync } from './tracing';
 import {
 	isConfigFile,
 	isDeclarationFile,
@@ -201,35 +202,32 @@ export class ProjectManager implements Disposable {
 	 * Then creates new ProjectConfigurations, resets existing and invalidates file references.
 	 */
 	ensureModuleStructure(childOf = new Span()): Promise<void> {
-		const span = childOf.tracer().startSpan('Ensure module structure', { childOf });
-		try {
-			if (!this.ensuredModuleStructure) {
-				this.ensuredModuleStructure = (async () => {
-					await this.updater.ensureStructure();
-					// Ensure content of all all global .d.ts, [tj]sconfig.json, package.json files
-					await Promise.all(
-						iterate(this.localFs.uris())
-							.filter(uri => isGlobalTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
-							.map(uri => this.updater.ensure(uri))
-					);
-					// Reset all compilation state
-					// TODO ze incremental compilation instead
-					for (const config of this.configurations()) {
-						config.reset();
-					}
-					// Require re-processing of file references
-					this.invalidateReferencedFiles();
-				})();
+		return tracePromise('Ensure module structure', childOf, async span => {
+			try {
+				if (!this.ensuredModuleStructure) {
+					this.ensuredModuleStructure = (async () => {
+						await this.updater.ensureStructure();
+						// Ensure content of all all global .d.ts, [tj]sconfig.json, package.json files
+						await Promise.all(
+							iterate(this.localFs.uris())
+								.filter(uri => isGlobalTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
+								.map(uri => this.updater.ensure(uri))
+						);
+						// Reset all compilation state
+						// TODO ze incremental compilation instead
+						for (const config of this.configurations()) {
+							config.reset();
+						}
+						// Require re-processing of file references
+						this.invalidateReferencedFiles();
+					})();
+				}
+				await this.ensuredModuleStructure;
+			} catch (err) {
+				this.ensuredModuleStructure = undefined;
+				throw err;
 			}
-			return this.ensuredModuleStructure;
-		} catch (err) {
-			this.ensuredModuleStructure = undefined;
-			span.setTag('error', true);
-			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
-			throw err;
-		} finally {
-			span.finish();
-		}
+		});
 	}
 
 	/**
@@ -246,56 +244,50 @@ export class ProjectManager implements Disposable {
 	 * This includes all js/ts files, tsconfig files and package.json files.
 	 * Invalidates project configurations after execution
 	 */
-	async ensureOwnFiles(childOf = new Span()): Promise<void> {
-		const span = childOf.tracer().startSpan('Ensure own files', { childOf });
-		try {
-			if (!this.ensuredOwnFiles) {
-				this.ensuredOwnFiles = (async () => {
-					await this.updater.ensureStructure(span);
-					await Promise.all(
-						iterate(this.localFs.uris())
-							.filter(uri => !uri.includes('/node_modules/') && isJSTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
-							.map(uri => this.updater.ensure(uri))
-					);
-				})();
+	ensureOwnFiles(childOf = new Span()): Promise<void> {
+		return tracePromise('Ensure own files', childOf, async span => {
+			try {
+				if (!this.ensuredOwnFiles) {
+					this.ensuredOwnFiles = (async () => {
+						await this.updater.ensureStructure(span);
+						await Promise.all(
+							iterate(this.localFs.uris())
+								.filter(uri => !uri.includes('/node_modules/') && isJSTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
+								.map(uri => this.updater.ensure(uri))
+						);
+					})();
+				}
+				await this.ensuredOwnFiles;
+			} catch (err) {
+				this.ensuredOwnFiles = undefined;
+				throw err;
 			}
-			await this.ensuredOwnFiles;
-		} catch (err) {
-			this.ensuredOwnFiles = undefined;
-			span.setTag('error', true);
-			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
-			throw err;
-		} finally {
-			span.finish();
-		}
+		});
 	}
 
 	/**
 	 * Ensures all files were fetched from the remote file system.
 	 * Invalidates project configurations after execution
 	 */
-	async ensureAllFiles(childOf = new Span()): Promise<void> {
-		const span = childOf.tracer().startSpan('Ensure all files', { childOf });
-		try {
-			if (!this.ensuredAllFiles) {
-				this.ensuredAllFiles = (async () => {
+	ensureAllFiles(childOf = new Span()): Promise<void> {
+		return tracePromise('Ensure all files', childOf, async span => {
+			try {
+				if (!this.ensuredAllFiles) {
+					this.ensuredAllFiles = (async () => {
 						await this.updater.ensureStructure(span);
 						await Promise.all(
 							iterate(this.localFs.uris())
 								.filter(uri => isJSTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
 								.map(uri => this.updater.ensure(uri))
 						);
-				})();
+					})();
+				}
+				await this.ensuredAllFiles;
+			} catch (err) {
+				this.ensuredAllFiles = undefined;
+				throw err;
 			}
-			await this.ensuredAllFiles;
-		} catch (err) {
-			this.ensuredAllFiles = undefined;
-			span.setTag('error', true);
-			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
-			throw err;
-		} finally {
-			span.finish();
-		}
+		});
 	}
 
 	/**
@@ -316,33 +308,24 @@ export class ProjectManager implements Disposable {
 	 * @return Observable of file URIs ensured
 	 */
 	ensureReferencedFiles(uri: string, maxDepth = 30, ignore = new Set<string>(), childOf = new Span()): Observable<string> {
-		const span = childOf.tracer().startSpan('Ensure referenced files', { childOf });
-		span.addTags({ uri, maxDepth });
-		ignore.add(uri);
-		return Observable.from(this.ensureModuleStructure(span))
-			// If max depth was reached, don't go any further
-			.mergeMap(() => maxDepth === 0 ? [] : this.resolveReferencedFiles(uri))
-			// Prevent cycles
-			.filter(referencedUri => !ignore.has(referencedUri))
-			// Call method recursively with one less dep level
-			.mergeMap(referencedUri =>
-				this.ensureReferencedFiles(referencedUri, maxDepth - 1, ignore)
-					// Continue even if an import wasn't found
-					.catch(err => {
-						this.logger.error(`Error resolving file references for ${uri}:`, err);
-						return [];
-					})
-			)
-			// Log errors to span
-			.catch(err => {
-				span.setTag('error', true);
-				span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
-				throw err;
-			})
-			// Finish span
-			.finally(() => {
-				span.finish();
-			});
+		return traceObservable('Ensure referenced files', childOf, span => {
+			span.addTags({ uri, maxDepth });
+			ignore.add(uri);
+			return Observable.from(this.ensureModuleStructure(span))
+				// If max depth was reached, don't go any further
+				.mergeMap(() => maxDepth === 0 ? [] : this.resolveReferencedFiles(uri))
+				// Prevent cycles
+				.filter(referencedUri => !ignore.has(referencedUri))
+				// Call method recursively with one less dep level
+				.mergeMap(referencedUri =>
+					this.ensureReferencedFiles(referencedUri, maxDepth - 1, ignore)
+						// Continue even if an import wasn't found
+						.catch(err => {
+							this.logger.error(`Error resolving file references for ${uri}:`, err);
+							return [];
+						})
+				);
+		});
 	}
 
 	/**
@@ -724,13 +707,6 @@ export class ProjectConfiguration {
 
 	private service?: ts.LanguageService;
 
-	// program is "a collection of SourceFiles and a set of
-	// compilation options that represent a compilation unit. The
-	// program is the main entry point to the type system and code
-	// generation."
-	// (https://github.com/Microsoft/TypeScript-wiki/blob/master/Architectural-Overview.md#data-structures)
-	private program?: ts.Program;
-
 	/**
 	 * Object TS service will use to fetch content of source files
 	 */
@@ -800,7 +776,6 @@ export class ProjectConfiguration {
 		this.ensuredBasicFiles = false;
 		this.ensuredAllFiles = false;
 		this.service = undefined;
-		this.program = undefined;
 		this.host = undefined;
 	}
 
@@ -822,17 +797,7 @@ export class ProjectConfiguration {
 	 * @return program object (cached result of parsing and typechecking done by TS service)
 	 */
 	getProgram(childOf = new Span()): ts.Program | undefined {
-		const span = childOf.tracer().startSpan('Get program', { childOf });
-		try {
-			return this.getService().getProgram();
-		} catch (err) {
-			span.setTag('error', true);
-			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
-			this.logger.error(`Cannot create program object for ${this.rootFilePath}`, err);
-			throw err;
-		} finally {
-			span.finish();
-		}
+		return traceSync('Get program', childOf, span => this.getService().getProgram());
 	}
 
 	/**
