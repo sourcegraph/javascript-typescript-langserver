@@ -62,7 +62,7 @@ import {
 	uri2path
 } from './util';
 import hashObject = require('object-hash');
-import { castArray, merge, noop, omit } from 'lodash';
+import { castArray, merge, omit } from 'lodash';
 import * as url from 'url';
 import { extractDefinitelyTypedPackageName, extractNodeModulesPackageName, PackageJson, PackageManager } from './packages';
 import {
@@ -73,6 +73,7 @@ import {
 	navigationTreeToSymbolInformation,
 	walkNavigationTree
 } from './symbols';
+import { traceObservable } from './tracing';
 
 export interface TypeScriptServiceOptions {
 	traceModuleResolution?: boolean;
@@ -1344,92 +1345,79 @@ export class TypeScriptService {
 	 * @return Observable of [match score, SymbolInformation]
 	 */
 	protected _getSymbolsInConfig(config: ProjectConfiguration, query?: string | Partial<SymbolDescriptor>, childOf = new Span()): Observable<[number, SymbolInformation]> {
-		const span = childOf.tracer().startSpan('Get symbols in config', { childOf });
-		span.addTags({ config: config.configFilePath, query });
+		return traceObservable('Get symbols in config', childOf, span => {
+			span.addTags({ config: config.configFilePath, query });
+			config.ensureAllFiles(span);
 
-		return (() => {
-			try {
-				config.ensureAllFiles(span);
-
-				const program = config.getProgram(span);
-				if (!program) {
-					return Observable.empty();
-				}
-
-				if (typeof query === 'string') {
-					// Query by text query
-					// Limit the amount of symbols searched for text queries
-					return Observable.from(config.getService().getNavigateToItems(query, 100, undefined, false))
-						// Exclude dependencies and standard library
-						.filter(item => !isTypeScriptLibrary(item.fileName) && !item.fileName.includes('/node_modules/'))
-						// Same score for all
-						.map(item => [1, navigateToItemToSymbolInformation(item, program, this.root)] as [number, SymbolInformation]);
-				} else {
-					const queryWithoutPackage = query && omit(query, 'package') as SymbolDescriptor;
-					// Require at least 2 properties to match (or all if less provided)
-					const minScore = Math.min(2, getPropertyCount(query));
-					const minScoreWithoutPackage = Math.min(2, getPropertyCount(queryWithoutPackage));
-					const service = config.getService();
-					return Observable.from(program.getSourceFiles())
-						// Exclude dependencies and standard library
-						.filter(sourceFile => !isTypeScriptLibrary(sourceFile.fileName) && !sourceFile.fileName.includes('/node_modules/'))
-						.mergeMap(sourceFile => {
-							try {
-								const tree = service.getNavigationTree(sourceFile.fileName);
-								const nodes = observableFromIterable(walkNavigationTree(tree))
-									.filter(({ tree, parent }) => navigationTreeIsSymbol(tree));
-								let matchedNodes: Observable<{ score: number, tree: ts.NavigationTree, parent?: ts.NavigationTree }>;
-								if (!query) {
-									matchedNodes = nodes
-										.map(({ tree, parent }) => ({ score: 1, tree, parent }));
-								} else {
-									matchedNodes = nodes
-										// Get a score how good the symbol matches the SymbolDescriptor (ignoring PackageDescriptor)
-										.map(({ tree, parent }) => {
-											const symbolDescriptor = navigationTreeToSymbolDescriptor(tree, parent, sourceFile.fileName, this.root);
-											const score = getMatchingPropertyCount(queryWithoutPackage, symbolDescriptor);
-											return { score, tree, parent };
-										})
-										// Require the minimum score without the PackageDescriptor name
-										.filter(({ score }) => score >= minScoreWithoutPackage)
-										// If SymbolDescriptor matched, get package.json and match PackageDescriptor name
-										// TODO get and match full PackageDescriptor (version)
-										.mergeMap(({ score, tree, parent }) => {
-											if (!query.package || !query.package.name) {
-												return [{ score, tree, parent }];
-											}
-											const uri = path2uri(sourceFile.fileName);
-											return Observable.from(this.packageManager.getClosestPackageJson(uri, span))
-												// If PackageDescriptor matches, increase score
-												.map(packageJson => {
-													if (packageJson && packageJson.name === query.package!.name!) {
-														score++;
-													}
-													return { score, tree, parent };
-												});
-										})
-										// Require a minimum score to not return thousands of results
-										.filter(({ score }) => score >= minScore);
-								}
-								return matchedNodes
-									.map(({ score, tree, parent }) => [score, navigationTreeToSymbolInformation(tree, parent, sourceFile, this.root)] as [number, SymbolInformation]);
-							} catch (e) {
-								this.logger.error('Could not get navigation tree for file', sourceFile.fileName);
-								return [];
-							}
-						});
-				}
-			} catch (err) {
-				return Observable.throw(err);
+			const program = config.getProgram(span);
+			if (!program) {
+				return Observable.empty();
 			}
-		})()
-			.do(noop, err => {
-				span.setTag('error', true);
-				span.log({ 'event': 'error', 'error.object': err, 'stack': err.stack, 'message': err.message });
-			})
-			.finally(() => {
-				span.finish();
-			});
+
+			if (typeof query === 'string') {
+				// Query by text query
+				// Limit the amount of symbols searched for text queries
+				return Observable.from(config.getService().getNavigateToItems(query, 100, undefined, false))
+					// Exclude dependencies and standard library
+					.filter(item => !isTypeScriptLibrary(item.fileName) && !item.fileName.includes('/node_modules/'))
+					// Same score for all
+					.map(item => [1, navigateToItemToSymbolInformation(item, program, this.root)] as [number, SymbolInformation]);
+			} else {
+				const queryWithoutPackage = query && omit(query, 'package') as SymbolDescriptor;
+				// Require at least 2 properties to match (or all if less provided)
+				const minScore = Math.min(2, getPropertyCount(query));
+				const minScoreWithoutPackage = Math.min(2, getPropertyCount(queryWithoutPackage));
+				const service = config.getService();
+				return Observable.from(program.getSourceFiles())
+					// Exclude dependencies and standard library
+					.filter(sourceFile => !isTypeScriptLibrary(sourceFile.fileName) && !sourceFile.fileName.includes('/node_modules/'))
+					.mergeMap(sourceFile => {
+						try {
+							const tree = service.getNavigationTree(sourceFile.fileName);
+							const nodes = observableFromIterable(walkNavigationTree(tree))
+								.filter(({ tree, parent }) => navigationTreeIsSymbol(tree));
+							let matchedNodes: Observable<{ score: number, tree: ts.NavigationTree, parent?: ts.NavigationTree }>;
+							if (!query) {
+								matchedNodes = nodes
+									.map(({ tree, parent }) => ({ score: 1, tree, parent }));
+							} else {
+								matchedNodes = nodes
+									// Get a score how good the symbol matches the SymbolDescriptor (ignoring PackageDescriptor)
+									.map(({ tree, parent }) => {
+										const symbolDescriptor = navigationTreeToSymbolDescriptor(tree, parent, sourceFile.fileName, this.root);
+										const score = getMatchingPropertyCount(queryWithoutPackage, symbolDescriptor);
+										return { score, tree, parent };
+									})
+									// Require the minimum score without the PackageDescriptor name
+									.filter(({ score }) => score >= minScoreWithoutPackage)
+									// If SymbolDescriptor matched, get package.json and match PackageDescriptor name
+									// TODO get and match full PackageDescriptor (version)
+									.mergeMap(({ score, tree, parent }) => {
+										if (!query.package || !query.package.name) {
+											return [{ score, tree, parent }];
+										}
+										const uri = path2uri(sourceFile.fileName);
+										return Observable.from(this.packageManager.getClosestPackageJson(uri, span))
+											// If PackageDescriptor matches, increase score
+											.map(packageJson => {
+												if (packageJson && packageJson.name === query.package!.name!) {
+													score++;
+												}
+												return { score, tree, parent };
+											});
+									})
+									// Require a minimum score to not return thousands of results
+									.filter(({ score }) => score >= minScore);
+							}
+							return matchedNodes
+								.map(({ score, tree, parent }) => [score, navigationTreeToSymbolInformation(tree, parent, sourceFile, this.root)] as [number, SymbolInformation]);
+						} catch (e) {
+							this.logger.error('Could not get navigation tree for file', sourceFile.fileName);
+							return [];
+						}
+					});
+			}
+		});
 	}
 }
 
