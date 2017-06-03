@@ -707,13 +707,6 @@ export class ProjectConfiguration {
 
 	private service?: ts.LanguageService;
 
-	// program is "a collection of SourceFiles and a set of
-	// compilation options that represent a compilation unit. The
-	// program is the main entry point to the type system and code
-	// generation."
-	// (https://github.com/Microsoft/TypeScript-wiki/blob/master/Architectural-Overview.md#data-structures)
-	private program?: ts.Program;
-
 	/**
 	 * Object TS service will use to fetch content of source files
 	 */
@@ -783,7 +776,6 @@ export class ProjectConfiguration {
 		this.ensuredBasicFiles = false;
 		this.ensuredAllFiles = false;
 		this.service = undefined;
-		this.program = undefined;
 		this.host = undefined;
 	}
 
