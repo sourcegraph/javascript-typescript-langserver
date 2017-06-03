@@ -865,7 +865,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 								line: 0
 							},
 							start: {
-								character: 10,
+								character: 9,
 								line: 0
 							}
 						},
@@ -892,7 +892,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 								line: 0
 							},
 							start: {
-								character: 10,
+								character: 9,
 								line: 0
 							}
 						},
@@ -905,7 +905,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				assert.deepEqual(result, []);
 			});
 			it('should return all references to a symbol from a dependency', async function (this: TestContext & ITestCallbackContext) {
-				const result: ReferenceInformation[] = await this.service.workspaceXreferences({ query: { name: 'x', containerName: '' } })
+				const result: ReferenceInformation[] = await this.service.workspaceXreferences({ query: { name: 'x' } })
 					.reduce<jsonpatch.Operation, ReferenceInformation[]>(jsonpatch.applyReducer, null as any)
 					.toPromise();
 				assert.deepEqual(result, [{
@@ -916,7 +916,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 								line: 0
 							},
 							start: {
-								character: 9,
+								character: 8,
 								line: 0
 							}
 						},
@@ -951,7 +951,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 6,
+									character: 5,
 									line: 0
 								}
 							},
@@ -973,7 +973,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 10,
+									character: 9,
 									line: 0
 								}
 							},
@@ -995,7 +995,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 24,
+									character: 23,
 									line: 0
 								}
 							},
@@ -1010,7 +1010,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 9,
+									character: 8,
 									line: 0
 								}
 							},
@@ -1039,7 +1039,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 6,
+									character: 5,
 									line: 0
 								}
 							},
@@ -1061,7 +1061,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 10,
+									character: 9,
 									line: 0
 								}
 							},
@@ -1083,7 +1083,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 23,
+									character: 22,
 									line: 0
 								}
 							},
@@ -1105,7 +1105,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 52,
+									character: 51,
 									line: 0
 								}
 							},
@@ -1127,7 +1127,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 									line: 0
 								},
 								start: {
-									character: 68,
+									character: 67,
 									line: 0
 								}
 							},
