@@ -651,7 +651,7 @@ export class TypeScriptService {
 				if (isDefinitelyTyped) {
 					// Error if not passed a SymbolDescriptor query with an `@types` PackageDescriptor
 					if (!params.symbol || !params.symbol.package || !params.symbol.package.name || !params.symbol.package.name.startsWith('@types/')) {
-						return Observable.throw('workspace/symbol on DefinitelyTyped is only supported with a SymbolDescriptor query with an @types PackageDescriptor');
+						return Observable.throw(new Error('workspace/symbol on DefinitelyTyped is only supported with a SymbolDescriptor query with an @types PackageDescriptor'));
 					}
 
 					// Fetch all files in the package subdirectory
