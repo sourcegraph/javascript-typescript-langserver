@@ -1,8 +1,7 @@
 import { Observable, Subscription, Symbol } from '@reactivex/rxjs';
 import { EventEmitter } from 'events';
-import { apply, OpPatch } from 'json-patch';
+import jsonpatch from 'fast-json-patch';
 import { camelCase, omit } from 'lodash';
-import { cloneDeep } from 'lodash';
 import { FORMAT_TEXT_MAP, Span, Tracer } from 'opentracing';
 import { inspect } from 'util';
 import { ErrorCodes, Message, StreamMessageReader as VSCodeStreamMessageReader, StreamMessageWriter as VSCodeStreamMessageWriter } from 'vscode-jsonrpc';
@@ -239,7 +238,7 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 			return;
 		}
 		// Call handler method with params and span
-		let observable: Observable<OpPatch>;
+		let observable: Observable<jsonpatch.Operation>;
 		try {
 			// Convert return value to Observable
 			const returnValue = (handler as any)[method](message.params, span);
@@ -270,10 +269,7 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 				})
 				// Build up final result for BC
 				// TODO send null if client declared streaming capability
-				// Clone patches to not modify the values of the patches
-				.map(cloneDeep)
-				.toArray()
-				.map(patches => apply(null, patches))
+				.reduce<jsonpatch.Operation, any>(jsonpatch.applyReducer, null)
 				.finally(() => {
 					// Finish span
 					span.finish();
