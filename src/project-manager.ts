@@ -11,7 +11,6 @@ import { InMemoryFileSystem } from './memfs';
 import { traceObservable, tracePromise, traceSync } from './tracing';
 import {
 	isConfigFile,
-	isDeclarationFile,
 	isGlobalTSFile,
 	isJSTSFile,
 	isPackageJsonFile,
@@ -745,7 +744,7 @@ export class ProjectConfiguration {
 	 * List of files that project consist of (based on tsconfig includes/excludes and wildcards).
 	 * Each item is a relative file path
 	 */
-	expectedFilePaths: string[];
+	private expectedFilePaths = new Set<string>();
 
 	/**
 	 * @param fs file system to use
@@ -760,7 +759,6 @@ export class ProjectConfiguration {
 		this.versions = versions;
 		this.traceModuleResolution = traceModuleResolution || false;
 		this.rootFilePath = rootFilePath;
-		this.expectedFilePaths = [];
 	}
 
 	/**
@@ -784,7 +782,7 @@ export class ProjectConfiguration {
 		this.service = undefined;
 		this.program = undefined;
 		this.host = undefined;
-		this.expectedFilePaths = [];
+		this.expectedFilePaths = new Set();
 	}
 
 	/**
@@ -847,7 +845,7 @@ export class ProjectConfiguration {
 		}
 		const base = dir || this.fs.path;
 		const configParseResult = ts.parseJsonConfigFileContent(configObject, this.fs, base);
-		this.expectedFilePaths = configParseResult.fileNames;
+		this.expectedFilePaths = new Set(configParseResult.fileNames);
 
 		const options = configParseResult.options;
 		if (/(^|\/)jsconfig\.json$/.test(this.configFilePath)) {
@@ -891,16 +889,22 @@ export class ProjectConfiguration {
 			return;
 		}
 
-		// paths have been forward-slashified by TS (see toUnixPath below)
-
+		// Add global declaration files from the whole workspace
 		for (const uri of this.fs.uris()) {
 			const fileName = uri2path(uri);
-			if (isGlobalTSFile(fileName) ||
-				(isDeclarationFile(fileName) && this.expectedFilePaths.includes(toUnixPath(fileName)))) {
+			if (isGlobalTSFile(fileName)) {
 				const sourceFile = program.getSourceFile(fileName);
 				if (!sourceFile) {
 					this.getHost().addFile(fileName);
 				}
+			}
+		}
+
+		// Add files that belong to the project according to tsconfig.json settings
+		for (const filePath of this.expectedFilePaths) {
+			const sourceFile = program.getSourceFile(filePath);
+			if (!sourceFile) {
+				this.getHost().addFile(filePath);
 			}
 		}
 		this.ensuredBasicFiles = true;
