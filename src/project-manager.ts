@@ -121,6 +121,9 @@ export class ProjectManager implements Disposable {
 		this.strict = strict;
 		this.traceModuleResolution = traceModuleResolution || false;
 
+		// Share DocumentRegistry between all ProjectConfigurations
+		const documentRegistry = ts.createDocumentRegistry();
+
 		// Create catch-all fallback configs in case there are no tsconfig.json files
 		// They are removed once at least one tsconfig.json is found
 		const trimmedRootPath = this.rootPath.replace(/\/+$/, '');
@@ -137,6 +140,7 @@ export class ProjectManager implements Disposable {
 			};
 			const config = new ProjectConfiguration(
 				this.localFs,
+				documentRegistry,
 				trimmedRootPath,
 				this.versions,
 				'',
@@ -165,6 +169,7 @@ export class ProjectManager implements Disposable {
 					const configs = this.configs[configType];
 					configs.set(dir, new ProjectConfiguration(
 						this.localFs,
+						documentRegistry,
 						dir,
 						this.versions,
 						filePath,
@@ -767,12 +772,14 @@ export class ProjectConfiguration {
 
 	/**
 	 * @param fs file system to use
+	 * @param documentRegistry Shared DocumentRegistry that manages SourceFile objects
 	 * @param rootFilePath root file path, absolute
 	 * @param configFilePath configuration file path, absolute
 	 * @param configContent optional configuration content to use instead of reading configuration file)
 	 */
 	constructor(
 		fs: InMemoryFileSystem,
+		private documentRegistry: ts.DocumentRegistry,
 		rootFilePath: string,
 		versions: Map<string, number>,
 		configFilePath: string,
@@ -887,7 +894,7 @@ export class ProjectConfiguration {
 			this.versions,
 			this.logger
 		);
-		this.service = ts.createLanguageService(this.host, ts.createDocumentRegistry());
+		this.service = ts.createLanguageService(this.host, this.documentRegistry);
 		this.initialized = true;
 	}
 
