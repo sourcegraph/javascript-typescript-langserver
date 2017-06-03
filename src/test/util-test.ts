@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { getMatchingPropertyCount, getPropertyCount, isGlobalTSFile, isSymbolDescriptorMatch, JSONPTR } from '../util';
+import { getMatchingPropertyCount, getPropertyCount, isGlobalTSFile, isSymbolDescriptorMatch, JSONPTR, path2uri, uri2path } from '../util';
 
 describe('util', () => {
 	describe('JSONPTR', () => {
@@ -127,6 +127,49 @@ describe('util', () => {
 			assert.equal(isGlobalTSFile('/node_modules/@types/jest/index.d.ts'), true);
 			assert.equal(isGlobalTSFile('/node_modules/@types/jasmine/index.d.ts'), true);
 			assert.equal(isGlobalTSFile('/node_modules/@types/mocha/index.d.ts'), true);
+		});
+	});
+	describe('path2uri()', () => {
+		it('should throw an error if a non-absolute uri is passed in', () => {
+			assert.throws(() => path2uri('baz/qux'));
+		});
+		it('should convert a Unix file path to a URI', () => {
+			const uri = path2uri('/baz/qux');
+			assert.equal(uri, 'file:///baz/qux');
+		});
+		it('should convert a Windows file path to a URI', () => {
+			const uri = path2uri('C:\\baz\\qux');
+			assert.equal(uri, 'file:///C:/baz/qux');
+		});
+		it('should encode special characters', () => {
+			const uri = path2uri('/💩');
+			assert.equal(uri, 'file:///%F0%9F%92%A9');
+		});
+		it('should encode unreserved special characters', () => {
+			const uri = path2uri('/@baz');
+			assert.equal(uri, 'file:///%40baz');
+		});
+	});
+	describe('uri2path()', () => {
+		it('should convert a Unix file URI to a file path', () => {
+			const filePath = uri2path('file:///baz/qux');
+			assert.equal(filePath, '/baz/qux');
+		});
+		it('should convert a Windows file URI to a file path', () => {
+			const filePath = uri2path('file:///c:/baz/qux');
+			assert.equal(filePath, 'c:\\baz\\qux');
+		});
+		it('should convert a Windows file URI with uppercase drive letter to a file path', () => {
+			const filePath = uri2path('file:///C:/baz/qux');
+			assert.equal(filePath, 'C:\\baz\\qux');
+		});
+		it('should decode special characters', () => {
+			const filePath = uri2path('file:///%F0%9F%92%A9');
+			assert.equal(filePath, '/💩');
+		});
+		it('should decode unreserved special characters', () => {
+			const filePath = uri2path('file:///%40foo');
+			assert.equal(filePath, '/@foo');
 		});
 	});
 });

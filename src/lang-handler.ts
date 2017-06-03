@@ -18,6 +18,7 @@ import {
 	TextDocumentContentParams,
 	WorkspaceFilesParams
 } from './request-type';
+import { traceObservable } from './tracing';
 
 export interface LanguageClient {
 	/**
@@ -90,47 +91,41 @@ export class RemoteLanguageClient {
 	 * @return Emits the value of the result field or the error
 	 */
 	private request(method: string, params: any[] | { [attr: string]: any }, childOf = new Span()): Observable<any> {
-		const tracer = childOf.tracer();
-		const span = tracer.startSpan(`Request ${method}`, { childOf });
-		span.setTag('params', inspect(params));
-		return new Observable<any>(subscriber => {
-			// Generate a request ID
-			const id = this.idCounter++;
-			const message: RequestMessage & HasMeta = { jsonrpc: '2.0', method, id, params, meta: {} };
-			tracer.inject(span, FORMAT_TEXT_MAP, message.meta);
-			// Send request
-			this.output.write(message);
-			let receivedResponse = false;
-			// Subscribe to message events
-			const messageSub = Observable.fromEvent<Message>(this.input, 'message')
-				// Find response message with the correct ID
-				.filter(msg => isReponseMessage(msg) && msg.id === id)
-				.take(1)
-				// Emit result or error
-				.map((msg: ResponseMessage): any => {
-					receivedResponse = true;
-					if (msg.error) {
-						throw Object.assign(new Error(msg.error.message), msg.error);
+		return traceObservable(`Request ${method}`, childOf, span => {
+			span.setTag('params', inspect(params));
+			return new Observable<any>(subscriber => {
+				// Generate a request ID
+				const id = this.idCounter++;
+				const message: RequestMessage & HasMeta = { jsonrpc: '2.0', method, id, params, meta: {} };
+				childOf.tracer().inject(span, FORMAT_TEXT_MAP, message.meta);
+				// Send request
+				this.output.write(message);
+				let receivedResponse = false;
+				// Subscribe to message events
+				const messageSub = Observable.fromEvent<Message>(this.input, 'message')
+					// Find response message with the correct ID
+					.filter(msg => isReponseMessage(msg) && msg.id === id)
+					.take(1)
+					// Emit result or error
+					.map((msg: ResponseMessage): any => {
+						receivedResponse = true;
+						if (msg.error) {
+							throw Object.assign(new Error(msg.error.message), msg.error);
+						}
+						return msg.result;
+					})
+					// Forward events to subscriber
+					.subscribe(subscriber);
+				// Handler for unsubscribe()
+				return () => {
+					// Unsubscribe message event subscription (removes listener)
+					messageSub.unsubscribe();
+					if (!receivedResponse) {
+						// Send LSP $/cancelRequest to client
+						this.notify('$/cancelRequest', { id });
 					}
-					return msg.result;
-				})
-				// Forward events to subscriber
-				.subscribe(subscriber);
-			// Handler for unsubscribe()
-			return () => {
-				// Unsubscribe message event subscription (removes listener)
-				messageSub.unsubscribe();
-				if (!receivedResponse) {
-					// Send LSP $/cancelRequest to client
-					this.notify('$/cancelRequest', { id });
-				}
-			};
-		}).catch(err => {
-			span.setTag('error', true);
-			span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
-			throw err;
-		}).finally(() => {
-			span.finish();
+				};
+			});
 		});
 	}
 

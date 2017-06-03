@@ -1,6 +1,6 @@
 import { Observable } from '@reactivex/rxjs';
+import jsonpatch from 'fast-json-patch';
 import iterate from 'iterare';
-import { AddPatch, OpPatch } from 'json-patch';
 import { toPairs } from 'lodash';
 import { Span } from 'opentracing';
 import * as ts from 'typescript';
@@ -62,7 +62,7 @@ import {
 	uri2path
 } from './util';
 import hashObject = require('object-hash');
-import { castArray, merge, noop, omit } from 'lodash';
+import { castArray, merge, omit } from 'lodash';
 import * as url from 'url';
 import { extractDefinitelyTypedPackageName, extractNodeModulesPackageName, PackageJson, PackageManager } from './packages';
 import {
@@ -73,6 +73,7 @@ import {
 	navigationTreeToSymbolInformation,
 	walkNavigationTree
 } from './symbols';
+import { traceObservable } from './tracing';
 
 export interface TypeScriptServiceOptions {
 	traceModuleResolution?: boolean;
@@ -117,7 +118,7 @@ export class TypeScriptService {
 	/**
 	 * Cached response for empty workspace/symbol query
 	 */
-	private emptyQueryWorkspaceSymbols: Observable<OpPatch>;
+	private emptyQueryWorkspaceSymbols: Observable<jsonpatch.Operation>;
 
 	private traceModuleResolution: boolean;
 
@@ -195,10 +196,10 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches that build an `InitializeResult`
 	 */
-	initialize(params: InitializeParams, span = new Span()): Observable<OpPatch> {
+	initialize(params: InitializeParams, span = new Span()): Observable<jsonpatch.Operation> {
 		if (params.rootUri || params.rootPath) {
 			this.root = params.rootPath || uri2path(params.rootUri!);
-			this.rootUri = params.rootUri || path2uri('', params.rootPath!);
+			this.rootUri = params.rootUri || path2uri(params.rootPath!);
 			// The root URI always refers to a directory
 			if (!this.rootUri.endsWith('/')) {
 				this.rootUri += '/';
@@ -268,7 +269,7 @@ export class TypeScriptService {
 			op: 'add',
 			path: '',
 			value: result
-		} as OpPatch);
+		} as jsonpatch.Operation);
 	}
 
 	/**
@@ -279,7 +280,7 @@ export class TypeScriptService {
 	 */
 	protected _initializeFileSystems(accessDisk: boolean): void {
 		this.fileSystem = accessDisk ? new LocalFileSystem(this.rootUri) : new RemoteFileSystem(this.client);
-		this.inMemoryFileSystem = new InMemoryFileSystem(this.root);
+		this.inMemoryFileSystem = new InMemoryFileSystem(this.root, this.logger);
 	}
 
 	/**
@@ -289,10 +290,10 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches that build a `null` result
 	 */
-	shutdown(params = {}, span = new Span()): Observable<OpPatch> {
+	shutdown(params = {}, span = new Span()): Observable<jsonpatch.Operation> {
 		this.projectManager.dispose();
 		this.packageManager.dispose();
-		return Observable.of({ op: 'add', path: '', value: null } as AddPatch);
+		return Observable.of({ op: 'add', path: '', value: null } as jsonpatch.Operation);
 	}
 
 	/**
@@ -310,9 +311,9 @@ export class TypeScriptService {
 	 * @return Observable of JSON Patches that build a `Location[]` result
 	 */
 
-	textDocumentDefinition(params: TextDocumentPositionParams, span = new Span()): Observable<OpPatch> {
+	textDocumentDefinition(params: TextDocumentPositionParams, span = new Span()): Observable<jsonpatch.Operation> {
 		return this._getDefinitionLocations(params, span)
-			.map((location: Location): OpPatch => ({ op: 'add', path: '/-', value: location }))
+			.map((location: Location): jsonpatch.Operation => ({ op: 'add', path: '/-', value: location }))
 			.startWith({ op: 'add', path: '', value: [] });
 	}
 
@@ -370,9 +371,9 @@ export class TypeScriptService {
 	 * @return Observable of JSON Patches that build a `SymbolLocationInformation[]` result
 	 */
 
-	textDocumentXdefinition(params: TextDocumentPositionParams, span = new Span()): Observable<OpPatch> {
+	textDocumentXdefinition(params: TextDocumentPositionParams, span = new Span()): Observable<jsonpatch.Operation> {
 		return this._getSymbolLocationInformations(params, span)
-			.map(symbol => ({ op: 'add', path: '/-', value: symbol } as AddPatch))
+			.map(symbol => ({ op: 'add', path: '/-', value: symbol } as jsonpatch.Operation))
 			.startWith({ op: 'add', path: '', value: [] });
 	}
 
@@ -494,9 +495,9 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches that build a `Hover` result
 	 */
-	textDocumentHover(params: TextDocumentPositionParams, span = new Span()): Observable<OpPatch> {
+	textDocumentHover(params: TextDocumentPositionParams, span = new Span()): Observable<jsonpatch.Operation> {
 		return this._getHover(params, span)
-			.map(hover => ({ op: 'add', path: '', value: hover }) as AddPatch);
+			.map(hover => ({ op: 'add', path: '', value: hover }) as jsonpatch.Operation);
 	}
 
 	/**
@@ -572,7 +573,7 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches that build a `Location[]` result
 	 */
-	textDocumentReferences(params: ReferenceParams, span = new Span()): Observable<OpPatch> {
+	textDocumentReferences(params: ReferenceParams, span = new Span()): Observable<jsonpatch.Operation> {
 		const uri = normalizeUri(params.textDocument.uri);
 
 		// Ensure all files were fetched to collect all references
@@ -613,7 +614,7 @@ export class TypeScriptService {
 						const start = ts.getLineAndCharacterOfPosition(sourceFile, reference.textSpan.start);
 						const end = ts.getLineAndCharacterOfPosition(sourceFile, reference.textSpan.start + reference.textSpan.length);
 						return {
-							uri: path2uri(this.root, reference.fileName),
+							uri: path2uri(reference.fileName),
 							range: {
 								start,
 								end
@@ -621,7 +622,7 @@ export class TypeScriptService {
 						};
 					});
 			})
-			.map((location: Location): AddPatch => ({ op: 'add', path: '/-', value: location }))
+			.map((location: Location): jsonpatch.Operation => ({ op: 'add', path: '/-', value: location }))
 			// Initialize with array
 			.startWith({ op: 'add', path: '', value: [] });
 	}
@@ -633,7 +634,7 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches that build a `SymbolInformation[]` result
 	 */
-	workspaceSymbol(params: WorkspaceSymbolParams, span = new Span()): Observable<OpPatch> {
+	workspaceSymbol(params: WorkspaceSymbolParams, span = new Span()): Observable<jsonpatch.Operation> {
 
 		// Return cached result for empty query, if available
 		if (!params.query && !params.symbol && this.emptyQueryWorkspaceSymbols) {
@@ -705,10 +706,10 @@ export class TypeScriptService {
 				const index = scores.findIndex(s => s < score);
 				if (index === -1) {
 					scores.push(score);
-					return { op: 'add', path: '/-', value: symbol } as AddPatch;
+					return { op: 'add', path: '/-', value: symbol } as jsonpatch.Operation;
 				}
 				scores.splice(index, 0, score);
-				return { op: 'add', path: '/' + index, value: symbol } as AddPatch;
+				return { op: 'add', path: '/' + index, value: symbol } as jsonpatch.Operation;
 			})
 			.startWith({ op: 'add', path: '', value: [] });
 
@@ -725,7 +726,7 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches that build a `SymbolInformation[]` result
 	 */
-	textDocumentDocumentSymbol(params: DocumentSymbolParams, span = new Span()): Observable<OpPatch> {
+	textDocumentDocumentSymbol(params: DocumentSymbolParams, span = new Span()): Observable<jsonpatch.Operation> {
 		const uri = normalizeUri(params.textDocument.uri);
 
 		// Ensure files needed to resolve symbols are fetched
@@ -745,8 +746,8 @@ export class TypeScriptService {
 					.filter(({ tree, parent }) => navigationTreeIsSymbol(tree))
 					.map(({ tree, parent }) => navigationTreeToSymbolInformation(tree, parent, sourceFile, this.root));
 			})
-			.map(symbol => ({ op: 'add', path: '', value: symbol }) as AddPatch)
-			.startWith({ op: 'add', path: '', value: [] } as AddPatch);
+			.map(symbol => ({ op: 'add', path: '', value: symbol }) as jsonpatch.Operation)
+			.startWith({ op: 'add', path: '', value: [] } as jsonpatch.Operation);
 	}
 
 	/**
@@ -755,7 +756,7 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches that build a `ReferenceInformation[]` result
 	 */
-	workspaceXreferences(params: WorkspaceReferenceParams, span = new Span()): Observable<OpPatch> {
+	workspaceXreferences(params: WorkspaceReferenceParams, span = new Span()): Observable<jsonpatch.Operation> {
 		const queryWithoutPackage = omit(params.query, 'package');
 		return Observable.from(this.projectManager.ensureAllFiles(span))
 			.mergeMap<void, ProjectConfiguration>(() => {
@@ -806,7 +807,7 @@ export class TypeScriptService {
 											}
 											// If SymbolDescriptor matched and the query contains a PackageDescriptor, get package.json and match PackageDescriptor name
 											// TODO match full PackageDescriptor (version)
-											const uri = path2uri('', definition.fileName);
+											const uri = path2uri(definition.fileName);
 											return this._getPackageDescriptor(uri)
 												.mergeMap(packageDescriptor => {
 													symbol.package = packageDescriptor;
@@ -835,7 +836,7 @@ export class TypeScriptService {
 							})
 					);
 			})
-			.map((reference): AddPatch => ({ op: 'add', path: '/-', value: reference }))
+			.map((reference): jsonpatch.Operation => ({ op: 'add', path: '/-', value: reference }))
 			.startWith({ op: 'add', path: '', value: [] });
 	}
 
@@ -852,7 +853,7 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches that build a `PackageInformation[]` result
 	 */
-	workspaceXpackages(params = {}, span = new Span()): Observable<OpPatch> {
+	workspaceXpackages(params = {}, span = new Span()): Observable<jsonpatch.Operation> {
 		return this.isDefinitelyTyped
 			.mergeMap((isDefinitelyTyped: boolean): Observable<PackageInformation> => {
 				// In DefinitelyTyped, report all @types/ packages
@@ -911,7 +912,7 @@ export class TypeScriptService {
 							}));
 					});
 			})
-			.map((packageInfo): AddPatch => ({ op: 'add', path: '/-', value: packageInfo }))
+			.map((packageInfo): jsonpatch.Operation => ({ op: 'add', path: '/-', value: packageInfo }))
 			.startWith({ op: 'add', path: '', value: [] });
 	}
 
@@ -921,7 +922,7 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches that build a `DependencyReference[]` result
 	 */
-	workspaceXdependencies(params = {}, span = new Span()): Observable<OpPatch> {
+	workspaceXdependencies(params = {}, span = new Span()): Observable<jsonpatch.Operation> {
 		// Ensure package.json files
 		return Observable.from(this.projectManager.ensureModuleStructure())
 			// Iterate all files
@@ -946,7 +947,7 @@ export class TypeScriptService {
 						}
 					}))
 			)
-			.map((dependency): AddPatch => ({ op: 'add', path: '/-', value: dependency }))
+			.map((dependency): jsonpatch.Operation => ({ op: 'add', path: '/-', value: dependency }))
 			.startWith({ op: 'add', path: '', value: [] });
 	}
 
@@ -965,7 +966,7 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches that build a `CompletionList` result
 	 */
-	textDocumentCompletion(params: TextDocumentPositionParams, span = new Span()): Observable<OpPatch> {
+	textDocumentCompletion(params: TextDocumentPositionParams, span = new Span()): Observable<jsonpatch.Operation> {
 		const uri = normalizeUri(params.textDocument.uri);
 
 		// Ensure files needed to suggest completions are fetched
@@ -1005,11 +1006,11 @@ export class TypeScriptService {
 							item.documentation = ts.displayPartsToString(details.documentation);
 							item.detail = ts.displayPartsToString(details.displayParts);
 						}
-						return { op: 'add', path: '/items/-', value: item } as AddPatch;
+						return { op: 'add', path: '/items/-', value: item } as jsonpatch.Operation;
 					})
-					.startWith({ op: 'add', path: '/isIncomplete', value: false } as AddPatch);
+					.startWith({ op: 'add', path: '/isIncomplete', value: false } as jsonpatch.Operation);
 			})
-			.startWith({ op: 'add', path: '', value: { isIncomplete: true, items: [] } as CompletionList } as AddPatch);
+			.startWith({ op: 'add', path: '', value: { isIncomplete: true, items: [] } as CompletionList } as jsonpatch.Operation);
 	}
 
 	/**
@@ -1018,7 +1019,7 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches that build a `SignatureHelp` result
 	 */
-	textDocumentSignatureHelp(params: TextDocumentPositionParams, span = new Span()): Observable<OpPatch> {
+	textDocumentSignatureHelp(params: TextDocumentPositionParams, span = new Span()): Observable<jsonpatch.Operation> {
 		const uri = normalizeUri(params.textDocument.uri);
 
 		// Ensure files needed to resolve signature are fetched
@@ -1062,7 +1063,7 @@ export class TypeScriptService {
 					activeParameter: signatures.argumentIndex
 				};
 			})
-			.map(signatureHelp => ({ op: 'add', path: '', value: signatureHelp }) as AddPatch);
+			.map(signatureHelp => ({ op: 'add', path: '', value: signatureHelp }) as jsonpatch.Operation);
 	}
 
 	/**
@@ -1072,7 +1073,7 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches that build a `Command[]` result
 	 */
-	textDocumentCodeAction(params: CodeActionParams, span = new Span()): Observable<OpPatch> {
+	textDocumentCodeAction(params: CodeActionParams, span = new Span()): Observable<jsonpatch.Operation> {
 		const uri = normalizeUri(params.textDocument.uri);
 		return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
 			.toArray()
@@ -1099,7 +1100,7 @@ export class TypeScriptService {
 
 				return configuration.getService().getCodeFixesAtPosition(filePath, start, end, errorCodes, this.settings.format || {}) || [];
 			})
-			.map((action: ts.CodeAction): AddPatch => ({
+			.map((action: ts.CodeAction): jsonpatch.Operation => ({
 				op: 'add',
 				path: '/-',
 				value: {
@@ -1108,7 +1109,7 @@ export class TypeScriptService {
 					arguments: action.changes
 				} as Command
 			}))
-			.startWith({ op: 'add', path: '', value: [] } as AddPatch);
+			.startWith({ op: 'add', path: '', value: [] } as jsonpatch.Operation);
 	}
 
 	/**
@@ -1117,7 +1118,7 @@ export class TypeScriptService {
 	 * applies the changes to the workspace using the request workspace/applyEdit which is sent from
 	 * the server to the client.
 	 */
-	workspaceExecuteCommand(params: ExecuteCommandParams, span = new Span()): Observable<OpPatch> {
+	workspaceExecuteCommand(params: ExecuteCommandParams, span = new Span()): Observable<jsonpatch.Operation> {
 		switch (params.command) {
 			case 'codeFix':
 				if (!params.arguments || params.arguments.length < 1) {
@@ -1134,7 +1135,7 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches for `null` result
 	 */
-	executeCodeFixCommand(fileTextChanges: ts.FileTextChanges[], span = new Span()): Observable<OpPatch> {
+	executeCodeFixCommand(fileTextChanges: ts.FileTextChanges[], span = new Span()): Observable<jsonpatch.Operation> {
 		if (fileTextChanges.length === 0) {
 			return Observable.throw(new Error('No changes supplied for code fix command'));
 		}
@@ -1150,7 +1151,7 @@ export class TypeScriptService {
 					if (!sourceFile) {
 						throw new Error(`Expected source file ${change.fileName} to exist in configuration`);
 					}
-					const uri = path2uri(this.root, change.fileName);
+					const uri = path2uri(change.fileName);
 					changes[uri] = change.textChanges.map(({ span, newText }): TextEdit => ({
 						range: {
 							start: ts.getLineAndCharacterOfPosition(sourceFile, span.start),
@@ -1162,7 +1163,7 @@ export class TypeScriptService {
 
 				return this.client.workspaceApplyEdit({ edit: { changes }}, span);
 			})
-			.map(() => ({ op: 'add', path: '', value: null }) as AddPatch);
+			.map(() => ({ op: 'add', path: '', value: null }) as jsonpatch.Operation);
 	}
 
 	/**
@@ -1170,7 +1171,7 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches that build a `WorkspaceEdit` result
 	 */
-	textDocumentRename(params: RenameParams, span = new Span()): Observable<OpPatch> {
+	textDocumentRename(params: RenameParams, span = new Span()): Observable<jsonpatch.Operation> {
 		const uri = normalizeUri(params.textDocument.uri);
 		const editUris = new Set<string>();
 		return Observable.fromPromise(this.projectManager.ensureOwnFiles(span))
@@ -1201,14 +1202,14 @@ export class TypeScriptService {
 						if (!sourceFile) {
 							throw new Error(`expected source file ${location.fileName} to exist in configuration`);
 						}
-						const editUri = path2uri(this.root, location.fileName);
+						const editUri = path2uri(location.fileName);
 						const start = ts.getLineAndCharacterOfPosition(sourceFile, location.textSpan.start);
 						const end = ts.getLineAndCharacterOfPosition(sourceFile, location.textSpan.start + location.textSpan.length);
 						const edit: TextEdit = { range: { start, end }, newText: params.newName };
 						return [editUri, edit];
 					});
 			})
-			.map(([uri, edit]): AddPatch => {
+			.map(([uri, edit]): jsonpatch.Operation => {
 				// if file has no edit yet, initialize array
 				if (!editUris.has(uri)) {
 					editUris.add(uri);
@@ -1217,7 +1218,7 @@ export class TypeScriptService {
 				// else append to array
 				return { op: 'add', path: JSONPTR`/changes/${uri}/-`, value: edit };
 			})
-			.startWith({ op: 'add', path: '', value: { changes: {} } as WorkspaceEdit } as AddPatch);
+			.startWith({ op: 'add', path: '', value: { changes: {} } as WorkspaceEdit } as jsonpatch.Operation);
 	}
 
 	/**
@@ -1344,92 +1345,79 @@ export class TypeScriptService {
 	 * @return Observable of [match score, SymbolInformation]
 	 */
 	protected _getSymbolsInConfig(config: ProjectConfiguration, query?: string | Partial<SymbolDescriptor>, childOf = new Span()): Observable<[number, SymbolInformation]> {
-		const span = childOf.tracer().startSpan('Get symbols in config', { childOf });
-		span.addTags({ config: config.configFilePath, query });
+		return traceObservable('Get symbols in config', childOf, span => {
+			span.addTags({ config: config.configFilePath, query });
+			config.ensureAllFiles(span);
 
-		return (() => {
-			try {
-				config.ensureAllFiles(span);
-
-				const program = config.getProgram(span);
-				if (!program) {
-					return Observable.empty();
-				}
-
-				if (typeof query === 'string') {
-					// Query by text query
-					// Limit the amount of symbols searched for text queries
-					return Observable.from(config.getService().getNavigateToItems(query, 100, undefined, false))
-						// Exclude dependencies and standard library
-						.filter(item => !isTypeScriptLibrary(item.fileName) && !item.fileName.includes('/node_modules/'))
-						// Same score for all
-						.map(item => [1, navigateToItemToSymbolInformation(item, program, this.root)] as [number, SymbolInformation]);
-				} else {
-					const queryWithoutPackage = query && omit(query, 'package') as SymbolDescriptor;
-					// Require at least 2 properties to match (or all if less provided)
-					const minScore = Math.min(2, getPropertyCount(query));
-					const minScoreWithoutPackage = Math.min(2, getPropertyCount(queryWithoutPackage));
-					const service = config.getService();
-					return Observable.from(program.getSourceFiles())
-						// Exclude dependencies and standard library
-						.filter(sourceFile => !isTypeScriptLibrary(sourceFile.fileName) && !sourceFile.fileName.includes('/node_modules/'))
-						.mergeMap(sourceFile => {
-							try {
-								const tree = service.getNavigationTree(sourceFile.fileName);
-								const nodes = observableFromIterable(walkNavigationTree(tree))
-									.filter(({ tree, parent }) => navigationTreeIsSymbol(tree));
-								let matchedNodes: Observable<{ score: number, tree: ts.NavigationTree, parent?: ts.NavigationTree }>;
-								if (!query) {
-									matchedNodes = nodes
-										.map(({ tree, parent }) => ({ score: 1, tree, parent }));
-								} else {
-									matchedNodes = nodes
-										// Get a score how good the symbol matches the SymbolDescriptor (ignoring PackageDescriptor)
-										.map(({ tree, parent }) => {
-											const symbolDescriptor = navigationTreeToSymbolDescriptor(tree, parent, sourceFile.fileName, this.root);
-											const score = getMatchingPropertyCount(queryWithoutPackage, symbolDescriptor);
-											return { score, tree, parent };
-										})
-										// Require the minimum score without the PackageDescriptor name
-										.filter(({ score }) => score >= minScoreWithoutPackage)
-										// If SymbolDescriptor matched, get package.json and match PackageDescriptor name
-										// TODO get and match full PackageDescriptor (version)
-										.mergeMap(({ score, tree, parent }) => {
-											if (!query.package || !query.package.name) {
-												return [{ score, tree, parent }];
-											}
-											const uri = path2uri('', sourceFile.fileName);
-											return Observable.from(this.packageManager.getClosestPackageJson(uri, span))
-												// If PackageDescriptor matches, increase score
-												.map(packageJson => {
-													if (packageJson && packageJson.name === query.package!.name!) {
-														score++;
-													}
-													return { score, tree, parent };
-												});
-										})
-										// Require a minimum score to not return thousands of results
-										.filter(({ score }) => score >= minScore);
-								}
-								return matchedNodes
-									.map(({ score, tree, parent }) => [score, navigationTreeToSymbolInformation(tree, parent, sourceFile, this.root)] as [number, SymbolInformation]);
-							} catch (e) {
-								this.logger.error('Could not get navigation tree for file', sourceFile.fileName);
-								return [];
-							}
-						});
-				}
-			} catch (err) {
-				return Observable.throw(err);
+			const program = config.getProgram(span);
+			if (!program) {
+				return Observable.empty();
 			}
-		})()
-			.do(noop, err => {
-				span.setTag('error', true);
-				span.log({ 'event': 'error', 'error.object': err, 'stack': err.stack, 'message': err.message });
-			})
-			.finally(() => {
-				span.finish();
-			});
+
+			if (typeof query === 'string') {
+				// Query by text query
+				// Limit the amount of symbols searched for text queries
+				return Observable.from(config.getService().getNavigateToItems(query, 100, undefined, false))
+					// Exclude dependencies and standard library
+					.filter(item => !isTypeScriptLibrary(item.fileName) && !item.fileName.includes('/node_modules/'))
+					// Same score for all
+					.map(item => [1, navigateToItemToSymbolInformation(item, program, this.root)] as [number, SymbolInformation]);
+			} else {
+				const queryWithoutPackage = query && omit(query, 'package') as SymbolDescriptor;
+				// Require at least 2 properties to match (or all if less provided)
+				const minScore = Math.min(2, getPropertyCount(query));
+				const minScoreWithoutPackage = Math.min(2, getPropertyCount(queryWithoutPackage));
+				const service = config.getService();
+				return Observable.from(program.getSourceFiles())
+					// Exclude dependencies and standard library
+					.filter(sourceFile => !isTypeScriptLibrary(sourceFile.fileName) && !sourceFile.fileName.includes('/node_modules/'))
+					.mergeMap(sourceFile => {
+						try {
+							const tree = service.getNavigationTree(sourceFile.fileName);
+							const nodes = observableFromIterable(walkNavigationTree(tree))
+								.filter(({ tree, parent }) => navigationTreeIsSymbol(tree));
+							let matchedNodes: Observable<{ score: number, tree: ts.NavigationTree, parent?: ts.NavigationTree }>;
+							if (!query) {
+								matchedNodes = nodes
+									.map(({ tree, parent }) => ({ score: 1, tree, parent }));
+							} else {
+								matchedNodes = nodes
+									// Get a score how good the symbol matches the SymbolDescriptor (ignoring PackageDescriptor)
+									.map(({ tree, parent }) => {
+										const symbolDescriptor = navigationTreeToSymbolDescriptor(tree, parent, sourceFile.fileName, this.root);
+										const score = getMatchingPropertyCount(queryWithoutPackage, symbolDescriptor);
+										return { score, tree, parent };
+									})
+									// Require the minimum score without the PackageDescriptor name
+									.filter(({ score }) => score >= minScoreWithoutPackage)
+									// If SymbolDescriptor matched, get package.json and match PackageDescriptor name
+									// TODO get and match full PackageDescriptor (version)
+									.mergeMap(({ score, tree, parent }) => {
+										if (!query.package || !query.package.name) {
+											return [{ score, tree, parent }];
+										}
+										const uri = path2uri(sourceFile.fileName);
+										return Observable.from(this.packageManager.getClosestPackageJson(uri, span))
+											// If PackageDescriptor matches, increase score
+											.map(packageJson => {
+												if (packageJson && packageJson.name === query.package!.name!) {
+													score++;
+												}
+												return { score, tree, parent };
+											});
+									})
+									// Require a minimum score to not return thousands of results
+									.filter(({ score }) => score >= minScore);
+							}
+							return matchedNodes
+								.map(({ score, tree, parent }) => [score, navigationTreeToSymbolInformation(tree, parent, sourceFile, this.root)] as [number, SymbolInformation]);
+						} catch (e) {
+							this.logger.error('Could not get navigation tree for file', sourceFile.fileName);
+							return [];
+						}
+					});
+			}
+		});
 	}
 }
 

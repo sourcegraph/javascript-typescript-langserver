@@ -1,12 +1,9 @@
 import { Observable } from '@reactivex/rxjs';
-import * as os from 'os';
-import * as path from 'path';
+import jsonpatch from 'fast-json-patch';
 import { compareTwoStrings } from 'string-similarity';
 import * as ts from 'typescript';
 import * as url from 'url';
 import { PackageDescriptor, SymbolDescriptor } from './request-type';
-
-let strict = false;
 
 /**
  * Converts an Iterable to an Observable.
@@ -20,15 +17,7 @@ export function observableFromIterable<T>(iterable: Iterable<T>): Observable<T> 
  * Template string tag to escape JSON Pointer components as per https://tools.ietf.org/html/rfc6901#section-3
  */
 export function JSONPTR(strings: TemplateStringsArray, ...toEscape: string[]): string {
-	return strings.reduce((prev, curr, i) => prev + toEscape[i - 1].replace(/~/g, '~0').replace(/\//g, '~1') + curr);
-}
-
-/**
- * Toggles "strict" flag, affects how we are parsing/generating URLs.
- * In strict mode we using "file://PATH", otherwise on Windows we are using "file:///PATH"
- */
-export function setStrict(value: boolean) {
-	strict = value;
+	return strings.reduce((left, right, i) => left + jsonpatch.escapePathComponent(toEscape[i - 1]) + right);
 }
 
 /**
@@ -40,6 +29,7 @@ export function docstring(parts: ts.SymbolDisplayPart[]): string {
 
 /**
  * Normalizes path to match POSIX standard (slashes)
+ * This conversion should only be necessary to convert windows paths when calling TS APIs.
  */
 export function toUnixPath(filePath: string): string {
 	return filePath.replace(/\\/g, '/');
@@ -62,57 +52,52 @@ export function normalizeUri(uri: string): string {
 	return url.format(parts);
 }
 
-export function path2uri(root: string, file: string): string {
-	let ret = 'file://';
-	if (!strict && process.platform === 'win32') {
-		ret += '/';
+/**
+ * Converts an abolute path to a file:// uri
+ *
+ * @param path an absolute path
+ */
+export function path2uri(path: string): string {
+	// Require a leading slash, on windows prefixed with drive letter
+	if (!/^(?:[a-z]:)?[\\\/]/i.test(path)) {
+		throw new Error(`${path} is not an absolute path`);
 	}
-	let p;
-	if (root) {
-		p = resolve(root, file);
+
+	const parts = path.split(/[\\\/]/);
+
+	// If the first segment is a Windows drive letter, prefix with a slash and skip encoding
+	let head = parts.shift()!;
+	if (head !== '') {
+		head = '/' + head;
 	} else {
-		p = file;
+		head = encodeURIComponent(head);
 	}
-	if (/^[a-z]:[\\\/]/i.test(p)) {
-		p = '/' + p;
-	}
-	p = p.split(/[\\\/]/g).map((val, i) => i <= 1 && /^[a-z]:$/i.test(val) ? val : encodeURIComponent(val)).join('/');
-	return normalizeUri(ret + p);
+
+	return `file://${head}/${parts.map(encodeURIComponent).join('/')}`;
 }
 
+/**
+ * Converts a uri to an absolute path.
+ * The OS style is determined by the URI. E.g. `file:///c:/foo` always results in `c:\foo`
+ *
+ * @param uri a file:// uri
+ */
 export function uri2path(uri: string): string {
-	if (uri.startsWith('file://')) {
-		uri = uri.substring('file://'.length);
-		if (process.platform === 'win32') {
-			if (!strict) {
-				uri = uri.substring(1);
-			}
-		}
-		uri = uri.split('/').map(decodeURIComponent).join('/');
-	}
-	return uri;
-}
-
-export function uriToLocalPath(uri: string): string {
-	uri = uri.substring('file://'.length);
-	if (/^\/[a-z]:\//i.test(uri)) {
-		uri = uri.substring(1);
-	}
-	return uri.split('/').map(decodeURIComponent).join(path.sep);
-}
-
-export function isLocalUri(uri: string): boolean {
-	return uri.startsWith('file://');
-}
-
-export function resolve(root: string, file: string): string {
-	if (!strict || os.platform() !== 'win32') {
-		return path.resolve(root, file);
-	} else {
-		return path.posix.resolve(root, file);
+	const parts = url.parse(uri);
+	if (parts.protocol !== 'file:') {
+		throw new Error('Cannot resolve non-file uri to path: ' + uri);
 	}
 
+	let filePath = parts.pathname || '';
+
+	// If the path starts with a drive letter, return a Windows path
+	if (/^\/[a-z]:\//i.test(filePath)) {
+		filePath = filePath.substr(1).replace(/\//g, '\\');
+	}
+
+	return decodeURIComponent(filePath);
 }
+
 const jstsPattern = /\.[tj]sx?$/;
 
 export function isJSTSFile(filename: string): boolean {
@@ -163,32 +148,10 @@ export function isDeclarationFile(filename: string): boolean {
 }
 
 /**
- * Converts filename to POSIX-style absolute one if filename does not denote absolute path already
- */
-export function absolutize(filename: string) {
-	filename = toUnixPath(filename);
-	// If POSIX path does not treats filename as absolute, let's try system-specific one
-	if (!path.posix.isAbsolute(filename) && !path.isAbsolute(filename)) {
-		filename = '/' + filename;
-	}
-	return filename;
-}
-
-/**
- * Absolutizes directory name and cuts trailing slashes
- */
-export function normalizeDir(dir: string) {
-	dir = absolutize(dir);
-	if (dir !== '/') {
-		dir = dir.replace(/[\/]+$/, '');
-	}
-	return dir;
-}
-
-/**
  * Converts a ts.DefinitionInfo to a SymbolDescriptor
  */
 export function defInfoToSymbolDescriptor(info: ts.DefinitionInfo, rootPath: string): SymbolDescriptor {
+	const rootUnixPath = toUnixPath(rootPath);
 	const symbolDescriptor: SymbolDescriptor = {
 		kind: info.kind || '',
 		name: info.name || '',
@@ -207,9 +170,9 @@ export function defInfoToSymbolDescriptor(info: ts.DefinitionInfo, rootPath: str
 		symbolDescriptor.containerKind = ts.ScriptElementKind.moduleElement;
 	}
 	// Make paths relative to root paths
-	symbolDescriptor.containerName = symbolDescriptor.containerName.replace(rootPath, '');
-	symbolDescriptor.name = symbolDescriptor.name.replace(rootPath, '');
-	symbolDescriptor.filePath = symbolDescriptor.filePath.replace(rootPath, '');
+	symbolDescriptor.containerName = symbolDescriptor.containerName.replace(rootUnixPath, '');
+	symbolDescriptor.name = symbolDescriptor.name.replace(rootUnixPath, '');
+	symbolDescriptor.filePath = symbolDescriptor.filePath.replace(rootUnixPath, '');
 	return symbolDescriptor;
 }
 

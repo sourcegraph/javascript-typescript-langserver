@@ -5,7 +5,8 @@ import iterate from 'iterare';
 import { Span } from 'opentracing';
 import Semaphore from 'semaphore-async-await';
 import { InMemoryFileSystem } from './memfs';
-import { normalizeUri, uriToLocalPath } from './util';
+import { tracePromise } from './tracing';
+import { normalizeUri, uri2path } from './util';
 
 export interface FileSystem {
 	/**
@@ -58,7 +59,7 @@ export class LocalFileSystem implements FileSystem {
 	 * Converts the URI to an absolute path on the local disk
 	 */
 	protected resolveUriToPath(uri: string): string {
-		return uriToLocalPath(uri);
+		return uri2path(uri);
 	}
 
 	async getWorkspaceFiles(base = this.rootUri): Promise<Iterable<string>> {
@@ -144,8 +145,7 @@ export class FileSystemUpdater {
 	 * @param childOf A parent span for tracing
 	 */
 	fetchStructure(childOf = new Span()): Promise<void> {
-		const promise = (async () => {
-			const span = childOf.tracer().startSpan('Fetch workspace structure', { childOf });
+		const promise = tracePromise('Fetch workspace structure', childOf, async span => {
 			try {
 				const uris = await this.remoteFs.getWorkspaceFiles(undefined, span);
 				for (const uri of uris) {
@@ -153,13 +153,9 @@ export class FileSystemUpdater {
 				}
 			} catch (err) {
 				this.structureFetch = undefined;
-				span.setTag('error', true);
-				span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack });
 				throw err;
-			} finally {
-				span.finish();
 			}
-		})();
+		});
 		this.structureFetch = promise;
 		return promise;
 	}
