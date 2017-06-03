@@ -4,7 +4,7 @@ import * as ts from 'typescript';
 import { CompletionItemKind, CompletionList, DiagnosticSeverity, TextDocumentIdentifier, TextDocumentItem, WorkspaceEdit } from 'vscode-languageserver';
 import { Command, Diagnostic, Hover, Location, SignatureHelp, SymbolInformation, SymbolKind } from 'vscode-languageserver-types';
 import { LanguageClient, RemoteLanguageClient } from '../lang-handler';
-import { TextDocumentContentParams, WorkspaceFilesParams } from '../request-type';
+import { DependencyReference, PackageInformation, ReferenceInformation, TextDocumentContentParams, WorkspaceFilesParams } from '../request-type';
 import { SymbolLocationInformation } from '../request-type';
 import { TypeScriptService, TypeScriptServiceFactory } from '../typescript-service';
 import { toUnixPath, uri2path } from '../util';
@@ -847,7 +847,9 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		describe('workspaceXreferences()', function (this: TestContext) {
 			it('should return all references to a method', async function (this: TestContext) {
-				const result = await this.service.workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' } }).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise();
+				const result: ReferenceInformation[] = await this.service.workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' } })
+					.reduce<jsonpatch.Operation, ReferenceInformation[]>(jsonpatch.applyReducer, null as any)
+					.toPromise();
 				assert.deepEqual(result, [{
 					symbol: {
 						filePath: 'a.ts',
@@ -872,7 +874,9 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]);
 			} as any);
 			it('should return all references to a method with hinted dependee package name', async function (this: TestContext) {
-				const result = await this.service.workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' }, hints: { dependeePackageName: 'mypkg' } }).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise();
+				const result: ReferenceInformation[] = await this.service.workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' }, hints: { dependeePackageName: 'mypkg' } })
+					.reduce<jsonpatch.Operation, ReferenceInformation[]>(jsonpatch.applyReducer, null as any)
+					.toPromise();
 				assert.deepEqual(result, [{
 					symbol: {
 						filePath: 'a.ts',
@@ -901,7 +905,9 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				assert.deepEqual(result, []);
 			} as any);
 			it('should return all references to a symbol from a dependency', async function (this: TestContext) {
-				const result = await this.service.workspaceXreferences({ query: { name: 'x', containerName: '' } }).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise();
+				const result: ReferenceInformation[] = await this.service.workspaceXreferences({ query: { name: 'x', containerName: '' } })
+					.reduce<jsonpatch.Operation, ReferenceInformation[]>(jsonpatch.applyReducer, null as any)
+					.toPromise();
 				assert.deepEqual(result, [{
 					reference: {
 						range: {
@@ -926,7 +932,9 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]);
 			} as any);
 			it('should return all references to all symbols if empty SymbolDescriptor query is passed', async function (this: TestContext) {
-				const result = await this.service.workspaceXreferences({ query: {} }).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise();
+				const result: ReferenceInformation[] = await this.service.workspaceXreferences({ query: {} })
+					.reduce<jsonpatch.Operation, ReferenceInformation[]>(jsonpatch.applyReducer, null as any)
+					.toPromise();
 				assert.deepEqual(result, [
 					{
 						symbol: {
@@ -1174,7 +1182,9 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		describe('workspaceXdependencies()', function (this: TestContext) {
 			it('should account for all dependencies', async function (this: TestContext) {
-				const result = await this.service.workspaceXdependencies().reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise();
+				const result: DependencyReference[] = await this.service.workspaceXdependencies()
+					.reduce<jsonpatch.Operation, DependencyReference[]>(jsonpatch.applyReducer, null as any)
+					.toPromise();
 				assert.deepEqual(result, [
 					{ attributes: { name: 'babel-code-frame', version: '^6.16.0' }, hints: { dependeePackageName: 'tslint' } },
 					{ attributes: { name: 'findup-sync', version: '~0.3.0' }, hints: { dependeePackageName: 'tslint' } },
@@ -1191,7 +1201,9 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		} as any);
 		describe('workspaceXpackages()', function (this: TestContext) {
 			it('should accournt for all packages', async function (this: TestContext) {
-				const result = await this.service.workspaceXpackages().reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise();
+				const result: PackageInformation[] = await this.service.workspaceXpackages()
+					.reduce<jsonpatch.Operation, PackageInformation[]>(jsonpatch.applyReducer, null as any)
+					.toPromise();
 				assert.deepEqual(result, [{
 					package: {
 						name: 'tslint',
@@ -1300,7 +1312,10 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]
 			});
 
-			assert.deepEqual(await this.service.textDocumentHover(hoverParams).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise(), {
+			const result: Hover = await this.service.textDocumentHover(hoverParams)
+				.reduce<jsonpatch.Operation, Hover>(jsonpatch.applyReducer, null as any)
+				.toPromise();
+			assert.deepEqual(result, {
 				range,
 				contents: [
 					{ language: 'typescript', value: 'let parameters: number[]' },
@@ -1338,7 +1353,10 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}
 			});
 
-			assert.deepEqual(await this.service.textDocumentHover(hoverParams).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise(), {
+			const result: Hover = await this.service.textDocumentHover(hoverParams)
+				.reduce<jsonpatch.Operation, Hover>(jsonpatch.applyReducer, null as any)
+				.toPromise();
+			assert.deepEqual(result, {
 				range,
 				contents: [
 					{ language: 'typescript', value: 'let parameters: any[]' },
@@ -1370,13 +1388,18 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}
 			};
 
-			assert.deepEqual(await this.service.textDocumentHover(hoverParams).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise(), {
-				range,
-				contents: [
-					{ language: 'typescript', value: 'let parameters: any[]' },
-					'**let**'
-				]
-			});
+			{
+				const result: Hover = await this.service.textDocumentHover(hoverParams)
+					.reduce<jsonpatch.Operation, Hover>(jsonpatch.applyReducer, null as any)
+					.toPromise();
+				assert.deepEqual(result, {
+					range,
+					contents: [
+						{ language: 'typescript', value: 'let parameters: any[]' },
+						'**let**'
+					]
+				});
+			}
 
 			await this.service.textDocumentDidOpen({
 				textDocument: {
@@ -1387,13 +1410,18 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}
 			});
 
-			assert.deepEqual(await this.service.textDocumentHover(hoverParams).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise(), {
-				range,
-				contents: [
-					{ language: 'typescript', value: 'let parameters: string[]' },
-					'**let**'
-				]
-			});
+			{
+				const result: Hover = await this.service.textDocumentHover(hoverParams)
+					.reduce<jsonpatch.Operation, Hover>(jsonpatch.applyReducer, null as any)
+					.toPromise();
+				assert.deepEqual(result, {
+					range,
+					contents: [
+						{ language: 'typescript', value: 'let parameters: string[]' },
+						'**let**'
+					]
+				});
+			}
 
 			await this.service.textDocumentDidChange({
 				textDocument: {
@@ -1405,13 +1433,18 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]
 			});
 
-			assert.deepEqual(await this.service.textDocumentHover(hoverParams).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise(), {
-				range,
-				contents: [
-					{ language: 'typescript', value: 'let parameters: number[]' },
-					'**let**'
-				]
-			});
+			{
+				const result: Hover = await this.service.textDocumentHover(hoverParams)
+					.reduce<jsonpatch.Operation, Hover>(jsonpatch.applyReducer, null as any)
+					.toPromise();
+				assert.deepEqual(result, {
+					range,
+					contents: [
+						{ language: 'typescript', value: 'let parameters: number[]' },
+						'**let**'
+					]
+				});
+			}
 
 			await this.service.textDocumentDidClose({
 				textDocument: {
@@ -1419,13 +1452,18 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}
 			});
 
-			assert.deepEqual(await this.service.textDocumentHover(hoverParams).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise(), {
-				range,
-				contents: [
-					{ language: 'typescript', value: 'let parameters: any[]' },
-					'**let**'
-				]
-			});
+			{
+				const result: Hover = await this.service.textDocumentHover(hoverParams)
+					.reduce<jsonpatch.Operation, Hover>(jsonpatch.applyReducer, null as any)
+					.toPromise();
+				assert.deepEqual(result, {
+					range,
+					contents: [
+						{ language: 'typescript', value: 'let parameters: any[]' },
+						'**let**'
+					]
+				});
+			}
 		} as any);
 	} as any);
 
