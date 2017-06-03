@@ -569,12 +569,6 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	private fs: InMemoryFileSystem;
 
 	/**
-	 * List of files that project consist of (based on tsconfig includes/excludes and wildcards).
-	 * Each item is a relative file path
-	 */
-	expectedFilePaths: string[];
-
-	/**
 	 * Current list of files that were implicitly added to project
 	 * (every time when we need to extract data from a file that we haven't touched yet).
 	 * Each item is a relative file path
@@ -592,11 +586,10 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	 */
 	private versions: Map<string, number>;
 
-	constructor(rootPath: string, options: ts.CompilerOptions, fs: InMemoryFileSystem, expectedFiles: string[], versions: Map<string, number>, private logger: Logger = new NoopLogger()) {
+	constructor(rootPath: string, options: ts.CompilerOptions, fs: InMemoryFileSystem, versions: Map<string, number>, private logger: Logger = new NoopLogger()) {
 		this.rootPath = rootPath;
 		this.options = options;
 		this.fs = fs;
-		this.expectedFilePaths = expectedFiles;
 		this.versions = versions;
 		this.projectVersion = 1;
 		this.filePaths = [];
@@ -749,6 +742,12 @@ export class ProjectConfiguration {
 	private rootFilePath: string;
 
 	/**
+	 * List of files that project consist of (based on tsconfig includes/excludes and wildcards).
+	 * Each item is a relative file path
+	 */
+	expectedFilePaths: string[];
+
+	/**
 	 * @param fs file system to use
 	 * @param rootFilePath root file path, absolute
 	 * @param configFilePath configuration file path, absolute
@@ -761,6 +760,7 @@ export class ProjectConfiguration {
 		this.versions = versions;
 		this.traceModuleResolution = traceModuleResolution || false;
 		this.rootFilePath = rootFilePath;
+		this.expectedFilePaths = [];
 	}
 
 	/**
@@ -784,6 +784,7 @@ export class ProjectConfiguration {
 		this.service = undefined;
 		this.program = undefined;
 		this.host = undefined;
+		this.expectedFilePaths = [];
 	}
 
 	/**
@@ -846,7 +847,7 @@ export class ProjectConfiguration {
 		}
 		const base = dir || this.fs.path;
 		const configParseResult = ts.parseJsonConfigFileContent(configObject, this.fs, base);
-		const expFiles = configParseResult.fileNames;
+		this.expectedFilePaths = configParseResult.fileNames;
 
 		const options = configParseResult.options;
 		if (/(^|\/)jsconfig\.json$/.test(this.configFilePath)) {
@@ -859,7 +860,6 @@ export class ProjectConfiguration {
 			this.fs.path,
 			options,
 			this.fs,
-			expFiles,
 			this.versions,
 			this.logger
 		);
@@ -892,13 +892,11 @@ export class ProjectConfiguration {
 		}
 
 		// paths have been forward-slashified by TS (see toUnixPath below)
-		// TODO: consider moving expectedFilePaths out of LanguageServiceHost?
-		const expectedFilePaths = this.getHost().expectedFilePaths;
 
 		for (const uri of this.fs.uris()) {
 			const fileName = uri2path(uri);
 			if (isGlobalTSFile(fileName) ||
-				(isDeclarationFile(fileName) && expectedFilePaths.includes(toUnixPath(fileName)))) {
+				(isDeclarationFile(fileName) && this.expectedFilePaths.includes(toUnixPath(fileName)))) {
 				const sourceFile = program.getSourceFile(fileName);
 				if (!sourceFile) {
 					this.getHost().addFile(fileName);
@@ -940,7 +938,7 @@ export class ProjectConfiguration {
 		if (!program) {
 			return;
 		}
-		for (const fileName of (this.getHost().expectedFilePaths || [])) {
+		for (const fileName of this.expectedFilePaths) {
 			const sourceFile = program.getSourceFile(fileName);
 			if (!sourceFile) {
 				this.getHost().addFile(fileName);
