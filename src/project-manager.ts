@@ -11,6 +11,7 @@ import { InMemoryFileSystem } from './memfs';
 import { traceObservable, tracePromise, traceSync } from './tracing';
 import {
 	isConfigFile,
+	isDeclarationFile,
 	isGlobalTSFile,
 	isJSTSFile,
 	isPackageJsonFile,
@@ -889,22 +890,14 @@ export class ProjectConfiguration {
 			return;
 		}
 
-		// Add global declaration files from the whole workspace
+		// Add all global declaration files from the workspace and all declarations from the project
 		for (const uri of this.fs.uris()) {
 			const fileName = uri2path(uri);
-			if (isGlobalTSFile(fileName)) {
+			if (isGlobalTSFile(fileName) || (isDeclarationFile(fileName) && this.expectedFilePaths.has(toUnixPath(fileName)))) {
 				const sourceFile = program.getSourceFile(fileName);
 				if (!sourceFile) {
 					this.getHost().addFile(fileName);
 				}
-			}
-		}
-
-		// Add files that belong to the project according to tsconfig.json settings
-		for (const filePath of this.expectedFilePaths) {
-			const sourceFile = program.getSourceFile(filePath);
-			if (!sourceFile) {
-				this.getHost().addFile(filePath);
 			}
 		}
 		this.ensuredBasicFiles = true;
