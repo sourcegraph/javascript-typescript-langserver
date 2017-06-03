@@ -12,7 +12,6 @@ import { traceObservable, tracePromise, traceSync } from './tracing';
 import {
 	isConfigFile,
 	isDeclarationFile,
-	isDependencyFile,
 	isGlobalTSFile,
 	isJSTSFile,
 	isPackageJsonFile,
@@ -892,9 +891,14 @@ export class ProjectConfiguration {
 			return;
 		}
 
+		// paths have been forward-slashified by TS (see toUnixPath below)
+		// TODO: consider moving expectedFilePaths out of LanguageServiceHost?
+		const expectedFilePaths = this.getHost().expectedFilePaths;
+
 		for (const uri of this.fs.uris()) {
 			const fileName = uri2path(uri);
-			if (isGlobalTSFile(fileName) || (!isDependencyFile(fileName) && isDeclarationFile(fileName))) {
+			if (isGlobalTSFile(fileName) ||
+				(isDeclarationFile(fileName) && expectedFilePaths.includes(toUnixPath(fileName)))) {
 				const sourceFile = program.getSourceFile(fileName);
 				if (!sourceFile) {
 					this.getHost().addFile(fileName);
