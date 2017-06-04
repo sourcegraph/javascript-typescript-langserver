@@ -1,5 +1,6 @@
 import { Observable, Subscription } from '@reactivex/rxjs';
 import iterate from 'iterare';
+import { noop } from 'lodash';
 import { Span } from 'opentracing';
 import * as path from 'path';
 import * as ts from 'typescript';
@@ -7,7 +8,7 @@ import { Disposable } from './disposable';
 import { FileSystemUpdater } from './fs';
 import { Logger, NoopLogger } from './logging';
 import { InMemoryFileSystem } from './memfs';
-import { traceObservable, tracePromise, traceSync } from './tracing';
+import { traceObservable, traceSync } from './tracing';
 import {
 	isConfigFile,
 	isDeclarationFile,
@@ -71,17 +72,17 @@ export class ProjectManager implements Disposable {
 	 * Flag indicating that we fetched module struture (tsconfig.json, jsconfig.json, package.json files) from the remote file system.
 	 * Without having this information we won't be able to split workspace to sub-projects
 	 */
-	private ensuredModuleStructure?: Promise<void>;
+	private ensuredModuleStructure?: Observable<never>;
 
 	/**
-	 * Promise resolved when `ensureAllFiles` completed
+	 * Observable that completes when `ensureAllFiles` completed
 	 */
-	private ensuredAllFiles?: Promise<void>;
+	private ensuredAllFiles?: Observable<never>;
 
 	/**
-	 * Promise resolved when `ensureOwnFiles` completed
+	 * Observable that completes when `ensureOwnFiles` completed
 	 */
-	private ensuredOwnFiles?: Promise<void>;
+	private ensuredOwnFiles?: Observable<never>;
 
 	/**
 	 * A URI Map from file to files referenced by the file, so files only need to be pre-processed once
@@ -220,18 +221,17 @@ export class ProjectManager implements Disposable {
 	 * filesystem layout, global*.d.ts and package.json files.
 	 * Then creates new ProjectConfigurations, resets existing and invalidates file references.
 	 */
-	ensureModuleStructure(childOf = new Span()): Promise<void> {
-		return tracePromise('Ensure module structure', childOf, async span => {
-			try {
-				if (!this.ensuredModuleStructure) {
-					this.ensuredModuleStructure = (async () => {
-						await this.updater.ensureStructure().toPromise();
-						// Ensure content of all all global .d.ts, [tj]sconfig.json, package.json files
-						await observableFromIterable(this.inMemoryFs.uris())
-							.filter(uri => isGlobalTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
-							.mergeMap(uri => this.updater.ensure(uri))
-							.toPromise();
-
+	ensureModuleStructure(childOf = new Span()): Observable<never> {
+		return traceObservable('Ensure module structure', childOf, span => {
+			if (!this.ensuredModuleStructure) {
+				this.ensuredModuleStructure = this.updater.ensureStructure()
+					// Ensure content of all all global .d.ts, [tj]sconfig.json, package.json files
+					.concat(Observable.defer(() => observableFromIterable(this.inMemoryFs.uris())))
+					.filter(uri => isGlobalTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
+					.mergeMap(uri => this.updater.ensure(uri))
+					.do(noop, err => {
+						this.ensuredModuleStructure = undefined;
+					}, () => {
 						// Reset all compilation state
 						// TODO ze incremental compilation instead
 						for (const config of this.configurations()) {
@@ -239,13 +239,11 @@ export class ProjectManager implements Disposable {
 						}
 						// Require re-processing of file references
 						this.invalidateReferencedFiles();
-					})();
-				}
-				await this.ensuredModuleStructure;
-			} catch (err) {
-				this.ensuredModuleStructure = undefined;
-				throw err;
+					})
+					.publishReplay()
+					.refCount();
 			}
+			return this.ensuredModuleStructure;
 		});
 	}
 
@@ -263,23 +261,20 @@ export class ProjectManager implements Disposable {
 	 * This includes all js/ts files, tsconfig files and package.json files.
 	 * Invalidates project configurations after execution
 	 */
-	ensureOwnFiles(childOf = new Span()): Promise<void> {
-		return tracePromise('Ensure own files', childOf, async span => {
-			try {
-				if (!this.ensuredOwnFiles) {
-					this.ensuredOwnFiles = (async () => {
-						await this.updater.ensureStructure(span).toPromise();
-						await observableFromIterable(this.inMemoryFs.uris())
-							.filter(uri => !uri.includes('/node_modules/') && isJSTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
-							.mergeMap(uri => this.updater.ensure(uri))
-							.toPromise();
-					})();
-				}
-				await this.ensuredOwnFiles;
-			} catch (err) {
-				this.ensuredOwnFiles = undefined;
-				throw err;
+	ensureOwnFiles(childOf = new Span()): Observable<never> {
+		return traceObservable('Ensure own files', childOf, span => {
+			if (!this.ensuredOwnFiles) {
+				this.ensuredOwnFiles = this.updater.ensureStructure(span)
+					.concat(Observable.defer(() => observableFromIterable(this.inMemoryFs.uris())))
+					.filter(uri => !uri.includes('/node_modules/') && isJSTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
+					.mergeMap(uri => this.updater.ensure(uri))
+					.do(noop, err => {
+						this.ensuredOwnFiles = undefined;
+					})
+					.publishReplay()
+					.refCount();
 			}
+			return this.ensuredOwnFiles;
 		});
 	}
 
@@ -287,23 +282,20 @@ export class ProjectManager implements Disposable {
 	 * Ensures all files were fetched from the remote file system.
 	 * Invalidates project configurations after execution
 	 */
-	ensureAllFiles(childOf = new Span()): Promise<void> {
-		return tracePromise('Ensure all files', childOf, async span => {
-			try {
-				if (!this.ensuredAllFiles) {
-					this.ensuredAllFiles = (async () => {
-						await this.updater.ensureStructure(span).toPromise();
-						await observableFromIterable(this.inMemoryFs.uris())
-							.filter(uri => isJSTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
-							.mergeMap(uri => this.updater.ensure(uri))
-							.toPromise();
-					})();
-				}
-				await this.ensuredAllFiles;
-			} catch (err) {
-				this.ensuredAllFiles = undefined;
-				throw err;
+	ensureAllFiles(childOf = new Span()): Observable<never> {
+		return traceObservable('Ensure all files', childOf, span => {
+			if (!this.ensuredAllFiles) {
+				this.ensuredAllFiles = this.updater.ensureStructure(span)
+					.concat(Observable.defer(() => observableFromIterable(this.inMemoryFs.uris())))
+					.filter(uri => isJSTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
+					.mergeMap(uri => this.updater.ensure(uri))
+					.do(noop, err => {
+						this.ensuredAllFiles = undefined;
+					})
+					.publishReplay()
+					.refCount();
 			}
+			return this.ensuredAllFiles;
 		});
 	}
 
@@ -328,9 +320,9 @@ export class ProjectManager implements Disposable {
 		return traceObservable('Ensure referenced files', childOf, span => {
 			span.addTags({ uri, maxDepth });
 			ignore.add(uri);
-			return Observable.from(this.ensureModuleStructure(span))
+			return this.ensureModuleStructure(span)
 				// If max depth was reached, don't go any further
-				.mergeMap(() => maxDepth === 0 ? [] : this.resolveReferencedFiles(uri))
+				.concat(Observable.defer(() => maxDepth === 0 ? Observable.empty<never>() : this.resolveReferencedFiles(uri)))
 				// Prevent cycles
 				.filter(referencedUri => !ignore.has(referencedUri))
 				// Call method recursively with one less dep level
@@ -403,9 +395,8 @@ export class ProjectManager implements Disposable {
 			// Use same scheme, slashes, host for referenced URI as input file
 			.map(filePath => path2uri(filePath))
 			// Don't cache errors
-			.catch(err => {
+			.do(noop, err => {
 				this.referencedFiles.delete(uri);
-				throw err;
 			})
 			// Make sure all subscribers get the same values
 			.publishReplay()

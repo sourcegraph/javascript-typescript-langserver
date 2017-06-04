@@ -35,7 +35,7 @@ describe('ProjectManager', () => {
 			]));
 			const updater = new FileSystemUpdater(localfs, memfs);
 			projectManager = new ProjectManager('/', memfs, updater, true);
-			await projectManager.ensureAllFiles();
+			await projectManager.ensureAllFiles().toPromise();
 		});
 	});
 	describe('ensureReferencedFiles()', () => {
@@ -67,7 +67,7 @@ describe('ProjectManager', () => {
 			]));
 			const updater = new FileSystemUpdater(localfs, memfs);
 			projectManager = new ProjectManager('/', memfs, updater, true);
-			await projectManager.ensureAllFiles();
+			await projectManager.ensureAllFiles().toPromise();
 		});
 		it('should resolve best configuration based on file name', () => {
 			const jsConfig = projectManager.getConfiguration('/src/foo.js');
@@ -85,7 +85,7 @@ describe('ProjectManager', () => {
 			]));
 			const updater = new FileSystemUpdater(localfs, memfs);
 			projectManager = new ProjectManager('/', memfs, updater, true);
-			await projectManager.ensureAllFiles();
+			await projectManager.ensureAllFiles().toPromise();
 		});
 		it('should resolve best configuration based on file name', () => {
 			const config = projectManager.getParentConfiguration('file:///src/foo.ts');
@@ -103,7 +103,7 @@ describe('ProjectManager', () => {
 			]));
 			const updater = new FileSystemUpdater(localfs, memfs);
 			projectManager = new ProjectManager('/', memfs, updater, true);
-			await projectManager.ensureAllFiles();
+			await projectManager.ensureAllFiles().toPromise();
 		});
 		it('should resolve best configuration based on file name', () => {
 			const configs = Array.from(projectManager.getChildConfigurations('file:///foo')).map(config => config.configFilePath);

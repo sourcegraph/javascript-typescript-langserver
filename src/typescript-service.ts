@@ -579,8 +579,8 @@ export class TypeScriptService {
 		const uri = normalizeUri(params.textDocument.uri);
 
 		// Ensure all files were fetched to collect all references
-		return Observable.from(this.projectManager.ensureOwnFiles(span))
-			.mergeMap(() => {
+		return this.projectManager.ensureOwnFiles(span)
+			.concat(Observable.defer(() => {
 				// Convert URI to file path because TypeScript doesn't work with URIs
 				const fileName = uri2path(uri);
 				// Get tsconfig configuration for requested file
@@ -589,7 +589,7 @@ export class TypeScriptService {
 				configuration.ensureAllFiles(span);
 				const program = configuration.getProgram(span);
 				if (!program) {
-					return [];
+					return Observable.empty<never>();
 				}
 				// Get SourceFile object for requested file
 				const sourceFile = this._getSourceFile(configuration, fileName, span);
@@ -623,7 +623,7 @@ export class TypeScriptService {
 							}
 						};
 					});
-			})
+			}))
 			.map((location: Location): jsonpatch.Operation => ({ op: 'add', path: '/-', value: location }))
 			// Initialize with array
 			.startWith({ op: 'add', path: '', value: [] });
@@ -677,21 +677,22 @@ export class TypeScriptService {
 				}
 				// Regular workspace symbol search
 				// Search all symbols in own code, but not in dependencies
-				return Observable.from(this.projectManager.ensureOwnFiles(span))
-					.mergeMap(() =>
-						params.symbol && params.symbol.package && params.symbol.package.name
+				return this.projectManager.ensureOwnFiles(span)
+					.concat(Observable.defer(() => {
+						if (params.symbol && params.symbol.package && params.symbol.package.name) {
 							// If SymbolDescriptor query with PackageDescriptor, search for package.jsons with matching package name
-							? observableFromIterable(this.packageManager.packageJsonUris())
+							return observableFromIterable(this.packageManager.packageJsonUris())
 								.filter(packageJsonUri => (JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri)) as PackageJson).name === params.symbol!.package!.name)
 								// Find their parent and child tsconfigs
 								.mergeMap(packageJsonUri => Observable.merge(
 									castArray<ProjectConfiguration>(this.projectManager.getParentConfiguration(packageJsonUri) || []),
 									// Search child directories starting at the directory of the package.json
 									observableFromIterable(this.projectManager.getChildConfigurations(url.resolve(packageJsonUri, '.')))
-								))
-							// Else search all tsconfigs in the workspace
-							: observableFromIterable(this.projectManager.configurations())
-					)
+								));
+						}
+						// Else search all tsconfigs in the workspace
+						return observableFromIterable(this.projectManager.configurations());
+					}))
 					// If PackageDescriptor is given, only search project with the matching package name
 					.mergeMap(config => this._getSymbolsInConfig(config, params.query || params.symbol, span));
 			})
@@ -767,7 +768,7 @@ export class TypeScriptService {
 				}
 				return this.projectManager.ensureAllFiles(span);
 			})
-			.mergeMap(() => {
+			.concat(Observable.defer(() => {
 				// if we were hinted that we should only search a specific package, find it and only search the owning tsconfig.json
 				if (params.hints && params.hints.dependeePackageName) {
 					return observableFromIterable(this.packageManager.packageJsonUris())
@@ -783,12 +784,12 @@ export class TypeScriptService {
 				}
 				// else search all tsconfig.jsons
 				return observableFromIterable(this.projectManager.configurations());
-			})
+			}))
 			.mergeMap((config: ProjectConfiguration) => {
 				config.ensureAllFiles(span);
 				const program = config.getProgram(span);
 				if (!program) {
-					return Observable.empty();
+					return Observable.empty<never>();
 				}
 				return Observable.from(program.getSourceFiles())
 					// Ignore dependency files
@@ -882,9 +883,9 @@ export class TypeScriptService {
 						}));
 				}
 				// For other workspaces, search all package.json files
-				return Observable.from(this.projectManager.ensureModuleStructure(span))
+				return this.projectManager.ensureModuleStructure(span)
 					// Iterate all files
-					.mergeMap(() => observableFromIterable(this.inMemoryFileSystem.uris()))
+					.concat(Observable.defer(() => observableFromIterable(this.inMemoryFileSystem.uris())))
 					// Filter own package.jsons
 					.filter(uri => uri.includes('/package.json') && !uri.includes('/node_modules/'))
 					// Map to contents of package.jsons
@@ -933,9 +934,9 @@ export class TypeScriptService {
 	 */
 	workspaceXdependencies(params = {}, span = new Span()): Observable<jsonpatch.Operation> {
 		// Ensure package.json files
-		return Observable.from(this.projectManager.ensureModuleStructure())
+		return this.projectManager.ensureModuleStructure()
 			// Iterate all files
-			.mergeMap(() => observableFromIterable(this.inMemoryFileSystem.uris()))
+			.concat(Observable.defer(() => observableFromIterable(this.inMemoryFileSystem.uris())))
 			// Filter own package.jsons
 			.filter(uri => uri.includes('/package.json') && !uri.includes('/node_modules/'))
 			// Ensure contents of own package.jsons
@@ -1149,8 +1150,8 @@ export class TypeScriptService {
 			return Observable.throw(new Error('No changes supplied for code fix command'));
 		}
 
-		return Observable.from(this.projectManager.ensureOwnFiles(span))
-			.mergeMap(() => {
+		return this.projectManager.ensureOwnFiles(span)
+			.concat(Observable.defer(() => {
 				const configuration = this.projectManager.getConfiguration(fileTextChanges[0].fileName);
 				configuration.ensureBasicFiles(span);
 
@@ -1171,7 +1172,7 @@ export class TypeScriptService {
 				}
 
 				return this.client.workspaceApplyEdit({ edit: { changes }}, span);
-			})
+			}))
 			.map(() => ({ op: 'add', path: '', value: null }) as jsonpatch.Operation);
 	}
 
@@ -1183,8 +1184,8 @@ export class TypeScriptService {
 	textDocumentRename(params: RenameParams, span = new Span()): Observable<jsonpatch.Operation> {
 		const uri = normalizeUri(params.textDocument.uri);
 		const editUris = new Set<string>();
-		return Observable.fromPromise(this.projectManager.ensureOwnFiles(span))
-			.mergeMap(() => {
+		return this.projectManager.ensureOwnFiles(span)
+			.concat(Observable.defer(() => {
 
 				const filePath = uri2path(uri);
 				const configuration = this.projectManager.getParentConfiguration(params.textDocument.uri);
@@ -1217,7 +1218,7 @@ export class TypeScriptService {
 						const edit: TextEdit = { range: { start, end }, newText: params.newName };
 						return [editUri, edit];
 					});
-			})
+			}))
 			.map(([uri, edit]): jsonpatch.Operation => {
 				// if file has no edit yet, initialize array
 				if (!editUris.has(uri)) {
@@ -1360,7 +1361,7 @@ export class TypeScriptService {
 
 			const program = config.getProgram(span);
 			if (!program) {
-				return Observable.empty();
+				return Observable.empty<never>();
 			}
 
 			if (typeof query === 'string') {

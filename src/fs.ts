@@ -1,11 +1,12 @@
 import * as fs from 'mz/fs';
 import { LanguageClient } from './lang-handler';
 import glob = require('glob');
+import { Observable } from '@reactivex/rxjs';
 import iterate from 'iterare';
 import { Span } from 'opentracing';
 import Semaphore from 'semaphore-async-await';
 import { InMemoryFileSystem } from './memfs';
-import { tracePromise } from './tracing';
+import { traceObservable } from './tracing';
 import { normalizeUri, uri2path } from './util';
 
 export interface FileSystem {
@@ -91,14 +92,14 @@ export class LocalFileSystem implements FileSystem {
 export class FileSystemUpdater {
 
 	/**
-	 * Promise for a pending or fulfilled structure fetch
+	 * Observable for a pending or completed structure fetch
 	 */
-	private structureFetch?: Promise<void>;
+	private structureFetch?: Observable<never>;
 
 	/**
-	 * Map from URI to Promise of pending or fulfilled content fetch
+	 * Map from URI to Observable of pending or completed content fetch
 	 */
-	private fetches = new Map<string, Promise<void>>();
+	private fetches = new Map<string, Observable<never>>();
 
 	/**
 	 * Limits concurrent fetches to not fetch thousands of files in parallel
@@ -112,20 +113,22 @@ export class FileSystemUpdater {
 	 *
 	 * @param uri URI of the file to fetch
 	 * @param childOf A parent span for tracing
+	 * @return Observable that completes when the fetch is finished
 	 */
-	async fetch(uri: string, childOf = new Span()): Promise<void> {
+	fetch(uri: string, childOf = new Span()): Observable<never> {
 		// Limit concurrent fetches
-		const promise = this.concurrencyLimit.execute(async () => {
-			try {
-				const content = await this.remoteFs.getTextDocumentContent(uri);
+		const observable = Observable.from(this.concurrencyLimit.wait())
+			.mergeMap(() => this.remoteFs.getTextDocumentContent(uri))
+			.do(content => {
 				this.inMemoryFs.add(uri, content);
-			} catch (err) {
+			}, err => {
 				this.fetches.delete(uri);
-				throw err;
-			}
-		});
-		this.fetches.set(uri, promise);
-		return promise;
+			})
+			.ignoreElements()
+			.publishReplay()
+			.refCount();
+		this.fetches.set(uri, observable);
+		return observable;
 	}
 
 	/**
@@ -134,9 +137,10 @@ export class FileSystemUpdater {
 	 *
 	 * @param uri URI of the file to ensure
 	 * @param childOf An OpenTracing span for tracing
+	 * @return Observable that completes when the file was fetched
 	 */
-	ensure(uri: string, childOf = new Span()): Promise<void> {
-		return tracePromise('Ensure content', childOf, span => {
+	ensure(uri: string, childOf = new Span()): Observable<never> {
+		return traceObservable('Ensure content', childOf, span => {
 			span.addTags({ uri });
 			return this.fetches.get(uri) || this.fetch(uri, span);
 		});
@@ -147,20 +151,22 @@ export class FileSystemUpdater {
 	 *
 	 * @param childOf A parent span for tracing
 	 */
-	fetchStructure(childOf = new Span()): Promise<void> {
-		const promise = tracePromise('Fetch workspace structure', childOf, async span => {
-			try {
-				const uris = await this.remoteFs.getWorkspaceFiles(undefined, span);
-				for (const uri of uris) {
-					this.inMemoryFs.add(uri);
-				}
-			} catch (err) {
-				this.structureFetch = undefined;
-				throw err;
-			}
-		});
-		this.structureFetch = promise;
-		return promise;
+	fetchStructure(childOf = new Span()): Observable<never> {
+		const observable = traceObservable('Fetch workspace structure', childOf, span =>
+			Observable.from(this.remoteFs.getWorkspaceFiles(undefined, span))
+				.do(uris => {
+					for (const uri of uris) {
+						this.inMemoryFs.add(uri);
+					}
+				}, err => {
+					this.structureFetch = undefined;
+				})
+				.ignoreElements()
+				.publishReplay()
+				.refCount()
+		);
+		this.structureFetch = observable;
+		return observable;
 	}
 
 	/**
@@ -170,7 +176,7 @@ export class FileSystemUpdater {
 	 * @param span An OpenTracing span for tracing
 	 */
 	ensureStructure(childOf = new Span()) {
-		return tracePromise('Ensure structure', childOf, span => {
+		return traceObservable('Ensure structure', childOf, span => {
 			return this.structureFetch || this.fetchStructure(span);
 		});
 	}
