@@ -55,7 +55,7 @@ export class ProjectManager implements Disposable {
 	/**
 	 * Local side of file content provider which keeps cache of fetched files
 	 */
-	private localFs: InMemoryFileSystem;
+	private inMemoryFs: InMemoryFileSystem;
 
 	/**
 	 * File system updater that takes care of updating the in-memory file system
@@ -115,7 +115,7 @@ export class ProjectManager implements Disposable {
 	) {
 		this.rootPath = toUnixPath(rootPath);
 		this.updater = updater;
-		this.localFs = inMemoryFileSystem;
+		this.inMemoryFs = inMemoryFileSystem;
 		this.versions = new Map<string, number>();
 		this.strict = strict;
 		this.traceModuleResolution = traceModuleResolution || false;
@@ -138,7 +138,7 @@ export class ProjectManager implements Disposable {
 				include: { js: ['**/*.js', '**/*.jsx'], ts: ['**/*.ts', '**/*.tsx'] }[configType]
 			};
 			const config = new ProjectConfiguration(
-				this.localFs,
+				this.inMemoryFs,
 				documentRegistry,
 				trimmedRootPath,
 				this.versions,
@@ -167,7 +167,7 @@ export class ProjectManager implements Disposable {
 					const configType = this.getConfigurationType(filePath);
 					const configs = this.configs[configType];
 					configs.set(dir, new ProjectConfiguration(
-						this.localFs,
+						this.inMemoryFs,
 						documentRegistry,
 						dir,
 						this.versions,
@@ -202,7 +202,7 @@ export class ProjectManager implements Disposable {
 	 * @return local side of file content provider which keeps cached copies of fethed files
 	 */
 	getFs(): InMemoryFileSystem {
-		return this.localFs;
+		return this.inMemoryFs;
 	}
 
 	/**
@@ -210,7 +210,7 @@ export class ProjectManager implements Disposable {
 	 * @return true if there is a fetched file with a given path
 	 */
 	hasFile(filePath: string) {
-		return this.localFs.fileExists(filePath);
+		return this.inMemoryFs.fileExists(filePath);
 	}
 
 	/**
@@ -236,7 +236,7 @@ export class ProjectManager implements Disposable {
 						await this.updater.ensureStructure();
 						// Ensure content of all all global .d.ts, [tj]sconfig.json, package.json files
 						await Promise.all(
-							iterate(this.localFs.uris())
+							iterate(this.inMemoryFs.uris())
 								.filter(uri => isGlobalTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
 								.map(uri => this.updater.ensure(uri))
 						);
@@ -278,7 +278,7 @@ export class ProjectManager implements Disposable {
 					this.ensuredOwnFiles = (async () => {
 						await this.updater.ensureStructure(span);
 						await Promise.all(
-							iterate(this.localFs.uris())
+							iterate(this.inMemoryFs.uris())
 								.filter(uri => !uri.includes('/node_modules/') && isJSTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
 								.map(uri => this.updater.ensure(uri))
 						);
@@ -303,7 +303,7 @@ export class ProjectManager implements Disposable {
 					this.ensuredAllFiles = (async () => {
 						await this.updater.ensureStructure(span);
 						await Promise.all(
-							iterate(this.localFs.uris())
+							iterate(this.inMemoryFs.uris())
 								.filter(uri => isJSTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
 								.map(uri => this.updater.ensure(uri))
 						);
@@ -386,7 +386,7 @@ export class ProjectManager implements Disposable {
 			.mergeMap(() => {
 				const config = this.getConfiguration(filePath);
 				config.ensureBasicFiles(span);
-				const contents = this.localFs.getContent(uri);
+				const contents = this.inMemoryFs.getContent(uri);
 				const info = ts.preProcessFile(contents, true, true);
 				const compilerOpt = config.getHost().getCompilationSettings();
 				// TODO remove platform-specific behavior here, the host OS is not coupled to the client OS
@@ -395,7 +395,7 @@ export class ProjectManager implements Disposable {
 				return Observable.merge(
 					// References with `import`
 					Observable.from(info.importedFiles)
-						.map(importedFile => ts.resolveModuleName(importedFile.fileName, toUnixPath(filePath), compilerOpt, this.localFs))
+						.map(importedFile => ts.resolveModuleName(importedFile.fileName, toUnixPath(filePath), compilerOpt, this.inMemoryFs))
 						// false means we didn't find a file defining the module. It
 						// could still exist as an ambient module, which is why we
 						// fetch global*.d.ts files.
@@ -418,7 +418,7 @@ export class ProjectManager implements Disposable {
 								typeReferenceDirective.fileName,
 								filePath,
 								compilerOpt,
-								this.localFs
+								this.inMemoryFs
 							)
 						)
 						.filter(resolved => !!(resolved && resolved.resolvedTypeReferenceDirective && resolved.resolvedTypeReferenceDirective.resolvedFileName))
@@ -513,7 +513,7 @@ export class ProjectManager implements Disposable {
 	 */
 	didClose(uri: string, span = new Span()) {
 		const filePath = uri2path(uri);
-		this.localFs.didClose(uri);
+		this.inMemoryFs.didClose(uri);
 		let version = this.versions.get(uri) || 0;
 		this.versions.set(uri, ++version);
 		const config = this.getConfigurationIfExists(filePath);
@@ -531,7 +531,7 @@ export class ProjectManager implements Disposable {
 	 */
 	didChange(uri: string, text: string, span = new Span()) {
 		const filePath = uri2path(uri);
-		this.localFs.didChange(uri, text);
+		this.inMemoryFs.didChange(uri, text);
 		let version = this.versions.get(uri) || 0;
 		this.versions.set(uri, ++version);
 		const config = this.getConfigurationIfExists(filePath);
@@ -548,7 +548,7 @@ export class ProjectManager implements Disposable {
 	 * @param uri file's URI
 	 */
 	didSave(uri: string) {
-		this.localFs.didSave(uri);
+		this.inMemoryFs.didSave(uri);
 	}
 
 	/**
