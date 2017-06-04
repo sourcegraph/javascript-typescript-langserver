@@ -44,6 +44,7 @@ import {
 	InitializeResult,
 	PackageDescriptor,
 	PackageInformation,
+	ReferenceInformation,
 	SymbolDescriptor,
 	SymbolLocationInformation,
 	WorkspaceReferenceParams,
@@ -53,7 +54,6 @@ import {
 	defInfoToSymbolDescriptor,
 	getMatchingPropertyCount,
 	getPropertyCount,
-	isSymbolDescriptorMatch,
 	JSONPTR,
 	normalizeUri,
 	observableFromIterable,
@@ -761,14 +761,21 @@ export class TypeScriptService {
 	 */
 	workspaceXreferences(params: WorkspaceReferenceParams, span = new Span()): Observable<jsonpatch.Operation> {
 		const queryWithoutPackage = omit(params.query, 'package');
-		return Observable.from(this.projectManager.ensureAllFiles(span))
-			.mergeMap<void, ProjectConfiguration>(() => {
+		const minScore = Math.min(4.75, getPropertyCount(queryWithoutPackage));
+		return this.isDefinitelyTyped
+			.mergeMap(isDefinitelyTyped => {
+				if (isDefinitelyTyped) {
+					throw new Error('workspace/xreferences not supported in DefinitelyTyped');
+				}
+				return this.projectManager.ensureAllFiles(span);
+			})
+			.mergeMap(() => {
 				// if we were hinted that we should only search a specific package, find it and only search the owning tsconfig.json
 				if (params.hints && params.hints.dependeePackageName) {
 					return observableFromIterable(this.packageManager.packageJsonUris())
 						.filter(uri => (JSON.parse(this.inMemoryFileSystem.getContent(uri)) as PackageJson).name === params.hints!.dependeePackageName)
 						.take(1)
-						.mergeMap<string, ProjectConfiguration>(uri => {
+						.mergeMap(uri => {
 							const config = this.projectManager.getParentConfiguration(uri);
 							if (!config) {
 								return observableFromIterable(this.projectManager.configurations());
@@ -796,35 +803,36 @@ export class TypeScriptService {
 							.filter((node): node is ts.Identifier => node.kind === ts.SyntaxKind.Identifier)
 							.mergeMap(node => {
 								try {
-									// Get DefinitionInformations at the node
+									// Find definition for node
 									return Observable.from(config.getService().getDefinitionAtPosition(source.fileName, node.pos + 1) || [])
 										.mergeMap(definition => {
 											const symbol = defInfoToSymbolDescriptor(definition, this.root);
 											// Check if SymbolDescriptor without PackageDescriptor matches
-											if (!isSymbolDescriptorMatch(queryWithoutPackage, symbol)) {
+											const score = getMatchingPropertyCount(queryWithoutPackage, symbol);
+											if (score < minScore || (params.query.package && !definition.fileName.includes(params.query.package.name))) {
 												return [];
 											}
+											span.log({ event: 'match', score });
 											// If no PackageDescriptor query, return match
 											if (!params.query.package || !params.query.package) {
 												return [symbol];
 											}
 											// If SymbolDescriptor matched and the query contains a PackageDescriptor, get package.json and match PackageDescriptor name
-											// TODO match full PackageDescriptor (version)
+											// TODO match full PackageDescriptor (version) and fill out the symbol.package field
 											const uri = path2uri(definition.fileName);
-											return this._getPackageDescriptor(uri)
-												.mergeMap(packageDescriptor => {
+											return Observable.from(this._getPackageDescriptor(uri, span))
+												.filter(packageDescriptor => !!(packageDescriptor && packageDescriptor.name === params.query.package!.name!))
+												.map(packageDescriptor => {
 													symbol.package = packageDescriptor;
-													return packageDescriptor && packageDescriptor.name === params.query.package!.name!
-														? [symbol]
-														: [];
+													return symbol;
 												});
 										})
-										.map(symbol => ({
+										.map((symbol: SymbolDescriptor): ReferenceInformation => ({
 											symbol,
 											reference: {
 												uri: locationUri(source.fileName),
 												range: {
-													start: ts.getLineAndCharacterOfPosition(source, node.pos + 1),
+													start: ts.getLineAndCharacterOfPosition(source, node.pos),
 													end: ts.getLineAndCharacterOfPosition(source, node.end)
 												}
 											}
