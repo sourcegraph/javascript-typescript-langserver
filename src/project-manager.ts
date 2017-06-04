@@ -1,7 +1,6 @@
 import { Observable, Subscription } from '@reactivex/rxjs';
 import iterate from 'iterare';
 import { Span } from 'opentracing';
-import * as os from 'os';
 import * as path from 'path';
 import * as ts from 'typescript';
 import { Disposable } from './disposable';
@@ -113,7 +112,7 @@ export class ProjectManager implements Disposable {
 		traceModuleResolution?: boolean,
 		protected logger: Logger = new NoopLogger()
 	) {
-		this.rootPath = toUnixPath(rootPath);
+		this.rootPath = rootPath;
 		this.updater = updater;
 		this.inMemoryFs = inMemoryFileSystem;
 		this.versions = new Map<string, number>();
@@ -380,47 +379,32 @@ export class ProjectManager implements Disposable {
 		if (observable) {
 			return observable;
 		}
-		// TypeScript works with file paths, not URIs
-		const filePath = uri2path(uri);
 		observable = Observable.from(this.updater.ensure(uri))
 			.mergeMap(() => {
-				const config = this.getConfiguration(filePath);
+				const referencingFilePath = uri2path(uri);
+				const config = this.getConfiguration(referencingFilePath);
 				config.ensureBasicFiles(span);
 				const contents = this.inMemoryFs.getContent(uri);
 				const info = ts.preProcessFile(contents, true, true);
 				const compilerOpt = config.getHost().getCompilationSettings();
-				// TODO remove platform-specific behavior here, the host OS is not coupled to the client OS
-				const resolver = !this.strict && os.platform() === 'win32' ? path : path.posix;
+				const pathResolver = referencingFilePath.includes('\\') ? path.win32 : path.posix;
 				// Iterate imported files
 				return Observable.merge(
 					// References with `import`
 					Observable.from(info.importedFiles)
-						.map(importedFile => ts.resolveModuleName(importedFile.fileName, toUnixPath(filePath), compilerOpt, this.inMemoryFs))
-						// false means we didn't find a file defining the module. It
-						// could still exist as an ambient module, which is why we
-						// fetch global*.d.ts files.
+						.map(importedFile => ts.resolveModuleName(importedFile.fileName, toUnixPath(referencingFilePath), compilerOpt, this.inMemoryFs))
+						// false means we didn't find a file defining the module. It could still
+						// exist as an ambient module, which is why we fetch global*.d.ts files.
 						.filter(resolved => !!(resolved && resolved.resolvedModule))
 						.map(resolved => resolved.resolvedModule!.resolvedFileName),
 					// References with `<reference path="..."/>`
 					Observable.from(info.referencedFiles)
-						// Resolve triple slash references relative to current file
-						// instead of using module resolution host because it behaves
-						// differently in "nodejs" mode
-						.map(referencedFile => resolver.resolve(
-							this.rootPath,
-							resolver.dirname(filePath),
-							toUnixPath(referencedFile.fileName)
-						)),
+						// Resolve triple slash references relative to current file instead of using
+						// module resolution host because it behaves differently in "nodejs" mode
+						.map(referencedFile => pathResolver.resolve(this.rootPath, pathResolver.dirname(referencingFilePath), toUnixPath(referencedFile.fileName))),
 					// References with `<reference types="..."/>`
 					Observable.from(info.typeReferenceDirectives)
-						.map(typeReferenceDirective =>
-							ts.resolveTypeReferenceDirective(
-								typeReferenceDirective.fileName,
-								filePath,
-								compilerOpt,
-								this.inMemoryFs
-							)
-						)
+						.map(typeReferenceDirective => ts.resolveTypeReferenceDirective(typeReferenceDirective.fileName, referencingFilePath, compilerOpt, this.inMemoryFs))
 						.filter(resolved => !!(resolved && resolved.resolvedTypeReferenceDirective && resolved.resolvedTypeReferenceDirective.resolvedFileName))
 						.map(resolved => resolved.resolvedTypeReferenceDirective!.resolvedFileName!)
 				);
