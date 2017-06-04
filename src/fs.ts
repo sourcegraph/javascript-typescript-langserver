@@ -174,7 +174,7 @@ export class FileSystemUpdater {
 	 *
 	 * @param span An OpenTracing span for tracing
 	 */
-	ensureStructure(childOf = new Span()) {
+	ensureStructure(childOf = new Span()): Observable<never> {
 		return traceObservable('Ensure structure', childOf, span => {
 			return this.structureFetch || this.fetchStructure(span);
 		});
