@@ -561,8 +561,9 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			[rootUri + 'a.ts', 'class a { foo() { const i = 1;} }'],
 			[rootUri + 'foo/b.ts', 'class b { bar: number; baz(): number { return this.bar;}}; function qux() {}'],
 			[rootUri + 'c.ts', 'import { x } from "dep/dep";'],
-			[rootUri + 'package.json', '{ "name": "mypkg" }'],
-			[rootUri + 'node_modules/dep/dep.ts', 'export var x = 1;']
+			[rootUri + 'package.json', JSON.stringify({ name: 'mypkg' })],
+			[rootUri + 'node_modules/dep/dep.ts', 'export var x = 1;'],
+			[rootUri + 'node_modules/dep/package.json', JSON.stringify({ name: 'dep' })]
 		])));
 
 		afterEach(shutdownService);
@@ -928,6 +929,38 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						containerName: '"node_modules/dep/dep"',
 						kind: 'var',
 						name: 'x'
+					}
+				}]);
+			});
+			it('should return all references to a symbol from a dependency with PackageDescriptor query', async function (this: TestContext & ITestCallbackContext) {
+				const result: ReferenceInformation[] = await this.service.workspaceXreferences({ query: { name: 'x', package: { name: 'dep' } } })
+					.reduce<jsonpatch.Operation, ReferenceInformation[]>(jsonpatch.applyReducer, null as any)
+					.toPromise();
+				assert.deepEqual(result, [{
+					reference: {
+						range: {
+							end: {
+								character: 10,
+								line: 0
+							},
+							start: {
+								character: 8,
+								line: 0
+							}
+						},
+						uri: rootUri + 'c.ts'
+					},
+					symbol: {
+						filePath: 'node_modules/dep/dep.ts',
+						containerKind: '',
+						containerName: '"node_modules/dep/dep"',
+						kind: 'var',
+						name: 'x',
+						package: {
+							name: 'dep',
+							repoURL: undefined,
+							version: undefined
+						}
 					}
 				}]);
 			});
