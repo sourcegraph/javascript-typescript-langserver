@@ -35,7 +35,7 @@ export class RemoteFileSystem implements FileSystem {
 	 * A language server can use the result to index files by filtering and doing a content request for each text document of interest.
 	 */
 	getWorkspaceFiles(base?: string, childOf = new Span()): Observable<string> {
-		return Observable.fromPromise(this.client.workspaceXfiles({ base }, childOf))
+		return this.client.workspaceXfiles({ base }, childOf)
 			.mergeMap(textDocuments => textDocuments)
 			.map(textDocument => normalizeUri(textDocument.uri));
 	}
@@ -44,7 +44,7 @@ export class RemoteFileSystem implements FileSystem {
 	 * The content request is sent from the server to the client to request the current content of any text document. This allows language servers to operate without accessing the file system directly.
 	 */
 	getTextDocumentContent(uri: string, childOf = new Span()): Observable<string> {
-		return Observable.fromPromise(this.client.textDocumentXcontent({ textDocument: { uri } }, childOf))
+		return this.client.textDocumentXcontent({ textDocument: { uri } }, childOf)
 			.map(textDocument => textDocument.text);
 	}
 }
