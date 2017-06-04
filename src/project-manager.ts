@@ -735,6 +735,11 @@ export class ProjectConfiguration {
 	private expectedFilePaths = new Set<string>();
 
 	/**
+	 * List of resolved extra root directories to allow global typings to be loaded from.
+	 */
+	private typeRoots: string[];
+
+	/**
 	 * @param fs file system to use
 	 * @param documentRegistry Shared DocumentRegistry that manages SourceFile objects
 	 * @param rootFilePath root file path, absolute
@@ -838,6 +843,10 @@ export class ProjectConfiguration {
 		this.expectedFilePaths = new Set(configParseResult.fileNames);
 
 		const options = configParseResult.options;
+		this.typeRoots = options.typeRoots ?
+			options.typeRoots.map((r: string) => path.resolve(this.rootFilePath, r)) :
+			[];
+
 		if (/(^|\/)jsconfig\.json$/.test(this.configFilePath)) {
 			options.allowJs = true;
 		}
@@ -864,6 +873,17 @@ export class ProjectConfiguration {
 
 	private ensuredBasicFiles = false;
 
+	private isTypeRootDeclaration(path: string) {
+		if (isDeclarationFile(path)) {
+			for (const base of this.typeRoots) {
+				if (path.startsWith(base)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
 	/**
 	 * Ensures we added basic files (global TS files, dependencies, declarations)
 	 */
@@ -882,7 +902,9 @@ export class ProjectConfiguration {
 		// Add all global declaration files from the workspace and all declarations from the project
 		for (const uri of this.fs.uris()) {
 			const fileName = uri2path(uri);
-			if (isGlobalTSFile(fileName) || (isDeclarationFile(fileName) && this.expectedFilePaths.has(toUnixPath(fileName)))) {
+			if (isGlobalTSFile(fileName) ||
+				this.isTypeRootDeclaration(fileName) ||
+				(isDeclarationFile(fileName) && this.expectedFilePaths.has(toUnixPath(fileName)))) {
 				const sourceFile = program.getSourceFile(fileName);
 				if (!sourceFile) {
 					this.getHost().addFile(fileName);
