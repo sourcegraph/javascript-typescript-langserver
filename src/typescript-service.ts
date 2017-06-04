@@ -443,8 +443,8 @@ export class TypeScriptService {
 				const parts = url.parse(uri);
 				const packageJsonUri = url.format({ ...parts, pathname: parts.pathname!.slice(0, parts.pathname!.lastIndexOf('/node_modules/' + encodedPackageName)) + `/node_modules/${encodedPackageName}/package.json` });
 				// Fetch the package.json of the dependency
-				return Observable.from(this.updater.ensure(packageJsonUri, span))
-					.map((): PackageDescriptor | undefined => {
+				return this.updater.ensure(packageJsonUri, span)
+					.concat(Observable.defer((): Observable<PackageDescriptor | undefined> => {
 						const packageJson = JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri));
 						const { name, version } = packageJson;
 						if (name) {
@@ -457,10 +457,10 @@ export class TypeScriptService {
 								// else use repository field from package.json
 								repoURL = typeof packageJson.repository === 'object' ? packageJson.repository.url : undefined;
 							}
-							return { name, version, repoURL };
+							return Observable.of({ name, version, repoURL });
 						}
-						return undefined;
-					});
+						return Observable.of(undefined);
+					}));
 			} else {
 				// The symbol is defined in the root package of the workspace, not in a dependency
 				// Get root package.json
@@ -661,12 +661,11 @@ export class TypeScriptService {
 					const normRootUri = this.rootUri.endsWith('/') ? this.rootUri : this.rootUri + '/';
 					const packageRootUri = normRootUri + params.symbol.package.name.substr(1) + '/';
 
-					return Observable.from(this.updater.ensureStructure(span))
-						.mergeMap(() => observableFromIterable(this.inMemoryFileSystem.uris()))
+					return this.updater.ensureStructure(span)
+						.concat(Observable.defer(() => observableFromIterable(this.inMemoryFileSystem.uris())))
 						.filter(uri => uri.startsWith(packageRootUri))
 						.mergeMap(uri => this.updater.ensure(uri, span))
-						.toArray()
-						.mergeMap(() => {
+						.concat(Observable.defer(() => {
 							span.log({ event: 'fetched package files' });
 							const config = this.projectManager.getParentConfiguration(packageRootUri, 'ts');
 							if (!config) {
@@ -674,7 +673,7 @@ export class TypeScriptService {
 							}
 							// Don't match PackageDescriptor on symbols
 							return this._getSymbolsInConfig(config, omit(params.symbol!, 'package'), span);
-						});
+						}));
 				}
 				// Regular workspace symbol search
 				// Search all symbols in own code, but not in dependencies

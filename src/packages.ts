@@ -147,7 +147,7 @@ export class PackageManager extends EventEmitter implements Disposable {
 	 * Gets the content of the closest package.json known to to the DependencyManager in the ancestors of a URI
 	 */
 	async getClosestPackageJson(uri: string, span = new Span()): Promise<PackageJson | undefined> {
-		await this.updater.ensureStructure();
+		await this.updater.ensureStructure().toPromise();
 		const packageJsonUri = this.getClosestPackageJsonUri(uri);
 		if (!packageJsonUri) {
 			return undefined;
@@ -170,7 +170,7 @@ export class PackageManager extends EventEmitter implements Disposable {
 			if (packageJson) {
 				return packageJson;
 			}
-			await this.updater.ensure(uri, span);
+			await this.updater.ensure(uri, span).toPromise();
 			packageJson = this.packages.get(uri)!;
 			if (!packageJson) {
 				throw new Error(`Expected ${uri} to be registered in PackageManager`);
