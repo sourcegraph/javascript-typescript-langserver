@@ -133,10 +133,13 @@ export class FileSystemUpdater {
 	 * This function cannot be cancelled because multiple callers get the result of the same operation.
 	 *
 	 * @param uri URI of the file to ensure
-	 * @param span An OpenTracing span for tracing
+	 * @param childOf An OpenTracing span for tracing
 	 */
-	ensure(uri: string, span = new Span()): Promise<void> {
-		return this.fetches.get(uri) || this.fetch(uri, span);
+	ensure(uri: string, childOf = new Span()): Promise<void> {
+		return tracePromise('Ensure content', childOf, span => {
+			span.addTags({ uri });
+			return this.fetches.get(uri) || this.fetch(uri, span);
+		});
 	}
 
 	/**
@@ -166,8 +169,10 @@ export class FileSystemUpdater {
 	 *
 	 * @param span An OpenTracing span for tracing
 	 */
-	ensureStructure(span = new Span()) {
-		return this.structureFetch || this.fetchStructure(span);
+	ensureStructure(childOf = new Span()) {
+		return tracePromise('Ensure structure', childOf, span => {
+			return this.structureFetch || this.fetchStructure(span);
+		});
 	}
 
 	/**

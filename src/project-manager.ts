@@ -32,7 +32,7 @@ export type ConfigType = 'js' | 'ts';
 export class ProjectManager implements Disposable {
 
 	/**
-	 * Root path (as passed to `initialize` request)
+	 * Root path with slashes
 	 */
 	private rootPath: string;
 
@@ -105,13 +105,23 @@ export class ProjectManager implements Disposable {
 	 * @param strict indicates if we are working in strict mode (VFS) or with a local file system
 	 * @param traceModuleResolution allows to enable module resolution tracing (done by TS compiler)
 	 */
-	constructor(rootPath: string, inMemoryFileSystem: InMemoryFileSystem, updater: FileSystemUpdater, strict: boolean, traceModuleResolution?: boolean, protected logger: Logger = new NoopLogger()) {
+	constructor(
+		rootPath: string,
+		inMemoryFileSystem: InMemoryFileSystem,
+		updater: FileSystemUpdater,
+		strict: boolean,
+		traceModuleResolution?: boolean,
+		protected logger: Logger = new NoopLogger()
+	) {
 		this.rootPath = toUnixPath(rootPath);
 		this.updater = updater;
 		this.localFs = inMemoryFileSystem;
 		this.versions = new Map<string, number>();
 		this.strict = strict;
 		this.traceModuleResolution = traceModuleResolution || false;
+
+		// Share DocumentRegistry between all ProjectConfigurations
+		const documentRegistry = ts.createDocumentRegistry();
 
 		// Create catch-all fallback configs in case there are no tsconfig.json files
 		// They are removed once at least one tsconfig.json is found
@@ -127,7 +137,16 @@ export class ProjectManager implements Disposable {
 				},
 				include: { js: ['**/*.js', '**/*.jsx'], ts: ['**/*.ts', '**/*.tsx'] }[configType]
 			};
-			const config = new ProjectConfiguration(this.localFs, trimmedRootPath, this.versions, '', tsConfig, this.traceModuleResolution, this.logger);
+			const config = new ProjectConfiguration(
+				this.localFs,
+				documentRegistry,
+				trimmedRootPath,
+				this.versions,
+				'',
+				tsConfig,
+				this.traceModuleResolution,
+				this.logger
+			);
 			configs.set(trimmedRootPath, config);
 			fallbackConfigs[configType] = config;
 		}
@@ -147,7 +166,16 @@ export class ProjectManager implements Disposable {
 					}
 					const configType = this.getConfigurationType(filePath);
 					const configs = this.configs[configType];
-					configs.set(dir, new ProjectConfiguration(this.localFs, dir, this.versions, filePath, undefined, this.traceModuleResolution, this.logger));
+					configs.set(dir, new ProjectConfiguration(
+						this.localFs,
+						documentRegistry,
+						dir,
+						this.versions,
+						filePath,
+						undefined,
+						this.traceModuleResolution,
+						this.logger
+					));
 					// Remove catch-all config (if exists)
 					if (configs.get(trimmedRootPath) === fallbackConfigs[configType]) {
 						configs.delete(trimmedRootPath);
@@ -742,11 +770,21 @@ export class ProjectConfiguration {
 
 	/**
 	 * @param fs file system to use
+	 * @param documentRegistry Shared DocumentRegistry that manages SourceFile objects
 	 * @param rootFilePath root file path, absolute
 	 * @param configFilePath configuration file path, absolute
 	 * @param configContent optional configuration content to use instead of reading configuration file)
 	 */
-	constructor(fs: InMemoryFileSystem, rootFilePath: string, versions: Map<string, number>, configFilePath: string, configContent?: any, traceModuleResolution?: boolean, private logger: Logger = new NoopLogger()) {
+	constructor(
+		fs: InMemoryFileSystem,
+		private documentRegistry: ts.DocumentRegistry,
+		rootFilePath: string,
+		versions: Map<string, number>,
+		configFilePath: string,
+		configContent?: any,
+		traceModuleResolution?: boolean,
+		private logger: Logger = new NoopLogger()
+	) {
 		this.fs = fs;
 		this.configFilePath = configFilePath;
 		this.configContent = configContent;
@@ -854,7 +892,7 @@ export class ProjectConfiguration {
 			this.versions,
 			this.logger
 		);
-		this.service = ts.createLanguageService(this.host, ts.createDocumentRegistry());
+		this.service = ts.createLanguageService(this.host, this.documentRegistry);
 		this.initialized = true;
 	}
 
