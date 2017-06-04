@@ -46,12 +46,6 @@ export class ProjectManager implements Disposable {
 	};
 
 	/**
-	 * When on, indicates that client is responsible to provide file content (VFS),
-	 * otherwise we are working with a local file system
-	 */
-	private strict: boolean;
-
-	/**
 	 * Local side of file content provider which keeps cache of fetched files
 	 */
 	private inMemoryFs: InMemoryFileSystem;
@@ -108,7 +102,6 @@ export class ProjectManager implements Disposable {
 		rootPath: string,
 		inMemoryFileSystem: InMemoryFileSystem,
 		updater: FileSystemUpdater,
-		strict: boolean,
 		traceModuleResolution?: boolean,
 		protected logger: Logger = new NoopLogger()
 	) {
@@ -116,7 +109,6 @@ export class ProjectManager implements Disposable {
 		this.updater = updater;
 		this.inMemoryFs = inMemoryFileSystem;
 		this.versions = new Map<string, number>();
-		this.strict = strict;
 		this.traceModuleResolution = traceModuleResolution || false;
 
 		// Share DocumentRegistry between all ProjectConfigurations

@@ -210,7 +210,6 @@ export class TypeScriptService {
 				this.root,
 				this.inMemoryFileSystem,
 				this.updater,
-				!!this.options.strict,
 				this.traceModuleResolution,
 				this.logger
 			);
