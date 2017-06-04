@@ -395,7 +395,7 @@ export class ProjectManager implements Disposable {
 				return Observable.merge(
 					// References with `import`
 					Observable.from(info.importedFiles)
-						.map(importedFile => ts.resolveModuleName(importedFile.fileName, toUnixPath(filePath), compilerOpt, config.moduleResolutionHost()))
+						.map(importedFile => ts.resolveModuleName(importedFile.fileName, toUnixPath(filePath), compilerOpt, this.localFs))
 						// false means we didn't find a file defining the module. It
 						// could still exist as an ambient module, which is why we
 						// fetch global*.d.ts files.
@@ -418,7 +418,7 @@ export class ProjectManager implements Disposable {
 								typeReferenceDirective.fileName,
 								filePath,
 								compilerOpt,
-								config.moduleResolutionHost()
+								this.localFs
 							)
 						)
 						.filter(resolved => !!(resolved && resolved.resolvedTypeReferenceDirective && resolved.resolvedTypeReferenceDirective.resolvedFileName))
@@ -791,13 +791,6 @@ export class ProjectConfiguration {
 		this.versions = versions;
 		this.traceModuleResolution = traceModuleResolution || false;
 		this.rootFilePath = rootFilePath;
-	}
-
-	/**
-	 * @return module resolution host to use by TS service
-	 */
-	moduleResolutionHost(): ts.ModuleResolutionHost {
-		return this.fs;
 	}
 
 	/**
