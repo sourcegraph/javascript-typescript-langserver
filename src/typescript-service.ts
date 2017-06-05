@@ -402,6 +402,7 @@ export class TypeScriptService {
 						const definitionUri = locationUri(definition.fileName);
 						// Get the PackageDescriptor
 						return this._getPackageDescriptor(definitionUri)
+							.defaultIfEmpty(undefined)
 							.map((packageDescriptor: PackageDescriptor | undefined): SymbolLocationInformation => {
 								const sourceFile = this._getSourceFile(configuration, definition.fileName, span);
 								if (!sourceFile) {
@@ -429,9 +430,9 @@ export class TypeScriptService {
 	/**
 	 * Finds the PackageDescriptor a given file belongs to
 	 *
-	 * @return Observable that emits a single PackageDescriptor or undefined if the definition does not belong to any package
+	 * @return Observable that emits a single PackageDescriptor or never if the definition does not belong to any package
 	 */
-	protected _getPackageDescriptor(uri: string, childOf = new Span()): Observable<PackageDescriptor | undefined> {
+	protected _getPackageDescriptor(uri: string, childOf = new Span()): Observable<PackageDescriptor> {
 		return traceObservable('Get PackageDescriptor', childOf, span => {
 			span.addTags({ uri });
 			// Get package name of the dependency in which the symbol is defined in, if any
@@ -444,47 +445,45 @@ export class TypeScriptService {
 				const packageJsonUri = url.format({ ...parts, pathname: parts.pathname!.slice(0, parts.pathname!.lastIndexOf('/node_modules/' + encodedPackageName)) + `/node_modules/${encodedPackageName}/package.json` });
 				// Fetch the package.json of the dependency
 				return this.updater.ensure(packageJsonUri, span)
-					.concat(Observable.defer((): Observable<PackageDescriptor | undefined> => {
-						const packageJson = JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri));
+					.concat(Observable.defer((): Observable<PackageDescriptor> => {
+						const packageJson: PackageJson = JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri));
 						const { name, version } = packageJson;
-						if (name) {
-							// Used by the LSP proxy to shortcut database lookup of repo URL for PackageDescriptor
-							let repoURL: string | undefined;
-							if (name.startsWith('@types/')) {
-								// if the dependency package is an @types/ package, point the repo to DefinitelyTyped
-								repoURL = 'https://github.com/DefinitelyTyped/DefinitelyTyped';
-							} else {
-								// else use repository field from package.json
-								repoURL = typeof packageJson.repository === 'object' ? packageJson.repository.url : undefined;
-							}
-							return Observable.of({ name, version, repoURL });
+						if (!name) {
+							return Observable.empty();
 						}
-						return Observable.of(undefined);
+						// Used by the LSP proxy to shortcut database lookup of repo URL for PackageDescriptor
+						let repoURL: string | undefined;
+						if (name.startsWith('@types/')) {
+							// if the dependency package is an @types/ package, point the repo to DefinitelyTyped
+							repoURL = 'https://github.com/DefinitelyTyped/DefinitelyTyped';
+						} else {
+							// else use repository field from package.json
+							repoURL = typeof packageJson.repository === 'object' ? packageJson.repository.url : undefined;
+						}
+						return Observable.of({ name, version, repoURL });
 					}));
 			} else {
 				// The symbol is defined in the root package of the workspace, not in a dependency
 				// Get root package.json
 				return this.packageManager.getClosestPackageJson(uri, span)
-					.map((packageJson): PackageDescriptor | undefined => {
+					.mergeMap(packageJson => {
 						let { name, version } = packageJson;
-						if (name) {
-							let repoURL = typeof packageJson.repository === 'object' ? packageJson.repository.url : undefined;
-							// If the root package is DefinitelyTyped, find out the proper @types package name for each typing
-							if (name === 'definitely-typed') {
-								name = extractDefinitelyTypedPackageName(uri);
-								if (!name) {
-									this.logger.error(`Could not extract package name from DefinitelyTyped URI ${uri}`);
-									return undefined;
-								}
-								version = undefined;
-								repoURL = 'https://github.com/DefinitelyTyped/DefinitelyTyped';
-							}
-							return { name, version, repoURL };
+						if (!name) {
+							return [];
 						}
-						return undefined;
-					})
-					// Workspace has no package.json
-					.defaultIfEmpty(undefined);
+						let repoURL = typeof packageJson.repository === 'object' ? packageJson.repository.url : undefined;
+						// If the root package is DefinitelyTyped, find out the proper @types package name for each typing
+						if (name === 'definitely-typed') {
+							name = extractDefinitelyTypedPackageName(uri);
+							if (!name) {
+								this.logger.error(`Could not extract package name from DefinitelyTyped URI ${uri}`);
+								return [];
+							}
+							version = undefined;
+							repoURL = 'https://github.com/DefinitelyTyped/DefinitelyTyped';
+						}
+						return [{ name, version, repoURL } as PackageDescriptor];
+					});
 			}
 		});
 	}
@@ -817,7 +816,8 @@ export class TypeScriptService {
 											// If SymbolDescriptor matched and the query contains a PackageDescriptor, get package.json and match PackageDescriptor name
 											// TODO match full PackageDescriptor (version) and fill out the symbol.package field
 											const uri = path2uri(definition.fileName);
-											return Observable.from(this._getPackageDescriptor(uri, span))
+											return this._getPackageDescriptor(uri, span)
+												.defaultIfEmpty(undefined)
 												.filter(packageDescriptor => !!(packageDescriptor && packageDescriptor.name === params.query.package!.name!))
 												.map(packageDescriptor => {
 													symbol.package = packageDescriptor;
