@@ -464,12 +464,8 @@ export class TypeScriptService {
 			} else {
 				// The symbol is defined in the root package of the workspace, not in a dependency
 				// Get root package.json
-				return Observable.from(this.packageManager.getClosestPackageJson(uri, span))
+				return this.packageManager.getClosestPackageJson(uri, span)
 					.map((packageJson): PackageDescriptor | undefined => {
-						if (!packageJson) {
-							// Workspace has no package.json
-							return undefined;
-						}
 						let { name, version } = packageJson;
 						if (name) {
 							let repoURL = typeof packageJson.repository === 'object' ? packageJson.repository.url : undefined;
@@ -486,7 +482,9 @@ export class TypeScriptService {
 							return { name, version, repoURL };
 						}
 						return undefined;
-					});
+					})
+					// Workspace has no package.json
+					.defaultIfEmpty(undefined);
 			}
 		});
 	}
@@ -1407,8 +1405,9 @@ export class TypeScriptService {
 											return [{ score, tree, parent }];
 										}
 										const uri = path2uri(sourceFile.fileName);
-										return Observable.from(this.packageManager.getClosestPackageJson(uri, span))
+										return this.packageManager.getClosestPackageJson(uri, span)
 											// If PackageDescriptor matches, increase score
+											.defaultIfEmpty(undefined)
 											.map(packageJson => {
 												if (packageJson && packageJson.name === query.package!.name!) {
 													score++;
