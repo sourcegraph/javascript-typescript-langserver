@@ -1,9 +1,9 @@
-import * as fs from 'mz/fs';
-import { LanguageClient } from './lang-handler';
-import glob = require('glob');
 import { Observable } from '@reactivex/rxjs';
+import { Glob } from 'glob';
+import * as fs from 'mz/fs';
 import { Span } from 'opentracing';
 import Semaphore from 'semaphore-async-await';
+import { LanguageClient } from './lang-handler';
 import { InMemoryFileSystem } from './memfs';
 import { traceObservable } from './tracing';
 import { normalizeUri, uri2path } from './util';
@@ -68,14 +68,26 @@ export class LocalFileSystem implements FileSystem {
 			base += '/';
 		}
 		const cwd = this.resolveUriToPath(base);
-		return Observable.bindNodeCallback<string, glob.IOptions, string[]>(glob)('*', {
-			cwd,
-			nodir: true,
-			matchBase: true,
-			follow: true
-		})
-			.mergeMap(files => files)
-			.map(file => normalizeUri(base + file));
+		return new Observable<string>(subscriber => {
+			const globber = new Glob('*', {
+				cwd,
+				nodir: true,
+				matchBase: true,
+				follow: true
+			});
+			globber.on('match', (file: string) => {
+				subscriber.next(normalizeUri(base + file));
+			});
+			globber.on('error', (err: any) => {
+				subscriber.error(err);
+			});
+			globber.on('end', () => {
+				subscriber.complete();
+			});
+			return () => {
+				globber.abort();
+			};
+		});
 	}
 
 	getTextDocumentContent(uri: string): Observable<string> {
