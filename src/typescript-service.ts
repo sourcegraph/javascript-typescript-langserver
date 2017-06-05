@@ -402,6 +402,7 @@ export class TypeScriptService {
 						const definitionUri = locationUri(definition.fileName);
 						// Get the PackageDescriptor
 						return this._getPackageDescriptor(definitionUri)
+							.defaultIfEmpty(undefined)
 							.map((packageDescriptor: PackageDescriptor | undefined): SymbolLocationInformation => {
 								const sourceFile = this._getSourceFile(configuration, definition.fileName, span);
 								if (!sourceFile) {
@@ -429,9 +430,9 @@ export class TypeScriptService {
 	/**
 	 * Finds the PackageDescriptor a given file belongs to
 	 *
-	 * @return Observable that emits a single PackageDescriptor or undefined if the definition does not belong to any package
+	 * @return Observable that emits a single PackageDescriptor or never if the definition does not belong to any package
 	 */
-	protected _getPackageDescriptor(uri: string, childOf = new Span()): Observable<PackageDescriptor | undefined> {
+	protected _getPackageDescriptor(uri: string, childOf = new Span()): Observable<PackageDescriptor> {
 		return traceObservable('Get PackageDescriptor', childOf, span => {
 			span.addTags({ uri });
 			// Get package name of the dependency in which the symbol is defined in, if any
@@ -443,49 +444,45 @@ export class TypeScriptService {
 				const parts = url.parse(uri);
 				const packageJsonUri = url.format({ ...parts, pathname: parts.pathname!.slice(0, parts.pathname!.lastIndexOf('/node_modules/' + encodedPackageName)) + `/node_modules/${encodedPackageName}/package.json` });
 				// Fetch the package.json of the dependency
-				return Observable.from(this.updater.ensure(packageJsonUri, span))
-					.map((): PackageDescriptor | undefined => {
-						const packageJson = JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri));
+				return this.updater.ensure(packageJsonUri, span)
+					.concat(Observable.defer((): Observable<PackageDescriptor> => {
+						const packageJson: PackageJson = JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri));
 						const { name, version } = packageJson;
-						if (name) {
-							// Used by the LSP proxy to shortcut database lookup of repo URL for PackageDescriptor
-							let repoURL: string | undefined;
-							if (name.startsWith('@types/')) {
-								// if the dependency package is an @types/ package, point the repo to DefinitelyTyped
-								repoURL = 'https://github.com/DefinitelyTyped/DefinitelyTyped';
-							} else {
-								// else use repository field from package.json
-								repoURL = typeof packageJson.repository === 'object' ? packageJson.repository.url : undefined;
-							}
-							return { name, version, repoURL };
+						if (!name) {
+							return Observable.empty();
 						}
-						return undefined;
-					});
+						// Used by the LSP proxy to shortcut database lookup of repo URL for PackageDescriptor
+						let repoURL: string | undefined;
+						if (name.startsWith('@types/')) {
+							// if the dependency package is an @types/ package, point the repo to DefinitelyTyped
+							repoURL = 'https://github.com/DefinitelyTyped/DefinitelyTyped';
+						} else {
+							// else use repository field from package.json
+							repoURL = typeof packageJson.repository === 'object' ? packageJson.repository.url : undefined;
+						}
+						return Observable.of({ name, version, repoURL });
+					}));
 			} else {
 				// The symbol is defined in the root package of the workspace, not in a dependency
 				// Get root package.json
-				return Observable.from(this.packageManager.getClosestPackageJson(uri, span))
-					.map((packageJson): PackageDescriptor | undefined => {
-						if (!packageJson) {
-							// Workspace has no package.json
-							return undefined;
-						}
+				return this.packageManager.getClosestPackageJson(uri, span)
+					.mergeMap(packageJson => {
 						let { name, version } = packageJson;
-						if (name) {
-							let repoURL = typeof packageJson.repository === 'object' ? packageJson.repository.url : undefined;
-							// If the root package is DefinitelyTyped, find out the proper @types package name for each typing
-							if (name === 'definitely-typed') {
-								name = extractDefinitelyTypedPackageName(uri);
-								if (!name) {
-									this.logger.error(`Could not extract package name from DefinitelyTyped URI ${uri}`);
-									return undefined;
-								}
-								version = undefined;
-								repoURL = 'https://github.com/DefinitelyTyped/DefinitelyTyped';
-							}
-							return { name, version, repoURL };
+						if (!name) {
+							return [];
 						}
-						return undefined;
+						let repoURL = typeof packageJson.repository === 'object' ? packageJson.repository.url : undefined;
+						// If the root package is DefinitelyTyped, find out the proper @types package name for each typing
+						if (name === 'definitely-typed') {
+							name = extractDefinitelyTypedPackageName(uri);
+							if (!name) {
+								this.logger.error(`Could not extract package name from DefinitelyTyped URI ${uri}`);
+								return [];
+							}
+							version = undefined;
+							repoURL = 'https://github.com/DefinitelyTyped/DefinitelyTyped';
+						}
+						return [{ name, version, repoURL } as PackageDescriptor];
 					});
 			}
 		});
@@ -579,8 +576,8 @@ export class TypeScriptService {
 		const uri = normalizeUri(params.textDocument.uri);
 
 		// Ensure all files were fetched to collect all references
-		return Observable.from(this.projectManager.ensureOwnFiles(span))
-			.mergeMap(() => {
+		return this.projectManager.ensureOwnFiles(span)
+			.concat(Observable.defer(() => {
 				// Convert URI to file path because TypeScript doesn't work with URIs
 				const fileName = uri2path(uri);
 				// Get tsconfig configuration for requested file
@@ -589,7 +586,7 @@ export class TypeScriptService {
 				configuration.ensureAllFiles(span);
 				const program = configuration.getProgram(span);
 				if (!program) {
-					return [];
+					return Observable.empty<never>();
 				}
 				// Get SourceFile object for requested file
 				const sourceFile = this._getSourceFile(configuration, fileName, span);
@@ -623,7 +620,7 @@ export class TypeScriptService {
 							}
 						};
 					});
-			})
+			}))
 			.map((location: Location): jsonpatch.Operation => ({ op: 'add', path: '/-', value: location }))
 			// Initialize with array
 			.startWith({ op: 'add', path: '', value: [] });
@@ -661,12 +658,11 @@ export class TypeScriptService {
 					const normRootUri = this.rootUri.endsWith('/') ? this.rootUri : this.rootUri + '/';
 					const packageRootUri = normRootUri + params.symbol.package.name.substr(1) + '/';
 
-					return Observable.from(this.updater.ensureStructure(span))
-						.mergeMap(() => observableFromIterable(this.inMemoryFileSystem.uris()))
+					return this.updater.ensureStructure(span)
+						.concat(Observable.defer(() => observableFromIterable(this.inMemoryFileSystem.uris())))
 						.filter(uri => uri.startsWith(packageRootUri))
 						.mergeMap(uri => this.updater.ensure(uri, span))
-						.toArray()
-						.mergeMap(() => {
+						.concat(Observable.defer(() => {
 							span.log({ event: 'fetched package files' });
 							const config = this.projectManager.getParentConfiguration(packageRootUri, 'ts');
 							if (!config) {
@@ -674,25 +670,26 @@ export class TypeScriptService {
 							}
 							// Don't match PackageDescriptor on symbols
 							return this._getSymbolsInConfig(config, omit(params.symbol!, 'package'), span);
-						});
+						}));
 				}
 				// Regular workspace symbol search
 				// Search all symbols in own code, but not in dependencies
-				return Observable.from(this.projectManager.ensureOwnFiles(span))
-					.mergeMap(() =>
-						params.symbol && params.symbol.package && params.symbol.package.name
+				return this.projectManager.ensureOwnFiles(span)
+					.concat(Observable.defer(() => {
+						if (params.symbol && params.symbol.package && params.symbol.package.name) {
 							// If SymbolDescriptor query with PackageDescriptor, search for package.jsons with matching package name
-							? observableFromIterable(this.packageManager.packageJsonUris())
+							return observableFromIterable(this.packageManager.packageJsonUris())
 								.filter(packageJsonUri => (JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri)) as PackageJson).name === params.symbol!.package!.name)
 								// Find their parent and child tsconfigs
 								.mergeMap(packageJsonUri => Observable.merge(
 									castArray<ProjectConfiguration>(this.projectManager.getParentConfiguration(packageJsonUri) || []),
 									// Search child directories starting at the directory of the package.json
 									observableFromIterable(this.projectManager.getChildConfigurations(url.resolve(packageJsonUri, '.')))
-								))
-							// Else search all tsconfigs in the workspace
-							: observableFromIterable(this.projectManager.configurations())
-					)
+								));
+						}
+						// Else search all tsconfigs in the workspace
+						return observableFromIterable(this.projectManager.configurations());
+					}))
 					// If PackageDescriptor is given, only search project with the matching package name
 					.mergeMap(config => this._getSymbolsInConfig(config, params.query || params.symbol, span));
 			})
@@ -768,7 +765,7 @@ export class TypeScriptService {
 				}
 				return this.projectManager.ensureAllFiles(span);
 			})
-			.mergeMap(() => {
+			.concat(Observable.defer(() => {
 				// if we were hinted that we should only search a specific package, find it and only search the owning tsconfig.json
 				if (params.hints && params.hints.dependeePackageName) {
 					return observableFromIterable(this.packageManager.packageJsonUris())
@@ -784,12 +781,12 @@ export class TypeScriptService {
 				}
 				// else search all tsconfig.jsons
 				return observableFromIterable(this.projectManager.configurations());
-			})
+			}))
 			.mergeMap((config: ProjectConfiguration) => {
 				config.ensureAllFiles(span);
 				const program = config.getProgram(span);
 				if (!program) {
-					return Observable.empty();
+					return Observable.empty<never>();
 				}
 				return Observable.from(program.getSourceFiles())
 					// Ignore dependency files
@@ -819,7 +816,8 @@ export class TypeScriptService {
 											// If SymbolDescriptor matched and the query contains a PackageDescriptor, get package.json and match PackageDescriptor name
 											// TODO match full PackageDescriptor (version) and fill out the symbol.package field
 											const uri = path2uri(definition.fileName);
-											return Observable.from(this._getPackageDescriptor(uri, span))
+											return this._getPackageDescriptor(uri, span)
+												.defaultIfEmpty(undefined)
 												.filter(packageDescriptor => !!(packageDescriptor && packageDescriptor.name === params.query.package!.name!))
 												.map(packageDescriptor => {
 													symbol.package = packageDescriptor;
@@ -883,9 +881,9 @@ export class TypeScriptService {
 						}));
 				}
 				// For other workspaces, search all package.json files
-				return Observable.from(this.projectManager.ensureModuleStructure(span))
+				return this.projectManager.ensureModuleStructure(span)
 					// Iterate all files
-					.mergeMap(() => observableFromIterable(this.inMemoryFileSystem.uris()))
+					.concat(Observable.defer(() => observableFromIterable(this.inMemoryFileSystem.uris())))
 					// Filter own package.jsons
 					.filter(uri => uri.includes('/package.json') && !uri.includes('/node_modules/'))
 					// Map to contents of package.jsons
@@ -934,9 +932,9 @@ export class TypeScriptService {
 	 */
 	workspaceXdependencies(params = {}, span = new Span()): Observable<jsonpatch.Operation> {
 		// Ensure package.json files
-		return Observable.from(this.projectManager.ensureModuleStructure())
+		return this.projectManager.ensureModuleStructure()
 			// Iterate all files
-			.mergeMap(() => observableFromIterable(this.inMemoryFileSystem.uris()))
+			.concat(Observable.defer(() => observableFromIterable(this.inMemoryFileSystem.uris())))
 			// Filter own package.jsons
 			.filter(uri => uri.includes('/package.json') && !uri.includes('/node_modules/'))
 			// Ensure contents of own package.jsons
@@ -1150,8 +1148,8 @@ export class TypeScriptService {
 			return Observable.throw(new Error('No changes supplied for code fix command'));
 		}
 
-		return Observable.from(this.projectManager.ensureOwnFiles(span))
-			.mergeMap(() => {
+		return this.projectManager.ensureOwnFiles(span)
+			.concat(Observable.defer(() => {
 				const configuration = this.projectManager.getConfiguration(fileTextChanges[0].fileName);
 				configuration.ensureBasicFiles(span);
 
@@ -1172,7 +1170,7 @@ export class TypeScriptService {
 				}
 
 				return this.client.workspaceApplyEdit({ edit: { changes }}, span);
-			})
+			}))
 			.map(() => ({ op: 'add', path: '', value: null }) as jsonpatch.Operation);
 	}
 
@@ -1184,8 +1182,8 @@ export class TypeScriptService {
 	textDocumentRename(params: RenameParams, span = new Span()): Observable<jsonpatch.Operation> {
 		const uri = normalizeUri(params.textDocument.uri);
 		const editUris = new Set<string>();
-		return Observable.fromPromise(this.projectManager.ensureOwnFiles(span))
-			.mergeMap(() => {
+		return this.projectManager.ensureOwnFiles(span)
+			.concat(Observable.defer(() => {
 
 				const filePath = uri2path(uri);
 				const configuration = this.projectManager.getParentConfiguration(params.textDocument.uri);
@@ -1218,7 +1216,7 @@ export class TypeScriptService {
 						const edit: TextEdit = { range: { start, end }, newText: params.newName };
 						return [editUri, edit];
 					});
-			})
+			}))
 			.map(([uri, edit]): jsonpatch.Operation => {
 				// if file has no edit yet, initialize array
 				if (!editUris.has(uri)) {
@@ -1361,7 +1359,7 @@ export class TypeScriptService {
 
 			const program = config.getProgram(span);
 			if (!program) {
-				return Observable.empty();
+				return Observable.empty<never>();
 			}
 
 			if (typeof query === 'string') {
@@ -1407,8 +1405,9 @@ export class TypeScriptService {
 											return [{ score, tree, parent }];
 										}
 										const uri = path2uri(sourceFile.fileName);
-										return Observable.from(this.packageManager.getClosestPackageJson(uri, span))
+										return this.packageManager.getClosestPackageJson(uri, span)
 											// If PackageDescriptor matches, increase score
+											.defaultIfEmpty(undefined)
 											.map(packageJson => {
 												if (packageJson && packageJson.name === query.package!.name!) {
 													score++;

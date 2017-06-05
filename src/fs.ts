@@ -1,11 +1,11 @@
+import { Observable } from '@reactivex/rxjs';
+import { Glob } from 'glob';
 import * as fs from 'mz/fs';
-import { LanguageClient } from './lang-handler';
-import glob = require('glob');
-import iterate from 'iterare';
 import { Span } from 'opentracing';
 import Semaphore from 'semaphore-async-await';
+import { LanguageClient } from './lang-handler';
 import { InMemoryFileSystem } from './memfs';
-import { tracePromise } from './tracing';
+import { traceObservable } from './tracing';
 import { normalizeUri, uri2path } from './util';
 
 export interface FileSystem {
@@ -13,17 +13,17 @@ export interface FileSystem {
 	 * Returns all files in the workspace under base
 	 *
 	 * @param base A URI under which to search, resolved relative to the rootUri
-	 * @return A promise that is fulfilled with an array of URIs
+	 * @return An Observable that emits URIs
 	 */
-	getWorkspaceFiles(base?: string, childOf?: Span): Promise<Iterable<string>>;
+	getWorkspaceFiles(base?: string, childOf?: Span): Observable<string>;
 
 	/**
 	 * Returns the content of a text document
 	 *
 	 * @param uri The URI of the text document, resolved relative to the rootUri
-	 * @return A promise that is fulfilled with the text document content
+	 * @return An Observable that emits the text document content
 	 */
-	getTextDocumentContent(uri: string, childOf?: Span): Promise<string>;
+	getTextDocumentContent(uri: string, childOf?: Span): Observable<string>;
 }
 
 export class RemoteFileSystem implements FileSystem {
@@ -34,17 +34,18 @@ export class RemoteFileSystem implements FileSystem {
 	 * The files request is sent from the server to the client to request a list of all files in the workspace or inside the directory of the base parameter, if given.
 	 * A language server can use the result to index files by filtering and doing a content request for each text document of interest.
 	 */
-	async getWorkspaceFiles(base?: string, childOf = new Span()): Promise<Iterable<string>> {
-		return iterate(await this.client.workspaceXfiles({ base }, childOf))
+	getWorkspaceFiles(base?: string, childOf = new Span()): Observable<string> {
+		return this.client.workspaceXfiles({ base }, childOf)
+			.mergeMap(textDocuments => textDocuments)
 			.map(textDocument => normalizeUri(textDocument.uri));
 	}
 
 	/**
 	 * The content request is sent from the server to the client to request the current content of any text document. This allows language servers to operate without accessing the file system directly.
 	 */
-	async getTextDocumentContent(uri: string, childOf = new Span()): Promise<string> {
-		const textDocument = await this.client.textDocumentXcontent({ textDocument: { uri } }, childOf);
-		return textDocument.text;
+	getTextDocumentContent(uri: string, childOf = new Span()): Observable<string> {
+		return this.client.textDocumentXcontent({ textDocument: { uri } }, childOf)
+			.map(textDocument => textDocument.text);
 	}
 }
 
@@ -62,24 +63,36 @@ export class LocalFileSystem implements FileSystem {
 		return uri2path(uri);
 	}
 
-	async getWorkspaceFiles(base = this.rootUri): Promise<Iterable<string>> {
+	getWorkspaceFiles(base = this.rootUri): Observable<string> {
 		if (!base.endsWith('/')) {
 			base += '/';
 		}
 		const cwd = this.resolveUriToPath(base);
-		const files = await new Promise<string[]>((resolve, reject) => {
-			glob('*', {
+		return new Observable<string>(subscriber => {
+			const globber = new Glob('*', {
 				cwd,
 				nodir: true,
 				matchBase: true,
 				follow: true
-			}, (err, matches) => err ? reject(err) : resolve(matches));
+			});
+			globber.on('match', (file: string) => {
+				subscriber.next(normalizeUri(base + file));
+			});
+			globber.on('error', (err: any) => {
+				subscriber.error(err);
+			});
+			globber.on('end', () => {
+				subscriber.complete();
+			});
+			return () => {
+				globber.abort();
+			};
 		});
-		return iterate(files).map(file => normalizeUri(base + file));
 	}
 
-	async getTextDocumentContent(uri: string): Promise<string> {
-		return fs.readFile(this.resolveUriToPath(uri), 'utf8');
+	getTextDocumentContent(uri: string): Observable<string> {
+		const filePath = this.resolveUriToPath(uri);
+		return Observable.fromPromise(fs.readFile(filePath, 'utf8'));
 	}
 }
 
@@ -91,14 +104,14 @@ export class LocalFileSystem implements FileSystem {
 export class FileSystemUpdater {
 
 	/**
-	 * Promise for a pending or fulfilled structure fetch
+	 * Observable for a pending or completed structure fetch
 	 */
-	private structureFetch?: Promise<void>;
+	private structureFetch?: Observable<never>;
 
 	/**
-	 * Map from URI to Promise of pending or fulfilled content fetch
+	 * Map from URI to Observable of pending or completed content fetch
 	 */
-	private fetches = new Map<string, Promise<void>>();
+	private fetches = new Map<string, Observable<never>>();
 
 	/**
 	 * Limits concurrent fetches to not fetch thousands of files in parallel
@@ -112,20 +125,23 @@ export class FileSystemUpdater {
 	 *
 	 * @param uri URI of the file to fetch
 	 * @param childOf A parent span for tracing
+	 * @return Observable that completes when the fetch is finished
 	 */
-	async fetch(uri: string, childOf = new Span()): Promise<void> {
+	fetch(uri: string, childOf = new Span()): Observable<never> {
 		// Limit concurrent fetches
-		const promise = this.concurrencyLimit.execute(async () => {
-			try {
-				const content = await this.remoteFs.getTextDocumentContent(uri);
+		const observable = Observable.fromPromise(this.concurrencyLimit.wait())
+			.mergeMap(() => this.remoteFs.getTextDocumentContent(uri))
+			.do(content => {
+				this.concurrencyLimit.signal();
 				this.inMemoryFs.add(uri, content);
-			} catch (err) {
+			}, err => {
 				this.fetches.delete(uri);
-				throw err;
-			}
-		});
-		this.fetches.set(uri, promise);
-		return promise;
+			})
+			.ignoreElements()
+			.publishReplay()
+			.refCount();
+		this.fetches.set(uri, observable);
+		return observable;
 	}
 
 	/**
@@ -134,9 +150,10 @@ export class FileSystemUpdater {
 	 *
 	 * @param uri URI of the file to ensure
 	 * @param childOf An OpenTracing span for tracing
+	 * @return Observable that completes when the file was fetched
 	 */
-	ensure(uri: string, childOf = new Span()): Promise<void> {
-		return tracePromise('Ensure content', childOf, span => {
+	ensure(uri: string, childOf = new Span()): Observable<never> {
+		return traceObservable('Ensure content', childOf, span => {
 			span.addTags({ uri });
 			return this.fetches.get(uri) || this.fetch(uri, span);
 		});
@@ -147,20 +164,20 @@ export class FileSystemUpdater {
 	 *
 	 * @param childOf A parent span for tracing
 	 */
-	fetchStructure(childOf = new Span()): Promise<void> {
-		const promise = tracePromise('Fetch workspace structure', childOf, async span => {
-			try {
-				const uris = await this.remoteFs.getWorkspaceFiles(undefined, span);
-				for (const uri of uris) {
+	fetchStructure(childOf = new Span()): Observable<never> {
+		const observable = traceObservable('Fetch workspace structure', childOf, span =>
+			this.remoteFs.getWorkspaceFiles(undefined, span)
+				.do(uri => {
 					this.inMemoryFs.add(uri);
-				}
-			} catch (err) {
-				this.structureFetch = undefined;
-				throw err;
-			}
-		});
-		this.structureFetch = promise;
-		return promise;
+				}, err => {
+					this.structureFetch = undefined;
+				})
+				.ignoreElements()
+				.publishReplay()
+				.refCount()
+		);
+		this.structureFetch = observable;
+		return observable;
 	}
 
 	/**
@@ -169,8 +186,8 @@ export class FileSystemUpdater {
 	 *
 	 * @param span An OpenTracing span for tracing
 	 */
-	ensureStructure(childOf = new Span()) {
-		return tracePromise('Ensure structure', childOf, span => {
+	ensureStructure(childOf = new Span()): Observable<never> {
+		return traceObservable('Ensure structure', childOf, span => {
 			return this.structureFetch || this.fetchStructure(span);
 		});
 	}

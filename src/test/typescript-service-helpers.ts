@@ -7,8 +7,9 @@ import { LanguageClient, RemoteLanguageClient } from '../lang-handler';
 import { DependencyReference, PackageInformation, ReferenceInformation, TextDocumentContentParams, WorkspaceFilesParams } from '../request-type';
 import { SymbolLocationInformation } from '../request-type';
 import { TypeScriptService, TypeScriptServiceFactory } from '../typescript-service';
-import { toUnixPath, uri2path } from '../util';
+import { observableFromIterable, toUnixPath, uri2path } from '../util';
 import chaiAsPromised = require('chai-as-promised');
+import { Observable } from '@reactivex/rxjs';
 import jsonpatch from 'fast-json-patch';
 import { IBeforeAndAfterContext, ISuiteCallbackContext, ITestCallbackContext } from 'mocha';
 
@@ -34,22 +35,22 @@ export const initializeTypeScriptService = (createService: TypeScriptServiceFact
 
 	// Stub client
 	this.client = sinon.createStubInstance(RemoteLanguageClient);
-	this.client.textDocumentXcontent.callsFake(async (params: TextDocumentContentParams): Promise<TextDocumentItem> => {
+	this.client.textDocumentXcontent.callsFake((params: TextDocumentContentParams): Observable<TextDocumentItem> => {
 		if (!files.has(params.textDocument.uri)) {
-			throw new Error(`Text document ${params.textDocument.uri} does not exist`);
+			return Observable.throw(new Error(`Text document ${params.textDocument.uri} does not exist`));
 		}
-		return {
+		return Observable.of({
 			uri: params.textDocument.uri,
 			text: files.get(params.textDocument.uri)!,
 			version: 1,
 			languageId: ''
-		};
+		});
 	});
-	this.client.workspaceXfiles.callsFake(async (params: WorkspaceFilesParams): Promise<TextDocumentIdentifier[]> => {
-		return Array.from(files.keys()).map(uri => ({ uri }));
+	this.client.workspaceXfiles.callsFake((params: WorkspaceFilesParams): Observable<TextDocumentIdentifier[]> => {
+		return observableFromIterable(files.keys()).map(uri => ({ uri })).toArray();
 	});
-	this.client.xcacheGet.returns(null);
-	this.client.workspaceApplyEdit.returns(Promise.resolve({applied: true}));
+	this.client.xcacheGet.callsFake(() => Observable.of(null));
+	this.client.workspaceApplyEdit.callsFake(() => Observable.of({applied: true}));
 	this.service = createService(this.client);
 
 	await this.service.initialize({
