@@ -1,7 +1,6 @@
 import { Observable, Subscription } from '@reactivex/rxjs';
 import iterate from 'iterare';
 import { Span } from 'opentracing';
-import * as os from 'os';
 import * as path from 'path';
 import * as ts from 'typescript';
 import { Disposable } from './disposable';
@@ -12,7 +11,6 @@ import { traceObservable, tracePromise, traceSync } from './tracing';
 import {
 	isConfigFile,
 	isDeclarationFile,
-	isDependencyFile,
 	isGlobalTSFile,
 	isJSTSFile,
 	isPackageJsonFile,
@@ -33,7 +31,7 @@ export type ConfigType = 'js' | 'ts';
 export class ProjectManager implements Disposable {
 
 	/**
-	 * Root path (as passed to `initialize` request)
+	 * Root path with slashes
 	 */
 	private rootPath: string;
 
@@ -48,15 +46,9 @@ export class ProjectManager implements Disposable {
 	};
 
 	/**
-	 * When on, indicates that client is responsible to provide file content (VFS),
-	 * otherwise we are working with a local file system
-	 */
-	private strict: boolean;
-
-	/**
 	 * Local side of file content provider which keeps cache of fetched files
 	 */
-	private localFs: InMemoryFileSystem;
+	private inMemoryFs: InMemoryFileSystem;
 
 	/**
 	 * File system updater that takes care of updating the in-memory file system
@@ -106,13 +98,21 @@ export class ProjectManager implements Disposable {
 	 * @param strict indicates if we are working in strict mode (VFS) or with a local file system
 	 * @param traceModuleResolution allows to enable module resolution tracing (done by TS compiler)
 	 */
-	constructor(rootPath: string, inMemoryFileSystem: InMemoryFileSystem, updater: FileSystemUpdater, strict: boolean, traceModuleResolution?: boolean, protected logger: Logger = new NoopLogger()) {
-		this.rootPath = toUnixPath(rootPath);
+	constructor(
+		rootPath: string,
+		inMemoryFileSystem: InMemoryFileSystem,
+		updater: FileSystemUpdater,
+		traceModuleResolution?: boolean,
+		protected logger: Logger = new NoopLogger()
+	) {
+		this.rootPath = rootPath;
 		this.updater = updater;
-		this.localFs = inMemoryFileSystem;
+		this.inMemoryFs = inMemoryFileSystem;
 		this.versions = new Map<string, number>();
-		this.strict = strict;
 		this.traceModuleResolution = traceModuleResolution || false;
+
+		// Share DocumentRegistry between all ProjectConfigurations
+		const documentRegistry = ts.createDocumentRegistry();
 
 		// Create catch-all fallback configs in case there are no tsconfig.json files
 		// They are removed once at least one tsconfig.json is found
@@ -128,7 +128,16 @@ export class ProjectManager implements Disposable {
 				},
 				include: { js: ['**/*.js', '**/*.jsx'], ts: ['**/*.ts', '**/*.tsx'] }[configType]
 			};
-			const config = new ProjectConfiguration(this.localFs, trimmedRootPath, this.versions, '', tsConfig, this.traceModuleResolution, this.logger);
+			const config = new ProjectConfiguration(
+				this.inMemoryFs,
+				documentRegistry,
+				trimmedRootPath,
+				this.versions,
+				'',
+				tsConfig,
+				this.traceModuleResolution,
+				this.logger
+			);
 			configs.set(trimmedRootPath, config);
 			fallbackConfigs[configType] = config;
 		}
@@ -148,7 +157,16 @@ export class ProjectManager implements Disposable {
 					}
 					const configType = this.getConfigurationType(filePath);
 					const configs = this.configs[configType];
-					configs.set(dir, new ProjectConfiguration(this.localFs, dir, this.versions, filePath, undefined, this.traceModuleResolution, this.logger));
+					configs.set(dir, new ProjectConfiguration(
+						this.inMemoryFs,
+						documentRegistry,
+						dir,
+						this.versions,
+						filePath,
+						undefined,
+						this.traceModuleResolution,
+						this.logger
+					));
 					// Remove catch-all config (if exists)
 					if (configs.get(trimmedRootPath) === fallbackConfigs[configType]) {
 						configs.delete(trimmedRootPath);
@@ -175,7 +193,7 @@ export class ProjectManager implements Disposable {
 	 * @return local side of file content provider which keeps cached copies of fethed files
 	 */
 	getFs(): InMemoryFileSystem {
-		return this.localFs;
+		return this.inMemoryFs;
 	}
 
 	/**
@@ -183,7 +201,7 @@ export class ProjectManager implements Disposable {
 	 * @return true if there is a fetched file with a given path
 	 */
 	hasFile(filePath: string) {
-		return this.localFs.fileExists(filePath);
+		return this.inMemoryFs.fileExists(filePath);
 	}
 
 	/**
@@ -209,7 +227,7 @@ export class ProjectManager implements Disposable {
 						await this.updater.ensureStructure();
 						// Ensure content of all all global .d.ts, [tj]sconfig.json, package.json files
 						await Promise.all(
-							iterate(this.localFs.uris())
+							iterate(this.inMemoryFs.uris())
 								.filter(uri => isGlobalTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
 								.map(uri => this.updater.ensure(uri))
 						);
@@ -251,7 +269,7 @@ export class ProjectManager implements Disposable {
 					this.ensuredOwnFiles = (async () => {
 						await this.updater.ensureStructure(span);
 						await Promise.all(
-							iterate(this.localFs.uris())
+							iterate(this.inMemoryFs.uris())
 								.filter(uri => !uri.includes('/node_modules/') && isJSTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
 								.map(uri => this.updater.ensure(uri))
 						);
@@ -276,7 +294,7 @@ export class ProjectManager implements Disposable {
 					this.ensuredAllFiles = (async () => {
 						await this.updater.ensureStructure(span);
 						await Promise.all(
-							iterate(this.localFs.uris())
+							iterate(this.inMemoryFs.uris())
 								.filter(uri => isJSTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
 								.map(uri => this.updater.ensure(uri))
 						);
@@ -353,47 +371,32 @@ export class ProjectManager implements Disposable {
 		if (observable) {
 			return observable;
 		}
-		// TypeScript works with file paths, not URIs
-		const filePath = uri2path(uri);
 		observable = Observable.from(this.updater.ensure(uri))
 			.mergeMap(() => {
-				const config = this.getConfiguration(filePath);
+				const referencingFilePath = uri2path(uri);
+				const config = this.getConfiguration(referencingFilePath);
 				config.ensureBasicFiles(span);
-				const contents = this.localFs.getContent(uri);
+				const contents = this.inMemoryFs.getContent(uri);
 				const info = ts.preProcessFile(contents, true, true);
 				const compilerOpt = config.getHost().getCompilationSettings();
-				// TODO remove platform-specific behavior here, the host OS is not coupled to the client OS
-				const resolver = !this.strict && os.platform() === 'win32' ? path : path.posix;
+				const pathResolver = referencingFilePath.includes('\\') ? path.win32 : path.posix;
 				// Iterate imported files
 				return Observable.merge(
 					// References with `import`
 					Observable.from(info.importedFiles)
-						.map(importedFile => ts.resolveModuleName(importedFile.fileName, toUnixPath(filePath), compilerOpt, config.moduleResolutionHost()))
-						// false means we didn't find a file defining the module. It
-						// could still exist as an ambient module, which is why we
-						// fetch global*.d.ts files.
+						.map(importedFile => ts.resolveModuleName(importedFile.fileName, toUnixPath(referencingFilePath), compilerOpt, this.inMemoryFs))
+						// false means we didn't find a file defining the module. It could still
+						// exist as an ambient module, which is why we fetch global*.d.ts files.
 						.filter(resolved => !!(resolved && resolved.resolvedModule))
 						.map(resolved => resolved.resolvedModule!.resolvedFileName),
 					// References with `<reference path="..."/>`
 					Observable.from(info.referencedFiles)
-						// Resolve triple slash references relative to current file
-						// instead of using module resolution host because it behaves
-						// differently in "nodejs" mode
-						.map(referencedFile => resolver.resolve(
-							this.rootPath,
-							resolver.dirname(filePath),
-							toUnixPath(referencedFile.fileName)
-						)),
+						// Resolve triple slash references relative to current file instead of using
+						// module resolution host because it behaves differently in "nodejs" mode
+						.map(referencedFile => pathResolver.resolve(this.rootPath, pathResolver.dirname(referencingFilePath), toUnixPath(referencedFile.fileName))),
 					// References with `<reference types="..."/>`
 					Observable.from(info.typeReferenceDirectives)
-						.map(typeReferenceDirective =>
-							ts.resolveTypeReferenceDirective(
-								typeReferenceDirective.fileName,
-								filePath,
-								compilerOpt,
-								config.moduleResolutionHost()
-							)
-						)
+						.map(typeReferenceDirective => ts.resolveTypeReferenceDirective(typeReferenceDirective.fileName, referencingFilePath, compilerOpt, this.inMemoryFs))
 						.filter(resolved => !!(resolved && resolved.resolvedTypeReferenceDirective && resolved.resolvedTypeReferenceDirective.resolvedFileName))
 						.map(resolved => resolved.resolvedTypeReferenceDirective!.resolvedFileName!)
 				);
@@ -486,7 +489,7 @@ export class ProjectManager implements Disposable {
 	 */
 	didClose(uri: string, span = new Span()) {
 		const filePath = uri2path(uri);
-		this.localFs.didClose(uri);
+		this.inMemoryFs.didClose(uri);
 		let version = this.versions.get(uri) || 0;
 		this.versions.set(uri, ++version);
 		const config = this.getConfigurationIfExists(filePath);
@@ -504,7 +507,7 @@ export class ProjectManager implements Disposable {
 	 */
 	didChange(uri: string, text: string, span = new Span()) {
 		const filePath = uri2path(uri);
-		this.localFs.didChange(uri, text);
+		this.inMemoryFs.didChange(uri, text);
 		let version = this.versions.get(uri) || 0;
 		this.versions.set(uri, ++version);
 		const config = this.getConfigurationIfExists(filePath);
@@ -521,7 +524,7 @@ export class ProjectManager implements Disposable {
 	 * @param uri file's URI
 	 */
 	didSave(uri: string) {
-		this.localFs.didSave(uri);
+		this.inMemoryFs.didSave(uri);
 	}
 
 	/**
@@ -570,12 +573,6 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	private fs: InMemoryFileSystem;
 
 	/**
-	 * List of files that project consist of (based on tsconfig includes/excludes and wildcards).
-	 * Each item is a relative file path
-	 */
-	expectedFilePaths: string[];
-
-	/**
 	 * Current list of files that were implicitly added to project
 	 * (every time when we need to extract data from a file that we haven't touched yet).
 	 * Each item is a relative file path
@@ -593,11 +590,10 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 	 */
 	private versions: Map<string, number>;
 
-	constructor(rootPath: string, options: ts.CompilerOptions, fs: InMemoryFileSystem, expectedFiles: string[], versions: Map<string, number>, private logger: Logger = new NoopLogger()) {
+	constructor(rootPath: string, options: ts.CompilerOptions, fs: InMemoryFileSystem, versions: Map<string, number>, private logger: Logger = new NoopLogger()) {
 		this.rootPath = rootPath;
 		this.options = options;
 		this.fs = fs;
-		this.expectedFilePaths = expectedFiles;
 		this.versions = versions;
 		this.projectVersion = 1;
 		this.filePaths = [];
@@ -743,25 +739,34 @@ export class ProjectConfiguration {
 	private rootFilePath: string;
 
 	/**
+	 * List of files that project consist of (based on tsconfig includes/excludes and wildcards).
+	 * Each item is a relative file path
+	 */
+	private expectedFilePaths = new Set<string>();
+
+	/**
 	 * @param fs file system to use
+	 * @param documentRegistry Shared DocumentRegistry that manages SourceFile objects
 	 * @param rootFilePath root file path, absolute
 	 * @param configFilePath configuration file path, absolute
 	 * @param configContent optional configuration content to use instead of reading configuration file)
 	 */
-	constructor(fs: InMemoryFileSystem, rootFilePath: string, versions: Map<string, number>, configFilePath: string, configContent?: any, traceModuleResolution?: boolean, private logger: Logger = new NoopLogger()) {
+	constructor(
+		fs: InMemoryFileSystem,
+		private documentRegistry: ts.DocumentRegistry,
+		rootFilePath: string,
+		versions: Map<string, number>,
+		configFilePath: string,
+		configContent?: any,
+		traceModuleResolution?: boolean,
+		private logger: Logger = new NoopLogger()
+	) {
 		this.fs = fs;
 		this.configFilePath = configFilePath;
 		this.configContent = configContent;
 		this.versions = versions;
 		this.traceModuleResolution = traceModuleResolution || false;
 		this.rootFilePath = rootFilePath;
-	}
-
-	/**
-	 * @return module resolution host to use by TS service
-	 */
-	moduleResolutionHost(): ts.ModuleResolutionHost {
-		return this.fs;
 	}
 
 	/**
@@ -777,6 +782,7 @@ export class ProjectConfiguration {
 		this.ensuredAllFiles = false;
 		this.service = undefined;
 		this.host = undefined;
+		this.expectedFilePaths = new Set();
 	}
 
 	/**
@@ -839,7 +845,7 @@ export class ProjectConfiguration {
 		}
 		const base = dir || this.fs.path;
 		const configParseResult = ts.parseJsonConfigFileContent(configObject, this.fs, base);
-		const expFiles = configParseResult.fileNames;
+		this.expectedFilePaths = new Set(configParseResult.fileNames);
 
 		const options = configParseResult.options;
 		if (/(^|\/)jsconfig\.json$/.test(this.configFilePath)) {
@@ -852,11 +858,10 @@ export class ProjectConfiguration {
 			this.fs.path,
 			options,
 			this.fs,
-			expFiles,
 			this.versions,
 			this.logger
 		);
-		this.service = ts.createLanguageService(this.host, ts.createDocumentRegistry());
+		this.service = ts.createLanguageService(this.host, this.documentRegistry);
 		this.initialized = true;
 	}
 
@@ -884,9 +889,10 @@ export class ProjectConfiguration {
 			return;
 		}
 
+		// Add all global declaration files from the workspace and all declarations from the project
 		for (const uri of this.fs.uris()) {
 			const fileName = uri2path(uri);
-			if (isGlobalTSFile(fileName) || (!isDependencyFile(fileName) && isDeclarationFile(fileName))) {
+			if (isGlobalTSFile(fileName) || (isDeclarationFile(fileName) && this.expectedFilePaths.has(toUnixPath(fileName)))) {
 				const sourceFile = program.getSourceFile(fileName);
 				if (!sourceFile) {
 					this.getHost().addFile(fileName);
@@ -928,7 +934,7 @@ export class ProjectConfiguration {
 		if (!program) {
 			return;
 		}
-		for (const fileName of (this.getHost().expectedFilePaths || [])) {
+		for (const fileName of this.expectedFilePaths) {
 			const sourceFile = program.getSourceFile(fileName);
 			if (!sourceFile) {
 				this.getHost().addFile(fileName);

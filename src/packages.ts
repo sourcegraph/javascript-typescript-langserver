@@ -8,6 +8,7 @@ import { Disposable } from './disposable';
 import { FileSystemUpdater } from './fs';
 import { Logger, NoopLogger } from './logging';
 import { InMemoryFileSystem } from './memfs';
+import { tracePromise } from './tracing';
 
 /**
  * Schema of a package.json file
@@ -151,7 +152,7 @@ export class PackageManager extends EventEmitter implements Disposable {
 		if (!packageJsonUri) {
 			return undefined;
 		}
-		return await this.getPackageJson(packageJsonUri);
+		return await this.getPackageJson(packageJsonUri, span);
 	}
 
 	/**
@@ -159,20 +160,23 @@ export class PackageManager extends EventEmitter implements Disposable {
 	 *
 	 * @param uri URI of the package.json
 	 */
-	async getPackageJson(uri: string, span = new Span()): Promise<PackageJson> {
-		if (uri.includes('/node_modules/')) {
-			throw new Error(`Not an own package.json: ${uri}`);
-		}
-		let packageJson = this.packages.get(uri);
-		if (packageJson) {
+	async getPackageJson(uri: string, childOf = new Span()): Promise<PackageJson> {
+		return tracePromise('Get package.json', childOf, async span => {
+			span.addTags({ uri });
+			if (uri.includes('/node_modules/')) {
+				throw new Error(`Not an own package.json: ${uri}`);
+			}
+			let packageJson = this.packages.get(uri);
+			if (packageJson) {
+				return packageJson;
+			}
+			await this.updater.ensure(uri, span);
+			packageJson = this.packages.get(uri)!;
+			if (!packageJson) {
+				throw new Error(`Expected ${uri} to be registered in PackageManager`);
+			}
 			return packageJson;
-		}
-		await this.updater.ensure(uri, span);
-		packageJson = this.packages.get(uri)!;
-		if (!packageJson) {
-			throw new Error(`Expected ${uri} to be registered in PackageManager`);
-		}
-		return packageJson;
+		});
 	}
 
 	/**
