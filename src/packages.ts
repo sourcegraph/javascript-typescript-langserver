@@ -113,9 +113,9 @@ export class PackageManager extends EventEmitter implements Disposable {
 					// Don't override existing content with undefined
 					if (parsed || !this.packages.get(uri)) {
 						this.packages.set(uri, parsed);
+						this.logger.log(`Found package ${uri}`);
 						this.emit('parsed', uri, parsed);
 					}
-					this.logger.log(`Found package ${uri}`);
 					// If the current root package.json is further nested than this one, replace it
 					const level = parts.pathname.split('/').length;
 					if (level < rootPackageJsonLevel) {
