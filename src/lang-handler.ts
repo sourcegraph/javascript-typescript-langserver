@@ -26,13 +26,13 @@ export interface LanguageClient {
 	 * any text document. This allows language servers to operate without accessing the file system
 	 * directly.
 	 */
-	textDocumentXcontent(params: TextDocumentContentParams, childOf?: Span): Promise<TextDocumentItem>;
+	textDocumentXcontent(params: TextDocumentContentParams, childOf?: Span): Observable<TextDocumentItem>;
 
 	/**
 	 * The files request is sent from the server to the client to request a list of all files in the
 	 * workspace or inside the directory of the `base` parameter, if given.
 	 */
-	workspaceXfiles(params: WorkspaceFilesParams, childOf?: Span): Promise<TextDocumentIdentifier[]>;
+	workspaceXfiles(params: WorkspaceFilesParams, childOf?: Span): Observable<TextDocumentIdentifier[]>;
 
 	/**
 	 * The log message notification is sent from the server to the client to ask
@@ -44,7 +44,7 @@ export interface LanguageClient {
 	 * The cache get request is sent from the server to the client to request the value of a cache
 	 * item identified by the provided key.
 	 */
-	xcacheGet(params: CacheGetParams, childOf?: Span): Promise<any>;
+	xcacheGet(params: CacheGetParams, childOf?: Span): Observable<any>;
 
 	/**
 	 * The cache set notification is sent from the server to the client to set the value of a cache
@@ -65,7 +65,7 @@ export interface LanguageClient {
 	 * Can occur as as a result of rename or executeCommand (code action).
 	 * @param params The edits to apply to the workspace
 	 */
-	workspaceApplyEdit(params: ApplyWorkspaceEditParams, childOf?: Span): Promise<ApplyWorkspaceEditResponse>;
+	workspaceApplyEdit(params: ApplyWorkspaceEditParams, childOf?: Span): Observable<ApplyWorkspaceEditResponse>;
 }
 
 /**
@@ -145,16 +145,16 @@ export class RemoteLanguageClient {
 	 * any text document. This allows language servers to operate without accessing the file system
 	 * directly.
 	 */
-	textDocumentXcontent(params: TextDocumentContentParams, childOf = new Span()): Promise<TextDocumentItem> {
-		return this.request('textDocument/xcontent', params, childOf).toPromise();
+	textDocumentXcontent(params: TextDocumentContentParams, childOf = new Span()): Observable<TextDocumentItem> {
+		return this.request('textDocument/xcontent', params, childOf);
 	}
 
 	/**
 	 * The files request is sent from the server to the client to request a list of all files in the
 	 * workspace or inside the directory of the `base` parameter, if given.
 	 */
-	workspaceXfiles(params: WorkspaceFilesParams, childOf = new Span()): Promise<TextDocumentIdentifier[]> {
-		return this.request('workspace/xfiles', params, childOf).toPromise();
+	workspaceXfiles(params: WorkspaceFilesParams, childOf = new Span()): Observable<TextDocumentIdentifier[]> {
+		return this.request('workspace/xfiles', params, childOf);
 	}
 
 	/**
@@ -169,8 +169,8 @@ export class RemoteLanguageClient {
 	 * The cache get request is sent from the server to the client to request the value of a cache
 	 * item identified by the provided key.
 	 */
-	xcacheGet(params: CacheGetParams, childOf = new Span()): Promise<any> {
-		return this.request('xcache/get', params, childOf).toPromise();
+	xcacheGet(params: CacheGetParams, childOf = new Span()): Observable<any> {
+		return this.request('xcache/get', params, childOf);
 	}
 
 	/**
@@ -179,7 +179,7 @@ export class RemoteLanguageClient {
 	 * because the server is not supposed to act differently if the cache set failed.
 	 */
 	xcacheSet(params: CacheSetParams): void {
-		return this.notify('xcache/set', params);
+		this.notify('xcache/set', params);
 	}
 
 	/**
@@ -197,7 +197,7 @@ export class RemoteLanguageClient {
 	 *
 	 * @param params The edits to apply.
 	 */
-	workspaceApplyEdit(params: ApplyWorkspaceEditParams, childOf = new Span()): Promise<ApplyWorkspaceEditResponse> {
-		return this.request('workspace/applyEdit', params, childOf).toPromise();
+	workspaceApplyEdit(params: ApplyWorkspaceEditParams, childOf = new Span()): Observable<ApplyWorkspaceEditResponse> {
+		return this.request('workspace/applyEdit', params, childOf);
 	}
 }

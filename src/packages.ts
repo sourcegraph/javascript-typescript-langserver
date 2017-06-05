@@ -8,7 +8,7 @@ import { Disposable } from './disposable';
 import { FileSystemUpdater } from './fs';
 import { Logger, NoopLogger } from './logging';
 import { InMemoryFileSystem } from './memfs';
-import { tracePromise } from './tracing';
+import { traceObservable } from './tracing';
 
 /**
  * Schema of a package.json file
@@ -145,37 +145,44 @@ export class PackageManager extends EventEmitter implements Disposable {
 
 	/**
 	 * Gets the content of the closest package.json known to to the DependencyManager in the ancestors of a URI
+	 *
+	 * @return Observable that emits a single PackageJson or never
 	 */
-	async getClosestPackageJson(uri: string, span = new Span()): Promise<PackageJson | undefined> {
-		await this.updater.ensureStructure();
-		const packageJsonUri = this.getClosestPackageJsonUri(uri);
-		if (!packageJsonUri) {
-			return undefined;
-		}
-		return await this.getPackageJson(packageJsonUri, span);
+	getClosestPackageJson(uri: string, span = new Span()): Observable<PackageJson> {
+		return this.updater.ensureStructure()
+			.concat(Observable.defer(() => {
+				const packageJsonUri = this.getClosestPackageJsonUri(uri);
+				if (!packageJsonUri) {
+					return Observable.empty<never>();
+				}
+				return this.getPackageJson(packageJsonUri, span);
+			}));
 	}
 
 	/**
 	 * Returns the parsed package.json of the passed URI
 	 *
 	 * @param uri URI of the package.json
+	 * @return Observable that emits a single PackageJson or never
 	 */
-	async getPackageJson(uri: string, childOf = new Span()): Promise<PackageJson> {
-		return tracePromise('Get package.json', childOf, async span => {
+	getPackageJson(uri: string, childOf = new Span()): Observable<PackageJson> {
+		return traceObservable('Get package.json', childOf, span => {
 			span.addTags({ uri });
 			if (uri.includes('/node_modules/')) {
-				throw new Error(`Not an own package.json: ${uri}`);
+				return Observable.throw(new Error(`Not an own package.json: ${uri}`));
 			}
 			let packageJson = this.packages.get(uri);
 			if (packageJson) {
-				return packageJson;
+				return Observable.of(packageJson);
 			}
-			await this.updater.ensure(uri, span);
-			packageJson = this.packages.get(uri)!;
-			if (!packageJson) {
-				throw new Error(`Expected ${uri} to be registered in PackageManager`);
-			}
-			return packageJson;
+			return this.updater.ensure(uri, span)
+				.concat(Observable.defer(() => {
+					packageJson = this.packages.get(uri)!;
+					if (!packageJson) {
+						return Observable.throw(new Error(`Expected ${uri} to be registered in PackageManager`));
+					}
+					return Observable.of(packageJson);
+				}));
 		});
 	}
 
