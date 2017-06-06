@@ -745,7 +745,7 @@ export class TypeScriptService {
 					.filter(({ tree, parent }) => navigationTreeIsSymbol(tree))
 					.map(({ tree, parent }) => navigationTreeToSymbolInformation(tree, parent, sourceFile, this.root));
 			})
-			.map(symbol => ({ op: 'add', path: '', value: symbol }) as jsonpatch.Operation)
+			.map(symbol => ({ op: 'add', path: '/-', value: symbol }) as jsonpatch.Operation)
 			.startWith({ op: 'add', path: '', value: [] } as jsonpatch.Operation);
 	}
 
