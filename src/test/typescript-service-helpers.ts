@@ -925,9 +925,9 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						uri: rootUri + 'c.ts'
 					},
 					symbol: {
-						filePath: 'node_modules/dep/dep.ts',
+						filePath: 'dep/dep.ts',
 						containerKind: '',
-						containerName: '"node_modules/dep/dep"',
+						containerName: '"dep/dep"',
 						kind: 'var',
 						name: 'x'
 					}
@@ -952,9 +952,9 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						uri: rootUri + 'c.ts'
 					},
 					symbol: {
-						filePath: 'node_modules/dep/dep.ts',
+						filePath: 'dep/dep.ts',
 						containerKind: '',
-						containerName: '"node_modules/dep/dep"',
+						containerName: '"dep/dep"',
 						kind: 'var',
 						name: 'x',
 						package: {
@@ -1051,9 +1051,9 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 							uri: rootUri + 'c.ts'
 						},
 						symbol: {
-							filePath: 'node_modules/dep/dep.ts',
+							filePath: 'dep/dep.ts',
 							containerKind: '',
-							containerName: '"node_modules/dep/dep"',
+							containerName: '"dep/dep"',
 							kind: 'var',
 							name: 'x'
 						}

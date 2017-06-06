@@ -3,7 +3,33 @@ import * as ts from 'typescript';
 import { SymbolInformation, SymbolKind } from 'vscode-languageserver-types';
 import { isTypeScriptLibrary } from './memfs';
 import { SymbolDescriptor } from './request-type';
-import { path2uri } from './util';
+import { path2uri, toUnixPath } from './util';
+
+/**
+ * Returns a SymbolDescriptor for a ts.DefinitionInfo
+ */
+export function definitionInfoToSymbolDescriptor(info: ts.DefinitionInfo, rootPath: string): SymbolDescriptor {
+	const rootUnixPath = toUnixPath(rootPath);
+	const symbolDescriptor: SymbolDescriptor = {
+		kind: info.kind || '',
+		name: info.name || '',
+		containerKind: info.containerKind || '',
+		containerName: info.containerName || '',
+		filePath: info.fileName
+	};
+	// If the symbol is an external module representing a file, set name to the file path
+	if (info.kind === ts.ScriptElementKind.moduleElement && info.name && /[\\\/]/.test(info.name)) {
+		symbolDescriptor.name = '"' + info.fileName.replace(/(?:\.d)?\.tsx?$/, '') + '"';
+	}
+	// If the symbol itself is not a module and there is no containerKind
+	// then the container is an external module named by the file name (without file extension)
+	if (info.kind !== ts.ScriptElementKind.moduleElement && !info.containerKind && !info.containerName) {
+		symbolDescriptor.containerName = '"' + info.fileName.replace(/(?:\.d)?\.tsx?$/, '') + '"';
+		symbolDescriptor.containerKind = ts.ScriptElementKind.moduleElement;
+	}
+	normalizeSymbolDescriptorPaths(symbolDescriptor, rootUnixPath);
+	return symbolDescriptor;
+}
 
 /**
  * Transforms definition's file name to URI. If definition belongs to the in-memory TypeScript library,
@@ -136,10 +162,7 @@ export function navigationTreeToSymbolDescriptor(tree: ts.NavigationTree, parent
 		}
 		symbolDescriptor.containerKind = ts.ScriptElementKind.moduleElement;
 	}
-	// Make all paths that may occur in module names relative to the workspace rootPath
-	symbolDescriptor.name = symbolDescriptor.name.replace(rootPath, '');
-	symbolDescriptor.containerName = symbolDescriptor.containerName.replace(rootPath, '');
-	symbolDescriptor.filePath = symbolDescriptor.filePath.replace(rootPath, '');
+	normalizeSymbolDescriptorPaths(symbolDescriptor, rootPath);
 	return symbolDescriptor;
 }
 
@@ -166,4 +189,19 @@ export function navigationTreeIsSymbol(tree: ts.NavigationTree): boolean {
 		return false;
 	}
 	return true;
+}
+
+/**
+ * Makes paths relative to the passed rootPath and strips `node_modules` out of paths
+ */
+function normalizeSymbolDescriptorPaths(symbol: SymbolDescriptor, rootPath: string) {
+	for (const key of ['name', 'containerName', 'filePath'] as ['name', 'containerName', 'filePath']) {
+		// Make all paths that may occur in module names relative to the workspace rootPath
+		symbol[key] = symbol[key].replace(rootPath, '');
+		// Remove node_modules part from a module name
+		// The SymbolDescriptor will be used in the defining repo, where the symbol file path will never contain node_modules
+		// It may contain the package name though if the repo is a monorepo with multiple packages
+		const regExp = /[^"]*node_modules\//;
+		symbol[key] = symbol[key].replace(regExp, '');
+	}
 }
