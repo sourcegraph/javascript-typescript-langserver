@@ -51,7 +51,6 @@ import {
 	WorkspaceSymbolParams
 } from './request-type';
 import {
-	defInfoToSymbolDescriptor,
 	getMatchingPropertyCount,
 	getPropertyCount,
 	JSONPTR,
@@ -66,6 +65,7 @@ import { castArray, merge, omit } from 'lodash';
 import * as url from 'url';
 import { extractDefinitelyTypedPackageName, extractNodeModulesPackageName, PackageJson, PackageManager } from './packages';
 import {
+	definitionInfoToSymbolDescriptor,
 	locationUri,
 	navigateToItemToSymbolInformation,
 	navigationTreeIsSymbol,
@@ -408,7 +408,7 @@ export class TypeScriptService {
 								if (!sourceFile) {
 									throw new Error(`Expected source file ${definition.fileName} to exist in configuration`);
 								}
-								const symbol = defInfoToSymbolDescriptor(definition, this.root);
+								const symbol = definitionInfoToSymbolDescriptor(definition, this.root);
 								if (packageDescriptor) {
 									symbol.package = packageDescriptor;
 								}
@@ -802,7 +802,7 @@ export class TypeScriptService {
 									// Find definition for node
 									return Observable.from(config.getService().getDefinitionAtPosition(source.fileName, node.pos + 1) || [])
 										.mergeMap(definition => {
-											const symbol = defInfoToSymbolDescriptor(definition, this.root);
+											const symbol = definitionInfoToSymbolDescriptor(definition, this.root);
 											// Check if SymbolDescriptor without PackageDescriptor matches
 											const score = getMatchingPropertyCount(queryWithoutPackage, symbol);
 											if (score < minScore || (params.query.package && !definition.fileName.includes(params.query.package.name))) {

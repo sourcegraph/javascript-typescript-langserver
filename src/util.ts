@@ -148,35 +148,6 @@ export function isDeclarationFile(filename: string): boolean {
 }
 
 /**
- * Converts a ts.DefinitionInfo to a SymbolDescriptor
- */
-export function defInfoToSymbolDescriptor(info: ts.DefinitionInfo, rootPath: string): SymbolDescriptor {
-	const rootUnixPath = toUnixPath(rootPath);
-	const symbolDescriptor: SymbolDescriptor = {
-		kind: info.kind || '',
-		name: info.name || '',
-		containerKind: info.containerKind || '',
-		containerName: info.containerName || '',
-		filePath: info.fileName
-	};
-	// If the symbol is an external module representing a file, set name to the file path
-	if (info.kind === ts.ScriptElementKind.moduleElement && info.name && /[\\\/]/.test(info.name)) {
-		symbolDescriptor.name = '"' + info.fileName.replace(/(?:\.d)?\.tsx?$/, '') + '"';
-	}
-	// If the symbol itself is not a module and there is no containerKind
-	// then the container is an external module named by the file name (without file extension)
-	if (info.kind !== ts.ScriptElementKind.moduleElement && !info.containerKind && !info.containerName) {
-		symbolDescriptor.containerName = '"' + info.fileName.replace(/(?:\.d)?\.tsx?$/, '') + '"';
-		symbolDescriptor.containerKind = ts.ScriptElementKind.moduleElement;
-	}
-	// Make paths relative to root paths
-	symbolDescriptor.containerName = symbolDescriptor.containerName.replace(rootUnixPath, '');
-	symbolDescriptor.name = symbolDescriptor.name.replace(rootUnixPath, '');
-	symbolDescriptor.filePath = symbolDescriptor.filePath.replace(rootUnixPath, '');
-	return symbolDescriptor;
-}
-
-/**
  * Compares two values and returns a numeric score between 0 and 1 defining of how well they match.
  * E.g. if 2 of 4 properties in the query match, will return 2
  */
