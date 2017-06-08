@@ -18,6 +18,7 @@ import {
 	DocumentSymbolParams,
 	ExecuteCommandParams,
 	Hover,
+	InsertTextFormat,
 	Location,
 	MarkedString,
 	ParameterInformation,
@@ -173,6 +174,8 @@ export class TypeScriptService {
 		}
 	};
 
+	private completionWithSnippets: boolean = false;
+
 	constructor(protected client: LanguageClient, protected options: TypeScriptServiceOptions = {}) {
 		this.logger = new LSPLogger(client);
 	}
@@ -200,6 +203,10 @@ export class TypeScriptService {
 		if (params.rootUri || params.rootPath) {
 			this.root = params.rootPath || uri2path(params.rootUri!);
 			this.rootUri = params.rootUri || path2uri(params.rootPath!);
+
+			if (params.capabilities.textDocument && params.capabilities.textDocument.completion && params.capabilities.textDocument.completion.completionItem) {
+				this.completionWithSnippets = params.capabilities.textDocument.completion.completionItem.snippetSupport || false;
+			}
 			// The root URI always refers to a directory
 			if (!this.rootUri.endsWith('/')) {
 				this.rootUri += '/';
@@ -998,10 +1005,26 @@ export class TypeScriptService {
 				if (completions == null) {
 					return [];
 				}
+				function createSnippet(entry: ts.CompletionEntryDetails): string {
+					let index = 0;
+					const parameters = entry.displayParts
+						.filter(p => p.kind === 'parameterName')
+						.map(p => {
+							index++;
+							return '${' + `${index}:${p.text}` + '}';
+						});
+					if (entry.kind === 'property') {
+						return entry.name;
+					} else {
+						const paramString = parameters.join(', ');
+						return entry.name + `(${paramString})`;
+					}
+				}
 
 				return Observable.from(completions.entries)
 					.map(entry =>  {
 						const item: CompletionItem = { label: entry.name };
+
 						const kind = completionKinds[entry.kind];
 						if (kind) {
 							item.kind = kind;
@@ -1013,6 +1036,13 @@ export class TypeScriptService {
 						if (details) {
 							item.documentation = ts.displayPartsToString(details.documentation);
 							item.detail = ts.displayPartsToString(details.displayParts);
+							if (this.completionWithSnippets) {
+								item.insertTextFormat = InsertTextFormat.Snippet;
+								item.insertText = createSnippet(details);
+							} else {
+								item.insertTextFormat = InsertTextFormat.PlainText;
+								item.insertText = details.name;
+							}
 						}
 						return { op: 'add', path: '/items/-', value: item } as Operation;
 					})
