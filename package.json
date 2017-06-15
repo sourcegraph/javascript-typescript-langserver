@@ -2,7 +2,7 @@
   "name": "javascript-typescript-langserver",
   "homepage": "https://github.com/sourcegraph/javascript-typescript-langserver",
   "author": "Sourcegraph",
-  "version": "2.0.0",
+  "version": "0.0.0-development",
   "license": "Apache-2.0",
   "description": "Implementation of the Language Server Protocol for JavaScript and TypeScript",
   "keywords": [
@@ -30,7 +30,9 @@
     "test": "mocha --require source-map-support/register --timeout 7000 --slow 2000 lib/test/**/*.js",
     "lint": "tslint -t msbuild -c tslint.json 'src/**/*.ts'",
     "build": "tsc",
-    "watch": "tsc -w"
+    "watch": "tsc -w",
+    "semantic-release": "semantic-release pre && npm publish && semantic-release post",
+    "commitmsg": "validate-commit-msg"
   },
   "dependencies": {
     "@reactivex/rxjs": "^5.3.0",
@@ -65,13 +67,18 @@
     "@types/rimraf": "0.0.28",
     "@types/sinon": "2.3.1",
     "@types/temp": "0.8.29",
+    "commitizen": "^2.9.6",
+    "cz-conventional-changelog": "^2.0.0",
+    "husky": "^0.13.4",
     "mocha": "^3.2.0",
     "nyc": "^11.0.2",
     "rimraf": "^2.6.1",
+    "semantic-release": "^6.3.6",
     "sinon": "^2.0.0",
     "source-map-support": "^0.4.11",
     "temp": "^0.8.3",
-    "tslint": "^5.0.0"
+    "tslint": "^5.0.0",
+    "validate-commit-msg": "^2.12.2"
   },
   "bin": {
     "javascript-typescript-langserver": "./lib/language-server.js",
@@ -84,5 +91,10 @@
     "exclude": [
       "lib/test/**/*.js"
     ]
+  },
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-conventional-changelog"
+    }
   }
 }
