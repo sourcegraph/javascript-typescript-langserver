@@ -7,52 +7,84 @@
 )](https://ci.appveyor.com/project/sourcegraph/javascript-typescript-langserver/branch/master)
 [![codecov](https://codecov.io/gh/sourcegraph/javascript-typescript-langserver/branch/master/graph/badge.svg)](https://codecov.io/gh/sourcegraph/javascript-typescript-langserver)
 [![Dependencies](https://david-dm.org/sourcegraph/javascript-typescript-langserver.svg)](https://david-dm.org/sourcegraph/javascript-typescript-langserver)
+[![OpenTracing Badge](https://img.shields.io/badge/OpenTracing-enabled-blue.svg)](http://opentracing.io)
 [![Gitter](https://badges.gitter.im/sourcegraph/javascript-typescript-langserver.svg)](https://gitter.im/sourcegraph/javascript-typescript-langserver?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
 This is a language server for JavaScript and TypeScript that adheres to the [Language Server Protocol (LSP)](https://github.com/Microsoft/language-server-protocol/blob/master/protocol.md). It uses [TypeScript's](http://www.typescriptlang.org/) LanguageService to perform source code analysis.
 
-## Getting started
 
-1. `npm install`
-1. `npm run build`
-1. `node lib/language-server.js`
+## Try it out
 
-To try it in [Visual Studio Code](https://code.visualstudio.com), install the [vscode-client](https://github.com/sourcegraph/langserver/tree/master/vscode-client) extension and then open up a `.ts` file.
+ - On [sourcegraph.com](https://sourcegraph.com/github.com/sourcegraph/javascript-typescript-langserver/-/blob/src/typescript-service.ts)
+ - In [Visual Studio Code](https://github.com/sourcegraph/vscode-javascript-typescript) (as an alternative to the built-in TypeScript integration)
+ - In [Eclipse Che](https://eclipse.org/che/)
+ - In [NeoVim](https://github.com/autozimu/LanguageClient-neovim)
 
-## Development
+## Features
 
-Run `npm run watch`.
+ - Hovers
+ - Goto definition
+ - Find all references
+ - Document symbols
+ - Workspace symbol search
+ - Rename
+ - Completion
+ - Signature help
+ - Diagnostics
+ - Quick fixes
 
-## Tests
+## Run it from source
 
-Run `npm test`.
+```bash
+# install dependencies
+npm install
 
-## Command line arguments 
+# compile
+npm run build
+# or compile on file changes
+npm run watch
 
-* `-p, --port` specifies port to use, default one is `2089`
-* `-s, --strict` enables strict mode where server expects all files to be receives in `didOpen` notification requests
-* `-c, --cluster` specifies number of concurrent cluster workers (defaults to number of CPUs)
-* `-t, --trace` enables printing of all incoming and outgoing messages
-* `-l, --logfile` specifies log file to print all messages to
+# run over STDIO
+node lib/language-server-stdio
+# or run over TCP
+node lib/language-server
 
-## Supported LSP requests
+# run tests
+npm test
+```
 
-### `initialize`
-In strict mode we expect `rootPath` to be equal `file:///` while in non-strict mode VSCode usually sends absolute file URL. In both modes does not track existence of calling process.
-### `exit`
-Implementation closes underlying communication channel
-### `shutdown`
-Does nothing opposite to LSP specification that expects server to exit
-### `textDocument/hover`
-### `textDocument/definition`
-### `textDocument/references`
-### `workspace/symbols`
-Introduces `limit` parameter to limit number of symbols to return
+## Options
 
-## Differences from LSP protocol specification
-In strict mode LSP server does not touch underlying file system, instead it uses the [LSP files extension](https://github.com/sourcegraph/language-server-protocol/blob/master/extension-files.md) to retrieve workspace files and file contents.
+```
+  Usage: language-server [options]
 
-## Known issues
+  Options:
 
-* You need to disable VSCode's built-in TypeScript support to avoid weird conflicts on TypeScript files (double hover tooltips, etc.). There's a hacky way to do this: add the setting `{"typescript.tsdk": "/dev/null"}` to your VSCode user or workspace settings.
+    -h, --help            output usage information
+    -V, --version         output the version number
+    -s, --strict          enabled strict mode
+    -p, --port [port]     specifies LSP port to use (2089)
+    -c, --cluster [num]   number of concurrent cluster workers (defaults to number of CPUs, 8)
+    -t, --trace           print all requests and responses
+    -l, --logfile [file]  log to this file
+```
 
+## Extensions
+
+This language server implements some LSP extensions, prefixed with an `x`.
+
+- **[Files extension](https://github.com/sourcegraph/language-server-protocol/blob/master/extension-files.md)**  
+  Allows the server to request file contents without accessing the file system
+- **[SymbolDescriptor extension](https://github.com/sourcegraph/language-server-protocol/blob/master/extension-workspace-references.md)**  
+  Get a SymbolDescriptor for a symbol, search the workspace for symbols or references to it
+- **[Streaming](https://github.com/sourcegraph/language-server-protocol/blob/streaming/protocol.md#partialResult)**  
+  Supports streaming partial results for all endpoints through JSON Patches
+- **Packages extension**  
+  Methods to get information about dependencies
+- **TCP / multiple client support**  
+  When running over TCP, the `exit` notification will not kill the process, but close the TCP socket
+
+## Versioning
+
+This project follows [semver](http://semver.org/) for command line arguments and standard LSP methods.
+Any change to command line arguments, Node version or protocol breaking changes will result in a major version increase.
