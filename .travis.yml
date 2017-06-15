@@ -14,3 +14,8 @@ script:
 after_success:
   # Upload coverage to codecov
   - 'nyc report --reporter=lcov > coverage.lcov && bash <(curl -s https://codecov.io/bash) -f coverage/lcov.info'
+  - npm run semantic-release
+
+branches:
+  except:
+    - /^v\d+\.\d+\.\d+$/
