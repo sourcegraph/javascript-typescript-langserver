@@ -1,5 +1,5 @@
 import { Observable } from '@reactivex/rxjs';
-import jsonpatch from 'fast-json-patch';
+import { Operation } from 'fast-json-patch';
 import iterate from 'iterare';
 import { toPairs } from 'lodash';
 import { Span } from 'opentracing';
@@ -118,7 +118,7 @@ export class TypeScriptService {
 	/**
 	 * Cached response for empty workspace/symbol query
 	 */
-	private emptyQueryWorkspaceSymbols: Observable<jsonpatch.Operation>;
+	private emptyQueryWorkspaceSymbols: Observable<Operation>;
 
 	private traceModuleResolution: boolean;
 
@@ -196,7 +196,7 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches that build an `InitializeResult`
 	 */
-	initialize(params: InitializeParams, span = new Span()): Observable<jsonpatch.Operation> {
+	initialize(params: InitializeParams, span = new Span()): Observable<Operation> {
 		if (params.rootUri || params.rootPath) {
 			this.root = params.rootPath || uri2path(params.rootUri!);
 			this.rootUri = params.rootUri || path2uri(params.rootPath!);
@@ -268,7 +268,7 @@ export class TypeScriptService {
 			op: 'add',
 			path: '',
 			value: result
-		} as jsonpatch.Operation);
+		} as Operation);
 	}
 
 	/**
@@ -289,10 +289,10 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches that build a `null` result
 	 */
-	shutdown(params = {}, span = new Span()): Observable<jsonpatch.Operation> {
+	shutdown(params = {}, span = new Span()): Observable<Operation> {
 		this.projectManager.dispose();
 		this.packageManager.dispose();
-		return Observable.of({ op: 'add', path: '', value: null } as jsonpatch.Operation);
+		return Observable.of({ op: 'add', path: '', value: null } as Operation);
 	}
 
 	/**
@@ -310,9 +310,9 @@ export class TypeScriptService {
 	 * @return Observable of JSON Patches that build a `Location[]` result
 	 */
 
-	textDocumentDefinition(params: TextDocumentPositionParams, span = new Span()): Observable<jsonpatch.Operation> {
+	textDocumentDefinition(params: TextDocumentPositionParams, span = new Span()): Observable<Operation> {
 		return this._getDefinitionLocations(params, span)
-			.map((location: Location): jsonpatch.Operation => ({ op: 'add', path: '/-', value: location }))
+			.map((location: Location): Operation => ({ op: 'add', path: '/-', value: location }))
 			.startWith({ op: 'add', path: '', value: [] });
 	}
 
@@ -370,9 +370,9 @@ export class TypeScriptService {
 	 * @return Observable of JSON Patches that build a `SymbolLocationInformation[]` result
 	 */
 
-	textDocumentXdefinition(params: TextDocumentPositionParams, span = new Span()): Observable<jsonpatch.Operation> {
+	textDocumentXdefinition(params: TextDocumentPositionParams, span = new Span()): Observable<Operation> {
 		return this._getSymbolLocationInformations(params, span)
-			.map(symbol => ({ op: 'add', path: '/-', value: symbol } as jsonpatch.Operation))
+			.map(symbol => ({ op: 'add', path: '/-', value: symbol } as Operation))
 			.startWith({ op: 'add', path: '', value: [] });
 	}
 
@@ -494,9 +494,9 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches that build a `Hover` result
 	 */
-	textDocumentHover(params: TextDocumentPositionParams, span = new Span()): Observable<jsonpatch.Operation> {
+	textDocumentHover(params: TextDocumentPositionParams, span = new Span()): Observable<Operation> {
 		return this._getHover(params, span)
-			.map(hover => ({ op: 'add', path: '', value: hover }) as jsonpatch.Operation);
+			.map(hover => ({ op: 'add', path: '', value: hover }) as Operation);
 	}
 
 	/**
@@ -572,7 +572,7 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches that build a `Location[]` result
 	 */
-	textDocumentReferences(params: ReferenceParams, span = new Span()): Observable<jsonpatch.Operation> {
+	textDocumentReferences(params: ReferenceParams, span = new Span()): Observable<Operation> {
 		const uri = normalizeUri(params.textDocument.uri);
 
 		// Ensure all files were fetched to collect all references
@@ -621,7 +621,7 @@ export class TypeScriptService {
 						};
 					});
 			}))
-			.map((location: Location): jsonpatch.Operation => ({ op: 'add', path: '/-', value: location }))
+			.map((location: Location): Operation => ({ op: 'add', path: '/-', value: location }))
 			// Initialize with array
 			.startWith({ op: 'add', path: '', value: [] });
 	}
@@ -633,7 +633,7 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches that build a `SymbolInformation[]` result
 	 */
-	workspaceSymbol(params: WorkspaceSymbolParams, span = new Span()): Observable<jsonpatch.Operation> {
+	workspaceSymbol(params: WorkspaceSymbolParams, span = new Span()): Observable<Operation> {
 
 		// Return cached result for empty query, if available
 		if (!params.query && !params.symbol && this.emptyQueryWorkspaceSymbols) {
@@ -705,10 +705,10 @@ export class TypeScriptService {
 				const index = scores.findIndex(s => s < score);
 				if (index === -1) {
 					scores.push(score);
-					return { op: 'add', path: '/-', value: symbol } as jsonpatch.Operation;
+					return { op: 'add', path: '/-', value: symbol } as Operation;
 				}
 				scores.splice(index, 0, score);
-				return { op: 'add', path: '/' + index, value: symbol } as jsonpatch.Operation;
+				return { op: 'add', path: '/' + index, value: symbol } as Operation;
 			})
 			.startWith({ op: 'add', path: '', value: [] });
 
@@ -725,7 +725,7 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches that build a `SymbolInformation[]` result
 	 */
-	textDocumentDocumentSymbol(params: DocumentSymbolParams, span = new Span()): Observable<jsonpatch.Operation> {
+	textDocumentDocumentSymbol(params: DocumentSymbolParams, span = new Span()): Observable<Operation> {
 		const uri = normalizeUri(params.textDocument.uri);
 
 		// Ensure files needed to resolve symbols are fetched
@@ -745,8 +745,8 @@ export class TypeScriptService {
 					.filter(({ tree, parent }) => navigationTreeIsSymbol(tree))
 					.map(({ tree, parent }) => navigationTreeToSymbolInformation(tree, parent, sourceFile, this.root));
 			})
-			.map(symbol => ({ op: 'add', path: '/-', value: symbol }) as jsonpatch.Operation)
-			.startWith({ op: 'add', path: '', value: [] } as jsonpatch.Operation);
+			.map(symbol => ({ op: 'add', path: '/-', value: symbol }) as Operation)
+			.startWith({ op: 'add', path: '', value: [] } as Operation);
 	}
 
 	/**
@@ -755,7 +755,7 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches that build a `ReferenceInformation[]` result
 	 */
-	workspaceXreferences(params: WorkspaceReferenceParams, span = new Span()): Observable<jsonpatch.Operation> {
+	workspaceXreferences(params: WorkspaceReferenceParams, span = new Span()): Observable<Operation> {
 		const queryWithoutPackage = omit(params.query, 'package');
 		const minScore = Math.min(4.75, getPropertyCount(queryWithoutPackage));
 		return this.isDefinitelyTyped
@@ -844,7 +844,7 @@ export class TypeScriptService {
 							})
 					);
 			})
-			.map((reference): jsonpatch.Operation => ({ op: 'add', path: '/-', value: reference }))
+			.map((reference): Operation => ({ op: 'add', path: '/-', value: reference }))
 			.startWith({ op: 'add', path: '', value: [] });
 	}
 
@@ -861,7 +861,7 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches that build a `PackageInformation[]` result
 	 */
-	workspaceXpackages(params = {}, span = new Span()): Observable<jsonpatch.Operation> {
+	workspaceXpackages(params = {}, span = new Span()): Observable<Operation> {
 		return this.isDefinitelyTyped
 			.mergeMap((isDefinitelyTyped: boolean): Observable<PackageInformation> => {
 				// In DefinitelyTyped, report all @types/ packages
@@ -920,7 +920,7 @@ export class TypeScriptService {
 							}));
 					});
 			})
-			.map((packageInfo): jsonpatch.Operation => ({ op: 'add', path: '/-', value: packageInfo }))
+			.map((packageInfo): Operation => ({ op: 'add', path: '/-', value: packageInfo }))
 			.startWith({ op: 'add', path: '', value: [] });
 	}
 
@@ -930,7 +930,7 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches that build a `DependencyReference[]` result
 	 */
-	workspaceXdependencies(params = {}, span = new Span()): Observable<jsonpatch.Operation> {
+	workspaceXdependencies(params = {}, span = new Span()): Observable<Operation> {
 		// Ensure package.json files
 		return this.projectManager.ensureModuleStructure()
 			// Iterate all files
@@ -955,7 +955,7 @@ export class TypeScriptService {
 						}
 					}))
 			)
-			.map((dependency): jsonpatch.Operation => ({ op: 'add', path: '/-', value: dependency }))
+			.map((dependency): Operation => ({ op: 'add', path: '/-', value: dependency }))
 			.startWith({ op: 'add', path: '', value: [] });
 	}
 
@@ -974,7 +974,7 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches that build a `CompletionList` result
 	 */
-	textDocumentCompletion(params: TextDocumentPositionParams, span = new Span()): Observable<jsonpatch.Operation> {
+	textDocumentCompletion(params: TextDocumentPositionParams, span = new Span()): Observable<Operation> {
 		const uri = normalizeUri(params.textDocument.uri);
 
 		// Ensure files needed to suggest completions are fetched
@@ -1014,11 +1014,11 @@ export class TypeScriptService {
 							item.documentation = ts.displayPartsToString(details.documentation);
 							item.detail = ts.displayPartsToString(details.displayParts);
 						}
-						return { op: 'add', path: '/items/-', value: item } as jsonpatch.Operation;
+						return { op: 'add', path: '/items/-', value: item } as Operation;
 					})
-					.startWith({ op: 'add', path: '/isIncomplete', value: false } as jsonpatch.Operation);
+					.startWith({ op: 'add', path: '/isIncomplete', value: false } as Operation);
 			})
-			.startWith({ op: 'add', path: '', value: { isIncomplete: true, items: [] } as CompletionList } as jsonpatch.Operation);
+			.startWith({ op: 'add', path: '', value: { isIncomplete: true, items: [] } as CompletionList } as Operation);
 	}
 
 	/**
@@ -1027,7 +1027,7 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches that build a `SignatureHelp` result
 	 */
-	textDocumentSignatureHelp(params: TextDocumentPositionParams, span = new Span()): Observable<jsonpatch.Operation> {
+	textDocumentSignatureHelp(params: TextDocumentPositionParams, span = new Span()): Observable<Operation> {
 		const uri = normalizeUri(params.textDocument.uri);
 
 		// Ensure files needed to resolve signature are fetched
@@ -1071,7 +1071,7 @@ export class TypeScriptService {
 					activeParameter: signatures.argumentIndex
 				};
 			})
-			.map(signatureHelp => ({ op: 'add', path: '', value: signatureHelp }) as jsonpatch.Operation);
+			.map(signatureHelp => ({ op: 'add', path: '', value: signatureHelp }) as Operation);
 	}
 
 	/**
@@ -1081,7 +1081,7 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches that build a `Command[]` result
 	 */
-	textDocumentCodeAction(params: CodeActionParams, span = new Span()): Observable<jsonpatch.Operation> {
+	textDocumentCodeAction(params: CodeActionParams, span = new Span()): Observable<Operation> {
 		const uri = normalizeUri(params.textDocument.uri);
 		return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
 			.toArray()
@@ -1108,7 +1108,7 @@ export class TypeScriptService {
 
 				return configuration.getService().getCodeFixesAtPosition(filePath, start, end, errorCodes, this.settings.format || {}) || [];
 			})
-			.map((action: ts.CodeAction): jsonpatch.Operation => ({
+			.map((action: ts.CodeAction): Operation => ({
 				op: 'add',
 				path: '/-',
 				value: {
@@ -1117,7 +1117,7 @@ export class TypeScriptService {
 					arguments: action.changes
 				} as Command
 			}))
-			.startWith({ op: 'add', path: '', value: [] } as jsonpatch.Operation);
+			.startWith({ op: 'add', path: '', value: [] } as Operation);
 	}
 
 	/**
@@ -1126,7 +1126,7 @@ export class TypeScriptService {
 	 * applies the changes to the workspace using the request workspace/applyEdit which is sent from
 	 * the server to the client.
 	 */
-	workspaceExecuteCommand(params: ExecuteCommandParams, span = new Span()): Observable<jsonpatch.Operation> {
+	workspaceExecuteCommand(params: ExecuteCommandParams, span = new Span()): Observable<Operation> {
 		switch (params.command) {
 			case 'codeFix':
 				if (!params.arguments || params.arguments.length < 1) {
@@ -1143,7 +1143,7 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches for `null` result
 	 */
-	executeCodeFixCommand(fileTextChanges: ts.FileTextChanges[], span = new Span()): Observable<jsonpatch.Operation> {
+	executeCodeFixCommand(fileTextChanges: ts.FileTextChanges[], span = new Span()): Observable<Operation> {
 		if (fileTextChanges.length === 0) {
 			return Observable.throw(new Error('No changes supplied for code fix command'));
 		}
@@ -1171,7 +1171,7 @@ export class TypeScriptService {
 
 				return this.client.workspaceApplyEdit({ edit: { changes }}, span);
 			}))
-			.map(() => ({ op: 'add', path: '', value: null }) as jsonpatch.Operation);
+			.map(() => ({ op: 'add', path: '', value: null }) as Operation);
 	}
 
 	/**
@@ -1179,7 +1179,7 @@ export class TypeScriptService {
 	 *
 	 * @return Observable of JSON Patches that build a `WorkspaceEdit` result
 	 */
-	textDocumentRename(params: RenameParams, span = new Span()): Observable<jsonpatch.Operation> {
+	textDocumentRename(params: RenameParams, span = new Span()): Observable<Operation> {
 		const uri = normalizeUri(params.textDocument.uri);
 		const editUris = new Set<string>();
 		return this.projectManager.ensureOwnFiles(span)
@@ -1217,7 +1217,7 @@ export class TypeScriptService {
 						return [editUri, edit];
 					});
 			}))
-			.map(([uri, edit]): jsonpatch.Operation => {
+			.map(([uri, edit]): Operation => {
 				// if file has no edit yet, initialize array
 				if (!editUris.has(uri)) {
 					editUris.add(uri);
@@ -1226,7 +1226,7 @@ export class TypeScriptService {
 				// else append to array
 				return { op: 'add', path: JSONPTR`/changes/${uri}/-`, value: edit };
 			})
-			.startWith({ op: 'add', path: '', value: { changes: {} } as WorkspaceEdit } as jsonpatch.Operation);
+			.startWith({ op: 'add', path: '', value: { changes: {} } as WorkspaceEdit } as Operation);
 	}
 
 	/**

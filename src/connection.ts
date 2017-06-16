@@ -1,6 +1,6 @@
 import { Observable, Subscription, Symbol } from '@reactivex/rxjs';
 import { EventEmitter } from 'events';
-import jsonpatch from 'fast-json-patch';
+import { applyReducer, Operation } from 'fast-json-patch';
 import { camelCase, omit } from 'lodash';
 import { FORMAT_TEXT_MAP, Span, Tracer } from 'opentracing';
 import { inspect } from 'util';
@@ -238,7 +238,7 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 			return;
 		}
 		// Call handler method with params and span
-		let observable: Observable<jsonpatch.Operation>;
+		let observable: Observable<Operation>;
 		try {
 			// Convert return value to Observable
 			const returnValue = (handler as any)[method](message.params, span);
@@ -269,7 +269,7 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 				})
 				// Build up final result for BC
 				// TODO send null if client declared streaming capability
-				.reduce<jsonpatch.Operation, any>(jsonpatch.applyReducer, null)
+				.reduce<Operation, any>(applyReducer, null)
 				.finally(() => {
 					// Finish span
 					span.finish();
