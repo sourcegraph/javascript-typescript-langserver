@@ -10,7 +10,7 @@ import { TypeScriptService, TypeScriptServiceFactory } from '../typescript-servi
 import { observableFromIterable, toUnixPath, uri2path } from '../util';
 import chaiAsPromised = require('chai-as-promised');
 import { Observable } from '@reactivex/rxjs';
-import jsonpatch from 'fast-json-patch';
+import { applyReducer, Operation } from 'fast-json-patch';
 import { IBeforeAndAfterContext, ISuiteCallbackContext, ITestCallbackContext } from 'mocha';
 
 chai.use(chaiAsPromised);
@@ -111,7 +111,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 29
 					}
-				}).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise();
+				}).reduce<Operation, Location[]>(applyReducer, null as any).toPromise();
 				assert.deepEqual(result, [{
 					uri: rootUri + 'a.ts',
 					range: {
@@ -135,7 +135,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 0
 					}
-				}).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise();
+				}).reduce<Operation, Location[]>(applyReducer, null as any).toPromise();
 				assert.deepEqual(result, []);
 			});
 			specify('in other file', async function (this: TestContext & ITestCallbackContext) {
@@ -147,7 +147,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 9
 					}
-				}).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise();
+				}).reduce<Operation, Location[]>(applyReducer, null as any).toPromise();
 				assert.deepEqual(result, [{
 					uri: rootUri + 'foo/b.ts',
 					range: {
@@ -173,7 +173,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 3,
 						character: 15
 					}
-				}).reduce<jsonpatch.Operation, SymbolLocationInformation[]>(jsonpatch.applyReducer, null as any).toPromise();
+				}).reduce<Operation, SymbolLocationInformation[]>(applyReducer, null as any).toPromise();
 				assert.deepEqual(result, [{
 					location: {
 						uri: rootUri + 'd.ts',
@@ -206,7 +206,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 29
 					}
-				}).reduce<jsonpatch.Operation, SymbolLocationInformation[]>(jsonpatch.applyReducer, null as any).toPromise();
+				}).reduce<Operation, SymbolLocationInformation[]>(applyReducer, null as any).toPromise();
 				assert.deepEqual(result, [{
 					location: {
 						uri: rootUri + 'a.ts',
@@ -241,7 +241,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 29
 					}
-				}).reduce<jsonpatch.Operation, Hover>(jsonpatch.applyReducer, null as any).toPromise();
+				}).reduce<Operation, Hover>(applyReducer, null as any).toPromise();
 				assert.deepEqual(result, {
 					range: {
 						start: {
@@ -268,7 +268,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 9
 					}
-				}).reduce<jsonpatch.Operation, Hover>(jsonpatch.applyReducer, null as any).toPromise();
+				}).reduce<Operation, Hover>(applyReducer, null as any).toPromise();
 				assert.deepEqual(result, {
 					range: {
 						end: {
@@ -295,7 +295,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 0
 					}
-				}).reduce<jsonpatch.Operation, Hover>(jsonpatch.applyReducer, null as any).toPromise();
+				}).reduce<Operation, Hover>(applyReducer, null as any).toPromise();
 				assert.deepEqual(result, { contents: [] });
 			});
 			specify('over non-existent file', function (this: TestContext & ITestCallbackContext) {
@@ -345,7 +345,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 20
 					}
-				}).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise();
+				}).reduce<Operation, Location[]>(applyReducer, null as any).toPromise();
 				assert.deepEqual(result, [{
 					uri: rootUri + 'typings/dep.d.ts',
 					range: {
@@ -370,7 +370,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 							line: 0,
 							character: 12
 						}
-					}).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise();
+					}).reduce<Operation, Location[]>(applyReducer, null as any).toPromise();
 					assert.deepEqual(result, [{
 						uri: rootUri + 'typings/dep.d.ts',
 						range: {
@@ -394,7 +394,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 							line: 0,
 							character: 20
 						}
-					}).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise();
+					}).reduce<Operation, Location[]>(applyReducer, null as any).toPromise();
 					assert.deepEqual(result, [{
 						uri: rootUri + 'typings/dep.d.ts',
 						range: {
@@ -506,7 +506,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			it('should find a symbol by SymbolDescriptor query with name and package name', async function (this: TestContext & ITestCallbackContext) {
 				const result: SymbolInformation[] = await this.service.workspaceSymbol({
 					symbol: { name: 'resolveCallback', package: { name: '@types/resolve' } }
-				}).reduce<jsonpatch.Operation, SymbolInformation[]>(jsonpatch.applyReducer, null as any).toPromise();
+				}).reduce<Operation, SymbolInformation[]>(applyReducer, null as any).toPromise();
 				assert.deepEqual(result, [{
 					kind: SymbolKind.Variable,
 					location: {
@@ -534,7 +534,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 							name: '@types/resolve'
 						}
 					}
-				}).reduce<jsonpatch.Operation, SymbolInformation[]>(jsonpatch.applyReducer, null as any).toPromise();
+				}).reduce<Operation, SymbolInformation[]>(applyReducer, null as any).toPromise();
 				assert.deepEqual(result[0], {
 					kind: SymbolKind.Variable,
 					location: {
@@ -580,7 +580,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 								name: 'mypkg'
 							}
 						}
-					}).reduce<jsonpatch.Operation, SymbolInformation[]>(jsonpatch.applyReducer, null as any).toPromise();
+					}).reduce<Operation, SymbolInformation[]>(applyReducer, null as any).toPromise();
 					assert.deepEqual(result[0], {
 					kind: SymbolKind.Class,
 						location: {
@@ -602,7 +602,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				it('should find a symbol by name, kind, package name and ignore package version', async function (this: TestContext & ITestCallbackContext) {
 					const result: SymbolInformation[] = await this.service.workspaceSymbol({
 						symbol: { name: 'a', kind: 'class', package: { name: 'mypkg', version: '203940234' } }
-					}).reduce<jsonpatch.Operation, SymbolInformation[]>(jsonpatch.applyReducer, null as any).toPromise();
+					}).reduce<Operation, SymbolInformation[]>(applyReducer, null as any).toPromise();
 					assert.deepEqual(result[0], {
 						kind: SymbolKind.Class,
 						location: {
@@ -626,7 +626,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						symbol: {
 							name: 'a'
 						}
-					}).reduce<jsonpatch.Operation, SymbolInformation[]>(jsonpatch.applyReducer, null as any).toPromise();
+					}).reduce<Operation, SymbolInformation[]>(applyReducer, null as any).toPromise();
 					assert.deepEqual(result, [{
 						kind: SymbolKind.Class,
 						location: {
@@ -654,13 +654,13 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 								name: 'not-mypkg'
 							}
 						}
-					}).reduce<jsonpatch.Operation, SymbolInformation[]>(jsonpatch.applyReducer, null as any).toPromise();
+					}).reduce<Operation, SymbolInformation[]>(applyReducer, null as any).toPromise();
 					assert.deepEqual(result, []);
 				});
 			});
 			describe('with text query', function (this: TestContext & ISuiteCallbackContext) {
 				it('should find a symbol', async function (this: TestContext & ITestCallbackContext) {
-					const result: SymbolInformation[] = await this.service.workspaceSymbol({ query: 'a' }).reduce<jsonpatch.Operation, SymbolInformation[]>(jsonpatch.applyReducer, null as any).toPromise();
+					const result: SymbolInformation[] = await this.service.workspaceSymbol({ query: 'a' }).reduce<Operation, SymbolInformation[]>(applyReducer, null as any).toPromise();
 					assert.deepEqual(result, [{
 						kind: SymbolKind.Class,
 						location: {
@@ -681,7 +681,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				});
 				it('should return all symbols for an empty query excluding dependencies', async function (this: TestContext & ITestCallbackContext) {
 					const result: SymbolInformation[] = await this.service.workspaceSymbol({ query: '' })
-						.reduce<jsonpatch.Operation, SymbolInformation[]>(jsonpatch.applyReducer, null as any)
+						.reduce<Operation, SymbolInformation[]>(applyReducer, null as any)
 						.toPromise();
 					assert.deepEqual(result, [
 						{
@@ -850,7 +850,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		describe('workspaceXreferences()', function (this: TestContext & ISuiteCallbackContext) {
 			it('should return all references to a method', async function (this: TestContext & ITestCallbackContext) {
 				const result: ReferenceInformation[] = await this.service.workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' } })
-					.reduce<jsonpatch.Operation, ReferenceInformation[]>(jsonpatch.applyReducer, null as any)
+					.reduce<Operation, ReferenceInformation[]>(applyReducer, null as any)
 					.toPromise();
 				assert.deepEqual(result, [{
 					symbol: {
@@ -877,7 +877,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			});
 			it('should return all references to a method with hinted dependee package name', async function (this: TestContext & ITestCallbackContext) {
 				const result: ReferenceInformation[] = await this.service.workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' }, hints: { dependeePackageName: 'mypkg' } })
-					.reduce<jsonpatch.Operation, ReferenceInformation[]>(jsonpatch.applyReducer, null as any)
+					.reduce<Operation, ReferenceInformation[]>(applyReducer, null as any)
 					.toPromise();
 				assert.deepEqual(result, [{
 					symbol: {
@@ -903,12 +903,12 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}]);
 			});
 			it('should return no references to a method if hinted dependee package name was not found', async function (this: TestContext & ITestCallbackContext) {
-				const result = await this.service.workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' }, hints: { dependeePackageName: 'NOT-mypkg' } }).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise();
+				const result = await this.service.workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' }, hints: { dependeePackageName: 'NOT-mypkg' } }).reduce<Operation, Location[]>(applyReducer, null as any).toPromise();
 				assert.deepEqual(result, []);
 			});
 			it('should return all references to a symbol from a dependency', async function (this: TestContext & ITestCallbackContext) {
 				const result: ReferenceInformation[] = await this.service.workspaceXreferences({ query: { name: 'x' } })
-					.reduce<jsonpatch.Operation, ReferenceInformation[]>(jsonpatch.applyReducer, null as any)
+					.reduce<Operation, ReferenceInformation[]>(applyReducer, null as any)
 					.toPromise();
 				assert.deepEqual(result, [{
 					reference: {
@@ -935,7 +935,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			});
 			it('should return all references to a symbol from a dependency with PackageDescriptor query', async function (this: TestContext & ITestCallbackContext) {
 				const result: ReferenceInformation[] = await this.service.workspaceXreferences({ query: { name: 'x', package: { name: 'dep' } } })
-					.reduce<jsonpatch.Operation, ReferenceInformation[]>(jsonpatch.applyReducer, null as any)
+					.reduce<Operation, ReferenceInformation[]>(applyReducer, null as any)
 					.toPromise();
 				assert.deepEqual(result, [{
 					reference: {
@@ -967,7 +967,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			});
 			it('should return all references to all symbols if empty SymbolDescriptor query is passed', async function (this: TestContext & ITestCallbackContext) {
 				const result: ReferenceInformation[] = await this.service.workspaceXreferences({ query: {} })
-					.reduce<jsonpatch.Operation, ReferenceInformation[]>(jsonpatch.applyReducer, null as any)
+					.reduce<Operation, ReferenceInformation[]>(applyReducer, null as any)
 					.toPromise();
 				assert.deepEqual(result, [
 					{
@@ -1217,7 +1217,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		describe('workspaceXdependencies()', function (this: TestContext & ISuiteCallbackContext) {
 			it('should account for all dependencies', async function (this: TestContext & ITestCallbackContext) {
 				const result: DependencyReference[] = await this.service.workspaceXdependencies()
-					.reduce<jsonpatch.Operation, DependencyReference[]>(jsonpatch.applyReducer, null as any)
+					.reduce<Operation, DependencyReference[]>(applyReducer, null as any)
 					.toPromise();
 				assert.deepEqual(result, [
 					{ attributes: { name: 'babel-code-frame', version: '^6.16.0' }, hints: { dependeePackageName: 'tslint' } },
@@ -1236,7 +1236,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		describe('workspaceXpackages()', function (this: TestContext & ISuiteCallbackContext) {
 			it('should accournt for all packages', async function (this: TestContext & ITestCallbackContext) {
 				const result: PackageInformation[] = await this.service.workspaceXpackages()
-					.reduce<jsonpatch.Operation, PackageInformation[]>(jsonpatch.applyReducer, null as any)
+					.reduce<Operation, PackageInformation[]>(applyReducer, null as any)
 					.toPromise();
 				assert.deepEqual(result, [{
 					package: {
@@ -1285,7 +1285,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 0,
 					character: 5
 				}
-			}).reduce<jsonpatch.Operation, Hover>(jsonpatch.applyReducer, null as any).toPromise();
+			}).reduce<Operation, Hover>(applyReducer, null as any).toPromise();
 			assert.deepEqual(result, {
 				range: {
 					end: {
@@ -1347,7 +1347,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			});
 
 			const result: Hover = await this.service.textDocumentHover(hoverParams)
-				.reduce<jsonpatch.Operation, Hover>(jsonpatch.applyReducer, null as any)
+				.reduce<Operation, Hover>(applyReducer, null as any)
 				.toPromise();
 			assert.deepEqual(result, {
 				range,
@@ -1388,7 +1388,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			});
 
 			const result: Hover = await this.service.textDocumentHover(hoverParams)
-				.reduce<jsonpatch.Operation, Hover>(jsonpatch.applyReducer, null as any)
+				.reduce<Operation, Hover>(applyReducer, null as any)
 				.toPromise();
 			assert.deepEqual(result, {
 				range,
@@ -1424,7 +1424,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 			{
 				const result: Hover = await this.service.textDocumentHover(hoverParams)
-					.reduce<jsonpatch.Operation, Hover>(jsonpatch.applyReducer, null as any)
+					.reduce<Operation, Hover>(applyReducer, null as any)
 					.toPromise();
 				assert.deepEqual(result, {
 					range,
@@ -1446,7 +1446,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 			{
 				const result: Hover = await this.service.textDocumentHover(hoverParams)
-					.reduce<jsonpatch.Operation, Hover>(jsonpatch.applyReducer, null as any)
+					.reduce<Operation, Hover>(applyReducer, null as any)
 					.toPromise();
 				assert.deepEqual(result, {
 					range,
@@ -1469,7 +1469,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 			{
 				const result: Hover = await this.service.textDocumentHover(hoverParams)
-					.reduce<jsonpatch.Operation, Hover>(jsonpatch.applyReducer, null as any)
+					.reduce<Operation, Hover>(applyReducer, null as any)
 					.toPromise();
 				assert.deepEqual(result, {
 					range,
@@ -1488,7 +1488,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 			{
 				const result: Hover = await this.service.textDocumentHover(hoverParams)
-					.reduce<jsonpatch.Operation, Hover>(jsonpatch.applyReducer, null as any)
+					.reduce<Operation, Hover>(applyReducer, null as any)
 					.toPromise();
 				assert.deepEqual(result, {
 					range,
@@ -1644,7 +1644,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 1,
 						character: 23
 					}
-				}).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise();
+				}).reduce<Operation, Location[]>(applyReducer, null as any).toPromise();
 				assert.deepEqual(result, [{
 					// Note: technically this list should also
 					// include the 2nd definition of `foo` in
@@ -1676,7 +1676,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 1,
 						character: 2
 					}
-				}).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise();
+				}).reduce<Operation, Location[]>(applyReducer, null as any).toPromise();
 				assert.deepEqual(result, [{
 					uri: rootUri + 'foo/d.ts',
 					range: {
@@ -1700,7 +1700,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 3,
 						character: 21
 					}
-				}).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise();
+				}).reduce<Operation, Location[]>(applyReducer, null as any).toPromise();
 				assert.deepEqual(result, [{
 					uri: rootUri + 'missing/b.ts',
 					range: {
@@ -1727,7 +1727,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 2,
 						character: 8
 					}
-				}).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise();
+				}).reduce<Operation, Location[]>(applyReducer, null as any).toPromise();
 				assert.deepEqual(result, [{
 					uri: rootUri + 'deeprefs/e.ts',
 					range: {
@@ -1767,7 +1767,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 16
 					}
-				}).reduce<jsonpatch.Operation, Hover>(jsonpatch.applyReducer, null as any).toPromise();
+				}).reduce<Operation, Hover>(applyReducer, null as any).toPromise();
 				assert.deepEqual(result, {
 					range: {
 						end: {
@@ -1823,7 +1823,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 16
 					}
-				}).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise(), [{
+				}).reduce<Operation, Location[]>(applyReducer, null as any).toPromise(), [{
 					uri: 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/lib.dom.d.ts',
 					range: {
 						start: {
@@ -1857,7 +1857,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						line: 0,
 						character: 50
 					}
-				}).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise(), [{
+				}).reduce<Operation, Location[]>(applyReducer, null as any).toPromise(), [{
 					uri: 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/lib.es5.d.ts',
 					range: {
 						start: {
@@ -1917,7 +1917,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					character: 0
 				},
 				context: { includeDeclaration: false }
-			}).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise();
+			}).reduce<Operation, Location[]>(applyReducer, null as any).toPromise();
 			assert.deepEqual(result, []);
 		});
 
@@ -1931,7 +1931,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					character: 5
 				},
 				context: { includeDeclaration: true }
-			}).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise();
+			}).reduce<Operation, Location[]>(applyReducer, null as any).toPromise();
 			assert.deepEqual(result, [{
 				range: {
 					end: {
@@ -1957,7 +1957,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					character: 5
 				},
 				context: { includeDeclaration: false }
-			}).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise();
+			}).reduce<Operation, Location[]>(applyReducer, null as any).toPromise();
 			assert.deepEqual(result, [{
 				range: {
 					end: {
@@ -1982,7 +1982,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					character: 28
 				},
 				context: { includeDeclaration: false }
-			}).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise();
+			}).reduce<Operation, Location[]>(applyReducer, null as any).toPromise();
 			assert.deepEqual(result, [
 				{
 					range: {
@@ -2063,7 +2063,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 0,
 					character: 0
 				}
-			}).reduce<jsonpatch.Operation, SignatureHelp>(jsonpatch.applyReducer, null as any).toPromise();
+			}).reduce<Operation, SignatureHelp>(applyReducer, null as any).toPromise();
 			assert.deepEqual(result, {
 				signatures: [],
 				activeSignature: 0,
@@ -2080,7 +2080,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 15,
 					character: 11
 				}
-			}).reduce<jsonpatch.Operation, SignatureHelp>(jsonpatch.applyReducer, null as any).toPromise();
+			}).reduce<Operation, SignatureHelp>(applyReducer, null as any).toPromise();
 			assert.deepEqual(result, {
 				signatures: [
 					{
@@ -2109,7 +2109,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 1,
 					character: 4
 				}
-			}).reduce<jsonpatch.Operation, SignatureHelp>(jsonpatch.applyReducer, null as any).toPromise();
+			}).reduce<Operation, SignatureHelp>(applyReducer, null as any).toPromise();
 			assert.deepEqual(result, {
 				activeSignature: 0,
 				activeParameter: 0,
@@ -2168,7 +2168,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 11,
 					character: 2
 				}
-			}).reduce<jsonpatch.Operation, CompletionList>(jsonpatch.applyReducer, null as any).toPromise();
+			}).reduce<Operation, CompletionList>(applyReducer, null as any).toPromise();
 			assert.equal(result.isIncomplete, false);
 			assert.sameDeepMembers(result.items, [
 				{
@@ -2210,7 +2210,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 1,
 					character: 2
 				}
-			}).reduce<jsonpatch.Operation, CompletionList>(jsonpatch.applyReducer, null as any).toPromise();
+			}).reduce<Operation, CompletionList>(applyReducer, null as any).toPromise();
 			assert.deepEqual(result, {
 				isIncomplete: false,
 				items: [{
@@ -2231,7 +2231,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 1,
 					character: 13
 				}
-			}).reduce<jsonpatch.Operation, CompletionList>(jsonpatch.applyReducer, null as any).toPromise();
+			}).reduce<Operation, CompletionList>(applyReducer, null as any).toPromise();
 			assert.deepEqual(result, {
 				isIncomplete: false,
 				items: [{
@@ -2253,7 +2253,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 0,
 					character: 0
 				}
-			}).reduce<jsonpatch.Operation, CompletionList>(jsonpatch.applyReducer, null as any).toPromise();
+			}).reduce<Operation, CompletionList>(applyReducer, null as any).toPromise();
 			assert.notDeepEqual(result.items, []);
 		});
 	});
@@ -2295,7 +2295,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						character: 1
 					},
 					newName: 'asdf'
-				}).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise(),
+				}).reduce<Operation, Location[]>(applyReducer, null as any).toPromise(),
 				'This symbol cannot be renamed'
 			);
 		});
@@ -2309,7 +2309,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					character: 6
 				},
 				newName: 'B'
-			}).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise();
+			}).reduce<Operation, Location[]>(applyReducer, null as any).toPromise();
 			assert.deepEqual(result, {
 				changes: {
 					[rootUri + 'a.ts']: [{
@@ -2350,7 +2350,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					character: 16
 				},
 				newName: 'f'
-			}).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise();
+			}).reduce<Operation, Location[]>(applyReducer, null as any).toPromise();
 			assert.deepEqual(result, {
 				changes: {
 					[rootUri + 'import.ts']: [{
@@ -2447,7 +2447,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				context: {
 					diagnostics: [firstDiagnostic]
 				}
-			}).reduce<jsonpatch.Operation, Command[]>(jsonpatch.applyReducer, null as any).toPromise();
+			}).reduce<Operation, Command[]>(applyReducer, null as any).toPromise();
 			assert.deepEqual(actions, [{
 				title: 'Add \'this.\' to unresolved variable.',
 				command: 'codeFix',
@@ -2489,7 +2489,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 							newText: '\t\tthis.missingThis'
 						}]
 					}]
-				}).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise();
+				}).reduce<Operation, Location[]>(applyReducer, null as any).toPromise();
 
 				sinon.assert.calledOnce(this.client.workspaceApplyEdit);
 				const workspaceEdit = this.client.workspaceApplyEdit.lastCall.args[0];
@@ -2537,7 +2537,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 0,
 					character: 16
 				}
-			}).reduce<jsonpatch.Operation, Hover>(jsonpatch.applyReducer, null as any).toPromise();
+			}).reduce<Operation, Hover>(applyReducer, null as any).toPromise();
 			assert.deepEqual(result, {
 				range: {
 					start: {
@@ -2564,7 +2564,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 0,
 					character: 16
 				}
-			}).reduce<jsonpatch.Operation, Hover>(jsonpatch.applyReducer, null as any).toPromise();
+			}).reduce<Operation, Hover>(applyReducer, null as any).toPromise();
 			assert.deepEqual(result, {
 				range: {
 					start: {
@@ -2591,7 +2591,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 1,
 					character: 0
 				}
-			}).reduce<jsonpatch.Operation, Location[]>(jsonpatch.applyReducer, null as any).toPromise();
+			}).reduce<Operation, Location[]>(applyReducer, null as any).toPromise();
 			assert.deepEqual(result, [{
 				range: {
 					start: {

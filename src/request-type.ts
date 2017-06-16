@@ -1,4 +1,4 @@
-import jsonpatch from 'fast-json-patch';
+import { Operation } from 'fast-json-patch';
 import * as vscode from 'vscode-languageserver';
 
 export interface InitializeParams extends vscode.InitializeParams {
@@ -232,5 +232,5 @@ export interface PartialResultParams {
 	 * A JSON Patch that represents updates to the partial result as specified in RFC6902
 	 * https://tools.ietf.org/html/rfc6902
 	 */
-	patch: jsonpatch.Operation[];
+	patch: Operation[];
 }
