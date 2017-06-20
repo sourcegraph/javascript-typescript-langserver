@@ -5,7 +5,7 @@ import { camelCase, omit } from 'lodash';
 import { FORMAT_TEXT_MAP, Span, Tracer } from 'opentracing';
 import { inspect } from 'util';
 import { ErrorCodes, Message, StreamMessageReader as VSCodeStreamMessageReader, StreamMessageWriter as VSCodeStreamMessageWriter } from 'vscode-jsonrpc';
-import { isNotificationMessage, isReponseMessage, isRequestMessage, NotificationMessage, RequestMessage, ResponseMessage } from 'vscode-jsonrpc/lib/messages';
+import { isNotificationMessage, isRequestMessage, isResponseMessage, NotificationMessage, RequestMessage, ResponseMessage } from 'vscode-jsonrpc/lib/messages';
 import { Logger, NoopLogger } from './logging';
 import { InitializeParams, PartialResultParams } from './request-type';
 import { TypeScriptService } from './typescript-service';
@@ -168,7 +168,7 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 
 	messageEmitter.on('message', async message => {
 		// Ignore responses
-		if (isReponseMessage(message)) {
+		if (isResponseMessage(message)) {
 			return;
 		}
 		if (!isRequestMessage(message) && !isNotificationMessage(message)) {

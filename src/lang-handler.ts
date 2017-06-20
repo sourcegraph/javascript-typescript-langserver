@@ -1,7 +1,7 @@
 import { Observable } from '@reactivex/rxjs';
 import { FORMAT_TEXT_MAP, Span } from 'opentracing';
 import { inspect } from 'util';
-import { isReponseMessage, Message, NotificationMessage, RequestMessage, ResponseMessage } from 'vscode-jsonrpc/lib/messages';
+import { isResponseMessage, Message, NotificationMessage, RequestMessage, ResponseMessage } from 'vscode-jsonrpc/lib/messages';
 import {
 	ApplyWorkspaceEditParams,
 	ApplyWorkspaceEditResponse,
@@ -104,7 +104,7 @@ export class RemoteLanguageClient {
 				// Subscribe to message events
 				const messageSub = Observable.fromEvent<Message>(this.input, 'message')
 					// Find response message with the correct ID
-					.filter(msg => isReponseMessage(msg) && msg.id === id)
+					.filter(msg => isResponseMessage(msg) && msg.id === id)
 					.take(1)
 					// Emit result or error
 					.map((msg: ResponseMessage): any => {
