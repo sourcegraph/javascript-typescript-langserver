@@ -2163,7 +2163,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					line: 11,
 					character: 2
 				}
-			}).reduce<jsonpatch.Operation, CompletionList>(jsonpatch.applyReducer, null as any).toPromise();
+			}).reduce<Operation, CompletionList>(applyReducer, null as any).toPromise();
 			// * A snippet can define tab stops and placeholders with `$1`, `$2`
 			//  * and `${3:foo}`. `$0` defines the final tab stop, it defaults to
 			//  * the end of the snippet. Placeholders with equal identifiers are linked,
