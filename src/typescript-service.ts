@@ -1006,13 +1006,6 @@ export class TypeScriptService {
 					return [];
 				}
 				function createSnippet(entry: ts.CompletionEntryDetails): string {
-					let index = 0;
-					const parameters = entry.displayParts
-						.filter(p => p.kind === 'parameterName')
-						.map(p => {
-							index++;
-							return '${' + `${index}:${p.text}` + '}';
-						});
 					if (entry.kind === 'property') {
 						return entry.name;
 					} else {
