@@ -2125,7 +2125,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 	});
 
-	describe.only('textDocumentCompletion() with snippets', function (this: TestContext & ISuiteCallbackContext){
+	describe('textDocumentCompletion() with snippets', function (this: TestContext & ISuiteCallbackContext){
 		beforeEach(initializeTypeScriptService(createService, rootUri, new Map([
 			[rootUri + 'a.ts', [
 				'class A {',
@@ -2154,7 +2154,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		afterEach(shutdownService);
 
-		it('shoudl produce completions with snippets if supported', async function (this: TestContext & ITestCallbackContext) {
+		it('should produce completions with snippets if supported', async function (this: TestContext & ITestCallbackContext) {
 			const result: CompletionList = await this.service.textDocumentCompletion({
 				textDocument: {
 					uri: rootUri + 'a.ts'
@@ -2262,6 +2262,8 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					label: 'bar',
 					kind: CompletionItemKind.Method,
 					documentation: 'bar doc',
+					insertText: 'bar',
+					insertTextFormat: InsertTextFormat.PlainText,
 					sortText: '0',
 					detail: '(method) A.bar(): number'
 				},
@@ -2269,6 +2271,8 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					label: 'baz',
 					kind: CompletionItemKind.Method,
 					documentation: 'baz doc',
+					insertText: 'baz',
+					insertTextFormat: InsertTextFormat.PlainText,
 					sortText: '0',
 					detail: '(method) A.baz(): string'
 				},
@@ -2276,6 +2280,8 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					label: 'foo',
 					kind: CompletionItemKind.Method,
 					documentation: 'foo doc',
+					insertText: 'foo',
+					insertTextFormat: InsertTextFormat.PlainText,
 					sortText: '0',
 					detail: '(method) A.foo(): void'
 				},
@@ -2283,6 +2289,8 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					label: 'qux',
 					kind: CompletionItemKind.Property,
 					documentation: 'qux doc',
+					insertText: 'qux',
+					insertTextFormat: InsertTextFormat.PlainText,
 					sortText: '0',
 					detail: '(property) A.qux: number'
 				}
@@ -2305,6 +2313,8 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					label: 'd',
 					kind: CompletionItemKind.Function,
 					documentation: 'd doc',
+					insertText: 'd',
+					insertTextFormat: InsertTextFormat.PlainText,
 					detail: 'function d(): void',
 					sortText: '0'
 				}]
@@ -2326,6 +2336,8 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					label: 'bar',
 					kind: CompletionItemKind.Interface,
 					documentation: 'bar doc',
+					insertText: 'bar',
+					insertTextFormat: InsertTextFormat.PlainText,
 					sortText: '0',
 					detail: 'interface foo.bar'
 				}]
