@@ -16,7 +16,7 @@ import { IBeforeAndAfterContext, ISuiteCallbackContext, ITestCallbackContext } f
 chai.use(chaiAsPromised);
 const assert = chai.assert;
 
-const defaultCapabilities: ClientCapabilities = {
+const DEFAULT_CAPABILITIES: ClientCapabilities = {
 	xcontentProvider: true,
 	xfilesProvider: true
 };
@@ -36,7 +36,7 @@ export interface TestContext {
  * @param createService A factory that creates the TypeScript service. Allows to test subclasses of TypeScriptService
  * @param files A Map from URI to file content of files that should be available in the workspace
  */
-export const initializeTypeScriptService = (createService: TypeScriptServiceFactory, rootUri: string, files: Map<string, string>, clientCapabilities?: ClientCapabilities) => async function (this: TestContext & IBeforeAndAfterContext): Promise<void> {
+export const initializeTypeScriptService = (createService: TypeScriptServiceFactory, rootUri: string, files: Map<string, string>, clientCapabilities: ClientCapabilities = DEFAULT_CAPABILITIES) => async function (this: TestContext & IBeforeAndAfterContext): Promise<void> {
 
 	// Stub client
 	this.client = sinon.createStubInstance(RemoteLanguageClient);
@@ -61,7 +61,7 @@ export const initializeTypeScriptService = (createService: TypeScriptServiceFact
 	await this.service.initialize({
 		processId: process.pid,
 		rootUri,
-		capabilities: clientCapabilities || defaultCapabilities
+		capabilities: clientCapabilities || DEFAULT_CAPABILITIES
 	}).toPromise();
 };
 
@@ -2149,7 +2149,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					}
 				}
 			},
-			...defaultCapabilities
+			...DEFAULT_CAPABILITIES
 		}));
 
 		afterEach(shutdownService);
