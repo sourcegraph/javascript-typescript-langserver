@@ -176,7 +176,6 @@ export class TypeScriptService {
 
 	/**
 	 * Indicates if the client prefers completion results formatted as snippets.
-	 * @type {boolean}
 	 */
 	private supportsCompletionWithSnippets: boolean = false;
 
@@ -1034,9 +1033,7 @@ export class TypeScriptService {
 								} else {
 									const parameters = details.displayParts
 										.filter(p => p.kind === 'parameterName')
-										.map((p, index) => {
-											return '${' + `${index + 1}:${p.text}` + '}';
-										});
+										.map((p, index) => '${' + `${index + 1}:${p.text}` + '}'});
 									const paramString = parameters.join(', ');
 									item.insertText = details.name + `(${paramString})`;
 								}
