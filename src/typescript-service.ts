@@ -18,6 +18,7 @@ import {
 	DocumentSymbolParams,
 	ExecuteCommandParams,
 	Hover,
+	InsertTextFormat,
 	Location,
 	MarkedString,
 	ParameterInformation,
@@ -173,6 +174,11 @@ export class TypeScriptService {
 		}
 	};
 
+	/**
+	 * Indicates if the client prefers completion results formatted as snippets.
+	 */
+	private supportsCompletionWithSnippets: boolean = false;
+
 	constructor(protected client: LanguageClient, protected options: TypeScriptServiceOptions = {}) {
 		this.logger = new LSPLogger(client);
 	}
@@ -200,6 +206,12 @@ export class TypeScriptService {
 		if (params.rootUri || params.rootPath) {
 			this.root = params.rootPath || uri2path(params.rootUri!);
 			this.rootUri = params.rootUri || path2uri(params.rootPath!);
+
+			this.supportsCompletionWithSnippets = params.capabilities.textDocument &&
+				params.capabilities.textDocument.completion &&
+				params.capabilities.textDocument.completion.completionItem &&
+				params.capabilities.textDocument.completion.completionItem.snippetSupport || false;
+
 			// The root URI always refers to a directory
 			if (!this.rootUri.endsWith('/')) {
 				this.rootUri += '/';
@@ -1002,6 +1014,7 @@ export class TypeScriptService {
 				return Observable.from(completions.entries)
 					.map(entry =>  {
 						const item: CompletionItem = { label: entry.name };
+
 						const kind = completionKinds[entry.kind];
 						if (kind) {
 							item.kind = kind;
@@ -1013,6 +1026,21 @@ export class TypeScriptService {
 						if (details) {
 							item.documentation = ts.displayPartsToString(details.documentation);
 							item.detail = ts.displayPartsToString(details.displayParts);
+							if (this.supportsCompletionWithSnippets) {
+								item.insertTextFormat = InsertTextFormat.Snippet;
+								if (entry.kind === 'property') {
+									item.insertText = details.name;
+								} else {
+									const parameters = details.displayParts
+										.filter(p => p.kind === 'parameterName')
+										.map((p, i) => '${' + `${i + 1}:${p.text}` + '}');
+									const paramString = parameters.join(', ');
+									item.insertText = details.name + `(${paramString})`;
+								}
+							} else {
+								item.insertTextFormat = InsertTextFormat.PlainText;
+								item.insertText = details.name;
+							}
 						}
 						return { op: 'add', path: '/items/-', value: item } as Operation;
 					})
