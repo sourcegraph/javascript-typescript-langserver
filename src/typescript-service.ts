@@ -1033,7 +1033,7 @@ export class TypeScriptService {
 								} else {
 									const parameters = details.displayParts
 										.filter(p => p.kind === 'parameterName')
-										.map((p, index) => '${' + `${index + 1}:${p.text}` + '}'});
+										.map((p, i) => '${' + `${i + 1}:${p.text}` + '}');
 									const paramString = parameters.join(', ');
 									item.insertText = details.name + `(${paramString})`;
 								}
