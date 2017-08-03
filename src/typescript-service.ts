@@ -1009,6 +1009,13 @@ export class TypeScriptService {
 					if (entry.kind === 'property') {
 						return entry.name;
 					} else {
+						let index = 0;
+						const parameters = entry.displayParts
+							.filter(p => p.kind === 'parameterName')
+							.map(p => {
+								index++;
+								return '${' + `${index}:${p.text}` + '}';
+							});
 						const paramString = parameters.join(', ');
 						return entry.name + `(${paramString})`;
 					}
