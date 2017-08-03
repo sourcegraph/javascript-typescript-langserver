@@ -174,7 +174,11 @@ export class TypeScriptService {
 		}
 	};
 
-	private completionWithSnippets: boolean = false;
+	/**
+	 * Indicates if the client prefers completion results formatted as snippets.
+	 * @type {boolean}
+	 */
+	private supportsCompletionWithSnippets: boolean = false;
 
 	constructor(protected client: LanguageClient, protected options: TypeScriptServiceOptions = {}) {
 		this.logger = new LSPLogger(client);
@@ -204,9 +208,11 @@ export class TypeScriptService {
 			this.root = params.rootPath || uri2path(params.rootUri!);
 			this.rootUri = params.rootUri || path2uri(params.rootPath!);
 
-			if (params.capabilities.textDocument && params.capabilities.textDocument.completion && params.capabilities.textDocument.completion.completionItem) {
-				this.completionWithSnippets = params.capabilities.textDocument.completion.completionItem.snippetSupport || false;
-			}
+			this.supportsCompletionWithSnippets = params.capabilities.textDocument &&
+				params.capabilities.textDocument.completion &&
+				params.capabilities.textDocument.completion.completionItem &&
+				params.capabilities.textDocument.completion.completionItem.snippetSupport || false;
+
 			// The root URI always refers to a directory
 			if (!this.rootUri.endsWith('/')) {
 				this.rootUri += '/';
@@ -1005,21 +1011,6 @@ export class TypeScriptService {
 				if (completions == null) {
 					return [];
 				}
-				function createSnippet(entry: ts.CompletionEntryDetails): string {
-					if (entry.kind === 'property') {
-						return entry.name;
-					} else {
-						let index = 0;
-						const parameters = entry.displayParts
-							.filter(p => p.kind === 'parameterName')
-							.map(p => {
-								index++;
-								return '${' + `${index}:${p.text}` + '}';
-							});
-						const paramString = parameters.join(', ');
-						return entry.name + `(${paramString})`;
-					}
-				}
 
 				return Observable.from(completions.entries)
 					.map(entry =>  {
@@ -1036,9 +1027,19 @@ export class TypeScriptService {
 						if (details) {
 							item.documentation = ts.displayPartsToString(details.documentation);
 							item.detail = ts.displayPartsToString(details.displayParts);
-							if (this.completionWithSnippets) {
+							if (this.supportsCompletionWithSnippets) {
 								item.insertTextFormat = InsertTextFormat.Snippet;
-								item.insertText = createSnippet(details);
+								if (entry.kind === 'property') {
+									item.insertText = details.name;
+								} else {
+									const parameters = details.displayParts
+										.filter(p => p.kind === 'parameterName')
+										.map((p, index) => {
+											return '${' + `${index + 1}:${p.text}` + '}';
+										});
+									const paramString = parameters.join(', ');
+									item.insertText = details.name + `(${paramString})`;
+								}
 							} else {
 								item.insertTextFormat = InsertTextFormat.PlainText;
 								item.insertText = details.name;
