@@ -24,6 +24,32 @@ import {
 
 export type ConfigType = 'js' | 'ts';
 
+interface Project {
+	projectService: {
+		logger: Logger;
+	};
+}
+
+type ServerHost = any;
+
+type RequireResult = { module: {}, error: undefined } | { module: undefined, error: {} };
+
+// copied from TypeScript server/project.ts
+interface PluginCreateInfo {
+	project: Project;
+	languageService: ts.LanguageService;
+	languageServiceHost: ts.LanguageServiceHost;
+	serverHost: ServerHost;
+	config: any;
+}
+
+interface PluginModule {
+	create(createInfo: PluginCreateInfo): ts.LanguageService;
+	getExternalFiles?(proj: Project): string[];
+}
+
+type PluginModuleFactory = (mod: { typescript: typeof ts }) => PluginModule;
+
 /**
  * ProjectManager translates VFS files to one or many projects denoted by [tj]config.json.
  * It uses either local or remote file system to fetch directory tree and files from and then
@@ -910,7 +936,122 @@ export class ProjectConfiguration {
 			this.logger
 		);
 		this.service = ts.createLanguageService(this.host, this.documentRegistry);
+		this.enablePlugins(options);
 		this.initialized = true;
+	}
+
+	private serverHostRequire(initialDir: string, moduleName: string): RequireResult {
+		// const modulePath = ts.resolveJavaScriptModule(moduleName, initialDir, this.fs));
+		const modulePath = initialDir + '/' + moduleName;
+		try {
+			return { module: require(modulePath), error: undefined };
+		} catch (error) {
+			return { module: undefined, error };
+		}
+	}
+
+	// // marked @internal in ts :(
+	// private resolveJavaScriptModule(moduleName: string, initialDir: string, host: ts.ModuleResolutionHost): string {
+	// 	const { resolvedModule, failedLookupLocations } =
+	// 		ts.nodeModuleNameResolverWorker(moduleName, initialDir, { moduleResolution: ts.ModuleResolutionKind.NodeJs, allowJs: true }, host, /*cache*/ undefined, /*jsOnly*/ true);
+	// 	if (!resolvedModule) {
+	// 		throw new Error(`Could not resolve JS module ${moduleName} starting at ${initialDir}. Looked in: ${failedLookupLocations.join(', ')}`);
+	// 	}
+	// 	return resolvedModule.resolvedFileName;
+	// }
+
+	enablePlugins(options: ts.CompilerOptions) {
+		// const host = this.getHost();
+		// const options = this.getCompilerOptions();
+
+		// if (!host.require) {
+		//     this.logger.info("Plugins were requested but not running in environment that supports 'require'. Nothing will be loaded");
+		//     return;
+		// }
+
+		// Search our peer node_modules, then any globally-specified probe paths
+		// ../../.. to walk from X/node_modules/typescript/lib/tsserver.js to X/node_modules/
+		// const searchPaths = [combinePaths(host.getExecutingFilePath(), "../../.."), ...this.projectService.pluginProbeLocations];
+		const searchPaths = [];
+		// if (this.projectService.allowLocalPluginLoads) {
+		// const local = ts.getDirectoryPath(this.configFilePath);
+		const local = this.rootFilePath;
+		this.logger.info(`enablePlugins for ${this.configFilePath}`);
+		this.logger.info(`Local plugin loading enabled; adding ${local} to search paths`);
+		searchPaths.unshift(local);
+		// }
+
+		// Enable tsconfig-specified plugins
+		if (options.plugins) {
+			for (const pluginConfigEntry of options.plugins as ts.PluginImport[]) {
+				this.enablePlugin(pluginConfigEntry, searchPaths);
+			}
+		}
+		const file = '';
+		file.toLowerCase();
+
+		// if (this.projectService.globalPlugins) {
+		//     // Enable global plugins with synthetic configuration entries
+		//     for (const globalPluginName of this.projectService.globalPlugins) {
+		//         // Skip already-locally-loaded plugins
+		//         if (options.plugins && options.plugins.some(p => p.name === globalPluginName)) continue;
+
+		//         // Provide global: true so plugins can detect why they can't find their config
+		//         this.enablePlugin({ name: globalPluginName, global: true } as PluginImport, searchPaths);
+		//     }
+		// }
+	}
+
+	private resolveModule(moduleName: string, initialDir: string): {} | undefined {
+		// const resolvedPath = ts.normalizeSlashes(host.resolvePath(ts.combinePaths(initialDir, 'node_modules')));
+		const pathResolver = initialDir.includes('\\') ? path.win32 : path.posix;
+
+		const resolvedPath = pathResolver.resolve(initialDir, 'node_modules');
+		this.logger.info(`Loading ${moduleName} from ${initialDir} (resolved to ${resolvedPath})`);
+		const result = this.serverHostRequire(resolvedPath, moduleName);
+		if (result.error) {
+			this.logger.info(`Failed to load module: ${JSON.stringify(result.error)}`);
+			return undefined;
+		}
+		return result.module;
+	}
+
+	private enablePlugin(pluginConfigEntry: ts.PluginImport, searchPaths: string[]) {
+		// const log = (message: string) => {
+		//     this.logger.info(message);
+		// };
+
+		for (const searchPath of searchPaths) {
+			const resolvedModule =  this.resolveModule(pluginConfigEntry.name, searchPath) as PluginModuleFactory;
+			if (resolvedModule) {
+				this.enableProxy(resolvedModule, pluginConfigEntry);
+				return;
+			}
+		}
+		this.logger.info(`Couldn't find ${pluginConfigEntry.name} anywhere in paths: ${searchPaths.join(',')}`);
+	}
+
+	private enableProxy(pluginModuleFactory: PluginModuleFactory, configEntry: ts.PluginImport) {
+		try {
+			if (typeof pluginModuleFactory !== 'function') {
+				this.logger.info(`Skipped loading plugin ${configEntry.name} because it did expose a proper factory function`);
+				return;
+			}
+
+			const info: PluginCreateInfo = {
+				config: configEntry,
+				project: { projectService: { logger: this.logger }}, // TODO: this will never work.
+				languageService: this.getService(),
+				languageServiceHost: this.getHost(),
+				serverHost: undefined // TODO: may need to be faked.
+			};
+
+			const pluginModule = pluginModuleFactory({ typescript: ts });
+			this.service = pluginModule.create(info);
+			// this.plugins.push(pluginModule); TODO: is this needed?
+		} catch (e) {
+			this.logger.info(`Plugin activation failed: ${e}`);
+		}
 	}
 
 	/**

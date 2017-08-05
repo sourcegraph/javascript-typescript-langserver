@@ -1337,15 +1337,8 @@ export class TypeScriptService {
 		if (!config) {
 			return;
 		}
-		const program = config.getProgram(span);
-		if (!program) {
-			return;
-		}
-		const sourceFile = program.getSourceFile(uri2path(uri));
-		if (!sourceFile) {
-			return;
-		}
-		const tsDiagnostics = ts.getPreEmitDiagnostics(program, sourceFile);
+		const fileName = uri2path(uri);
+		const tsDiagnostics = config.getService().getSyntacticDiagnostics(fileName).concat(config.getService().getSemanticDiagnostics(fileName));
 		const diagnostics = iterate(tsDiagnostics)
 			// TS can report diagnostics without a file and range in some cases
 			// These cannot be represented as LSP Diagnostics since the range and URI is required
