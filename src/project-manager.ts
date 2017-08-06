@@ -24,17 +24,15 @@ import {
 
 export type ConfigType = 'js' | 'ts';
 
+// definitions from from TypeScript server/project.ts
 interface Project {
 	projectService: {
 		logger: Logger;
 	};
 }
 
-type ServerHost = any;
+type ServerHost = object;
 
-type RequireResult = { module: {}, error: undefined } | { module: undefined, error: {} };
-
-// copied from TypeScript server/project.ts
 interface PluginCreateInfo {
 	project: Project;
 	languageService: ts.LanguageService;
@@ -42,6 +40,8 @@ interface PluginCreateInfo {
 	serverHost: ServerHost;
 	config: any;
 }
+
+type RequireResult = { module: {}, error: undefined } | { module: undefined, error: {} };
 
 interface PluginModule {
 	create(createInfo: PluginCreateInfo): ts.LanguageService;
@@ -940,46 +940,19 @@ export class ProjectConfiguration {
 		this.initialized = true;
 	}
 
-	private serverHostRequire(initialDir: string, moduleName: string): RequireResult {
-		// const modulePath = ts.resolveJavaScriptModule(moduleName, initialDir, this.fs));
-		const modulePath = initialDir + '/' + moduleName;
-		try {
-			return { module: require(modulePath), error: undefined };
-		} catch (error) {
-			return { module: undefined, error };
-		}
-	}
-
-	// // marked @internal in ts :(
-	// private resolveJavaScriptModule(moduleName: string, initialDir: string, host: ts.ModuleResolutionHost): string {
-	// 	const { resolvedModule, failedLookupLocations } =
-	// 		ts.nodeModuleNameResolverWorker(moduleName, initialDir, { moduleResolution: ts.ModuleResolutionKind.NodeJs, allowJs: true }, host, /*cache*/ undefined, /*jsOnly*/ true);
-	// 	if (!resolvedModule) {
-	// 		throw new Error(`Could not resolve JS module ${moduleName} starting at ${initialDir}. Looked in: ${failedLookupLocations.join(', ')}`);
-	// 	}
-	// 	return resolvedModule.resolvedFileName;
-	// }
-
-	enablePlugins(options: ts.CompilerOptions) {
-		// const host = this.getHost();
-		// const options = this.getCompilerOptions();
-
-		// if (!host.require) {
-		//     this.logger.info("Plugins were requested but not running in environment that supports 'require'. Nothing will be loaded");
-		//     return;
-		// }
-
-		// Search our peer node_modules, then any globally-specified probe paths
-		// ../../.. to walk from X/node_modules/typescript/lib/tsserver.js to X/node_modules/
-		// const searchPaths = [combinePaths(host.getExecutingFilePath(), "../../.."), ...this.projectService.pluginProbeLocations];
+	private enablePlugins(options: ts.CompilerOptions) {
 		const searchPaths = [];
-		// if (this.projectService.allowLocalPluginLoads) {
-		// const local = ts.getDirectoryPath(this.configFilePath);
-		const local = this.rootFilePath;
-		this.logger.info(`enablePlugins for ${this.configFilePath}`);
-		this.logger.info(`Local plugin loading enabled; adding ${local} to search paths`);
-		searchPaths.unshift(local);
-		// }
+		// TODO: support pluginProbeLocations?
+		// TODO: add peer node_modules to source path.
+
+		// TODO: determine how to expose this setting.
+		// VS Code starts tsserver with --allowLocalPluginLoads by default: https://github.com/Microsoft/TypeScript/pull/15924
+		const allowLocalPluginLoads = true;
+		if (allowLocalPluginLoads) {
+			const local = this.rootFilePath;
+			this.logger.info(`Local plugin loading enabled; adding ${local} to search paths`);
+			searchPaths.unshift(local);
+		}
 
 		// Enable tsconfig-specified plugins
 		if (options.plugins) {
@@ -987,28 +960,14 @@ export class ProjectConfiguration {
 				this.enablePlugin(pluginConfigEntry, searchPaths);
 			}
 		}
-		const file = '';
-		file.toLowerCase();
 
-		// if (this.projectService.globalPlugins) {
-		//     // Enable global plugins with synthetic configuration entries
-		//     for (const globalPluginName of this.projectService.globalPlugins) {
-		//         // Skip already-locally-loaded plugins
-		//         if (options.plugins && options.plugins.some(p => p.name === globalPluginName)) continue;
-
-		//         // Provide global: true so plugins can detect why they can't find their config
-		//         this.enablePlugin({ name: globalPluginName, global: true } as PluginImport, searchPaths);
-		//     }
-		// }
+		// TODO: support globalPlugins flag if desired
 	}
 
 	private resolveModule(moduleName: string, initialDir: string): {} | undefined {
-		// const resolvedPath = ts.normalizeSlashes(host.resolvePath(ts.combinePaths(initialDir, 'node_modules')));
-		const pathResolver = initialDir.includes('\\') ? path.win32 : path.posix;
-
-		const resolvedPath = pathResolver.resolve(initialDir, 'node_modules');
+		const resolvedPath = path.resolve(initialDir, 'node_modules');
 		this.logger.info(`Loading ${moduleName} from ${initialDir} (resolved to ${resolvedPath})`);
-		const result = this.serverHostRequire(resolvedPath, moduleName);
+		const result = this.requirePlugin(resolvedPath, moduleName);
 		if (result.error) {
 			this.logger.info(`Failed to load module: ${JSON.stringify(result.error)}`);
 			return undefined;
@@ -1016,11 +975,33 @@ export class ProjectConfiguration {
 		return result.module;
 	}
 
-	private enablePlugin(pluginConfigEntry: ts.PluginImport, searchPaths: string[]) {
-		// const log = (message: string) => {
-		//     this.logger.info(message);
-		// };
+	// TODO: stolen from moduleNameResolver.ts because marked as internal
+	/**
+	 * Expose resolution logic to allow us to use Node module resolution logic from arbitrary locations.
+	 * No way to do this with `require()`: https://github.com/nodejs/node/issues/5963
+	 * Throws an error if the module can't be resolved.
+	 */
+	private resolveJavaScriptModule(moduleName: string, initialDir: string, host: ts.ModuleResolutionHost): string {
+		const { resolvedModule /* , failedLookupLocations */ } =
+			ts.nodeModuleNameResolver(moduleName, /* containingFile */ initialDir, { moduleResolution: ts.ModuleResolutionKind.NodeJs, allowJs: true }, this.fs, undefined);
+			// TODO: jsOnly flag missing :(
+		if (!resolvedModule) {
+			// TODO: add  Looked in: ${failedLookupLocations.join(', ')} back into error.
+			throw new Error(`Could not resolve JS module ${moduleName} starting at ${initialDir}.`);
+		}
+		return resolvedModule.resolvedFileName;
+	}
 
+	private requirePlugin(initialDir: string, moduleName: string): RequireResult {
+		const modulePath = this.resolveJavaScriptModule(moduleName, initialDir, this.fs);
+		try {
+			return { module: require(modulePath), error: undefined };
+		} catch (error) {
+			return { module: undefined, error };
+		}
+	}
+
+	private enablePlugin(pluginConfigEntry: ts.PluginImport, searchPaths: string[]) {
 		for (const searchPath of searchPaths) {
 			const resolvedModule =  this.resolveModule(pluginConfigEntry.name, searchPath) as PluginModuleFactory;
 			if (resolvedModule) {
@@ -1034,21 +1015,20 @@ export class ProjectConfiguration {
 	private enableProxy(pluginModuleFactory: PluginModuleFactory, configEntry: ts.PluginImport) {
 		try {
 			if (typeof pluginModuleFactory !== 'function') {
-				this.logger.info(`Skipped loading plugin ${configEntry.name} because it did expose a proper factory function`);
+				this.logger.info(`Skipped loading plugin ${configEntry.name} because it didn't expose a proper factory function`);
 				return;
 			}
 
 			const info: PluginCreateInfo = {
 				config: configEntry,
-				project: { projectService: { logger: this.logger }}, // TODO: this will never work.
+				project: { projectService: { logger: this.logger }}, // TODO: may need more support
 				languageService: this.getService(),
 				languageServiceHost: this.getHost(),
-				serverHost: undefined // TODO: may need to be faked.
+				serverHost: {} // TODO: may need an adapter
 			};
 
 			const pluginModule = pluginModuleFactory({ typescript: ts });
 			this.service = pluginModule.create(info);
-			// this.plugins.push(pluginModule); TODO: is this needed?
 		} catch (e) {
 			this.logger.info(`Plugin activation failed: ${e}`);
 		}
