@@ -18,7 +18,7 @@ export function convertTsDiagnostic(diagnostic: ts.Diagnostic): Diagnostic {
 		message: text,
 		severity: convertDiagnosticCategory(diagnostic.category),
 		code: diagnostic.code,
-		source: 'ts'
+		source: diagnostic.source || 'ts'
 	};
 }
 
