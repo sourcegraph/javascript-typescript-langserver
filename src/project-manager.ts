@@ -25,14 +25,24 @@ import {
 export type ConfigType = 'js' | 'ts';
 
 // definitions from from TypeScript server/project.ts
-interface Project {
-	projectService: {
-		logger: Logger;
-	};
+
+/**
+ * A plugin exports an initialization function, injected with
+ * the current typescript instance
+ */
+type PluginModuleFactory = (mod: { typescript: typeof ts }) => PluginModule;
+
+/**
+ * A plugin presents this API when initialized
+ */
+interface PluginModule {
+	create(createInfo: PluginCreateInfo): ts.LanguageService;
+	getExternalFiles?(proj: Project): string[];
 }
 
-type ServerHost = object;
-
+/**
+ * All of tsserver's environment exposed to plugins
+ */
 interface PluginCreateInfo {
 	project: Project;
 	languageService: ts.LanguageService;
@@ -41,14 +51,24 @@ interface PluginCreateInfo {
 	config: any;
 }
 
-type RequireResult = { module: {}, error: undefined } | { module: undefined, error: {} };
-
-interface PluginModule {
-	create(createInfo: PluginCreateInfo): ts.LanguageService;
-	getExternalFiles?(proj: Project): string[];
+/**
+ * The portion of tsserver's Project API exposed to plugins
+ */
+interface Project {
+	projectService: {
+		logger: Logger;
+	};
 }
 
-type PluginModuleFactory = (mod: { typescript: typeof ts }) => PluginModule;
+/**
+ * The portion of tsserver's ServerHost API exposed to plugins
+ */
+type ServerHost = object;
+
+/**
+ * The result of a node require: a module or an error.
+ */
+type RequireResult = { module: {}, error: undefined } | { module: undefined, error: {} };
 
 /**
  * ProjectManager translates VFS files to one or many projects denoted by [tj]config.json.
@@ -964,6 +984,27 @@ export class ProjectConfiguration {
 		// TODO: support globalPlugins flag if desired
 	}
 
+	/**
+	 * Tries to load and enable a single plugin
+	 * @param pluginConfigEntry
+	 * @param searchPaths
+	 */
+	private enablePlugin(pluginConfigEntry: ts.PluginImport, searchPaths: string[]) {
+		for (const searchPath of searchPaths) {
+			const resolvedModule =  this.resolveModule(pluginConfigEntry.name, searchPath) as PluginModuleFactory;
+			if (resolvedModule) {
+				this.enableProxy(resolvedModule, pluginConfigEntry);
+				return;
+			}
+		}
+		this.logger.info(`Couldn't find ${pluginConfigEntry.name} anywhere in paths: ${searchPaths.join(',')}`);
+	}
+
+	/**
+	 * Load a plugin use a node require
+	 * @param moduleName
+	 * @param initialDir
+	 */
 	private resolveModule(moduleName: string, initialDir: string): {} | undefined {
 		const resolvedPath = path.resolve(initialDir, 'node_modules');
 		this.logger.info(`Loading ${moduleName} from ${initialDir} (resolved to ${resolvedPath})`);
@@ -973,6 +1014,20 @@ export class ProjectConfiguration {
 			return undefined;
 		}
 		return result.module;
+	}
+
+	/**
+	 * Resolves a loads a plugin function relative to initialDir
+	 * @param initialDir
+	 * @param moduleName
+	 */
+	private requirePlugin(initialDir: string, moduleName: string): RequireResult {
+		const modulePath = this.resolveJavaScriptModule(moduleName, initialDir, this.fs);
+		try {
+			return { module: require(modulePath), error: undefined };
+		} catch (error) {
+			return { module: undefined, error };
+		}
 	}
 
 	// TODO: stolen from moduleNameResolver.ts because marked as internal
@@ -992,26 +1047,11 @@ export class ProjectConfiguration {
 		return resolvedModule.resolvedFileName;
 	}
 
-	private requirePlugin(initialDir: string, moduleName: string): RequireResult {
-		const modulePath = this.resolveJavaScriptModule(moduleName, initialDir, this.fs);
-		try {
-			return { module: require(modulePath), error: undefined };
-		} catch (error) {
-			return { module: undefined, error };
-		}
-	}
-
-	private enablePlugin(pluginConfigEntry: ts.PluginImport, searchPaths: string[]) {
-		for (const searchPath of searchPaths) {
-			const resolvedModule =  this.resolveModule(pluginConfigEntry.name, searchPath) as PluginModuleFactory;
-			if (resolvedModule) {
-				this.enableProxy(resolvedModule, pluginConfigEntry);
-				return;
-			}
-		}
-		this.logger.info(`Couldn't find ${pluginConfigEntry.name} anywhere in paths: ${searchPaths.join(',')}`);
-	}
-
+	/**
+	 * Replaces the LanguageService with an instance wrapped by the plugin
+	 * @param pluginModuleFactory function to create the module
+	 * @param configEntry extra settings from tsconfig to pass to the plugin module
+	 */
 	private enableProxy(pluginModuleFactory: PluginModuleFactory, configEntry: ts.PluginImport) {
 		try {
 			if (typeof pluginModuleFactory !== 'function') {
