@@ -2,8 +2,11 @@ import { Observable } from '@reactivex/rxjs';
 import { Operation } from 'fast-json-patch';
 import iterate from 'iterare';
 import { toPairs } from 'lodash';
+import { castArray, merge, omit } from 'lodash';
+import hashObject = require('object-hash');
 import { Span } from 'opentracing';
 import * as ts from 'typescript';
+import * as url from 'url';
 import {
 	CodeActionParams,
 	Command,
@@ -38,6 +41,7 @@ import { FileSystem, FileSystemUpdater, LocalFileSystem, RemoteFileSystem } from
 import { LanguageClient } from './lang-handler';
 import { Logger, LSPLogger } from './logging';
 import { InMemoryFileSystem, isTypeScriptLibrary } from './memfs';
+import { extractDefinitelyTypedPackageName, extractNodeModulesPackageName, PackageJson, PackageManager } from './packages';
 import { ProjectConfiguration, ProjectManager } from './project-manager';
 import {
 	DependencyReference,
@@ -52,20 +56,6 @@ import {
 	WorkspaceSymbolParams
 } from './request-type';
 import {
-	getMatchingPropertyCount,
-	getPropertyCount,
-	JSONPTR,
-	normalizeUri,
-	observableFromIterable,
-	path2uri,
-	toUnixPath,
-	uri2path
-} from './util';
-import hashObject = require('object-hash');
-import { castArray, merge, omit } from 'lodash';
-import * as url from 'url';
-import { extractDefinitelyTypedPackageName, extractNodeModulesPackageName, PackageJson, PackageManager } from './packages';
-import {
 	definitionInfoToSymbolDescriptor,
 	locationUri,
 	navigateToItemToSymbolInformation,
@@ -75,6 +65,16 @@ import {
 	walkNavigationTree
 } from './symbols';
 import { traceObservable } from './tracing';
+import {
+	getMatchingPropertyCount,
+	getPropertyCount,
+	JSONPTR,
+	normalizeUri,
+	observableFromIterable,
+	path2uri,
+	toUnixPath,
+	uri2path
+} from './util';
 
 export interface TypeScriptServiceOptions {
 	traceModuleResolution?: boolean;

@@ -1,4 +1,8 @@
+import { Observable } from '@reactivex/rxjs';
 import * as chai from 'chai';
+import chaiAsPromised = require('chai-as-promised');
+import { applyReducer, Operation } from 'fast-json-patch';
+import { IBeforeAndAfterContext, ISuiteCallbackContext, ITestCallbackContext } from 'mocha';
 import * as sinon from 'sinon';
 import * as ts from 'typescript';
 import { CompletionItemKind, CompletionList, DiagnosticSeverity, InsertTextFormat, TextDocumentIdentifier, TextDocumentItem, WorkspaceEdit } from 'vscode-languageserver';
@@ -8,10 +12,6 @@ import { DependencyReference, PackageInformation, ReferenceInformation, TextDocu
 import { ClientCapabilities, SymbolLocationInformation } from '../request-type';
 import { TypeScriptService, TypeScriptServiceFactory } from '../typescript-service';
 import { observableFromIterable, toUnixPath, uri2path } from '../util';
-import chaiAsPromised = require('chai-as-promised');
-import { Observable } from '@reactivex/rxjs';
-import { applyReducer, Operation } from 'fast-json-patch';
-import { IBeforeAndAfterContext, ISuiteCallbackContext, ITestCallbackContext } from 'mocha';
 
 chai.use(chaiAsPromised);
 const assert = chai.assert;

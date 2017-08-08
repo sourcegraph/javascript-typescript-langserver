@@ -1,9 +1,9 @@
 import * as chai from 'chai';
+import chaiAsPromised = require('chai-as-promised');
 import iterate from 'iterare';
+import * as sinon from 'sinon';
 import { InMemoryFileSystem, typeScriptLibraries } from '../memfs';
 import { uri2path } from '../util';
-import chaiAsPromised = require('chai-as-promised');
-import * as sinon from 'sinon';
 chai.use(chaiAsPromised);
 const assert = chai.assert;
 
