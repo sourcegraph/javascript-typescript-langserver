@@ -1,11 +1,11 @@
 import * as chai from 'chai';
+import chaiAsPromised = require('chai-as-promised');
 import * as fs from 'mz/fs';
 import * as path from 'path';
 import * as rimraf from 'rimraf';
 import * as temp from 'temp';
 import { LocalFileSystem } from '../fs';
 import { path2uri } from '../util';
-import chaiAsPromised = require('chai-as-promised');
 chai.use(chaiAsPromised);
 const assert = chai.assert;
 
