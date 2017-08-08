@@ -1,10 +1,10 @@
 
-import * as chai from 'chai';
-import { traceObservable, tracePromise, traceSync } from '../tracing';
-import chaiAsPromised = require('chai-as-promised');
 import { Observable } from '@reactivex/rxjs';
+import * as chai from 'chai';
+import chaiAsPromised = require('chai-as-promised');
 import { Span } from 'opentracing';
 import * as sinon from 'sinon';
+import { traceObservable, tracePromise, traceSync } from '../tracing';
 chai.use(chaiAsPromised);
 const assert = chai.assert;
 

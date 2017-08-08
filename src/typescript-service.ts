@@ -2,8 +2,11 @@ import { Observable } from '@reactivex/rxjs';
 import { Operation } from 'fast-json-patch';
 import iterate from 'iterare';
 import { toPairs } from 'lodash';
+import { castArray, merge, omit } from 'lodash';
+import hashObject = require('object-hash');
 import { Span } from 'opentracing';
 import * as ts from 'typescript';
+import * as url from 'url';
 import {
 	CodeActionParams,
 	Command,
@@ -18,6 +21,7 @@ import {
 	DocumentSymbolParams,
 	ExecuteCommandParams,
 	Hover,
+	InsertTextFormat,
 	Location,
 	MarkedString,
 	ParameterInformation,
@@ -37,6 +41,7 @@ import { FileSystem, FileSystemUpdater, LocalFileSystem, RemoteFileSystem } from
 import { LanguageClient } from './lang-handler';
 import { Logger, LSPLogger } from './logging';
 import { InMemoryFileSystem, isTypeScriptLibrary } from './memfs';
+import { extractDefinitelyTypedPackageName, extractNodeModulesPackageName, PackageJson, PackageManager } from './packages';
 import { ProjectConfiguration, ProjectManager } from './project-manager';
 import {
 	DependencyReference,
@@ -51,20 +56,6 @@ import {
 	WorkspaceSymbolParams
 } from './request-type';
 import {
-	getMatchingPropertyCount,
-	getPropertyCount,
-	JSONPTR,
-	normalizeUri,
-	observableFromIterable,
-	path2uri,
-	toUnixPath,
-	uri2path
-} from './util';
-import hashObject = require('object-hash');
-import { castArray, merge, omit } from 'lodash';
-import * as url from 'url';
-import { extractDefinitelyTypedPackageName, extractNodeModulesPackageName, PackageJson, PackageManager } from './packages';
-import {
 	definitionInfoToSymbolDescriptor,
 	locationUri,
 	navigateToItemToSymbolInformation,
@@ -74,6 +65,16 @@ import {
 	walkNavigationTree
 } from './symbols';
 import { traceObservable } from './tracing';
+import {
+	getMatchingPropertyCount,
+	getPropertyCount,
+	JSONPTR,
+	normalizeUri,
+	observableFromIterable,
+	path2uri,
+	toUnixPath,
+	uri2path
+} from './util';
 
 export interface TypeScriptServiceOptions {
 	traceModuleResolution?: boolean;
@@ -173,6 +174,11 @@ export class TypeScriptService {
 		}
 	};
 
+	/**
+	 * Indicates if the client prefers completion results formatted as snippets.
+	 */
+	private supportsCompletionWithSnippets: boolean = false;
+
 	constructor(protected client: LanguageClient, protected options: TypeScriptServiceOptions = {}) {
 		this.logger = new LSPLogger(client);
 	}
@@ -200,6 +206,12 @@ export class TypeScriptService {
 		if (params.rootUri || params.rootPath) {
 			this.root = params.rootPath || uri2path(params.rootUri!);
 			this.rootUri = params.rootUri || path2uri(params.rootPath!);
+
+			this.supportsCompletionWithSnippets = params.capabilities.textDocument &&
+				params.capabilities.textDocument.completion &&
+				params.capabilities.textDocument.completion.completionItem &&
+				params.capabilities.textDocument.completion.completionItem.snippetSupport || false;
+
 			// The root URI always refers to a directory
 			if (!this.rootUri.endsWith('/')) {
 				this.rootUri += '/';
@@ -1002,6 +1014,7 @@ export class TypeScriptService {
 				return Observable.from(completions.entries)
 					.map(entry =>  {
 						const item: CompletionItem = { label: entry.name };
+
 						const kind = completionKinds[entry.kind];
 						if (kind) {
 							item.kind = kind;
@@ -1013,6 +1026,21 @@ export class TypeScriptService {
 						if (details) {
 							item.documentation = ts.displayPartsToString(details.documentation);
 							item.detail = ts.displayPartsToString(details.displayParts);
+							if (this.supportsCompletionWithSnippets) {
+								item.insertTextFormat = InsertTextFormat.Snippet;
+								if (entry.kind === 'property') {
+									item.insertText = details.name;
+								} else {
+									const parameters = details.displayParts
+										.filter(p => p.kind === 'parameterName')
+										.map((p, i) => '${' + `${i + 1}:${p.text}` + '}');
+									const paramString = parameters.join(', ');
+									item.insertText = details.name + `(${paramString})`;
+								}
+							} else {
+								item.insertTextFormat = InsertTextFormat.PlainText;
+								item.insertText = details.name;
+							}
 						}
 						return { op: 'add', path: '/items/-', value: item } as Operation;
 					})

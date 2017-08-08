@@ -1,20 +1,25 @@
+import { Observable } from '@reactivex/rxjs';
 import * as chai from 'chai';
+import chaiAsPromised = require('chai-as-promised');
+import { applyReducer, Operation } from 'fast-json-patch';
+import { IBeforeAndAfterContext, ISuiteCallbackContext, ITestCallbackContext } from 'mocha';
 import * as sinon from 'sinon';
 import * as ts from 'typescript';
-import { CompletionItemKind, CompletionList, DiagnosticSeverity, TextDocumentIdentifier, TextDocumentItem, WorkspaceEdit } from 'vscode-languageserver';
+import { CompletionItemKind, CompletionList, DiagnosticSeverity, InsertTextFormat, TextDocumentIdentifier, TextDocumentItem, WorkspaceEdit } from 'vscode-languageserver';
 import { Command, Diagnostic, Hover, Location, SignatureHelp, SymbolInformation, SymbolKind } from 'vscode-languageserver-types';
 import { LanguageClient, RemoteLanguageClient } from '../lang-handler';
 import { DependencyReference, PackageInformation, ReferenceInformation, TextDocumentContentParams, WorkspaceFilesParams } from '../request-type';
-import { SymbolLocationInformation } from '../request-type';
+import { ClientCapabilities, SymbolLocationInformation } from '../request-type';
 import { TypeScriptService, TypeScriptServiceFactory } from '../typescript-service';
 import { observableFromIterable, toUnixPath, uri2path } from '../util';
-import chaiAsPromised = require('chai-as-promised');
-import { Observable } from '@reactivex/rxjs';
-import { applyReducer, Operation } from 'fast-json-patch';
-import { IBeforeAndAfterContext, ISuiteCallbackContext, ITestCallbackContext } from 'mocha';
 
 chai.use(chaiAsPromised);
 const assert = chai.assert;
+
+const DEFAULT_CAPABILITIES: ClientCapabilities = {
+	xcontentProvider: true,
+	xfilesProvider: true
+};
 
 export interface TestContext {
 
@@ -31,7 +36,7 @@ export interface TestContext {
  * @param createService A factory that creates the TypeScript service. Allows to test subclasses of TypeScriptService
  * @param files A Map from URI to file content of files that should be available in the workspace
  */
-export const initializeTypeScriptService = (createService: TypeScriptServiceFactory, rootUri: string, files: Map<string, string>) => async function (this: TestContext & IBeforeAndAfterContext): Promise<void> {
+export const initializeTypeScriptService = (createService: TypeScriptServiceFactory, rootUri: string, files: Map<string, string>, clientCapabilities: ClientCapabilities = DEFAULT_CAPABILITIES) => async function (this: TestContext & IBeforeAndAfterContext): Promise<void> {
 
 	// Stub client
 	this.client = sinon.createStubInstance(RemoteLanguageClient);
@@ -56,10 +61,7 @@ export const initializeTypeScriptService = (createService: TypeScriptServiceFact
 	await this.service.initialize({
 		processId: process.pid,
 		rootUri,
-		capabilities: {
-			xcontentProvider: true,
-			xfilesProvider: true
-		}
+		capabilities: clientCapabilities || DEFAULT_CAPABILITIES
 	}).toPromise();
 };
 
@@ -2123,6 +2125,91 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 	});
 
+	describe('textDocumentCompletion() with snippets', function (this: TestContext & ISuiteCallbackContext){
+		beforeEach(initializeTypeScriptService(createService, rootUri, new Map([
+			[rootUri + 'a.ts', [
+				'class A {',
+				'	/** foo doc*/',
+				'    foo() {}',
+				'	/** bar doc*/',
+				'    bar(num: number): number { return 1; }',
+				'	/** baz doc*/',
+				'    baz(num: number): string { return ""; }',
+				'	/** qux doc*/',
+				'    qux: number;',
+				'}',
+				'const a = new A();',
+				'a.'
+			].join('\n')]
+		]), {
+			textDocument: {
+				completion: {
+					completionItem: {
+						snippetSupport: true
+					}
+				}
+			},
+			...DEFAULT_CAPABILITIES
+		}));
+
+		afterEach(shutdownService);
+
+		it('should produce completions with snippets if supported', async function (this: TestContext & ITestCallbackContext) {
+			const result: CompletionList = await this.service.textDocumentCompletion({
+				textDocument: {
+					uri: rootUri + 'a.ts'
+				},
+				position: {
+					line: 11,
+					character: 2
+				}
+			}).reduce<Operation, CompletionList>(applyReducer, null as any).toPromise();
+			// * A snippet can define tab stops and placeholders with `$1`, `$2`
+			//  * and `${3:foo}`. `$0` defines the final tab stop, it defaults to
+			//  * the end of the snippet. Placeholders with equal identifiers are linked,
+			//  * that is typing in one will update others too.
+			assert.equal(result.isIncomplete, false);
+			assert.sameDeepMembers(result.items, [
+				{
+					label: 'bar',
+					kind: CompletionItemKind.Method,
+					documentation: 'bar doc',
+					sortText: '0',
+					insertTextFormat: InsertTextFormat.Snippet,
+					insertText: 'bar(${1:num})',
+					detail: '(method) A.bar(num: number): number'
+				},
+				{
+					label: 'baz',
+					kind: CompletionItemKind.Method,
+					documentation: 'baz doc',
+					sortText: '0',
+					insertTextFormat: InsertTextFormat.Snippet,
+					insertText: 'baz(${1:num})',
+					detail: '(method) A.baz(num: number): string'
+				},
+				{
+					label: 'foo',
+					kind: CompletionItemKind.Method,
+					documentation: 'foo doc',
+					sortText: '0',
+					insertTextFormat: InsertTextFormat.Snippet,
+					insertText: 'foo()',
+					detail: '(method) A.foo(): void'
+				},
+				{
+					label: 'qux',
+					kind: CompletionItemKind.Property,
+					documentation: 'qux doc',
+					sortText: '0',
+					insertTextFormat: InsertTextFormat.Snippet,
+					insertText: 'qux',
+					detail: '(property) A.qux: number'
+				}
+			]);
+		});
+	});
+
 	describe('textDocumentCompletion()', function (this: TestContext & ISuiteCallbackContext) {
 		beforeEach(initializeTypeScriptService(createService, rootUri, new Map([
 			[rootUri + 'a.ts', [
@@ -2175,6 +2262,8 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					label: 'bar',
 					kind: CompletionItemKind.Method,
 					documentation: 'bar doc',
+					insertText: 'bar',
+					insertTextFormat: InsertTextFormat.PlainText,
 					sortText: '0',
 					detail: '(method) A.bar(): number'
 				},
@@ -2182,6 +2271,8 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					label: 'baz',
 					kind: CompletionItemKind.Method,
 					documentation: 'baz doc',
+					insertText: 'baz',
+					insertTextFormat: InsertTextFormat.PlainText,
 					sortText: '0',
 					detail: '(method) A.baz(): string'
 				},
@@ -2189,6 +2280,8 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					label: 'foo',
 					kind: CompletionItemKind.Method,
 					documentation: 'foo doc',
+					insertText: 'foo',
+					insertTextFormat: InsertTextFormat.PlainText,
 					sortText: '0',
 					detail: '(method) A.foo(): void'
 				},
@@ -2196,11 +2289,14 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					label: 'qux',
 					kind: CompletionItemKind.Property,
 					documentation: 'qux doc',
+					insertText: 'qux',
+					insertTextFormat: InsertTextFormat.PlainText,
 					sortText: '0',
 					detail: '(property) A.qux: number'
 				}
 			]);
 		});
+
 		it('produces completions for imported symbols', async function (this: TestContext & ITestCallbackContext) {
 			const result: CompletionList = await this.service.textDocumentCompletion({
 				textDocument: {
@@ -2217,6 +2313,8 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					label: 'd',
 					kind: CompletionItemKind.Function,
 					documentation: 'd doc',
+					insertText: 'd',
+					insertTextFormat: InsertTextFormat.PlainText,
 					detail: 'function d(): void',
 					sortText: '0'
 				}]
@@ -2238,6 +2336,8 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					label: 'bar',
 					kind: CompletionItemKind.Interface,
 					documentation: 'bar doc',
+					insertText: 'bar',
+					insertTextFormat: InsertTextFormat.PlainText,
 					sortText: '0',
 					detail: 'interface foo.bar'
 				}]
