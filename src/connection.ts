@@ -2,7 +2,7 @@ import { Observable, Subscription, Symbol } from '@reactivex/rxjs';
 import { EventEmitter } from 'events';
 import { applyReducer, Operation } from 'fast-json-patch';
 import { camelCase, omit } from 'lodash';
-import { FORMAT_TEXT_MAP, Span, Tracer } from 'opentracing';
+import { FORMAT_TEXT_MAP, SpanContext, Tracer } from 'opentracing';
 import { inspect } from 'util';
 import { ErrorCodes, Message, StreamMessageReader as VSCodeStreamMessageReader, StreamMessageWriter as VSCodeStreamMessageWriter } from 'vscode-jsonrpc';
 import { isNotificationMessage, isRequestMessage, isResponseMessage, NotificationMessage, RequestMessage, ResponseMessage } from 'vscode-jsonrpc/lib/messages';
@@ -210,17 +210,13 @@ export function registerLanguageHandler(messageEmitter: MessageEmitter, messageW
 				return;
 		}
 		const method = camelCase(message.method);
-		let span = new Span();
-		if (isRequestMessage(message)) {
-			// If message is request and has tracing metadata, extract the span context and create a span for the method call
-			if (hasMeta(message)) {
-				const context = tracer.extract(FORMAT_TEXT_MAP, message.meta);
-				if (context) {
-					span = tracer.startSpan('Handle ' + message.method, { childOf: context });
-					span.setTag('params', inspect(message.params));
-				}
-			}
+		let context: SpanContext | undefined;
+		// If message is request and has tracing metadata, extract the span context
+		if (isRequestMessage(message) && hasMeta(message)) {
+			context = tracer.extract(FORMAT_TEXT_MAP, message.meta) || undefined;
 		}
+		const span = tracer.startSpan('Handle ' + message.method, { childOf: context });
+		span.setTag('params', inspect(message.params));
 		if (typeof (handler as any)[method] !== 'function') {
 			// Method not implemented
 			if (isRequestMessage(message)) {
