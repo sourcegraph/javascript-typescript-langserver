@@ -69,6 +69,7 @@ npm test
     -c, --cluster [num]   number of concurrent cluster workers (defaults to number of CPUs, 8)
     -t, --trace           print all requests and responses
     -l, --logfile [file]  log to this file
+    -j, --enable-jaeger   enable OpenTracing through Jaeger
 ```
 
 ## Extensions
@@ -90,3 +91,18 @@ This language server implements some LSP extensions, prefixed with an `x`.
 
 This project follows [semver](http://semver.org/) for command line arguments and standard LSP methods.
 Any change to command line arguments, Node version or protocol breaking changes will result in a major version increase.
+
+## Debugging Performance with OpenTracing
+
+The language server is fully traced through [OpenTracing](http://opentracing.io/), which allows to debug what exact operations caused method calls to take long.
+You can pass a span context through an optional `meta` field on the JSON RPC message object.
+
+For local development, there is built-in support for the open source OpenTracing implementation [Jaeger](http://jaeger.readthedocs.io/en/latest/), which can be set up to run on localhost with just one command (you need [Docker](https://www.docker.com/) installed):
+
+```
+docker run -d -p5775:5775/udp -p6831:6831/udp -p6832:6832/udp \
+  -p5778:5778 -p16686:16686 -p14268:14268 jaegertracing/all-in-one:latest
+```
+
+After that, run the language server with the `--enable-jaeger` command line flag and do some requests from your client.
+Open http://localhost:16686 in your browser and you will see method calls broken down into spans.
