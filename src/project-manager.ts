@@ -1006,9 +1006,10 @@ export class ProjectConfiguration {
 	 * @param initialDir
 	 */
 	private resolveModule(moduleName: string, initialDir: string): {} | undefined {
-		const resolvedPath = path.resolve(initialDir, 'node_modules');
+		// const resolvedPath = path.resolve(initialDir, 'node_modules');
+		const resolvedPath = '';
 		this.logger.info(`Loading ${moduleName} from ${initialDir} (resolved to ${resolvedPath})`);
-		const result = this.requirePlugin(resolvedPath, moduleName);
+		const result = this.requirePlugin(initialDir, moduleName);
 		if (result.error) {
 			this.logger.info(`Failed to load module: ${JSON.stringify(result.error)}`);
 			return undefined;
@@ -1037,14 +1038,16 @@ export class ProjectConfiguration {
 	 * Throws an error if the module can't be resolved.
 	 */
 	private resolveJavaScriptModule(moduleName: string, initialDir: string, host: ts.ModuleResolutionHost): string {
-		const { resolvedModule /* , failedLookupLocations */ } =
-			ts.nodeModuleNameResolver(moduleName, /* containingFile */ initialDir, { moduleResolution: ts.ModuleResolutionKind.NodeJs, allowJs: true }, this.fs, undefined);
+		// const { resolvedModule /* , failedLookupLocations */ } =
+		const result =
+			ts.nodeModuleNameResolver(moduleName, /* containingFile */ initialDir.replace('\\', '/') + '/package.json', { moduleResolution: ts.ModuleResolutionKind.NodeJs, allowJs: true }, this.fs, undefined);
 			// TODO: jsOnly flag missing :(
-		if (!resolvedModule) {
+		if (!result.resolvedModule) {
 			// TODO: add  Looked in: ${failedLookupLocations.join(', ')} back into error.
+			// this.logger.error(result.failedLookupLocations!);
 			throw new Error(`Could not resolve JS module ${moduleName} starting at ${initialDir}.`);
 		}
-		return resolvedModule.resolvedFileName;
+		return result.resolvedModule.resolvedFileName;
 	}
 
 	/**
