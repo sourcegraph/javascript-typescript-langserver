@@ -880,7 +880,7 @@ export class ProjectConfiguration {
 	private isExpectedDeclarationFile(fileName: string) {
 		if (isDeclarationFile(fileName)) {
 			return this.expectedFilePaths.has(toUnixPath(fileName)) ||
-					this.typeRoots.some(root => fileName.startsWith(root))
+					this.typeRoots.some(root => fileName.startsWith(root));
 		} else {
 			return false;
 		}
