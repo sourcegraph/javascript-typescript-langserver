@@ -735,7 +735,7 @@ export class ProjectConfiguration {
 	private expectedFilePaths = new Set<string>();
 
 	/**
-	 * List of resolved extra root directories to allow global typings to be loaded from.
+	 * List of resolved extra root directories to allow global type declaration files to be loaded from.
 	 */
 	private typeRoots: string[];
 
@@ -873,15 +873,17 @@ export class ProjectConfiguration {
 
 	private ensuredBasicFiles = false;
 
-	private isTypeRootDeclaration(path: string) {
-		if (isDeclarationFile(path)) {
-			for (const base of this.typeRoots) {
-				if (path.startsWith(base)) {
-					return true;
-				}
-			}
+	/**
+	 * [isExpectedDeclarationFile description]
+	 * @param {string} fileName [description]
+	 */
+	private isExpectedDeclarationFile(fileName: string) {
+		if (isDeclarationFile(fileName)) {
+			return this.expectedFilePaths.has(toUnixPath(fileName)) ||
+					this.typeRoots.some(root => fileName.startsWith(root))
+		} else {
+			return false;
 		}
-		return false;
 	}
 
 	/**
@@ -903,8 +905,7 @@ export class ProjectConfiguration {
 		for (const uri of this.fs.uris()) {
 			const fileName = uri2path(uri);
 			if (isGlobalTSFile(fileName) ||
-				this.isTypeRootDeclaration(fileName) ||
-				(isDeclarationFile(fileName) && this.expectedFilePaths.has(toUnixPath(fileName)))) {
+				this.isExpectedDeclarationFile(fileName)) {
 				const sourceFile = program.getSourceFile(fileName);
 				if (!sourceFile) {
 					this.getHost().addFile(fileName);
