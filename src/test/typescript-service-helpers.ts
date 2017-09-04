@@ -1503,7 +1503,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		});
 	});
 
-	describe('Diagnostics', function (this: TestContext & ISuiteCallbackContext) {
+	describe.only('Diagnostics', function (this: TestContext & ISuiteCallbackContext) {
 
 		beforeEach(initializeTypeScriptService(createService, rootUri, new Map([
 			[rootUri + 'src/errors.ts', 'const text: string = 33;']
@@ -1511,16 +1511,23 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		afterEach(shutdownService);
 
+		function sleep(ms: number) {
+			return new Promise(resolve => setTimeout(resolve, ms));
+		}
+
 		it('should publish diagnostics on didOpen', async function (this: TestContext & ITestCallbackContext) {
 
-			await this.service.textDocumentDidOpen({
-				textDocument: {
-					uri: rootUri + 'src/errors.ts',
-					languageId: 'typescript',
-					text: 'const text: string = 33;',
-					version: 1
-				}
-			});
+			await Promise.all([
+				this.service.textDocumentDidOpen({
+					textDocument: {
+						uri: rootUri + 'src/errors.ts',
+						languageId: 'typescript',
+						text: 'const text: string = 33;',
+						version: 1
+					}
+				}),
+				sleep(300)
+			]);
 
 			sinon.assert.calledOnce(this.client.textDocumentPublishDiagnostics);
 			sinon.assert.calledWithExactly(this.client.textDocumentPublishDiagnostics, {
@@ -1537,26 +1544,32 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		it('should publish diagnostics on didChange', async function (this: TestContext & ITestCallbackContext) {
 
-			await this.service.textDocumentDidOpen({
-				textDocument: {
-					uri: rootUri + 'src/errors.ts',
-					languageId: 'typescript',
-					text: 'const text: string = 33;',
-					version: 1
-				}
-			});
+			await Promise.all([
+				await this.service.textDocumentDidOpen({
+					textDocument: {
+						uri: rootUri + 'src/errors.ts',
+						languageId: 'typescript',
+						text: 'const text: string = 33;',
+						version: 1
+					}
+				}),
+				sleep(300)
+			]);
 
 			this.client.textDocumentPublishDiagnostics.resetHistory();
 
-			await this.service.textDocumentDidChange({
-				textDocument: {
-					uri: rootUri + 'src/errors.ts',
-					version: 2
-				},
-				contentChanges: [
-					{ text: 'const text: boolean = 33;' }
-				]
-			});
+			await Promise.all([
+				this.service.textDocumentDidChange({
+					textDocument: {
+						uri: rootUri + 'src/errors.ts',
+						version: 2
+					},
+					contentChanges: [
+						{ text: 'const text: boolean = 33;' }
+					]
+				}),
+				sleep(300)
+			]);
 
 			sinon.assert.calledOnce(this.client.textDocumentPublishDiagnostics);
 			sinon.assert.calledWithExactly(this.client.textDocumentPublishDiagnostics, {
@@ -1573,26 +1586,32 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		it('should publish empty diagnostics on didChange if error was fixed', async function (this: TestContext & ITestCallbackContext) {
 
-			await this.service.textDocumentDidOpen({
-				textDocument: {
-					uri: rootUri + 'src/errors.ts',
-					languageId: 'typescript',
-					text: 'const text: string = 33;',
-					version: 1
-				}
-			});
+			await Promise.all([
+				this.service.textDocumentDidOpen({
+					textDocument: {
+						uri: rootUri + 'src/errors.ts',
+						languageId: 'typescript',
+						text: 'const text: string = 33;',
+						version: 1
+					}
+				}),
+				sleep(300)
+			]);
 
 			this.client.textDocumentPublishDiagnostics.resetHistory();
 
-			await this.service.textDocumentDidChange({
-				textDocument: {
-					uri: rootUri + 'src/errors.ts',
-					version: 2
-				},
-				contentChanges: [
-					{ text: 'const text: number = 33;' }
-				]
-			});
+			await Promise.all([
+				this.service.textDocumentDidChange({
+					textDocument: {
+						uri: rootUri + 'src/errors.ts',
+						version: 2
+					},
+					contentChanges: [
+						{ text: 'const text: number = 33;' }
+					]
+				}),
+				sleep(300)
+			]);
 
 			sinon.assert.calledOnce(this.client.textDocumentPublishDiagnostics);
 			sinon.assert.calledWithExactly(this.client.textDocumentPublishDiagnostics, {
