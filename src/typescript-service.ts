@@ -1025,8 +1025,8 @@ export class TypeScriptService {
 
 						// context for future resolve requests:
 						item.data = {
-							uri: uri,
-							offset: offset,
+							uri,
+							offset,
 							entryName: entry.name
 						};
 

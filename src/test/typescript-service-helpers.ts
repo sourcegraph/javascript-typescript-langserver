@@ -5,7 +5,7 @@ import { applyReducer, Operation } from 'fast-json-patch';
 import { IBeforeAndAfterContext, ISuiteCallbackContext, ITestCallbackContext } from 'mocha';
 import * as sinon from 'sinon';
 import * as ts from 'typescript';
-import { CompletionItemKind, CompletionList, DiagnosticSeverity, InsertTextFormat, TextDocumentIdentifier, TextDocumentItem, WorkspaceEdit, CompletionItem } from 'vscode-languageserver';
+import { CompletionItem, CompletionItemKind, CompletionList, DiagnosticSeverity, InsertTextFormat, TextDocumentIdentifier, TextDocumentItem, WorkspaceEdit } from 'vscode-languageserver';
 import { Command, Diagnostic, Hover, Location, SignatureHelp, SymbolInformation, SymbolKind } from 'vscode-languageserver-types';
 import { LanguageClient, RemoteLanguageClient } from '../lang-handler';
 import { DependencyReference, PackageInformation, ReferenceInformation, TextDocumentContentParams, WorkspaceFilesParams } from '../request-type';
@@ -2170,9 +2170,10 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			//  * that is typing in one will update others too.
 			assert.equal(result.isIncomplete, false);
 
-			const barItem = result.items.find(i => i.label === "bar") as CompletionItem;
-			const resolved: CompletionItem = await this.service.completionItemResolve(barItem)
-											   .reduce<Operation, CompletionItem>(applyReducer, null as any).toPromise();
+			const barItem = result.items.find(i => i.label === 'bar') as CompletionItem;
+			const resolved: CompletionItem = await this.service
+				.completionItemResolve(barItem)
+				.reduce<Operation, CompletionItem>(applyReducer, null as any).toPromise();
 
 			assert.deepEqual(resolved, {
 				label: 'bar',
@@ -2293,9 +2294,10 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}
 			]);
 
-			const barItem = result.items.find(i => i.label === "bar") as CompletionItem;
-			const resolved: CompletionItem = await this.service.completionItemResolve(barItem)
-											   .reduce<Operation, CompletionItem>(applyReducer, null as any).toPromise();
+			const barItem = result.items.find(i => i.label === 'bar') as CompletionItem;
+			const resolved: CompletionItem = await this.service
+				.completionItemResolve(barItem)
+				.reduce<Operation, CompletionItem>(applyReducer, null as any).toPromise();
 
 			assert.deepEqual(resolved, {
 				label: 'bar',
@@ -2324,7 +2326,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					data: {
 						entryName: 'd',
 						offset: 32,
-						uri: rootUri + "uses-import.ts"
+						uri: rootUri + 'uses-import.ts'
 					},
 					label: 'd',
 					kind: CompletionItemKind.Function,
@@ -2352,14 +2354,14 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					data: {
 						entryName: 'bar',
 						offset: 51,
-						uri: rootUri + "uses-reference.ts"
+						uri: rootUri + 'uses-reference.ts'
 					},
 					label: 'bar',
 					kind: CompletionItemKind.Interface,
 					// documentation: 'bar doc',
 					// insertText: 'bar',
 					// insertTextFormat: InsertTextFormat.PlainText,
-					sortText: '0',
+					sortText: '0'
 					// detail: 'interface foo.bar'
 				}]
 			});
