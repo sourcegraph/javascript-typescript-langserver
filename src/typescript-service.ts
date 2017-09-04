@@ -1022,31 +1022,62 @@ export class TypeScriptService {
 						if (entry.sortText) {
 							item.sortText = entry.sortText;
 						}
-						const details = configuration.getService().getCompletionEntryDetails(fileName, offset, entry.name);
-						if (details) {
-							item.documentation = ts.displayPartsToString(details.documentation);
-							item.detail = ts.displayPartsToString(details.displayParts);
-							if (this.supportsCompletionWithSnippets) {
-								item.insertTextFormat = InsertTextFormat.Snippet;
-								if (entry.kind === 'property') {
-									item.insertText = details.name;
-								} else {
-									const parameters = details.displayParts
-										.filter(p => p.kind === 'parameterName')
-										.map((p, i) => '${' + `${i + 1}:${p.text}` + '}');
-									const paramString = parameters.join(', ');
-									item.insertText = details.name + `(${paramString})`;
-								}
-							} else {
-								item.insertTextFormat = InsertTextFormat.PlainText;
-								item.insertText = details.name;
-							}
-						}
+
+						// context for future resolve requests:
+						item.data = {
+							uri: uri,
+							offset: offset,
+							entryName: entry.name
+						};
+
 						return { op: 'add', path: '/items/-', value: item } as Operation;
 					})
 					.startWith({ op: 'add', path: '/isIncomplete', value: false } as Operation);
 			})
 			.startWith({ op: 'add', path: '', value: { isIncomplete: true, items: [] } as CompletionList } as Operation);
+	}
+
+	/**
+	 * The completionItem/resolve request is used to fill in additional details from an incomplete
+	 * CompletionItem returned from the textDocument/completions call.
+	 *
+	 * @return Observable of JSON Patches that build a `CompletionItem` result
+	 */
+	completionItemResolve(item: CompletionItem, span = new Span()): Observable<Operation> {
+		const {uri, offset, entryName} = item.data;
+		const fileName: string = uri2path(uri);
+		return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
+			.toArray()
+			.map(() => {
+
+				const configuration = this.projectManager.getConfiguration(fileName);
+				configuration.ensureBasicFiles(span);
+
+				const details = configuration.getService().getCompletionEntryDetails(fileName, offset, entryName);
+				if (details) {
+					item.documentation = ts.displayPartsToString(details.documentation);
+					item.detail = ts.displayPartsToString(details.displayParts);
+					if (this.supportsCompletionWithSnippets) {
+						item.insertTextFormat = InsertTextFormat.Snippet;
+						if (details.kind === 'method' || details.kind === 'function') {
+							const parameters = details.displayParts
+								.filter(p => p.kind === 'parameterName')
+								.map((p, i) => '${' + `${i + 1}:${p.text}` + '}');
+							const paramString = parameters.join(', ');
+							item.insertText = details.name + `(${paramString})`;
+						} else {
+							item.insertText = details.name;
+
+						}
+					} else {
+						item.insertTextFormat = InsertTextFormat.PlainText;
+						item.insertText = details.name;
+					}
+					delete item.data;
+				}
+				return item;
+			})
+			.map(completionItem => ({ op: 'add', path: '', value: completionItem }) as Operation);
 	}
 
 	/**

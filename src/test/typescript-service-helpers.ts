@@ -5,7 +5,7 @@ import { applyReducer, Operation } from 'fast-json-patch';
 import { IBeforeAndAfterContext, ISuiteCallbackContext, ITestCallbackContext } from 'mocha';
 import * as sinon from 'sinon';
 import * as ts from 'typescript';
-import { CompletionItemKind, CompletionList, DiagnosticSeverity, InsertTextFormat, TextDocumentIdentifier, TextDocumentItem, WorkspaceEdit } from 'vscode-languageserver';
+import { CompletionItemKind, CompletionList, DiagnosticSeverity, InsertTextFormat, TextDocumentIdentifier, TextDocumentItem, WorkspaceEdit, CompletionItem } from 'vscode-languageserver';
 import { Command, Diagnostic, Hover, Location, SignatureHelp, SymbolInformation, SymbolKind } from 'vscode-languageserver-types';
 import { LanguageClient, RemoteLanguageClient } from '../lang-handler';
 import { DependencyReference, PackageInformation, ReferenceInformation, TextDocumentContentParams, WorkspaceFilesParams } from '../request-type';
@@ -2169,44 +2169,21 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			//  * the end of the snippet. Placeholders with equal identifiers are linked,
 			//  * that is typing in one will update others too.
 			assert.equal(result.isIncomplete, false);
-			assert.sameDeepMembers(result.items, [
-				{
-					label: 'bar',
-					kind: CompletionItemKind.Method,
-					documentation: 'bar doc',
-					sortText: '0',
-					insertTextFormat: InsertTextFormat.Snippet,
-					insertText: 'bar(${1:num})',
-					detail: '(method) A.bar(num: number): number'
-				},
-				{
-					label: 'baz',
-					kind: CompletionItemKind.Method,
-					documentation: 'baz doc',
-					sortText: '0',
-					insertTextFormat: InsertTextFormat.Snippet,
-					insertText: 'baz(${1:num})',
-					detail: '(method) A.baz(num: number): string'
-				},
-				{
-					label: 'foo',
-					kind: CompletionItemKind.Method,
-					documentation: 'foo doc',
-					sortText: '0',
-					insertTextFormat: InsertTextFormat.Snippet,
-					insertText: 'foo()',
-					detail: '(method) A.foo(): void'
-				},
-				{
-					label: 'qux',
-					kind: CompletionItemKind.Property,
-					documentation: 'qux doc',
-					sortText: '0',
-					insertTextFormat: InsertTextFormat.Snippet,
-					insertText: 'qux',
-					detail: '(property) A.qux: number'
-				}
-			]);
+
+			const barItem = result.items.find(i => i.label === "bar") as CompletionItem;
+			const resolved: CompletionItem = await this.service.completionItemResolve(barItem)
+											   .reduce<Operation, CompletionItem>(applyReducer, null as any).toPromise();
+
+			assert.deepEqual(resolved, {
+				label: 'bar',
+				kind: CompletionItemKind.Method,
+				documentation: 'bar doc',
+				insertText: 'bar(${1:num})',
+				insertTextFormat: InsertTextFormat.Snippet,
+				sortText: '0',
+				detail: '(method) A.bar(num: number): number'
+			});
+
 		});
 	});
 
@@ -2259,42 +2236,76 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			assert.equal(result.isIncomplete, false);
 			assert.sameDeepMembers(result.items, [
 				{
+					data: {
+						entryName: 'bar',
+						offset: 188,
+						uri: rootUri + 'a.ts'
+					},
 					label: 'bar',
 					kind: CompletionItemKind.Method,
-					documentation: 'bar doc',
-					insertText: 'bar',
-					insertTextFormat: InsertTextFormat.PlainText,
-					sortText: '0',
-					detail: '(method) A.bar(): number'
+					// documentation: 'bar doc',
+					// insertText: 'bar',
+					// insertTextFormat: InsertTextFormat.PlainText,
+					sortText: '0'
+					// detail: '(method) A.bar(): number'
 				},
 				{
+					data: {
+						entryName: 'baz',
+						offset: 188,
+						uri: rootUri + 'a.ts'
+					},
 					label: 'baz',
 					kind: CompletionItemKind.Method,
-					documentation: 'baz doc',
-					insertText: 'baz',
-					insertTextFormat: InsertTextFormat.PlainText,
-					sortText: '0',
-					detail: '(method) A.baz(): string'
+					// documentation: 'baz doc',
+					// insertText: 'baz',
+					// insertTextFormat: InsertTextFormat.PlainText,
+					sortText: '0'
+					// detail: '(method) A.baz(): string'
 				},
 				{
+					data: {
+						entryName: 'foo',
+						offset: 188,
+						uri: rootUri + 'a.ts'
+					},
 					label: 'foo',
 					kind: CompletionItemKind.Method,
-					documentation: 'foo doc',
-					insertText: 'foo',
-					insertTextFormat: InsertTextFormat.PlainText,
-					sortText: '0',
-					detail: '(method) A.foo(): void'
+					// documentation: 'foo doc',
+					// insertText: 'foo',
+					// insertTextFormat: InsertTextFormat.PlainText,
+					sortText: '0'
+					// detail: '(method) A.foo(): void'
 				},
 				{
+					data: {
+						entryName: 'qux',
+						offset: 188,
+						uri: rootUri + 'a.ts'
+					},
 					label: 'qux',
 					kind: CompletionItemKind.Property,
-					documentation: 'qux doc',
-					insertText: 'qux',
-					insertTextFormat: InsertTextFormat.PlainText,
-					sortText: '0',
-					detail: '(property) A.qux: number'
+					// documentation: 'qux doc',
+					// insertText: 'qux',
+					// insertTextFormat: InsertTextFormat.PlainText,
+					sortText: '0'
+					// detail: '(property) A.qux: number'
 				}
 			]);
+
+			const barItem = result.items.find(i => i.label === "bar") as CompletionItem;
+			const resolved: CompletionItem = await this.service.completionItemResolve(barItem)
+											   .reduce<Operation, CompletionItem>(applyReducer, null as any).toPromise();
+
+			assert.deepEqual(resolved, {
+				label: 'bar',
+				kind: CompletionItemKind.Method,
+				documentation: 'bar doc',
+				insertText: 'bar',
+				insertTextFormat: InsertTextFormat.PlainText,
+				sortText: '0',
+				detail: '(method) A.bar(): number'
+			});
 		});
 
 		it('produces completions for imported symbols', async function (this: TestContext & ITestCallbackContext) {
@@ -2310,12 +2321,17 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			assert.deepEqual(result, {
 				isIncomplete: false,
 				items: [{
+					data: {
+						entryName: 'd',
+						offset: 32,
+						uri: rootUri + "uses-import.ts"
+					},
 					label: 'd',
 					kind: CompletionItemKind.Function,
-					documentation: 'd doc',
-					insertText: 'd',
-					insertTextFormat: InsertTextFormat.PlainText,
-					detail: 'function d(): void',
+					// documentation: 'd doc',
+					// insertText: 'd',
+					// insertTextFormat: InsertTextFormat.PlainText,
+					// detail: 'function d(): void',
 					sortText: '0'
 				}]
 			});
@@ -2333,13 +2349,18 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			assert.deepEqual(result, {
 				isIncomplete: false,
 				items: [{
+					data: {
+						entryName: 'bar',
+						offset: 51,
+						uri: rootUri + "uses-reference.ts"
+					},
 					label: 'bar',
 					kind: CompletionItemKind.Interface,
-					documentation: 'bar doc',
-					insertText: 'bar',
-					insertTextFormat: InsertTextFormat.PlainText,
+					// documentation: 'bar doc',
+					// insertText: 'bar',
+					// insertTextFormat: InsertTextFormat.PlainText,
 					sortText: '0',
-					detail: 'interface foo.bar'
+					// detail: 'interface foo.bar'
 				}]
 			});
 		});
