@@ -1267,7 +1267,7 @@ export class TypeScriptService {
 		// Ensure files needed for most operations are fetched
 		await this.projectManager.ensureReferencedFiles(uri).toPromise();
 		this.projectManager.didOpen(uri, params.textDocument.text);
-		this._publishDiagnostics(uri);
+		setTimeout(() => this._publishDiagnostics(uri), 200);
 	}
 
 	/**
@@ -1288,7 +1288,7 @@ export class TypeScriptService {
 			return;
 		}
 		this.projectManager.didChange(uri, text);
-		this._publishDiagnostics(uri);
+		setTimeout(() => this._publishDiagnostics(uri), 200);
 	}
 
 	/**
