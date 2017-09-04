@@ -10,7 +10,6 @@ import * as url from 'url';
 import {
 	CodeActionParams,
 	Command,
-	CompletionItem,
 	CompletionItemKind,
 	CompletionList,
 	DidChangeConfigurationParams,
@@ -44,6 +43,7 @@ import { InMemoryFileSystem, isTypeScriptLibrary } from './memfs';
 import { extractDefinitelyTypedPackageName, extractNodeModulesPackageName, PackageJson, PackageManager } from './packages';
 import { ProjectConfiguration, ProjectManager } from './project-manager';
 import {
+	CompletionItem,
 	DependencyReference,
 	InitializeParams,
 	InitializeResult,
@@ -1044,6 +1044,9 @@ export class TypeScriptService {
 	 * @return Observable of JSON Patches that build a `CompletionItem` result
 	 */
 	completionItemResolve(item: CompletionItem, span = new Span()): Observable<Operation> {
+		if (item.data == null) {
+			throw new Error('Cannot resolve completion item without data');
+		}
 		const {uri, offset, entryName} = item.data;
 		const fileName: string = uri2path(uri);
 		return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
@@ -1073,7 +1076,7 @@ export class TypeScriptService {
 						item.insertTextFormat = InsertTextFormat.PlainText;
 						item.insertText = details.name;
 					}
-					delete item.data;
+					item.data = undefined;
 				}
 				return item;
 			})

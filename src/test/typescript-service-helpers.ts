@@ -5,11 +5,11 @@ import { applyReducer, Operation } from 'fast-json-patch';
 import { IBeforeAndAfterContext, ISuiteCallbackContext, ITestCallbackContext } from 'mocha';
 import * as sinon from 'sinon';
 import * as ts from 'typescript';
-import { CompletionItem, CompletionItemKind, CompletionList, DiagnosticSeverity, InsertTextFormat, TextDocumentIdentifier, TextDocumentItem, WorkspaceEdit } from 'vscode-languageserver';
+import { CompletionItemKind, CompletionList, DiagnosticSeverity, InsertTextFormat, TextDocumentIdentifier, TextDocumentItem, WorkspaceEdit } from 'vscode-languageserver';
 import { Command, Diagnostic, Hover, Location, SignatureHelp, SymbolInformation, SymbolKind } from 'vscode-languageserver-types';
 import { LanguageClient, RemoteLanguageClient } from '../lang-handler';
 import { DependencyReference, PackageInformation, ReferenceInformation, TextDocumentContentParams, WorkspaceFilesParams } from '../request-type';
-import { ClientCapabilities, SymbolLocationInformation } from '../request-type';
+import { ClientCapabilities, CompletionItem, SymbolLocationInformation } from '../request-type';
 import { TypeScriptService, TypeScriptServiceFactory } from '../typescript-service';
 import { observableFromIterable, toUnixPath, uri2path } from '../util';
 
@@ -2170,20 +2170,54 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			//  * that is typing in one will update others too.
 			assert.equal(result.isIncomplete, false);
 
-			const barItem = result.items.find(i => i.label === 'bar') as CompletionItem;
-			const resolved: CompletionItem = await this.service
-				.completionItemResolve(barItem)
-				.reduce<Operation, CompletionItem>(applyReducer, null as any).toPromise();
+			const resolveItem = (item: CompletionItem) => this.service
+					.completionItemResolve(item)
+					.reduce<Operation, CompletionItem>(applyReducer, null as any).toPromise();
 
-			assert.deepEqual(resolved, {
-				label: 'bar',
-				kind: CompletionItemKind.Method,
-				documentation: 'bar doc',
-				insertText: 'bar(${1:num})',
-				insertTextFormat: InsertTextFormat.Snippet,
-				sortText: '0',
-				detail: '(method) A.bar(num: number): number'
-			});
+			const resolvedItems = await Promise.all(result.items.map(resolveItem));
+
+			assert.sameDeepMembers(resolvedItems, [
+				{
+					label: 'bar',
+					kind: CompletionItemKind.Method,
+					documentation: 'bar doc',
+					sortText: '0',
+					insertTextFormat: InsertTextFormat.Snippet,
+					insertText: 'bar(${1:num})',
+					detail: '(method) A.bar(num: number): number',
+					data: undefined
+				},
+				{
+					label: 'baz',
+					kind: CompletionItemKind.Method,
+					documentation: 'baz doc',
+					sortText: '0',
+					insertTextFormat: InsertTextFormat.Snippet,
+					insertText: 'baz(${1:num})',
+					detail: '(method) A.baz(num: number): string',
+					data: undefined
+				},
+				{
+					label: 'foo',
+					kind: CompletionItemKind.Method,
+					documentation: 'foo doc',
+					sortText: '0',
+					insertTextFormat: InsertTextFormat.Snippet,
+					insertText: 'foo()',
+					detail: '(method) A.foo(): void',
+					data: undefined
+				},
+				{
+					label: 'qux',
+					kind: CompletionItemKind.Property,
+					documentation: 'qux doc',
+					sortText: '0',
+					insertTextFormat: InsertTextFormat.Snippet,
+					insertText: 'qux',
+					detail: '(property) A.qux: number',
+					data: undefined
+				}
+			]);
 
 		});
 	});
@@ -2225,6 +2259,69 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		afterEach(shutdownService);
 
 		it('produces completions in the same file', async function (this: TestContext & ITestCallbackContext) {
+			const result: CompletionList = await this.service.textDocumentCompletion({
+				textDocument: {
+					uri: rootUri + 'a.ts'
+				},
+				position: {
+					line: 11,
+					character: 2
+				}
+			}).reduce<Operation, CompletionList>(applyReducer, null as any).toPromise();
+			assert.equal(result.isIncomplete, false);
+
+			const resolveItem = (item: CompletionItem) => this.service
+					.completionItemResolve(item)
+					.reduce<Operation, CompletionItem>(applyReducer, null as any).toPromise();
+
+			const resolvedItems = await Promise.all(result.items.map(resolveItem));
+
+			assert.sameDeepMembers(resolvedItems, [
+				{
+					label: 'bar',
+					kind: CompletionItemKind.Method,
+					documentation: 'bar doc',
+					insertText: 'bar',
+					insertTextFormat: InsertTextFormat.PlainText,
+					sortText: '0',
+					detail: '(method) A.bar(): number',
+					data: undefined
+				},
+				{
+					label: 'baz',
+					kind: CompletionItemKind.Method,
+					documentation: 'baz doc',
+					insertText: 'baz',
+					insertTextFormat: InsertTextFormat.PlainText,
+					sortText: '0',
+					detail: '(method) A.baz(): string',
+					data: undefined
+				},
+				{
+					label: 'foo',
+					kind: CompletionItemKind.Method,
+					documentation: 'foo doc',
+					insertText: 'foo',
+					insertTextFormat: InsertTextFormat.PlainText,
+					sortText: '0',
+					detail: '(method) A.foo(): void',
+					data: undefined
+				},
+				{
+					label: 'qux',
+					kind: CompletionItemKind.Property,
+					documentation: 'qux doc',
+					insertText: 'qux',
+					insertTextFormat: InsertTextFormat.PlainText,
+					sortText: '0',
+					detail: '(property) A.qux: number',
+					data: undefined
+				}
+			]);
+
+		});
+
+		it('resolves completions in the same file', async function (this: TestContext & ITestCallbackContext) {
 			const result: CompletionList = await this.service.textDocumentCompletion({
 				textDocument: {
 					uri: rootUri + 'a.ts'
@@ -2293,21 +2390,6 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					// detail: '(property) A.qux: number'
 				}
 			]);
-
-			const barItem = result.items.find(i => i.label === 'bar') as CompletionItem;
-			const resolved: CompletionItem = await this.service
-				.completionItemResolve(barItem)
-				.reduce<Operation, CompletionItem>(applyReducer, null as any).toPromise();
-
-			assert.deepEqual(resolved, {
-				label: 'bar',
-				kind: CompletionItemKind.Method,
-				documentation: 'bar doc',
-				insertText: 'bar',
-				insertTextFormat: InsertTextFormat.PlainText,
-				sortText: '0',
-				detail: '(method) A.bar(): number'
-			});
 		});
 
 		it('produces completions for imported symbols', async function (this: TestContext & ITestCallbackContext) {
