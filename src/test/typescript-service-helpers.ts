@@ -2154,7 +2154,66 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
 		afterEach(shutdownService);
 
-		it('should produce completions with snippets if supported', async function (this: TestContext & ITestCallbackContext) {
+		it('should produce completions', async function (this: TestContext & ITestCallbackContext) {
+			const result: CompletionList = await this.service.textDocumentCompletion({
+				textDocument: {
+					uri: rootUri + 'a.ts'
+				},
+				position: {
+					line: 11,
+					character: 2
+				}
+			}).reduce<Operation, CompletionList>(applyReducer, null as any).toPromise();
+			// * A snippet can define tab stops and placeholders with `$1`, `$2`
+			//  * and `${3:foo}`. `$0` defines the final tab stop, it defaults to
+			//  * the end of the snippet. Placeholders with equal identifiers are linked,
+			//  * that is typing in one will update others too.
+			assert.equal(result.isIncomplete, false);
+			assert.sameDeepMembers(result.items, [
+				{
+					label: 'bar',
+					kind: CompletionItemKind.Method,
+					sortText: '0',
+					data: {
+						entryName: 'bar',
+						offset: 210,
+						uri: rootUri + 'a.ts'
+					}
+				},
+				{
+					label: 'baz',
+					kind: CompletionItemKind.Method,
+					sortText: '0',
+					data: {
+						entryName: 'baz',
+						offset: 210,
+						uri: rootUri + 'a.ts'
+					}
+				},
+				{
+					label: 'foo',
+					kind: CompletionItemKind.Method,
+					sortText: '0',
+					data: {
+						entryName: 'foo',
+						offset: 210,
+						uri: rootUri + 'a.ts'
+					}
+				},
+				{
+					label: 'qux',
+					kind: CompletionItemKind.Property,
+					sortText: '0',
+					data: {
+						entryName: 'qux',
+						offset: 210,
+						uri: rootUri + 'a.ts'
+					}
+				}
+			]);
+		});
+
+		it('should resolve completions with snippets', async function (this: TestContext & ITestCallbackContext) {
 			const result: CompletionList = await this.service.textDocumentCompletion({
 				textDocument: {
 					uri: rootUri + 'a.ts'
@@ -2269,69 +2328,6 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				}
 			}).reduce<Operation, CompletionList>(applyReducer, null as any).toPromise();
 			assert.equal(result.isIncomplete, false);
-
-			const resolveItem = (item: CompletionItem) => this.service
-					.completionItemResolve(item)
-					.reduce<Operation, CompletionItem>(applyReducer, null as any).toPromise();
-
-			const resolvedItems = await Promise.all(result.items.map(resolveItem));
-
-			assert.sameDeepMembers(resolvedItems, [
-				{
-					label: 'bar',
-					kind: CompletionItemKind.Method,
-					documentation: 'bar doc',
-					insertText: 'bar',
-					insertTextFormat: InsertTextFormat.PlainText,
-					sortText: '0',
-					detail: '(method) A.bar(): number',
-					data: undefined
-				},
-				{
-					label: 'baz',
-					kind: CompletionItemKind.Method,
-					documentation: 'baz doc',
-					insertText: 'baz',
-					insertTextFormat: InsertTextFormat.PlainText,
-					sortText: '0',
-					detail: '(method) A.baz(): string',
-					data: undefined
-				},
-				{
-					label: 'foo',
-					kind: CompletionItemKind.Method,
-					documentation: 'foo doc',
-					insertText: 'foo',
-					insertTextFormat: InsertTextFormat.PlainText,
-					sortText: '0',
-					detail: '(method) A.foo(): void',
-					data: undefined
-				},
-				{
-					label: 'qux',
-					kind: CompletionItemKind.Property,
-					documentation: 'qux doc',
-					insertText: 'qux',
-					insertTextFormat: InsertTextFormat.PlainText,
-					sortText: '0',
-					detail: '(property) A.qux: number',
-					data: undefined
-				}
-			]);
-
-		});
-
-		it('resolves completions in the same file', async function (this: TestContext & ITestCallbackContext) {
-			const result: CompletionList = await this.service.textDocumentCompletion({
-				textDocument: {
-					uri: rootUri + 'a.ts'
-				},
-				position: {
-					line: 11,
-					character: 2
-				}
-			}).reduce<Operation, CompletionList>(applyReducer, null as any).toPromise();
-			assert.equal(result.isIncomplete, false);
 			assert.sameDeepMembers(result.items, [
 				{
 					data: {
@@ -2390,6 +2386,69 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					// detail: '(property) A.qux: number'
 				}
 			]);
+		});
+
+		it('resolves completions in the same file', async function (this: TestContext & ITestCallbackContext) {
+			const result: CompletionList = await this.service.textDocumentCompletion({
+				textDocument: {
+					uri: rootUri + 'a.ts'
+				},
+				position: {
+					line: 11,
+					character: 2
+				}
+			}).reduce<Operation, CompletionList>(applyReducer, null as any).toPromise();
+			assert.equal(result.isIncomplete, false);
+
+			const resolveItem = (item: CompletionItem) => this.service
+					.completionItemResolve(item)
+					.reduce<Operation, CompletionItem>(applyReducer, null as any).toPromise();
+
+			const resolvedItems = await Promise.all(result.items.map(resolveItem));
+
+			assert.sameDeepMembers(resolvedItems, [
+				{
+					label: 'bar',
+					kind: CompletionItemKind.Method,
+					documentation: 'bar doc',
+					insertText: 'bar',
+					insertTextFormat: InsertTextFormat.PlainText,
+					sortText: '0',
+					detail: '(method) A.bar(): number',
+					data: undefined
+				},
+				{
+					label: 'baz',
+					kind: CompletionItemKind.Method,
+					documentation: 'baz doc',
+					insertText: 'baz',
+					insertTextFormat: InsertTextFormat.PlainText,
+					sortText: '0',
+					detail: '(method) A.baz(): string',
+					data: undefined
+				},
+				{
+					label: 'foo',
+					kind: CompletionItemKind.Method,
+					documentation: 'foo doc',
+					insertText: 'foo',
+					insertTextFormat: InsertTextFormat.PlainText,
+					sortText: '0',
+					detail: '(method) A.foo(): void',
+					data: undefined
+				},
+				{
+					label: 'qux',
+					kind: CompletionItemKind.Property,
+					documentation: 'qux doc',
+					insertText: 'qux',
+					insertTextFormat: InsertTextFormat.PlainText,
+					sortText: '0',
+					detail: '(property) A.qux: number',
+					data: undefined
+				}
+			]);
+
 		});
 
 		it('produces completions for imported symbols', async function (this: TestContext & ITestCallbackContext) {
