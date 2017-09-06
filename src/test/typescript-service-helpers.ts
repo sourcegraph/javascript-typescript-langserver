@@ -2164,10 +2164,6 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					character: 2
 				}
 			}).reduce<Operation, CompletionList>(applyReducer, null as any).toPromise();
-			// * A snippet can define tab stops and placeholders with `$1`, `$2`
-			//  * and `${3:foo}`. `$0` defines the final tab stop, it defaults to
-			//  * the end of the snippet. Placeholders with equal identifiers are linked,
-			//  * that is typing in one will update others too.
 			assert.equal(result.isIncomplete, false);
 			assert.sameDeepMembers(result.items, [
 				{
@@ -2337,11 +2333,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					},
 					label: 'bar',
 					kind: CompletionItemKind.Method,
-					// documentation: 'bar doc',
-					// insertText: 'bar',
-					// insertTextFormat: InsertTextFormat.PlainText,
 					sortText: '0'
-					// detail: '(method) A.bar(): number'
 				},
 				{
 					data: {
@@ -2351,11 +2343,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					},
 					label: 'baz',
 					kind: CompletionItemKind.Method,
-					// documentation: 'baz doc',
-					// insertText: 'baz',
-					// insertTextFormat: InsertTextFormat.PlainText,
 					sortText: '0'
-					// detail: '(method) A.baz(): string'
 				},
 				{
 					data: {
@@ -2365,11 +2353,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					},
 					label: 'foo',
 					kind: CompletionItemKind.Method,
-					// documentation: 'foo doc',
-					// insertText: 'foo',
-					// insertTextFormat: InsertTextFormat.PlainText,
 					sortText: '0'
-					// detail: '(method) A.foo(): void'
 				},
 				{
 					data: {
@@ -2379,11 +2363,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					},
 					label: 'qux',
 					kind: CompletionItemKind.Property,
-					// documentation: 'qux doc',
-					// insertText: 'qux',
-					// insertTextFormat: InsertTextFormat.PlainText,
 					sortText: '0'
-					// detail: '(property) A.qux: number'
 				}
 			]);
 		});
@@ -2471,10 +2451,6 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					},
 					label: 'd',
 					kind: CompletionItemKind.Function,
-					// documentation: 'd doc',
-					// insertText: 'd',
-					// insertTextFormat: InsertTextFormat.PlainText,
-					// detail: 'function d(): void',
 					sortText: '0'
 				}]
 			});
@@ -2499,11 +2475,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					},
 					label: 'bar',
 					kind: CompletionItemKind.Interface,
-					// documentation: 'bar doc',
-					// insertText: 'bar',
-					// insertTextFormat: InsertTextFormat.PlainText,
 					sortText: '0'
-					// detail: 'interface foo.bar'
 				}]
 			});
 		});
