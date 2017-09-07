@@ -321,6 +321,7 @@ export class ProjectManager implements Disposable {
 			span.addTags({ uri, maxDepth });
 			ignore.add(uri);
 			return this.ensureModuleStructure(span)
+				.concat(Observable.defer(() => this.ensureConfigDependencies()))
 				// If max depth was reached, don't go any further
 				.concat(Observable.defer(() => maxDepth === 0 ? Observable.empty<never>() : this.resolveReferencedFiles(uri)))
 				// Prevent cycles
@@ -335,6 +336,24 @@ export class ProjectManager implements Disposable {
 						})
 				);
 		});
+	}
+
+	isConfigDependency(uri: string): boolean {
+		for (const config of this.configurations()) {
+			config.ensureConfigFile();
+			if (config.isExpectedDeclarationFile(uri)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	ensureConfigDependencies(): Observable<never> {
+		return observableFromIterable(this.inMemoryFs.uris())
+			.filter(uri => this.isConfigDependency(uri2path(uri)))
+			.mergeMap(uri => this.updater.ensure(uri))
+			.publishReplay()
+			.refCount();
 	}
 
 	/**
@@ -877,7 +896,7 @@ export class ProjectConfiguration {
 	 * [isExpectedDeclarationFile description]
 	 * @param {string} fileName [description]
 	 */
-	private isExpectedDeclarationFile(fileName: string) {
+	public isExpectedDeclarationFile(fileName: string) {
 		if (isDeclarationFile(fileName)) {
 			return this.expectedFilePaths.has(toUnixPath(fileName)) ||
 					this.typeRoots.some(root => fileName.startsWith(root));

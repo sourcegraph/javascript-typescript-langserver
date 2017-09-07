@@ -39,8 +39,6 @@ describe('ProjectManager', () => {
 		});
 		it('loads files from typeRoots', async () => {
 			await projectManager.ensureReferencedFiles('file:///project/file.ts').toPromise();
-			projectManager.invalidateModuleStructure();
-			await projectManager.ensureModuleStructure().toPromise();
 			memfs.getContent('file:///project/file.ts');
 			memfs.getContent('file:///types/types.d.ts');
 		});
