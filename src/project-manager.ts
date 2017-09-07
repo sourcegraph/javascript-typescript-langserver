@@ -338,10 +338,10 @@ export class ProjectManager implements Disposable {
 		});
 	}
 
-	isConfigDependency(uri: string): boolean {
+	isConfigDependency(filePath: string): boolean {
 		for (const config of this.configurations()) {
 			config.ensureConfigFile();
-			if (config.isExpectedDeclarationFile(uri)) {
+			if (config.isExpectedDeclarationFile(toUnixPath(filePath))) {
 				return true;
 			}
 		}
