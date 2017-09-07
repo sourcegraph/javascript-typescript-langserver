@@ -341,7 +341,7 @@ export class ProjectManager implements Disposable {
 	isConfigDependency(filePath: string): boolean {
 		for (const config of this.configurations()) {
 			config.ensureConfigFile();
-			if (config.isExpectedDeclarationFile(toUnixPath(filePath))) {
+			if (config.isExpectedDeclarationFile(filePath)) {
 				return true;
 			}
 		}
@@ -862,8 +862,9 @@ export class ProjectConfiguration {
 		this.expectedFilePaths = new Set(configParseResult.fileNames);
 
 		const options = configParseResult.options;
+		const pathResolver = /[a-z]:\//i.test(base) ? path.win32 : path.posix;
 		this.typeRoots = options.typeRoots ?
-			options.typeRoots.map((r: string) => path.resolve(this.rootFilePath, r)) :
+			options.typeRoots.map((r: string) => pathResolver.resolve(this.rootFilePath, r)) :
 			[];
 
 		if (/(^|\/)jsconfig\.json$/.test(this.configFilePath)) {
