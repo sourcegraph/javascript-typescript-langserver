@@ -2547,7 +2547,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					character: 6
 				},
 				newName: 'B'
-			}).reduce<Operation, Location[]>(applyReducer, null as any).toPromise();
+			}).reduce<Operation, WorkspaceEdit>(applyReducer, null as any).toPromise();
 			assert.deepEqual(result, {
 				changes: {
 					[rootUri + 'a.ts']: [{
@@ -2588,7 +2588,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					character: 16
 				},
 				newName: 'f'
-			}).reduce<Operation, Location[]>(applyReducer, null as any).toPromise();
+			}).reduce<Operation, WorkspaceEdit>(applyReducer, null as any).toPromise();
 			assert.deepEqual(result, {
 				changes: {
 					[rootUri + 'import.ts']: [{
