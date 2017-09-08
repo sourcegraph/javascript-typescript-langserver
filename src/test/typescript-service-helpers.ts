@@ -2225,11 +2225,13 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 			//  * that is typing in one will update others too.
 			assert.equal(result.isIncomplete, false);
 
-			const resolveItem = (item: CompletionItem) => this.service
+			const resolvedItems = await Observable.from(result.items)
+				.mergeMap(item => this.service
 					.completionItemResolve(item)
-					.reduce<Operation, CompletionItem>(applyReducer, null as any).toPromise();
-
-			const resolvedItems = await Promise.all(result.items.map(resolveItem));
+					.reduce<Operation, CompletionItem>(applyReducer, null as any)
+				)
+				.toArray()
+				.toPromise();
 
 			assert.sameDeepMembers(resolvedItems, [
 				{
