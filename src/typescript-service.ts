@@ -265,7 +265,7 @@ export class TypeScriptService {
 				xdefinitionProvider: true,
 				xdependenciesProvider: true,
 				completionProvider: {
-					resolveProvider: false,
+					resolveProvider: true,
 					triggerCharacters: ['.']
 				},
 				codeActionProvider: true,
