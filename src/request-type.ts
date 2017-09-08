@@ -234,3 +234,30 @@ export interface PartialResultParams {
 	 */
 	patch: Operation[];
 }
+
+/**
+ * Restriction on vscode's CompletionItem interface
+ */
+export interface CompletionItem extends vscode.CompletionItem {
+	data?: CompletionItemData;
+}
+
+/**
+ * The necessary fields for a completion item details to be resolved by typescript
+ */
+export interface CompletionItemData {
+	/**
+	 * The document from which the completion was requested
+	 */
+	uri: string;
+
+	/**
+	 * The offset into the document at which the completion was requested
+	 */
+	offset: number;
+
+	/**
+	 * The name field from typescript's returned completion entry
+	 */
+	entryName: string;
+}
