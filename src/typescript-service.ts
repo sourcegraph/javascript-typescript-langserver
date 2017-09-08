@@ -1044,7 +1044,7 @@ export class TypeScriptService {
 	 * @return Observable of JSON Patches that build a `CompletionItem` result
 	 */
 	completionItemResolve(item: CompletionItem, span = new Span()): Observable<Operation> {
-		if (item.data == null) {
+		if (!item.data) {
 			throw new Error('Cannot resolve completion item without data');
 		}
 		const {uri, offset, entryName} = item.data;
