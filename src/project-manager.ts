@@ -862,7 +862,7 @@ export class ProjectConfiguration {
 		this.expectedFilePaths = new Set(configParseResult.fileNames);
 
 		const options = configParseResult.options;
-		const pathResolver = /[a-z]:\//i.test(base) ? path.win32 : path.posix;
+		const pathResolver = /^[a-z]:\//i.test(base) ? path.win32 : path.posix;
 		this.typeRoots = options.typeRoots ?
 			options.typeRoots.map((r: string) => pathResolver.resolve(this.rootFilePath, r)) :
 			[];
@@ -894,8 +894,8 @@ export class ProjectConfiguration {
 	private ensuredBasicFiles = false;
 
 	/**
-	 * [isExpectedDeclarationFile description]
-	 * @param {string} fileName [description]
+	 * Determines if a fileName is a declaration file within expected files or type roots
+	 * @param fileName
 	 */
 	public isExpectedDeclarationFile(fileName: string) {
 		if (isDeclarationFile(fileName)) {
