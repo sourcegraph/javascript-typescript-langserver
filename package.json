@@ -79,7 +79,6 @@
     "source-map-support": "^0.4.11",
     "temp": "^0.8.3",
     "tslint": "^5.0.0",
-    "tslint-language-service": "^0.9.6",
     "validate-commit-msg": "^2.12.2"
   },
   "bin": {

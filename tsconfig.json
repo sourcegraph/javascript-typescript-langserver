@@ -16,10 +16,7 @@
     "noImplicitThis": true,
     "noUnusedLocals": true,
     "noImplicitAny": true,
-    "strictNullChecks": true,
-    "plugins": [
-      { "name": "tslint-language-service"}
-    ]
+    "strictNullChecks": true
   },
   "include": [
     "src/**/*.ts"

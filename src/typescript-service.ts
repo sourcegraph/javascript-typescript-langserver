@@ -223,6 +223,7 @@ export class TypeScriptService {
 				this.inMemoryFileSystem,
 				this.updater,
 				this.traceModuleResolution,
+				params.initializationOptions,
 				this.logger
 			);
 			this.packageManager = new PackageManager(this.updater, this.inMemoryFileSystem, this.logger);

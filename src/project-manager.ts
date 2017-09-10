@@ -8,7 +8,9 @@ import * as ts from 'typescript';
 import { Disposable } from './disposable';
 import { FileSystemUpdater } from './fs';
 import { Logger, NoopLogger } from './logging';
+import { combinePaths } from './match-files';
 import { InMemoryFileSystem } from './memfs';
+import { InitializationOptions } from './request-type';
 import { traceObservable, traceSync } from './tracing';
 import {
 	isConfigFile,
@@ -147,6 +149,11 @@ export class ProjectManager implements Disposable {
 	private subscriptions = new Subscription();
 
 	/**
+	 * Options passed to the language server at startup
+	 */
+	private initializationOptions?: InitializationOptions;
+
+	/**
 	 * @param rootPath root path as passed to `initialize`
 	 * @param inMemoryFileSystem File system that keeps structure and contents in memory
 	 * @param strict indicates if we are working in strict mode (VFS) or with a local file system
@@ -157,12 +164,14 @@ export class ProjectManager implements Disposable {
 		inMemoryFileSystem: InMemoryFileSystem,
 		updater: FileSystemUpdater,
 		traceModuleResolution?: boolean,
+		initializationOptions?: InitializationOptions,
 		protected logger: Logger = new NoopLogger()
 	) {
 		this.rootPath = rootPath;
 		this.updater = updater;
 		this.inMemoryFs = inMemoryFileSystem;
 		this.versions = new Map<string, number>();
+		this.initializationOptions = initializationOptions;
 		this.traceModuleResolution = traceModuleResolution || false;
 
 		// Share DocumentRegistry between all ProjectConfigurations
@@ -190,6 +199,7 @@ export class ProjectManager implements Disposable {
 				'',
 				tsConfig,
 				this.traceModuleResolution,
+				this.initializationOptions,
 				this.logger
 			);
 			configs.set(trimmedRootPath, config);
@@ -219,6 +229,7 @@ export class ProjectManager implements Disposable {
 						filePath,
 						undefined,
 						this.traceModuleResolution,
+						this.initializationOptions,
 						this.logger
 					));
 					// Remove catch-all config (if exists)
@@ -817,6 +828,10 @@ export class ProjectConfiguration {
 	 */
 	private traceModuleResolution: boolean;
 
+	private allowLocalPluginLoads: boolean = false;
+	private globalPlugins: string[] = [];
+	private pluginProbeLocations: string[] = [];
+
 	/**
 	 * Root file path, relative to workspace hierarchy root
 	 */
@@ -848,12 +863,18 @@ export class ProjectConfiguration {
 		configFilePath: string,
 		configContent?: any,
 		traceModuleResolution?: boolean,
+		initializationOptions?: InitializationOptions,
 		private logger: Logger = new NoopLogger()
 	) {
 		this.fs = fs;
 		this.configFilePath = configFilePath;
 		this.configContent = configContent;
 		this.versions = versions;
+		if (initializationOptions) {
+			this.allowLocalPluginLoads = initializationOptions.allowLocalPluginLoads || false;
+			this.globalPlugins = initializationOptions.globalPlugins || [];
+			this.pluginProbeLocations = initializationOptions.pluginProbeLocations || [];
+		}
 		this.traceModuleResolution = traceModuleResolution || false;
 		this.rootFilePath = rootFilePath;
 	}
@@ -961,27 +982,41 @@ export class ProjectConfiguration {
 	}
 
 	private enablePlugins(options: ts.CompilerOptions) {
-		const searchPaths = [];
-		// TODO: support pluginProbeLocations?
-		// TODO: add peer node_modules to source path.
+		// Search our peer node_modules, then any globally-specified probe paths
+		// ../../.. to walk from X/node_modules/javascript-typescript-langserver/lib/project-manager.js to X/node_modules/
+		const searchPaths = [combinePaths(__filename, '../../..'), ...this.pluginProbeLocations];
 
-		// TODO: determine how to expose this setting.
-		// VS Code starts tsserver with --allowLocalPluginLoads by default: https://github.com/Microsoft/TypeScript/pull/15924
-		const allowLocalPluginLoads = true;
-		if (allowLocalPluginLoads) {
+		// Corresponds to --allowLocalPluginLoads, opt-in to avoid remote code execution.
+		if (this.allowLocalPluginLoads) {
 			const local = this.rootFilePath;
 			this.logger.info(`Local plugin loading enabled; adding ${local} to search paths`);
 			searchPaths.unshift(local);
 		}
 
+		let pluginImports: ts.PluginImport[] = [];
+		if (options.plugins) {
+			pluginImports = options.plugins as ts.PluginImport[];
+		}
+
 		// Enable tsconfig-specified plugins
 		if (options.plugins) {
-			for (const pluginConfigEntry of options.plugins as ts.PluginImport[]) {
+			for (const pluginConfigEntry of pluginImports) {
 				this.enablePlugin(pluginConfigEntry, searchPaths);
 			}
 		}
 
-		// TODO: support globalPlugins flag if desired
+		if (this.globalPlugins) {
+			// Enable global plugins with synthetic configuration entries
+			for (const globalPluginName of this.globalPlugins) {
+				// Skip already-locally-loaded plugins
+				if (!pluginImports || pluginImports.some(p => p.name === globalPluginName)) {
+					continue;
+				}
+
+				// Provide global: true so plugins can detect why they can't find their config
+				this.enablePlugin({ name: globalPluginName, global: true } as ts.PluginImport, searchPaths);
+			}
+		}
 	}
 
 	/**
@@ -1006,9 +1041,7 @@ export class ProjectConfiguration {
 	 * @param initialDir
 	 */
 	private resolveModule(moduleName: string, initialDir: string): {} | undefined {
-		// const resolvedPath = path.resolve(initialDir, 'node_modules');
-		const resolvedPath = '';
-		this.logger.info(`Loading ${moduleName} from ${initialDir} (resolved to ${resolvedPath})`);
+		this.logger.info(`Loading ${moduleName} from ${initialDir}`);
 		const result = this.requirePlugin(initialDir, moduleName);
 		if (result.error) {
 			this.logger.info(`Failed to load module: ${JSON.stringify(result.error)}`);
@@ -1031,20 +1064,18 @@ export class ProjectConfiguration {
 		}
 	}
 
-	// TODO: stolen from moduleNameResolver.ts because marked as internal
 	/**
 	 * Expose resolution logic to allow us to use Node module resolution logic from arbitrary locations.
 	 * No way to do this with `require()`: https://github.com/nodejs/node/issues/5963
 	 * Throws an error if the module can't be resolved.
+	 * stolen from moduleNameResolver.ts because marked as internal
 	 */
 	private resolveJavaScriptModule(moduleName: string, initialDir: string, host: ts.ModuleResolutionHost): string {
-		// const { resolvedModule /* , failedLookupLocations */ } =
+		// TODO: this should set jsOnly=true to the internal resolver, but this parameter is not exposed on a public api.
 		const result =
 			ts.nodeModuleNameResolver(moduleName, /* containingFile */ initialDir.replace('\\', '/') + '/package.json', { moduleResolution: ts.ModuleResolutionKind.NodeJs, allowJs: true }, this.fs, undefined);
-			// TODO: jsOnly flag missing :(
 		if (!result.resolvedModule) {
-			// TODO: add  Looked in: ${failedLookupLocations.join(', ')} back into error.
-			// this.logger.error(result.failedLookupLocations!);
+			// this.logger.error(result.failedLookupLocations);
 			throw new Error(`Could not resolve JS module ${moduleName} starting at ${initialDir}.`);
 		}
 		return result.resolvedModule.resolvedFileName;
