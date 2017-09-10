@@ -3,7 +3,7 @@ import * as vscode from 'vscode-languageserver';
 
 export interface InitializeParams extends vscode.InitializeParams {
 	capabilities: ClientCapabilities;
-	initializationOptions?: InitializationOptions
+	initializationOptions?: InitializationOptions;
 }
 
 export interface InitializationOptions {
