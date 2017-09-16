@@ -338,6 +338,10 @@ export class ProjectManager implements Disposable {
 		});
 	}
 
+	/**
+	 * Determines if a tsconfig/jsconfig needs additional declaration files loaded.
+	 * @param filePath
+	 */
 	isConfigDependency(filePath: string): boolean {
 		for (const config of this.configurations()) {
 			config.ensureConfigFile();
@@ -348,12 +352,13 @@ export class ProjectManager implements Disposable {
 		return false;
 	}
 
+	/**
+	 * Loads files determined by tsconfig to be needed into the file system
+	 */
 	ensureConfigDependencies(): Observable<never> {
 		return observableFromIterable(this.inMemoryFs.uris())
 			.filter(uri => this.isConfigDependency(uri2path(uri)))
-			.mergeMap(uri => this.updater.ensure(uri))
-			.publishReplay()
-			.refCount();
+			.mergeMap(uri => this.updater.ensure(uri));
 	}
 
 	/**
@@ -898,12 +903,9 @@ export class ProjectConfiguration {
 	 * @param fileName
 	 */
 	public isExpectedDeclarationFile(fileName: string) {
-		if (isDeclarationFile(fileName)) {
-			return this.expectedFilePaths.has(toUnixPath(fileName)) ||
-					this.typeRoots.some(root => fileName.startsWith(root));
-		} else {
-			return false;
-		}
+		return isDeclarationFile(fileName) &&
+				(this.expectedFilePaths.has(toUnixPath(fileName)) ||
+				this.typeRoots.some(root => fileName.startsWith(root)));
 	}
 
 	/**
