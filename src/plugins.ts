@@ -53,12 +53,11 @@ type RequireResult = { module: {}, error: undefined } | { module: undefined, err
 
 export class PluginLoader {
 
-	public allowLocalPluginLoads: boolean = false;
-	public globalPlugins: string[] = [];
-	public pluginProbeLocations: string[] = [];
-	public require: (path: string) => any = require;
+	private allowLocalPluginLoads: boolean = false;
+	private globalPlugins: string[] = [];
+	private pluginProbeLocations: string[] = [];
 
-	constructor(private rootFilePath: string, private fs: ts.ModuleResolutionHost, initializationOptions?: InitializationOptions, private logger = new NoopLogger()) {
+	constructor(private rootFilePath: string, private fs: ts.ModuleResolutionHost, initializationOptions?: InitializationOptions, private logger = new NoopLogger(), private requireModule: (moduleName: string) => any = require) {
 		if (initializationOptions) {
 			this.allowLocalPluginLoads = initializationOptions.allowLocalPluginLoads || false;
 			this.globalPlugins = initializationOptions.globalPlugins || [];
@@ -143,7 +142,7 @@ export class PluginLoader {
 	private requirePlugin(initialDir: string, moduleName: string): RequireResult {
 		const modulePath = this.resolveJavaScriptModule(moduleName, initialDir, this.fs);
 		try {
-			return { module: this.require(modulePath), error: undefined };
+			return { module: this.requireModule(modulePath), error: undefined };
 		} catch (error) {
 			return { module: undefined, error };
 		}
