@@ -193,7 +193,7 @@ export class PackageManager extends EventEmitter implements Disposable {
 	 * @return The found package.json or undefined if none found
 	 */
 	getClosestPackageJsonUri(uri: string): string | undefined {
-		const parts = url.parse(uri);
+		const parts: url.UrlObject = url.parse(uri);
 		while (true) {
 			if (!parts.pathname) {
 				return undefined;
