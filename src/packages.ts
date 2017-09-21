@@ -132,7 +132,7 @@ export class PackageManager extends EventEmitter implements Disposable {
 
 	/** Emitted when a new package.json was found and parsed */
 	on(event: 'parsed', listener: (uri: string, packageJson: PackageJson) => void): this;
-	on(event: string, listener: () => void): this {
+	on(event: string, listener: (...args: any[]) => void): this {
 		return super.on(event, listener);
 	}
 
