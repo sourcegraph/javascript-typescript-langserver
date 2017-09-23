@@ -2820,7 +2820,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 				]
 			});
 		});
-		it.only('should handle Windows-style paths in triple slash references', async function (this: TestContext & ITestCallbackContext) {
+		it('should handle Windows-style paths in triple slash references', async function (this: TestContext & ITestCallbackContext) {
 			const result = await this.service.textDocumentDefinition({
 				textDocument: {
 					uri: rootUri + 'windows/app/master.ts'
