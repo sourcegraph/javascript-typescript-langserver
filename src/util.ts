@@ -28,6 +28,13 @@ export function docstring(parts: ts.SymbolDisplayPart[]): string {
 }
 
 /**
+ * Typecasted version of Array.of producing arrays of two.
+ */
+export function pairOf<T>(...args: T[]): [T, T] {
+	return Array.of(...args) as [T, T];
+}
+
+/**
  * Normalizes path to match POSIX standard (slashes)
  * This conversion should only be necessary to convert windows paths when calling TS APIs.
  */

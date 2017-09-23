@@ -16,6 +16,7 @@ import {
 	isJSTSFile,
 	isPackageJsonFile,
 	observableFromIterable,
+	pairOf,
 	path2uri,
 	toUnixPath,
 	uri2path
@@ -146,7 +147,7 @@ export class ProjectManager implements Disposable {
 
 		// Whenever a file with content is added to the InMemoryFileSystem, check if it's a tsconfig.json and add a new ProjectConfiguration
 		this.subscriptions.add(
-			Observable.fromEvent<[string, string]>(inMemoryFileSystem, 'add', Array.of)
+			Observable.fromEvent<[string, string]>(inMemoryFileSystem, 'add', pairOf)
 				.filter(([uri, content]) => !!content && /\/[tj]sconfig\.json/.test(uri) && !uri.includes('/node_modules/'))
 				.subscribe(([uri, content]) => {
 					const filePath = uri2path(uri);
@@ -241,7 +242,7 @@ export class ProjectManager implements Disposable {
 						this.invalidateReferencedFiles();
 					})
 					.publishReplay()
-					.refCount();
+					.refCount() as Observable<never>;
 			}
 			return this.ensuredModuleStructure;
 		});
@@ -272,7 +273,7 @@ export class ProjectManager implements Disposable {
 						this.ensuredOwnFiles = undefined;
 					})
 					.publishReplay()
-					.refCount();
+					.refCount() as Observable<never>;
 			}
 			return this.ensuredOwnFiles;
 		});
@@ -293,7 +294,7 @@ export class ProjectManager implements Disposable {
 						this.ensuredAllFiles = undefined;
 					})
 					.publishReplay()
-					.refCount();
+					.refCount() as Observable<never>;
 			}
 			return this.ensuredAllFiles;
 		});
