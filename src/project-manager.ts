@@ -75,6 +75,11 @@ export class ProjectManager implements Disposable {
 	private ensuredModuleStructure?: Observable<never>;
 
 	/**
+	 * Observable that completes when extra dependencies pointed to by tsconfig.json have been loaded.
+	 */
+	private ensuredConfigDependencies?: Observable<never>;
+
+	/**
 	 * Observable that completes when `ensureAllFiles` completed
 	 */
 	private ensuredAllFiles?: Observable<never>;
@@ -252,6 +257,7 @@ export class ProjectManager implements Disposable {
 	 */
 	invalidateModuleStructure(): void {
 		this.ensuredModuleStructure = undefined;
+		this.ensuredConfigDependencies = undefined;
 		this.ensuredAllFiles = undefined;
 		this.ensuredOwnFiles = undefined;
 	}
@@ -355,10 +361,20 @@ export class ProjectManager implements Disposable {
 	/**
 	 * Loads files determined by tsconfig to be needed into the file system
 	 */
-	ensureConfigDependencies(): Observable<never> {
-		return observableFromIterable(this.inMemoryFs.uris())
-			.filter(uri => this.isConfigDependency(uri2path(uri)))
-			.mergeMap(uri => this.updater.ensure(uri));
+	ensureConfigDependencies(childOf = new Span()): Observable<never> {
+		return traceObservable('Ensure config dependencies', childOf, span => {
+			if (!this.ensuredConfigDependencies) {
+				this.ensuredConfigDependencies = observableFromIterable(this.inMemoryFs.uris())
+				.filter(uri => this.isConfigDependency(uri2path(uri)))
+				.mergeMap(uri => this.updater.ensure(uri))
+				.do(noop, err => {
+					this.ensuredConfigDependencies = undefined;
+				})
+				.publishReplay()
+				.refCount();
+			}
+			return this.ensuredConfigDependencies;
+		});
 	}
 
 	/**
