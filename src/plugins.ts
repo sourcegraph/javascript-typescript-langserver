@@ -3,7 +3,8 @@ import { Logger, NoopLogger } from './logging';
 import { combinePaths } from './match-files';
 import { InitializationOptions } from './request-type';
 
-// definitions from from TypeScript server/project.ts
+// Based on types and logic from TypeScript server/project.ts @
+// https://github.com/Microsoft/TypeScript/blob/711e890e59e10aa05a43cb938474a3d9c2270429/src/server/project.ts
 
 /**
  * A plugin exports an initialization function, injected with

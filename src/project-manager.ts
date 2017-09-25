@@ -923,7 +923,7 @@ export class ProjectConfiguration {
 		);
 		this.service = ts.createLanguageService(this.host, this.documentRegistry);
 		const pluginLoader = new PluginLoader(this.rootFilePath, this.fs, this.initializationOptions, this.logger);
-		pluginLoader.loadPlugins(options, this.enableProxy.bind(this));
+		pluginLoader.loadPlugins(options, (factory, config) => this.enableProxy(factory, config));
 		this.initialized = true;
 	}
 
@@ -950,7 +950,7 @@ export class ProjectConfiguration {
 			const pluginModule = pluginModuleFactory({ typescript: ts });
 			this.service = pluginModule.create(info);
 		} catch (e) {
-			this.logger.info(`Plugin activation failed: ${e}`);
+			this.logger.error(`Plugin activation failed: ${e}`);
 		}
 	}
 
