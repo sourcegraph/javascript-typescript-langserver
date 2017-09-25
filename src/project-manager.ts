@@ -369,7 +369,6 @@ export class ProjectManager implements Disposable {
 				const config = this.getConfiguration(referencingFilePath);
 				config.ensureBasicFiles(span);
 				const contents = this.inMemoryFs.getContent(uri);
-				config.ensureSourceFile(referencingFilePath, span);
 				const info = ts.preProcessFile(contents, true, true);
 				const compilerOpt = config.getHost().getCompilationSettings();
 				const pathResolver = referencingFilePath.includes('\\') ? path.win32 : path.posix;
@@ -675,6 +674,13 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 		this.logger.error(message);
 	}
 
+	readFile(path: string, encoding?: string): string {
+		return this.fs.readFile(path);
+	}
+
+	fileExists(path: string): boolean {
+		return this.fs.fileExists(path);
+	}
 }
 
 /**
