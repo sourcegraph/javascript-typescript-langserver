@@ -2759,9 +2759,9 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 		beforeEach(initializeTypeScriptService(createService, rootUri, new Map([
 			[rootUri + 'keywords-in-path/class/constructor/a.ts', 'export function a() {}'],
 			[rootUri + 'special-characters-in-path/%40foo/b.ts', 'export function b() {}'],
-			[rootUri + 'windows/app/master.ts', '/// <reference path="..\\lib\\master.d.ts" />\nc();'],
-			[rootUri + 'windows/lib/master.d.ts', '/// <reference path="..\\lib\\slave.d.ts" />'],
-			[rootUri + 'windows/lib/slave.d.ts', 'function c() {}']
+			[rootUri + 'windows/app/master.ts', '/// <reference path="..\\lib\\master.ts" />\nc();'],
+			[rootUri + 'windows/lib/master.ts', '/// <reference path="..\\lib\\slave.ts" />'],
+			[rootUri + 'windows/lib/slave.ts', 'function c() {}']
 		])));
 
 		afterEach(shutdownService);
@@ -2841,7 +2841,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 						character: 10
 					}
 				},
-				uri: rootUri + 'windows/lib/slave.d.ts'
+				uri: rootUri + 'windows/lib/slave.ts'
 			}]);
 		});
 	});
