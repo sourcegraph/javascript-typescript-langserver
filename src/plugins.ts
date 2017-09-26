@@ -1,7 +1,10 @@
+import * as fs from 'mz/fs';
+import * as path from 'path';
 import * as ts from 'typescript';
 import { Logger, NoopLogger } from './logging';
 import { combinePaths } from './match-files';
-import { InitializationOptions } from './request-type';
+import { PluginSettings } from './request-type';
+import { toUnixPath } from './util';
 
 // Based on types and logic from TypeScript server/project.ts @
 // https://github.com/Microsoft/TypeScript/blob/711e890e59e10aa05a43cb938474a3d9c2270429/src/server/project.ts
@@ -58,11 +61,17 @@ export class PluginLoader {
 	private globalPlugins: string[] = [];
 	private pluginProbeLocations: string[] = [];
 
-	constructor(private rootFilePath: string, private fs: ts.ModuleResolutionHost, initializationOptions?: InitializationOptions, private logger = new NoopLogger(), private requireModule: (moduleName: string) => any = require) {
-		if (initializationOptions) {
-			this.allowLocalPluginLoads = initializationOptions.allowLocalPluginLoads || false;
-			this.globalPlugins = initializationOptions.globalPlugins || [];
-			this.pluginProbeLocations = initializationOptions.pluginProbeLocations || [];
+	constructor(
+		private rootFilePath: string,
+		private fs: ts.ModuleResolutionHost,
+		pluginSettings?: PluginSettings,
+		private logger = new NoopLogger(),
+		private resolutionHost = new LocalModuleResolutionHost(),
+		private requireModule: (moduleName: string) => any = require) {
+		if (pluginSettings) {
+			this.allowLocalPluginLoads = pluginSettings.allowLocalPluginLoads || false;
+			this.globalPlugins = pluginSettings.globalPlugins || [];
+			this.pluginProbeLocations = pluginSettings.pluginProbeLocations || [];
 		}
 	}
 
@@ -117,7 +126,7 @@ export class PluginLoader {
 				return;
 			}
 		}
-		this.logger.info(`Couldn't find ${pluginConfigEntry.name} anywhere in paths: ${searchPaths.join(',')}`);
+		this.logger.error(`Couldn't find ${pluginConfigEntry.name} anywhere in paths: ${searchPaths.join(',')}`);
 	}
 
 	/**
@@ -126,10 +135,11 @@ export class PluginLoader {
 	 * @param initialDir
 	 */
 	private resolveModule(moduleName: string, initialDir: string): {} | undefined {
-		this.logger.info(`Loading ${moduleName} from ${initialDir}`);
-		const result = this.requirePlugin(initialDir, moduleName);
+		const resolvedPath = toUnixPath(path.resolve(combinePaths(initialDir, 'node_modules')));
+		this.logger.info(`Loading ${moduleName} from ${initialDir} (resolved to ${resolvedPath})`);
+		const result = this.requirePlugin(resolvedPath, moduleName);
 		if (result.error) {
-			this.logger.info(`Failed to load module: ${JSON.stringify(result.error)}`);
+			this.logger.error(`Failed to load module: ${JSON.stringify(result.error)}`);
 			return undefined;
 		}
 		return result.module;
@@ -141,8 +151,8 @@ export class PluginLoader {
 	 * @param moduleName
 	 */
 	private requirePlugin(initialDir: string, moduleName: string): RequireResult {
-		const modulePath = this.resolveJavaScriptModule(moduleName, initialDir, this.fs);
 		try {
+			const modulePath = this.resolveJavaScriptModule(moduleName, initialDir, this.fs);
 			return { module: this.requireModule(modulePath), error: undefined };
 		} catch (error) {
 			return { module: undefined, error };
@@ -158,11 +168,23 @@ export class PluginLoader {
 	private resolveJavaScriptModule(moduleName: string, initialDir: string, host: ts.ModuleResolutionHost): string {
 		// TODO: this should set jsOnly=true to the internal resolver, but this parameter is not exposed on a public api.
 		const result =
-			ts.nodeModuleNameResolver(moduleName, /* containingFile */ initialDir.replace('\\', '/') + '/package.json', { moduleResolution: ts.ModuleResolutionKind.NodeJs, allowJs: true }, this.fs, undefined);
+			ts.nodeModuleNameResolver(moduleName, /* containingFile */ initialDir.replace('\\', '/') + '/package.json', { moduleResolution: ts.ModuleResolutionKind.NodeJs, allowJs: true }, this.resolutionHost, undefined);
 		if (!result.resolvedModule) {
 			// this.logger.error(result.failedLookupLocations);
 			throw new Error(`Could not resolve JS module ${moduleName} starting at ${initialDir}.`);
 		}
 		return result.resolvedModule.resolvedFileName;
+	}
+}
+
+/**
+ * A local filesystem-based ModuleResolutionHost for plugin loading.
+ */
+export class LocalModuleResolutionHost implements ts.ModuleResolutionHost {
+	fileExists(fileName: string): boolean {
+		return fs.existsSync(fileName);
+	}
+	readFile(fileName: string): string {
+		return fs.readFileSync(fileName, 'utf8');
 	}
 }

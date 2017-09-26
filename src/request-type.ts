@@ -3,10 +3,12 @@ import * as vscode from 'vscode-languageserver';
 
 export interface InitializeParams extends vscode.InitializeParams {
 	capabilities: ClientCapabilities;
-	initializationOptions?: InitializationOptions;
 }
 
-export interface InitializationOptions {
+/**
+ * Settings to enable plugin loading
+ */
+export interface PluginSettings {
 	allowLocalPluginLoads: boolean;
 	globalPlugins: string[];
 	pluginProbeLocations: string[];

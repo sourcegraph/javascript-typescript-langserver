@@ -3,7 +3,7 @@ import * as sinon from 'sinon';
 import * as ts from 'typescript';
 import {InMemoryFileSystem} from '../memfs';
 import {PluginLoader, PluginModule, PluginModuleFactory} from '../plugins';
-import {InitializationOptions} from '../request-type';
+import {PluginSettings} from '../request-type';
 import { path2uri } from '../util';
 
 describe('plugins', () => {
@@ -24,14 +24,14 @@ describe('plugins', () => {
 			const peerPackagesUri = path2uri(peerPackagesPath);
 			memfs.add(peerPackagesUri + '/node_modules/some-plugin/package.json', '{ "name": "some-plugin", "version": "0.1.1", "main": "plugin.js"}');
 			memfs.add(peerPackagesUri + '/node_modules/some-plugin/plugin.js', '');
-			const initializationOptions: InitializationOptions = {
+			const pluginSettings: PluginSettings = {
 				globalPlugins: ['some-plugin'],
 				allowLocalPluginLoads: false,
 				pluginProbeLocations: []
 			};
 			const pluginFactoryFunc = (modules: any) => 5;
 			const fakeRequire = (path: string) => pluginFactoryFunc;
-			const loader = new PluginLoader('/', memfs, initializationOptions, undefined, fakeRequire);
+			const loader = new PluginLoader('/', memfs, pluginSettings, undefined, memfs, fakeRequire);
 			const compilerOptions: ts.CompilerOptions = {};
 			const applyProxy = sinon.spy();
 			loader.loadPlugins(compilerOptions, applyProxy);
@@ -43,14 +43,14 @@ describe('plugins', () => {
 			const memfs = new InMemoryFileSystem('/some-project');
 			memfs.add('file:///some-project/node_modules/some-plugin/package.json', '{ "name": "some-plugin", "version": "0.1.1", "main": "plugin.js"}');
 			memfs.add('file:///some-project/node_modules/some-plugin/plugin.js', '');
-			const initializationOptions: InitializationOptions = {
+			const pluginSettings: PluginSettings = {
 				globalPlugins: [],
 				allowLocalPluginLoads: true,
 				pluginProbeLocations: []
 			};
 			const pluginFactoryFunc = (modules: any) => 5;
 			const fakeRequire = (path: string) => pluginFactoryFunc;
-			const loader = new PluginLoader('/some-project', memfs, initializationOptions, undefined, fakeRequire);
+			const loader = new PluginLoader('/some-project', memfs, pluginSettings, undefined, memfs, fakeRequire);
 			const pluginOption: ts.PluginImport = {
 				name: 'some-plugin'
 			};

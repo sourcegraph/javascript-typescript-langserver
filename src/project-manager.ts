@@ -10,7 +10,7 @@ import { FileSystemUpdater } from './fs';
 import { Logger, NoopLogger } from './logging';
 import { InMemoryFileSystem } from './memfs';
 import { PluginCreateInfo, PluginLoader, PluginModuleFactory } from './plugins';
-import { InitializationOptions } from './request-type';
+import { PluginSettings } from './request-type';
 import { traceObservable, traceSync } from './tracing';
 import {
 	isConfigFile,
@@ -105,7 +105,7 @@ export class ProjectManager implements Disposable {
 	/**
 	 * Options passed to the language server at startup
 	 */
-	private initializationOptions?: InitializationOptions;
+	private pluginSettings?: PluginSettings;
 
 	/**
 	 * @param rootPath root path as passed to `initialize`
@@ -118,14 +118,14 @@ export class ProjectManager implements Disposable {
 		inMemoryFileSystem: InMemoryFileSystem,
 		updater: FileSystemUpdater,
 		traceModuleResolution?: boolean,
-		initializationOptions?: InitializationOptions,
+		pluginSettings?: PluginSettings,
 		protected logger: Logger = new NoopLogger()
 	) {
 		this.rootPath = rootPath;
 		this.updater = updater;
 		this.inMemoryFs = inMemoryFileSystem;
 		this.versions = new Map<string, number>();
-		this.initializationOptions = initializationOptions;
+		this.pluginSettings = pluginSettings;
 		this.traceModuleResolution = traceModuleResolution || false;
 
 		// Share DocumentRegistry between all ProjectConfigurations
@@ -153,7 +153,7 @@ export class ProjectManager implements Disposable {
 				'',
 				tsConfig,
 				this.traceModuleResolution,
-				this.initializationOptions,
+				this.pluginSettings,
 				this.logger
 			);
 			configs.set(trimmedRootPath, config);
@@ -183,7 +183,7 @@ export class ProjectManager implements Disposable {
 						filePath,
 						undefined,
 						this.traceModuleResolution,
-						this.initializationOptions,
+						this.pluginSettings,
 						this.logger
 					));
 					// Remove catch-all config (if exists)
@@ -813,7 +813,7 @@ export class ProjectConfiguration {
 		configFilePath: string,
 		configContent?: any,
 		traceModuleResolution?: boolean,
-		private initializationOptions?: InitializationOptions,
+		private pluginSettings?: PluginSettings,
 		private logger: Logger = new NoopLogger()
 	) {
 		this.fs = fs;
@@ -922,8 +922,8 @@ export class ProjectConfiguration {
 			this.logger
 		);
 		this.service = ts.createLanguageService(this.host, this.documentRegistry);
-		const pluginLoader = new PluginLoader(this.rootFilePath, this.fs, this.initializationOptions, this.logger);
-		pluginLoader.loadPlugins(options, (factory, config) => this.enableProxy(factory, config));
+		const pluginLoader = new PluginLoader(this.rootFilePath, this.fs, this.pluginSettings, this.logger);
+		pluginLoader.loadPlugins(options, this.enableProxy.bind(this) /* (factory, config) => this.enableProxy(factory, config)) */);
 		this.initialized = true;
 	}
 

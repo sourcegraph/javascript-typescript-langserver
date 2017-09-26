@@ -49,6 +49,7 @@ import {
 	InitializeResult,
 	PackageDescriptor,
 	PackageInformation,
+	PluginSettings,
 	ReferenceInformation,
 	SymbolDescriptor,
 	SymbolLocationInformation,
@@ -86,9 +87,9 @@ export type TypeScriptServiceFactory = (client: LanguageClient, options?: TypeSc
 /**
  * Settings synced through `didChangeConfiguration`
  */
-export interface Settings {
-	format: ts.FormatCodeSettings;
-}
+export type Settings = {
+	format: ts.FormatCodeSettings
+} & PluginSettings;
 
 /**
  * Handles incoming requests and return responses. There is a one-to-one-to-one
@@ -171,7 +172,10 @@ export class TypeScriptService {
 			insertSpaceBeforeFunctionParenthesis: false,
 			placeOpenBraceOnNewLineForFunctions: false,
 			placeOpenBraceOnNewLineForControlBlocks: false
-		}
+		},
+		allowLocalPluginLoads: false,
+		globalPlugins: [],
+		pluginProbeLocations: []
 	};
 
 	/**
@@ -223,7 +227,7 @@ export class TypeScriptService {
 				this.inMemoryFileSystem,
 				this.updater,
 				this.traceModuleResolution,
-				params.initializationOptions,
+				this.settings,
 				this.logger
 			);
 			this.packageManager = new PackageManager(this.updater, this.inMemoryFileSystem, this.logger);
