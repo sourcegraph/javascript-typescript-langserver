@@ -312,7 +312,7 @@ export class TypeScriptService {
 	 * A notification sent from the client to the server to signal the change of configuration
 	 * settings.
 	 */
-	didChangeConfiguration(params: DidChangeConfigurationParams): void {
+	workspaceDidChangeConfiguration(params: DidChangeConfigurationParams): void {
 		merge(this.settings, params.settings);
 	}
 
