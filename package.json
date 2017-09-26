@@ -75,7 +75,7 @@
     "nyc": "^11.0.2",
     "rimraf": "^2.6.1",
     "semantic-release": "^7.0.1",
-    "sinon": "^3.0.0",
+    "sinon": "^4.0.0",
     "source-map-support": "^0.4.11",
     "temp": "^0.8.3",
     "tslint": "^5.0.0",
