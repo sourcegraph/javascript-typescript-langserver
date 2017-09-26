@@ -371,7 +371,7 @@ export class ProjectManager implements Disposable {
 					this.ensuredConfigDependencies = undefined;
 				})
 				.publishReplay()
-				.refCount();
+				.refCount() as Observable<never>;
 			}
 			return this.ensuredConfigDependencies;
 		});
