@@ -1829,11 +1829,11 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					uri: 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/lib.dom.d.ts',
 					range: {
 						start: {
-							line: 8258,
+							line: 8259,
 							character: 10
 						},
 						end: {
-							line: 8258,
+							line: 8259,
 							character: 14
 						}
 					}
@@ -1841,11 +1841,11 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 					uri: 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/lib.dom.d.ts',
 					range: {
 						start: {
-							line: 8310,
+							line: 8311,
 							character: 12
 						},
 						end: {
-							line: 8310,
+							line: 8311,
 							character: 16
 						}
 					}

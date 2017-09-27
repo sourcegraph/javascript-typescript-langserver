@@ -139,7 +139,7 @@ export class FileSystemUpdater {
 			})
 			.ignoreElements()
 			.publishReplay()
-			.refCount();
+			.refCount() as Observable<never>;
 		this.fetches.set(uri, observable);
 		return observable;
 	}
@@ -174,7 +174,7 @@ export class FileSystemUpdater {
 				})
 				.ignoreElements()
 				.publishReplay()
-				.refCount()
+				.refCount() as Observable<never>
 		);
 		this.structureFetch = observable;
 		return observable;
