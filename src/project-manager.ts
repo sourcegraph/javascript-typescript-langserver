@@ -1,4 +1,5 @@
 import { Observable, Subscription } from '@reactivex/rxjs';
+import { SelectorMethodSignature } from '@reactivex/rxjs/dist/cjs/observable/FromEventObservable';
 import iterate from 'iterare';
 import { noop } from 'lodash';
 import { Span } from 'opentracing';
@@ -146,7 +147,7 @@ export class ProjectManager implements Disposable {
 
 		// Whenever a file with content is added to the InMemoryFileSystem, check if it's a tsconfig.json and add a new ProjectConfiguration
 		this.subscriptions.add(
-			Observable.fromEvent<[string, string]>(inMemoryFileSystem, 'add', Array.of)
+			Observable.fromEvent(inMemoryFileSystem, 'add', Array.of as SelectorMethodSignature<[string, string]>)
 				.filter(([uri, content]) => !!content && /\/[tj]sconfig\.json/.test(uri) && !uri.includes('/node_modules/'))
 				.subscribe(([uri, content]) => {
 					const filePath = uri2path(uri);
@@ -241,7 +242,7 @@ export class ProjectManager implements Disposable {
 						this.invalidateReferencedFiles();
 					})
 					.publishReplay()
-					.refCount();
+					.refCount() as Observable<never>;
 			}
 			return this.ensuredModuleStructure;
 		});
@@ -272,7 +273,7 @@ export class ProjectManager implements Disposable {
 						this.ensuredOwnFiles = undefined;
 					})
 					.publishReplay()
-					.refCount();
+					.refCount() as Observable<never>;
 			}
 			return this.ensuredOwnFiles;
 		});
@@ -293,7 +294,7 @@ export class ProjectManager implements Disposable {
 						this.ensuredAllFiles = undefined;
 					})
 					.publishReplay()
-					.refCount();
+					.refCount() as Observable<never>;
 			}
 			return this.ensuredAllFiles;
 		});
@@ -673,6 +674,13 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
 		this.logger.error(message);
 	}
 
+	readFile(path: string, encoding?: string): string {
+		return this.fs.readFile(path);
+	}
+
+	fileExists(path: string): boolean {
+		return this.fs.fileExists(path);
+	}
 }
 
 /**
