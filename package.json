@@ -62,7 +62,7 @@
     "@types/glob": "5.0.30",
     "@types/lodash": "4.14.74",
     "@types/mocha": "2.2.41",
-    "@types/mz": "0.0.31",
+    "@types/mz": "0.0.32",
     "@types/node": "7.0.32",
     "@types/rimraf": "2.0.2",
     "@types/object-hash": "0.5.29",
