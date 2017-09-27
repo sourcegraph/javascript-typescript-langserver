@@ -168,7 +168,13 @@ export class PluginLoader {
 	private resolveJavaScriptModule(moduleName: string, initialDir: string, host: ts.ModuleResolutionHost): string {
 		// TODO: this should set jsOnly=true to the internal resolver, but this parameter is not exposed on a public api.
 		const result =
-			ts.nodeModuleNameResolver(moduleName, /* containingFile */ initialDir.replace('\\', '/') + '/package.json', { moduleResolution: ts.ModuleResolutionKind.NodeJs, allowJs: true }, this.resolutionHost, undefined);
+			ts.nodeModuleNameResolver(
+				moduleName,
+				initialDir.replace('\\', '/') + '/package.json', /* containingFile */
+				{ moduleResolution: ts.ModuleResolutionKind.NodeJs, allowJs: true },
+				this.resolutionHost,
+				undefined
+			);
 		if (!result.resolvedModule) {
 			// this.logger.error(result.failedLookupLocations);
 			throw new Error(`Could not resolve JS module ${moduleName} starting at ${initialDir}.`);

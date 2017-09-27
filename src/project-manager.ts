@@ -923,7 +923,7 @@ export class ProjectConfiguration {
 		);
 		this.service = ts.createLanguageService(this.host, this.documentRegistry);
 		const pluginLoader = new PluginLoader(this.rootFilePath, this.fs, this.pluginSettings, this.logger);
-		pluginLoader.loadPlugins(options, this.enableProxy.bind(this) /* (factory, config) => this.enableProxy(factory, config)) */);
+		pluginLoader.loadPlugins(options, (factory, config) => this.wrapService(factory, config));
 		this.initialized = true;
 	}
 
@@ -932,7 +932,7 @@ export class ProjectConfiguration {
 	 * @param pluginModuleFactory function to create the module
 	 * @param configEntry extra settings from tsconfig to pass to the plugin module
 	 */
-	private enableProxy(pluginModuleFactory: PluginModuleFactory, configEntry: ts.PluginImport) {
+	private wrapService(pluginModuleFactory: PluginModuleFactory, configEntry: ts.PluginImport) {
 		try {
 			if (typeof pluginModuleFactory !== 'function') {
 				this.logger.info(`Skipped loading plugin ${configEntry.name} because it didn't expose a proper factory function`);
