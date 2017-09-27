@@ -453,7 +453,7 @@ export class TypeScriptService {
 				// The symbol is part of a dependency in node_modules
 				// Build URI to package.json of the Dependency
 				const encodedPackageName = packageName.split('/').map(encodeURIComponent).join('/');
-				const parts = url.parse(uri);
+				const parts: url.UrlObject = url.parse(uri);
 				const packageJsonUri = url.format({ ...parts, pathname: parts.pathname!.slice(0, parts.pathname!.lastIndexOf('/node_modules/' + encodedPackageName)) + `/node_modules/${encodedPackageName}/package.json` });
 				// Fetch the package.json of the dependency
 				return this.updater.ensure(packageJsonUri, span)
