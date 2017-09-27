@@ -24,6 +24,26 @@ describe('ProjectManager', () => {
 		assert.isDefined(configs.find(config => config.configFilePath === '/foo/tsconfig.json'));
 	});
 
+	describe('ensureBasicFiles', () => {
+		beforeEach(async () => {
+			memfs = new InMemoryFileSystem('/');
+			const localfs = new MapFileSystem(new Map([
+				['file:///project/package.json', '{"name": "package-name-1"}'],
+				['file:///project/tsconfig.json', '{ "compilerOptions": { "typeRoots": ["../types"]} }'],
+				['file:///project/file.ts', 'console.log(GLOBALCONSTANT);'],
+				['file:///types/types.d.ts', 'declare var GLOBALCONSTANT=1;']
+
+			]));
+			const updater = new FileSystemUpdater(localfs, memfs);
+			projectManager = new ProjectManager('/', memfs, updater, true);
+		});
+		it('loads files from typeRoots', async () => {
+			await projectManager.ensureReferencedFiles('file:///project/file.ts').toPromise();
+			memfs.getContent('file:///project/file.ts');
+			memfs.getContent('file:///types/types.d.ts');
+		});
+	});
+
 	describe('getPackageName()', () => {
 		beforeEach(async () => {
 			memfs = new InMemoryFileSystem('/');
