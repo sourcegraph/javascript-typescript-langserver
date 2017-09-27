@@ -1,4 +1,5 @@
 import { Observable, Subscription } from '@reactivex/rxjs';
+import { SelectorMethodSignature } from '@reactivex/rxjs/dist/cjs/observable/FromEventObservable';
 import iterate from 'iterare';
 import { noop } from 'lodash';
 import { Span } from 'opentracing';
@@ -16,7 +17,6 @@ import {
 	isJSTSFile,
 	isPackageJsonFile,
 	observableFromIterable,
-	pairOf,
 	path2uri,
 	toUnixPath,
 	uri2path
@@ -147,7 +147,7 @@ export class ProjectManager implements Disposable {
 
 		// Whenever a file with content is added to the InMemoryFileSystem, check if it's a tsconfig.json and add a new ProjectConfiguration
 		this.subscriptions.add(
-			Observable.fromEvent<[string, string]>(inMemoryFileSystem, 'add', pairOf)
+			Observable.fromEvent(inMemoryFileSystem, 'add', Array.of as SelectorMethodSignature<[string, string]>)
 				.filter(([uri, content]) => !!content && /\/[tj]sconfig\.json/.test(uri) && !uri.includes('/node_modules/'))
 				.subscribe(([uri, content]) => {
 					const filePath = uri2path(uri);
