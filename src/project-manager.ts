@@ -9,6 +9,8 @@ import { Disposable } from './disposable';
 import { FileSystemUpdater } from './fs';
 import { Logger, NoopLogger } from './logging';
 import { InMemoryFileSystem } from './memfs';
+import { PluginCreateInfo, PluginLoader, PluginModuleFactory } from './plugins';
+import { PluginSettings } from './request-type';
 import { traceObservable, traceSync } from './tracing';
 import {
 	isConfigFile,
@@ -101,6 +103,11 @@ export class ProjectManager implements Disposable {
 	private subscriptions = new Subscription();
 
 	/**
+	 * Options passed to the language server at startup
+	 */
+	private pluginSettings?: PluginSettings;
+
+	/**
 	 * @param rootPath root path as passed to `initialize`
 	 * @param inMemoryFileSystem File system that keeps structure and contents in memory
 	 * @param strict indicates if we are working in strict mode (VFS) or with a local file system
@@ -111,12 +118,14 @@ export class ProjectManager implements Disposable {
 		inMemoryFileSystem: InMemoryFileSystem,
 		updater: FileSystemUpdater,
 		traceModuleResolution?: boolean,
+		pluginSettings?: PluginSettings,
 		protected logger: Logger = new NoopLogger()
 	) {
 		this.rootPath = rootPath;
 		this.updater = updater;
 		this.inMemoryFs = inMemoryFileSystem;
 		this.versions = new Map<string, number>();
+		this.pluginSettings = pluginSettings;
 		this.traceModuleResolution = traceModuleResolution || false;
 
 		// Share DocumentRegistry between all ProjectConfigurations
@@ -144,6 +153,7 @@ export class ProjectManager implements Disposable {
 				'',
 				tsConfig,
 				this.traceModuleResolution,
+				this.pluginSettings,
 				this.logger
 			);
 			configs.set(trimmedRootPath, config);
@@ -173,6 +183,7 @@ export class ProjectManager implements Disposable {
 						filePath,
 						undefined,
 						this.traceModuleResolution,
+						this.pluginSettings,
 						this.logger
 					));
 					// Remove catch-all config (if exists)
@@ -802,6 +813,7 @@ export class ProjectConfiguration {
 		configFilePath: string,
 		configContent?: any,
 		traceModuleResolution?: boolean,
+		private pluginSettings?: PluginSettings,
 		private logger: Logger = new NoopLogger()
 	) {
 		this.fs = fs;
@@ -910,7 +922,36 @@ export class ProjectConfiguration {
 			this.logger
 		);
 		this.service = ts.createLanguageService(this.host, this.documentRegistry);
+		const pluginLoader = new PluginLoader(this.rootFilePath, this.fs, this.pluginSettings, this.logger);
+		pluginLoader.loadPlugins(options, (factory, config) => this.wrapService(factory, config));
 		this.initialized = true;
+	}
+
+	/**
+	 * Replaces the LanguageService with an instance wrapped by the plugin
+	 * @param pluginModuleFactory function to create the module
+	 * @param configEntry extra settings from tsconfig to pass to the plugin module
+	 */
+	private wrapService(pluginModuleFactory: PluginModuleFactory, configEntry: ts.PluginImport) {
+		try {
+			if (typeof pluginModuleFactory !== 'function') {
+				this.logger.info(`Skipped loading plugin ${configEntry.name} because it didn't expose a proper factory function`);
+				return;
+			}
+
+			const info: PluginCreateInfo = {
+				config: configEntry,
+				project: { projectService: { logger: this.logger }}, // TODO: may need more support
+				languageService: this.getService(),
+				languageServiceHost: this.getHost(),
+				serverHost: {} // TODO: may need an adapter
+			};
+
+			const pluginModule = pluginModuleFactory({ typescript: ts });
+			this.service = pluginModule.create(info);
+		} catch (e) {
+			this.logger.error(`Plugin activation failed: ${e}`);
+		}
 	}
 
 	/**
