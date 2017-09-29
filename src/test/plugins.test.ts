@@ -40,9 +40,11 @@ describe('plugins', () => {
 		});
 
 		it('should load a local plugin if specified', () => {
+			const rootDir = (process.platform === 'win32' ? 'c:\\' : '/') + 'some-project';
+			const rootUri = path2uri(rootDir) + '/';
 			const memfs = new InMemoryFileSystem('/some-project');
-			memfs.add('file:///some-project/node_modules/some-plugin/package.json', '{ "name": "some-plugin", "version": "0.1.1", "main": "plugin.js"}');
-			memfs.add('file:///some-project/node_modules/some-plugin/plugin.js', '');
+			memfs.add(rootUri + 'node_modules/some-plugin/package.json', '{ "name": "some-plugin", "version": "0.1.1", "main": "plugin.js"}');
+			memfs.add(rootUri + 'node_modules/some-plugin/plugin.js', '');
 			const pluginSettings: PluginSettings = {
 				globalPlugins: [],
 				allowLocalPluginLoads: true,
@@ -50,7 +52,7 @@ describe('plugins', () => {
 			};
 			const pluginFactoryFunc = (modules: any) => 5;
 			const fakeRequire = (path: string) => pluginFactoryFunc;
-			const loader = new PluginLoader('/some-project', memfs, pluginSettings, undefined, memfs, fakeRequire);
+			const loader = new PluginLoader(rootDir, memfs, pluginSettings, undefined, memfs, fakeRequire);
 			const pluginOption: ts.PluginImport = {
 				name: 'some-plugin'
 			};
