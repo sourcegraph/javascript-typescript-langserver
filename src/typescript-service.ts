@@ -88,7 +88,7 @@ export type TypeScriptServiceFactory = (client: LanguageClient, options?: TypeSc
  * Settings synced through `didChangeConfiguration`
  */
 export interface Settings extends PluginSettings {
-	format: ts.FormatCodeSettings
+	format: ts.FormatCodeSettings;
 }
 
 /**
