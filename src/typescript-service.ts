@@ -49,6 +49,7 @@ import {
 	InitializeResult,
 	PackageDescriptor,
 	PackageInformation,
+	PluginSettings,
 	ReferenceInformation,
 	SymbolDescriptor,
 	SymbolLocationInformation,
@@ -86,7 +87,7 @@ export type TypeScriptServiceFactory = (client: LanguageClient, options?: TypeSc
 /**
  * Settings synced through `didChangeConfiguration`
  */
-export interface Settings {
+export interface Settings extends PluginSettings {
 	format: ts.FormatCodeSettings;
 }
 
@@ -171,7 +172,10 @@ export class TypeScriptService {
 			insertSpaceBeforeFunctionParenthesis: false,
 			placeOpenBraceOnNewLineForFunctions: false,
 			placeOpenBraceOnNewLineForControlBlocks: false
-		}
+		},
+		allowLocalPluginLoads: false,
+		globalPlugins: [],
+		pluginProbeLocations: []
 	};
 
 	/**
@@ -223,6 +227,7 @@ export class TypeScriptService {
 				this.inMemoryFileSystem,
 				this.updater,
 				this.traceModuleResolution,
+				this.settings,
 				this.logger
 			);
 			this.packageManager = new PackageManager(this.updater, this.inMemoryFileSystem, this.logger);
@@ -311,7 +316,7 @@ export class TypeScriptService {
 	 * A notification sent from the client to the server to signal the change of configuration
 	 * settings.
 	 */
-	didChangeConfiguration(params: DidChangeConfigurationParams): void {
+	workspaceDidChangeConfiguration(params: DidChangeConfigurationParams): void {
 		merge(this.settings, params.settings);
 	}
 
@@ -1337,15 +1342,8 @@ export class TypeScriptService {
 		if (!config) {
 			return;
 		}
-		const program = config.getProgram(span);
-		if (!program) {
-			return;
-		}
-		const sourceFile = program.getSourceFile(uri2path(uri));
-		if (!sourceFile) {
-			return;
-		}
-		const tsDiagnostics = ts.getPreEmitDiagnostics(program, sourceFile);
+		const fileName = uri2path(uri);
+		const tsDiagnostics = config.getService().getSyntacticDiagnostics(fileName).concat(config.getService().getSemanticDiagnostics(fileName));
 		const diagnostics = iterate(tsDiagnostics)
 			// TS can report diagnostics without a file and range in some cases
 			// These cannot be represented as LSP Diagnostics since the range and URI is required

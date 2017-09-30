@@ -9,6 +9,8 @@ import { Disposable } from './disposable';
 import { FileSystemUpdater } from './fs';
 import { Logger, NoopLogger } from './logging';
 import { InMemoryFileSystem } from './memfs';
+import { PluginCreateInfo, PluginLoader, PluginModuleFactory } from './plugins';
+import { PluginSettings } from './request-type';
 import { traceObservable, traceSync } from './tracing';
 import {
 	isConfigFile,
@@ -76,6 +78,11 @@ export class ProjectManager implements Disposable {
 	private ensuredModuleStructure?: Observable<never>;
 
 	/**
+	 * Observable that completes when extra dependencies pointed to by tsconfig.json have been loaded.
+	 */
+	private ensuredConfigDependencies?: Observable<never>;
+
+	/**
 	 * Observable that completes when `ensureAllFiles` completed
 	 */
 	private ensuredAllFiles?: Observable<never>;
@@ -96,6 +103,11 @@ export class ProjectManager implements Disposable {
 	private subscriptions = new Subscription();
 
 	/**
+	 * Options passed to the language server at startup
+	 */
+	private pluginSettings?: PluginSettings;
+
+	/**
 	 * @param rootPath root path as passed to `initialize`
 	 * @param inMemoryFileSystem File system that keeps structure and contents in memory
 	 * @param strict indicates if we are working in strict mode (VFS) or with a local file system
@@ -106,12 +118,14 @@ export class ProjectManager implements Disposable {
 		inMemoryFileSystem: InMemoryFileSystem,
 		updater: FileSystemUpdater,
 		traceModuleResolution?: boolean,
+		pluginSettings?: PluginSettings,
 		protected logger: Logger = new NoopLogger()
 	) {
 		this.rootPath = rootPath;
 		this.updater = updater;
 		this.inMemoryFs = inMemoryFileSystem;
 		this.versions = new Map<string, number>();
+		this.pluginSettings = pluginSettings;
 		this.traceModuleResolution = traceModuleResolution || false;
 
 		// Share DocumentRegistry between all ProjectConfigurations
@@ -139,6 +153,7 @@ export class ProjectManager implements Disposable {
 				'',
 				tsConfig,
 				this.traceModuleResolution,
+				this.pluginSettings,
 				this.logger
 			);
 			configs.set(trimmedRootPath, config);
@@ -168,6 +183,7 @@ export class ProjectManager implements Disposable {
 						filePath,
 						undefined,
 						this.traceModuleResolution,
+						this.pluginSettings,
 						this.logger
 					));
 					// Remove catch-all config (if exists)
@@ -253,6 +269,7 @@ export class ProjectManager implements Disposable {
 	 */
 	invalidateModuleStructure(): void {
 		this.ensuredModuleStructure = undefined;
+		this.ensuredConfigDependencies = undefined;
 		this.ensuredAllFiles = undefined;
 		this.ensuredOwnFiles = undefined;
 	}
@@ -322,6 +339,7 @@ export class ProjectManager implements Disposable {
 			span.addTags({ uri, maxDepth });
 			ignore.add(uri);
 			return this.ensureModuleStructure(span)
+				.concat(Observable.defer(() => this.ensureConfigDependencies()))
 				// If max depth was reached, don't go any further
 				.concat(Observable.defer(() => maxDepth === 0 ? Observable.empty<never>() : this.resolveReferencedFiles(uri)))
 				// Prevent cycles
@@ -335,6 +353,39 @@ export class ProjectManager implements Disposable {
 							return [];
 						})
 				);
+		});
+	}
+
+	/**
+	 * Determines if a tsconfig/jsconfig needs additional declaration files loaded.
+	 * @param filePath
+	 */
+	isConfigDependency(filePath: string): boolean {
+		for (const config of this.configurations()) {
+			config.ensureConfigFile();
+			if (config.isExpectedDeclarationFile(filePath)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Loads files determined by tsconfig to be needed into the file system
+	 */
+	ensureConfigDependencies(childOf = new Span()): Observable<never> {
+		return traceObservable('Ensure config dependencies', childOf, span => {
+			if (!this.ensuredConfigDependencies) {
+				this.ensuredConfigDependencies = observableFromIterable(this.inMemoryFs.uris())
+				.filter(uri => this.isConfigDependency(uri2path(uri)))
+				.mergeMap(uri => this.updater.ensure(uri))
+				.do(noop, err => {
+					this.ensuredConfigDependencies = undefined;
+				})
+				.publishReplay()
+				.refCount() as Observable<never>;
+			}
+			return this.ensuredConfigDependencies;
 		});
 	}
 
@@ -743,6 +794,11 @@ export class ProjectConfiguration {
 	private expectedFilePaths = new Set<string>();
 
 	/**
+	 * List of resolved extra root directories to allow global type declaration files to be loaded from.
+	 */
+	private typeRoots: string[];
+
+	/**
 	 * @param fs file system to use
 	 * @param documentRegistry Shared DocumentRegistry that manages SourceFile objects
 	 * @param rootFilePath root file path, absolute
@@ -757,6 +813,7 @@ export class ProjectConfiguration {
 		configFilePath: string,
 		configContent?: any,
 		traceModuleResolution?: boolean,
+		private pluginSettings?: PluginSettings,
 		private logger: Logger = new NoopLogger()
 	) {
 		this.fs = fs;
@@ -846,6 +903,11 @@ export class ProjectConfiguration {
 		this.expectedFilePaths = new Set(configParseResult.fileNames);
 
 		const options = configParseResult.options;
+		const pathResolver = /^[a-z]:\//i.test(base) ? path.win32 : path.posix;
+		this.typeRoots = options.typeRoots ?
+			options.typeRoots.map((r: string) => pathResolver.resolve(this.rootFilePath, r)) :
+			[];
+
 		if (/(^|\/)jsconfig\.json$/.test(this.configFilePath)) {
 			options.allowJs = true;
 		}
@@ -860,7 +922,36 @@ export class ProjectConfiguration {
 			this.logger
 		);
 		this.service = ts.createLanguageService(this.host, this.documentRegistry);
+		const pluginLoader = new PluginLoader(this.rootFilePath, this.fs, this.pluginSettings, this.logger);
+		pluginLoader.loadPlugins(options, (factory, config) => this.wrapService(factory, config));
 		this.initialized = true;
+	}
+
+	/**
+	 * Replaces the LanguageService with an instance wrapped by the plugin
+	 * @param pluginModuleFactory function to create the module
+	 * @param configEntry extra settings from tsconfig to pass to the plugin module
+	 */
+	private wrapService(pluginModuleFactory: PluginModuleFactory, configEntry: ts.PluginImport) {
+		try {
+			if (typeof pluginModuleFactory !== 'function') {
+				this.logger.info(`Skipped loading plugin ${configEntry.name} because it didn't expose a proper factory function`);
+				return;
+			}
+
+			const info: PluginCreateInfo = {
+				config: configEntry,
+				project: { projectService: { logger: this.logger }}, // TODO: may need more support
+				languageService: this.getService(),
+				languageServiceHost: this.getHost(),
+				serverHost: {} // TODO: may need an adapter
+			};
+
+			const pluginModule = pluginModuleFactory({ typescript: ts });
+			this.service = pluginModule.create(info);
+		} catch (e) {
+			this.logger.error(`Plugin activation failed: ${e}`);
+		}
 	}
 
 	/**
@@ -871,6 +962,16 @@ export class ProjectConfiguration {
 	}
 
 	private ensuredBasicFiles = false;
+
+	/**
+	 * Determines if a fileName is a declaration file within expected files or type roots
+	 * @param fileName
+	 */
+	public isExpectedDeclarationFile(fileName: string) {
+		return isDeclarationFile(fileName) &&
+				(this.expectedFilePaths.has(toUnixPath(fileName)) ||
+				this.typeRoots.some(root => fileName.startsWith(root)));
+	}
 
 	/**
 	 * Ensures we added basic files (global TS files, dependencies, declarations)
@@ -890,7 +991,8 @@ export class ProjectConfiguration {
 		// Add all global declaration files from the workspace and all declarations from the project
 		for (const uri of this.fs.uris()) {
 			const fileName = uri2path(uri);
-			if (isGlobalTSFile(fileName) || (isDeclarationFile(fileName) && this.expectedFilePaths.has(toUnixPath(fileName)))) {
+			if (isGlobalTSFile(fileName) ||
+				this.isExpectedDeclarationFile(fileName)) {
 				const sourceFile = program.getSourceFile(fileName);
 				if (!sourceFile) {
 					this.getHost().addFile(fileName);

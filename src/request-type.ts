@@ -5,6 +5,15 @@ export interface InitializeParams extends vscode.InitializeParams {
 	capabilities: ClientCapabilities;
 }
 
+/**
+ * Settings to enable plugin loading
+ */
+export interface PluginSettings {
+	allowLocalPluginLoads: boolean;
+	globalPlugins: string[];
+	pluginProbeLocations: string[];
+}
+
 export interface ClientCapabilities extends vscode.ClientCapabilities {
 
 	/**

@@ -55,7 +55,7 @@ export function matchFiles(path: string, extensions: string[], excludes: string[
 
 const directorySeparator = '/';
 
-function combinePaths(path1: string, path2: string) {
+export function combinePaths(path1: string, path2: string) {
 	if (!(path1 && path1.length)) return path2;
 	if (!(path2 && path2.length)) return path1;
 	if (getRootLength(path2) !== 0) return path2;
