@@ -1,6 +1,6 @@
 
-import { Observable } from '@reactivex/rxjs';
-import { Span } from 'opentracing';
+import { Observable } from '@reactivex/rxjs'
+import { Span } from 'opentracing'
 
 /**
  * Traces a synchronous function by passing it a new child span.
@@ -12,16 +12,16 @@ import { Span } from 'opentracing';
  * @param operation The function to call
  */
 export function traceSync<T>(operationName: string, childOf: Span, operation: (span: Span) => T): T {
-	const span = childOf.tracer().startSpan(operationName, { childOf });
-	try {
-		return operation(span);
-	} catch (err) {
-		span.setTag('error', true);
-		span.log({ 'event': 'error', 'error.object': err, 'stack': err.stack, 'message': err.message });
-		throw err;
-	} finally {
-		span.finish();
-	}
+    const span = childOf.tracer().startSpan(operationName, { childOf })
+    try {
+        return operation(span)
+    } catch (err) {
+        span.setTag('error', true)
+        span.log({ 'event': 'error', 'error.object': err, 'stack': err.stack, 'message': err.message })
+        throw err
+    } finally {
+        span.finish()
+    }
 }
 
 /**
@@ -34,16 +34,16 @@ export function traceSync<T>(operationName: string, childOf: Span, operation: (s
  * @param operation The function to call
  */
 export async function tracePromise<T>(operationName: string, childOf: Span, operation: (span: Span) => Promise<T>): Promise<T> {
-	const span = childOf.tracer().startSpan(operationName, { childOf });
-	try {
-		return await operation(span);
-	} catch (err) {
-		span.setTag('error', true);
-		span.log({ 'event': 'error', 'error.object': err, 'stack': err.stack, 'message': err.message });
-		throw err;
-	} finally {
-		span.finish();
-	}
+    const span = childOf.tracer().startSpan(operationName, { childOf })
+    try {
+        return await operation(span)
+    } catch (err) {
+        span.setTag('error', true)
+        span.log({ 'event': 'error', 'error.object': err, 'stack': err.stack, 'message': err.message })
+        throw err
+    } finally {
+        span.finish()
+    }
 }
 
 /**
@@ -56,20 +56,20 @@ export async function tracePromise<T>(operationName: string, childOf: Span, oper
  * @param operation The function to call
  */
 export function traceObservable<T>(operationName: string, childOf: Span, operation: (span: Span) => Observable<T>): Observable<T> {
-	const span = childOf.tracer().startSpan(operationName, { childOf });
-	try {
-		return operation(span)
-			.do(undefined as any, err => {
-				span.setTag('error', true);
-				span.log({ 'event': 'error', 'error.object': err, 'stack': err.stack, 'message': err.message });
-			})
-			.finally(() => {
-				span.finish();
-			});
-	} catch (err) {
-		span.setTag('error', true);
-		span.log({ 'event': 'error', 'error.object': err, 'stack': err.stack, 'message': err.message });
-		span.finish();
-		return Observable.throw(err);
-	}
+    const span = childOf.tracer().startSpan(operationName, { childOf })
+    try {
+        return operation(span)
+            .do(undefined as any, err => {
+                span.setTag('error', true)
+                span.log({ 'event': 'error', 'error.object': err, 'stack': err.stack, 'message': err.message })
+            })
+            .finally(() => {
+                span.finish()
+            })
+    } catch (err) {
+        span.setTag('error', true)
+        span.log({ 'event': 'error', 'error.object': err, 'stack': err.stack, 'message': err.message })
+        span.finish()
+        return Observable.throw(err)
+    }
 }
