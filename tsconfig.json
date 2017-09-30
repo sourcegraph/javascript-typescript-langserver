@@ -1,22 +1,21 @@
 {
+  "extends": "./node_modules/@sourcegraph/tsconfig/tsconfig.json",
   "compilerOptions": {
+    "outDir": "lib",
     "target": "es2016",
+    "module": "commonjs",
+    "moduleResolution": "node",
     "lib": [
       "es2016",
       "dom"
     ],
-    "module": "commonjs",
-    "moduleResolution": "node",
     "sourceMap": true,
-    "outDir": "lib",
     "declaration": true,
-    "allowUnreachableCode": false,
-    "allowUnusedLabels": false,
-    "noImplicitReturns": true,
-    "noImplicitThis": true,
-    "noUnusedLocals": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true
+    "plugins": [
+      {
+        "name": "tslint-language-service"
+      }
+    ]
   },
   "include": [
     "src/**/*.ts"
