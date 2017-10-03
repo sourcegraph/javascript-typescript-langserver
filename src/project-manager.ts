@@ -405,7 +405,7 @@ export class ProjectConfiguration {
      */
     public isExpectedDeclarationFile(fileName: string): boolean {
         return isDeclarationFile(fileName) &&
-                (this.expectedFilePaths.has(toUnixPath(fileName)) ||
+                (this.expectedFilePaths.has(fileName) ||
                 this.typeRoots.some(root => fileName.startsWith(root)))
     }
 
@@ -427,8 +427,9 @@ export class ProjectConfiguration {
         // Add all global declaration files from the workspace and all declarations from the project
         for (const uri of this.fs.uris()) {
             const fileName = uri2path(uri)
-            if (isGlobalTSFile(fileName) ||
-                this.isExpectedDeclarationFile(fileName)) {
+            const unixPath = toUnixPath(fileName)
+            if (isGlobalTSFile(unixPath) ||
+                this.isExpectedDeclarationFile(unixPath)) {
                 const sourceFile = program.getSourceFile(fileName)
                 if (!sourceFile) {
                     this.getHost().addFile(fileName)
