@@ -73,7 +73,7 @@
     "commitizen": "^2.9.6",
     "cz-conventional-changelog": "^2.0.0",
     "husky": "^0.14.0",
-    "mocha": "^3.2.0",
+    "mocha": "^4.0.0",
     "nyc": "^11.0.2",
     "rimraf": "^2.6.1",
     "semantic-release": "^8.0.0",
