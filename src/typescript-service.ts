@@ -1093,19 +1093,15 @@ export class TypeScriptService {
                 if (details) {
                     item.documentation = ts.displayPartsToString(details.documentation)
                     item.detail = ts.displayPartsToString(details.displayParts)
-                    if (this.supportsCompletionWithSnippets) {
+                    if (this.supportsCompletionWithSnippets &&
+                        (details.kind === 'method' || details.kind === 'function')) {
+                        const parameters = details.displayParts
+                            .filter(p => p.kind === 'parameterName')
+                            // tslint:disable-next-line:no-invalid-template-strings
+                            .map((p, i) => '${' + `${i + 1}:${p.text}` + '}')
+                        const paramString = parameters.join(', ')
+                        item.insertText = details.name + `(${paramString})`
                         item.insertTextFormat = InsertTextFormat.Snippet
-                        if (details.kind === 'method' || details.kind === 'function') {
-                            const parameters = details.displayParts
-                                .filter(p => p.kind === 'parameterName')
-                                // tslint:disable-next-line:no-invalid-template-strings
-                                .map((p, i) => '${' + `${i + 1}:${p.text}` + '}')
-                            const paramString = parameters.join(', ')
-                            item.insertText = details.name + `(${paramString})`
-                        } else {
-                            item.insertText = details.name
-
-                        }
                     } else {
                         item.insertTextFormat = InsertTextFormat.PlainText
                         item.insertText = details.name

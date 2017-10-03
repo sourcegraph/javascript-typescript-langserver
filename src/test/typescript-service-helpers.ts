@@ -2457,7 +2457,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
                     kind: CompletionItemKind.Property,
                     documentation: 'qux doc',
                     sortText: '0',
-                    insertTextFormat: InsertTextFormat.Snippet,
+                    insertTextFormat: InsertTextFormat.PlainText,
                     insertText: 'qux',
                     detail: '(property) A.qux: number',
                     data: undefined
