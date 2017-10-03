@@ -343,7 +343,7 @@ export class ProjectConfiguration {
         const options = configParseResult.options
         const pathResolver = /^[a-z]:\//i.test(base) ? path.win32 : path.posix
         this.typeRoots = options.typeRoots ?
-            options.typeRoots.map((r: string) => pathResolver.resolve(this.rootFilePath, r)) :
+            options.typeRoots.map((r: string) => toUnixPath(pathResolver.resolve(this.rootFilePath, r))) :
             []
 
         if (/(^|\/)jsconfig\.json$/.test(this.configFilePath)) {
@@ -833,7 +833,7 @@ export class ProjectManager implements Disposable {
         return traceObservable('Ensure config dependencies', childOf, span => {
             if (!this.ensuredConfigDependencies) {
                 this.ensuredConfigDependencies = observableFromIterable(this.inMemoryFs.uris())
-                .filter(uri => this.isConfigDependency(uri2path(uri)))
+                .filter(uri => this.isConfigDependency(toUnixPath(uri2path(uri))))
                 .mergeMap(uri => this.updater.ensure(uri))
                 .do(noop, err => {
                     this.ensuredConfigDependencies = undefined
