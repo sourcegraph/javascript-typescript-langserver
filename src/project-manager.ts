@@ -589,7 +589,7 @@ export class ProjectManager implements Disposable {
 
         // Create catch-all fallback configs in case there are no tsconfig.json files
         // They are removed once at least one tsconfig.json is found
-        const trimmedRootPath = this.rootPath.replace(/\/+$/, '')
+        const trimmedRootPath = this.rootPath.replace(/[\\\/]+$/, '')
         const fallbackConfigs: {js?: ProjectConfiguration, ts?: ProjectConfiguration} = {}
         for (const configType of ['js', 'ts'] as ConfigType[]) {
             const configs = this.configs[configType]
@@ -622,13 +622,8 @@ export class ProjectManager implements Disposable {
                 .filter(([uri, content]) => !!content && /\/[tj]sconfig\.json/.test(uri) && !uri.includes('/node_modules/'))
                 .subscribe(([uri, content]) => {
                     const filePath = uri2path(uri)
-                    let dir = toUnixPath(filePath)
-                    const pos = dir.lastIndexOf('/')
-                    if (pos <= 0) {
-                        dir = ''
-                    } else {
-                        dir = dir.substring(0, pos)
-                    }
+                    const pos = filePath.includes('\\') ? filePath.lastIndexOf('\\') : filePath.lastIndexOf('/')
+                    const dir = pos <= 0 ? '' : filePath.substring(0, pos)
                     const configType = this.getConfigurationType(filePath)
                     const configs = this.configs[configType]
                     configs.set(dir, new ProjectConfiguration(
@@ -930,19 +925,19 @@ export class ProjectManager implements Disposable {
      * @return closest configuration for a given file path or undefined if there is no such configuration
      */
     public getConfigurationIfExists(filePath: string, configType = this.getConfigurationType(filePath)): ProjectConfiguration | undefined {
-        let dir = toUnixPath(filePath)
+        let dir = filePath
         let config: ProjectConfiguration | undefined
         const configs = this.configs[configType]
         if (!configs) {
             return undefined
         }
-        const rootPath = this.rootPath.replace(/\/+$/, '')
+        const rootPath = this.rootPath.replace(/[\\\/]+$/, '')
         while (dir && dir !== rootPath) {
             config = configs.get(dir)
             if (config) {
                 return config
             }
-            const pos = dir.lastIndexOf('/')
+            const pos = dir.includes('\\') ? dir.lastIndexOf('\\') : dir.lastIndexOf('/')
             if (pos <= 0) {
                 dir = ''
             } else {
@@ -1030,13 +1025,14 @@ export class ProjectManager implements Disposable {
      * @return configuration type to use for a given file
      */
     private getConfigurationType(filePath: string): ConfigType {
-        const name = path.posix.basename(filePath)
+        const unixPath = toUnixPath(filePath)
+        const name = path.posix.basename(unixPath)
         if (name === 'tsconfig.json') {
             return 'ts'
         } else if (name === 'jsconfig.json') {
             return 'js'
         }
-        const extension = path.posix.extname(filePath)
+        const extension = path.posix.extname(unixPath)
         if (extension === '.js' || extension === '.jsx') {
             return 'js'
         }
