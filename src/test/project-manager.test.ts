@@ -43,17 +43,37 @@ function testWithRootUri(rootUri: string): void {
                 const localfs = new MapFileSystem(new Map([
                     [rootUri + 'project/package.json', '{"name": "package-name-1"}'],
                     [rootUri + 'project/tsconfig.json', '{ "compilerOptions": { "typeRoots": ["../types"]} }'],
-                    [rootUri + 'project/file.ts', 'console.log(GLOBALCONSTANT);'],
+                    [rootUri + 'project/node_modules/%40types/mocha/index.d.ts', 'declare var describe { (description: string, spec: () => void): void; }'],
+                    [rootUri + 'project/file.ts', 'describe("test", () => console.log(GLOBALCONSTANT));'],
                     [rootUri + 'types/types.d.ts', 'declare var GLOBALCONSTANT=1;']
 
                 ]))
                 const updater = new FileSystemUpdater(localfs, memfs)
                 projectManager = new ProjectManager(rootPath, memfs, updater, true)
             })
+
             it('loads files from typeRoots', async () => {
-                await projectManager.ensureReferencedFiles(rootUri + 'project/file.ts').toPromise()
-                memfs.getContent(rootUri + 'project/file.ts')
-                memfs.getContent(rootUri + 'types/types.d.ts')
+                const sourceFileUri = rootUri + 'project/file.ts'
+                const typeRootFileUri = rootUri + 'types/types.d.ts'
+                await projectManager.ensureReferencedFiles(sourceFileUri).toPromise()
+                memfs.getContent(typeRootFileUri)
+
+                const config = projectManager.getConfiguration(uri2path(sourceFileUri), 'ts')
+                const host = config.getHost()
+                const typeDeclarationPath = uri2path(typeRootFileUri)
+                assert.includeMembers(host.getScriptFileNames(), [typeDeclarationPath])
+            })
+
+            it('loads mocha global type declarations', async () => {
+                const sourceFileUri = rootUri + 'project/file.ts'
+                const mochaDeclarationFileUri = rootUri + 'project/node_modules/%40types/mocha/index.d.ts'
+                await projectManager.ensureReferencedFiles(sourceFileUri).toPromise()
+                memfs.getContent(mochaDeclarationFileUri)
+
+                const config = projectManager.getConfiguration(uri2path(sourceFileUri), 'ts')
+                const host = config.getHost()
+                const mochaFilePath = uri2path(mochaDeclarationFileUri)
+                assert.includeMembers(host.getScriptFileNames(), [mochaFilePath])
             })
         })
 
