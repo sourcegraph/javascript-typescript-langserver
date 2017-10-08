@@ -21,8 +21,7 @@
     "url": "https://github.com/sourcegraph/javascript-typescript-langserver.git"
   },
   "engines": {
-    "node": ">=6.0.0",
-    "vscode": "1.x.x"
+    "node": ">=6.0.0"
   },
   "scripts": {
     "clean": "rimraf lib",
