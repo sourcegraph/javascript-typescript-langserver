@@ -495,6 +495,8 @@ export type ConfigType = 'js' | 'ts'
  * makes one or more LanguageService objects. By default all LanguageService objects contain no files,
  * they are added on demand - current file for hover or definition, project's files for references and
  * all files from all projects for workspace symbols.
+ *
+ * ProjectManager preserves Windows paths until passed to ProjectConfiguration or TS APIs.
  */
 export class ProjectManager implements Disposable {
 
