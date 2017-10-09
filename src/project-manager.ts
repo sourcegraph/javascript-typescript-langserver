@@ -185,6 +185,10 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
  * made available to the compiler before calling any other methods on
  * the ProjectConfiguration or its public members. By default, no
  * files are parsed.
+ *
+ * Windows file paths are converted to UNIX-style forward slashes
+ * when compared with Typescript configuration (isGlobalTSFile,
+ * expectedFilePaths and typeRoots)
  */
 export class ProjectConfiguration {
 
@@ -227,12 +231,13 @@ export class ProjectConfiguration {
 
     /**
      * List of files that project consist of (based on tsconfig includes/excludes and wildcards).
-     * Each item is a relative file path
+     * Each item is a relative UNIX-like file path
      */
     private expectedFilePaths = new Set<string>()
 
     /**
      * List of resolved extra root directories to allow global type declaration files to be loaded from.
+     * Each item is an absolute UNIX-like file path
      */
     private typeRoots: string[]
 
@@ -403,7 +408,7 @@ export class ProjectConfiguration {
 
     /**
      * Determines if a fileName is a declaration file within expected files or type roots
-     * @param fileName
+     * @param fileName A Unix-like absolute file path.
      */
     public isExpectedDeclarationFile(fileName: string): boolean {
         return isDeclarationFile(fileName) &&
@@ -811,7 +816,7 @@ export class ProjectManager implements Disposable {
 
     /**
      * Determines if a tsconfig/jsconfig needs additional declaration files loaded.
-     * @param filePath
+     * @param filePath A UNIX-like absolute file path
      */
     public isConfigDependency(filePath: string): boolean {
         for (const config of this.configurations()) {
