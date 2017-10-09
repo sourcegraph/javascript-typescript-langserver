@@ -24,6 +24,8 @@ import {
     uri2path
 } from './util'
 
+const LastForwardOrBackwardSlash = /[\\\/][^\\\/]*$/
+
 /**
  * Implementaton of LanguageServiceHost that works with in-memory file system.
  * It takes file content from local cache and provides it to TS compiler on demand
@@ -622,7 +624,7 @@ export class ProjectManager implements Disposable {
                 .filter(([uri, content]) => !!content && /\/[tj]sconfig\.json/.test(uri) && !uri.includes('/node_modules/'))
                 .subscribe(([uri, content]) => {
                     const filePath = uri2path(uri)
-                    const pos = filePath.includes('\\') ? filePath.lastIndexOf('\\') : filePath.lastIndexOf('/')
+                    const pos = filePath.search(LastForwardOrBackwardSlash)
                     const dir = pos <= 0 ? '' : filePath.substring(0, pos)
                     const configType = this.getConfigurationType(filePath)
                     const configs = this.configs[configType]
@@ -937,7 +939,7 @@ export class ProjectManager implements Disposable {
             if (config) {
                 return config
             }
-            const pos = dir.includes('\\') ? dir.lastIndexOf('\\') : dir.lastIndexOf('/')
+            const pos = dir.search(LastForwardOrBackwardSlash)
             if (pos <= 0) {
                 dir = ''
             } else {
