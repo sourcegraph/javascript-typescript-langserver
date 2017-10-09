@@ -24,6 +24,8 @@ import {
     uri2path
 } from './util'
 
+const LAST_FORWARD_OR_BACKWARD_SLASH = /[\\\/][^\\\/]*$/
+
 /**
  * Implementaton of LanguageServiceHost that works with in-memory file system.
  * It takes file content from local cache and provides it to TS compiler on demand
@@ -183,6 +185,10 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
  * made available to the compiler before calling any other methods on
  * the ProjectConfiguration or its public members. By default, no
  * files are parsed.
+ *
+ * Windows file paths are converted to UNIX-style forward slashes
+ * when compared with Typescript configuration (isGlobalTSFile,
+ * expectedFilePaths and typeRoots)
  */
 export class ProjectConfiguration {
 
@@ -225,12 +231,13 @@ export class ProjectConfiguration {
 
     /**
      * List of files that project consist of (based on tsconfig includes/excludes and wildcards).
-     * Each item is a relative file path
+     * Each item is a relative UNIX-like file path
      */
     private expectedFilePaths = new Set<string>()
 
     /**
      * List of resolved extra root directories to allow global type declaration files to be loaded from.
+     * Each item is an absolute UNIX-like file path
      */
     private typeRoots: string[]
 
@@ -343,7 +350,7 @@ export class ProjectConfiguration {
         const options = configParseResult.options
         const pathResolver = /^[a-z]:\//i.test(base) ? path.win32 : path.posix
         this.typeRoots = options.typeRoots ?
-            options.typeRoots.map((r: string) => pathResolver.resolve(this.rootFilePath, r)) :
+            options.typeRoots.map((r: string) => toUnixPath(pathResolver.resolve(this.rootFilePath, r))) :
             []
 
         if (/(^|\/)jsconfig\.json$/.test(this.configFilePath)) {
@@ -401,11 +408,11 @@ export class ProjectConfiguration {
 
     /**
      * Determines if a fileName is a declaration file within expected files or type roots
-     * @param fileName
+     * @param fileName A Unix-like absolute file path.
      */
     public isExpectedDeclarationFile(fileName: string): boolean {
         return isDeclarationFile(fileName) &&
-                (this.expectedFilePaths.has(toUnixPath(fileName)) ||
+                (this.expectedFilePaths.has(fileName) ||
                 this.typeRoots.some(root => fileName.startsWith(root)))
     }
 
@@ -427,8 +434,9 @@ export class ProjectConfiguration {
         // Add all global declaration files from the workspace and all declarations from the project
         for (const uri of this.fs.uris()) {
             const fileName = uri2path(uri)
-            if (isGlobalTSFile(fileName) ||
-                this.isExpectedDeclarationFile(fileName)) {
+            const unixPath = toUnixPath(fileName)
+            if (isGlobalTSFile(unixPath) ||
+                this.isExpectedDeclarationFile(unixPath)) {
                 const sourceFile = program.getSourceFile(fileName)
                 if (!sourceFile) {
                     this.getHost().addFile(fileName)
@@ -487,6 +495,8 @@ export type ConfigType = 'js' | 'ts'
  * makes one or more LanguageService objects. By default all LanguageService objects contain no files,
  * they are added on demand - current file for hover or definition, project's files for references and
  * all files from all projects for workspace symbols.
+ *
+ * ProjectManager preserves Windows paths until passed to ProjectConfiguration or TS APIs.
  */
 export class ProjectManager implements Disposable {
 
@@ -588,7 +598,7 @@ export class ProjectManager implements Disposable {
 
         // Create catch-all fallback configs in case there are no tsconfig.json files
         // They are removed once at least one tsconfig.json is found
-        const trimmedRootPath = this.rootPath.replace(/\/+$/, '')
+        const trimmedRootPath = this.rootPath.replace(/[\\\/]+$/, '')
         const fallbackConfigs: {js?: ProjectConfiguration, ts?: ProjectConfiguration} = {}
         for (const configType of ['js', 'ts'] as ConfigType[]) {
             const configs = this.configs[configType]
@@ -621,13 +631,8 @@ export class ProjectManager implements Disposable {
                 .filter(([uri, content]) => !!content && /\/[tj]sconfig\.json/.test(uri) && !uri.includes('/node_modules/'))
                 .subscribe(([uri, content]) => {
                     const filePath = uri2path(uri)
-                    let dir = toUnixPath(filePath)
-                    const pos = dir.lastIndexOf('/')
-                    if (pos <= 0) {
-                        dir = ''
-                    } else {
-                        dir = dir.substring(0, pos)
-                    }
+                    const pos = filePath.search(LAST_FORWARD_OR_BACKWARD_SLASH)
+                    const dir = pos <= 0 ? '' : filePath.substring(0, pos)
                     const configType = this.getConfigurationType(filePath)
                     const configs = this.configs[configType]
                     configs.set(dir, new ProjectConfiguration(
@@ -813,7 +818,7 @@ export class ProjectManager implements Disposable {
 
     /**
      * Determines if a tsconfig/jsconfig needs additional declaration files loaded.
-     * @param filePath
+     * @param filePath A UNIX-like absolute file path
      */
     public isConfigDependency(filePath: string): boolean {
         for (const config of this.configurations()) {
@@ -832,7 +837,7 @@ export class ProjectManager implements Disposable {
         return traceObservable('Ensure config dependencies', childOf, span => {
             if (!this.ensuredConfigDependencies) {
                 this.ensuredConfigDependencies = observableFromIterable(this.inMemoryFs.uris())
-                .filter(uri => this.isConfigDependency(uri2path(uri)))
+                .filter(uri => this.isConfigDependency(toUnixPath(uri2path(uri))))
                 .mergeMap(uri => this.updater.ensure(uri))
                 .do(noop, err => {
                     this.ensuredConfigDependencies = undefined
@@ -929,19 +934,19 @@ export class ProjectManager implements Disposable {
      * @return closest configuration for a given file path or undefined if there is no such configuration
      */
     public getConfigurationIfExists(filePath: string, configType = this.getConfigurationType(filePath)): ProjectConfiguration | undefined {
-        let dir = toUnixPath(filePath)
+        let dir = filePath
         let config: ProjectConfiguration | undefined
         const configs = this.configs[configType]
         if (!configs) {
             return undefined
         }
-        const rootPath = this.rootPath.replace(/\/+$/, '')
+        const rootPath = this.rootPath.replace(/[\\\/]+$/, '')
         while (dir && dir !== rootPath) {
             config = configs.get(dir)
             if (config) {
                 return config
             }
-            const pos = dir.lastIndexOf('/')
+            const pos = dir.search(LAST_FORWARD_OR_BACKWARD_SLASH)
             if (pos <= 0) {
                 dir = ''
             } else {
@@ -1029,13 +1034,14 @@ export class ProjectManager implements Disposable {
      * @return configuration type to use for a given file
      */
     private getConfigurationType(filePath: string): ConfigType {
-        const name = path.posix.basename(filePath)
+        const unixPath = toUnixPath(filePath)
+        const name = path.posix.basename(unixPath)
         if (name === 'tsconfig.json') {
             return 'ts'
         } else if (name === 'jsconfig.json') {
             return 'js'
         }
-        const extension = path.posix.extname(filePath)
+        const extension = path.posix.extname(unixPath)
         if (extension === '.js' || extension === '.jsx') {
             return 'js'
         }
