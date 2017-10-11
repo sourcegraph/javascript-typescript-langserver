@@ -65,7 +65,7 @@
     "@types/mocha": "^2.2.41",
     "@types/mz": "^0.0.31",
     "@types/node": "^7.0.32",
-    "@types/object-hash": "^0.5.29",
+    "@types/object-hash": "^1.1.0",
     "@types/rimraf": "^2.0.2",
     "@types/sinon": "^2.3.5",
     "@types/temp": "^0.8.29",
