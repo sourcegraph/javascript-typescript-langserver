@@ -1,7 +1,7 @@
-import { Observable } from '@reactivex/rxjs'
 import { Glob } from 'glob'
 import * as fs from 'mz/fs'
 import { Span } from 'opentracing'
+import { Observable } from 'rxjs'
 import Semaphore from 'semaphore-async-await'
 import { LanguageClient } from './lang-handler'
 import { InMemoryFileSystem } from './memfs'

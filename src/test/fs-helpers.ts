@@ -1,4 +1,4 @@
-import { Observable } from '@reactivex/rxjs'
+import { Observable } from 'rxjs'
 import { FileSystem } from '../fs'
 import { observableFromIterable } from '../util'
 

@@ -1,8 +1,8 @@
 
-import { Observable } from '@reactivex/rxjs'
 import * as chai from 'chai'
 import chaiAsPromised = require('chai-as-promised')
 import { Span } from 'opentracing'
+import { Observable } from 'rxjs'
 import * as sinon from 'sinon'
 import { traceObservable, tracePromise, traceSync } from '../tracing'
 chai.use(chaiAsPromised)

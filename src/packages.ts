@@ -1,8 +1,8 @@
 
-import { Observable, Subscription } from '@reactivex/rxjs'
 import { EventEmitter } from 'events'
 import { Span } from 'opentracing'
 import * as path from 'path'
+import { Observable, Subscription } from 'rxjs'
 import * as url from 'url'
 import { Disposable } from './disposable'
 import { FileSystemUpdater } from './fs'

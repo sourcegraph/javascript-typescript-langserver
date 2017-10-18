@@ -34,7 +34,6 @@
     "commitmsg": "validate-commit-msg"
   },
   "dependencies": {
-    "@reactivex/rxjs": "^5.3.0",
     "chai": "^4.0.1",
     "chai-as-promised": "^7.0.0",
     "chalk": "^2.2.0",
@@ -47,6 +46,7 @@
     "mz": "^2.6.0",
     "object-hash": "^1.1.8",
     "opentracing": "^0.14.0",
+    "rxjs": "^5.5.0",
     "semaphore-async-await": "^1.5.1",
     "string-similarity": "^1.1.0",
     "typescript": "2.4.2",

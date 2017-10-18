@@ -1,9 +1,9 @@
 
-import { Observable, Subject } from '@reactivex/rxjs'
 import * as assert from 'assert'
 import { EventEmitter } from 'events'
 import { Operation } from 'fast-json-patch'
 import { Span } from 'opentracing'
+import { Observable, Subject } from 'rxjs'
 import * as sinon from 'sinon'
 import { PassThrough } from 'stream'
 import { ErrorCodes } from 'vscode-jsonrpc'

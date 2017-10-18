@@ -1,5 +1,5 @@
-import { Observable } from '@reactivex/rxjs'
 import { FORMAT_TEXT_MAP, Span } from 'opentracing'
+import { Observable } from 'rxjs'
 import { inspect } from 'util'
 import { isResponseMessage, Message, NotificationMessage, RequestMessage, ResponseMessage } from 'vscode-jsonrpc/lib/messages'
 import {

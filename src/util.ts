@@ -1,5 +1,5 @@
-import { Observable } from '@reactivex/rxjs'
 import { escapePathComponent } from 'fast-json-patch'
+import { Observable } from 'rxjs'
 import { compareTwoStrings } from 'string-similarity'
 import * as ts from 'typescript'
 import * as url from 'url'

@@ -1,10 +1,10 @@
-import { Observable } from '@reactivex/rxjs'
 import { Operation } from 'fast-json-patch'
 import iterate from 'iterare'
 import { toPairs } from 'lodash'
 import { castArray, merge, omit } from 'lodash'
 import hashObject = require('object-hash')
 import { Span } from 'opentracing'
+import { Observable } from 'rxjs'
 import * as ts from 'typescript'
 import * as url from 'url'
 import {
