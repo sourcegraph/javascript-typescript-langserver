@@ -10,7 +10,7 @@ export function convertTsDiagnostic(diagnostic: ts.Diagnostic): Diagnostic {
     if (diagnostic.file && diagnostic.start && diagnostic.length) {
         range = {
             start: diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start),
-            end: diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start + diagnostic.length)
+            end: diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start + diagnostic.length),
         }
     }
     return {
@@ -18,7 +18,7 @@ export function convertTsDiagnostic(diagnostic: ts.Diagnostic): Diagnostic {
         message: text,
         severity: convertDiagnosticCategory(diagnostic.category),
         code: diagnostic.code,
-        source: diagnostic.source || 'ts'
+        source: diagnostic.source || 'ts',
     }
 }
 

@@ -21,7 +21,7 @@ import {
     observableFromIterable,
     path2uri,
     toUnixPath,
-    uri2path
+    uri2path,
 } from './util'
 
 const LAST_FORWARD_OR_BACKWARD_SLASH = /[\\\/][^\\\/]*$/
@@ -389,7 +389,7 @@ export class ProjectConfiguration {
                 project: { projectService: { logger: this.logger }}, // TODO: may need more support
                 languageService: this.getService(),
                 languageServiceHost: this.getHost(),
-                serverHost: {} // TODO: may need an adapter
+                serverHost: {}, // TODO: may need an adapter
             }
 
             const pluginModule = pluginModuleFactory({ typescript: ts })
@@ -512,7 +512,7 @@ export class ProjectManager implements Disposable {
      */
     private configs = {
         js: new Map<string, ProjectConfiguration>(),
-        ts: new Map<string, ProjectConfiguration>()
+        ts: new Map<string, ProjectConfiguration>(),
     }
 
     /**
@@ -606,9 +606,9 @@ export class ProjectManager implements Disposable {
                 compilerOptions: {
                     module: ts.ModuleKind.CommonJS,
                     allowNonTsExtensions: false,
-                    allowJs: configType === 'js'
+                    allowJs: configType === 'js',
                 },
-                include: { js: ['**/*.js', '**/*.jsx'], ts: ['**/*.ts', '**/*.tsx'] }[configType]
+                include: { js: ['**/*.js', '**/*.jsx'], ts: ['**/*.ts', '**/*.tsx'] }[configType],
             }
             const config = new ProjectConfiguration(
                 this.inMemoryFs,

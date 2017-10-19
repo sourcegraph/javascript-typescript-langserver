@@ -27,7 +27,7 @@ describe('plugins', () => {
             const pluginSettings: PluginSettings = {
                 globalPlugins: ['some-plugin'],
                 allowLocalPluginLoads: false,
-                pluginProbeLocations: []
+                pluginProbeLocations: [],
             }
             const pluginFactoryFunc = (modules: any) => 5
             const fakeRequire = (path: string) => pluginFactoryFunc
@@ -48,16 +48,16 @@ describe('plugins', () => {
             const pluginSettings: PluginSettings = {
                 globalPlugins: [],
                 allowLocalPluginLoads: true,
-                pluginProbeLocations: []
+                pluginProbeLocations: [],
             }
             const pluginFactoryFunc = (modules: any) => 5
             const fakeRequire = (path: string) => pluginFactoryFunc
             const loader = new PluginLoader(rootDir, memfs, pluginSettings, undefined, memfs, fakeRequire)
             const pluginOption: ts.PluginImport = {
-                name: 'some-plugin'
+                name: 'some-plugin',
             }
             const compilerOptions: ts.CompilerOptions = {
-                plugins: [pluginOption]
+                plugins: [pluginOption],
             }
             const applyProxy = sinon.spy()
             loader.loadPlugins(compilerOptions, applyProxy)

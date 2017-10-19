@@ -32,7 +32,7 @@ import {
     TextDocumentPositionParams,
     TextDocumentSyncKind,
     TextEdit,
-    WorkspaceEdit
+    WorkspaceEdit,
 } from 'vscode-languageserver'
 import { walkMostAST } from './ast'
 import { convertTsDiagnostic } from './diagnostics'
@@ -54,7 +54,7 @@ import {
     SymbolDescriptor,
     SymbolLocationInformation,
     WorkspaceReferenceParams,
-    WorkspaceSymbolParams
+    WorkspaceSymbolParams,
 } from './request-type'
 import {
     definitionInfoToSymbolDescriptor,
@@ -63,7 +63,7 @@ import {
     navigationTreeIsSymbol,
     navigationTreeToSymbolDescriptor,
     navigationTreeToSymbolInformation,
-    walkNavigationTree
+    walkNavigationTree,
 } from './symbols'
 import { traceObservable } from './tracing'
 import {
@@ -74,7 +74,7 @@ import {
     observableFromIterable,
     path2uri,
     toUnixPath,
-    uri2path
+    uri2path,
 } from './util'
 
 export interface TypeScriptServiceOptions {
@@ -111,7 +111,7 @@ const completionKinds: { [name: string]: CompletionItemKind } = {
     text: CompletionItemKind.Text,
     unit: CompletionItemKind.Unit,
     value: CompletionItemKind.Value,
-    variable: CompletionItemKind.Variable
+    variable: CompletionItemKind.Variable,
 }
 
 /**
@@ -194,11 +194,11 @@ export class TypeScriptService {
             insertSpaceAfterOpeningAndBeforeClosingTemplateStringBraces: false,
             insertSpaceBeforeFunctionParenthesis: false,
             placeOpenBraceOnNewLineForFunctions: false,
-            placeOpenBraceOnNewLineForControlBlocks: false
+            placeOpenBraceOnNewLineForControlBlocks: false,
         },
         allowLocalPluginLoads: false,
         globalPlugins: [],
-        pluginProbeLocations: []
+        pluginProbeLocations: [],
     }
 
     /**
@@ -285,7 +285,7 @@ export class TypeScriptService {
                 textDocumentSync: TextDocumentSyncKind.Full,
                 hoverProvider: true,
                 signatureHelpProvider: {
-                    triggerCharacters: ['(', ',']
+                    triggerCharacters: ['(', ','],
                 },
                 definitionProvider: true,
                 referencesProvider: true,
@@ -296,20 +296,20 @@ export class TypeScriptService {
                 xdependenciesProvider: true,
                 completionProvider: {
                     resolveProvider: true,
-                    triggerCharacters: ['.']
+                    triggerCharacters: ['.'],
                 },
                 codeActionProvider: true,
                 renameProvider: true,
                 executeCommandProvider: {
-                    commands: []
+                    commands: [],
                 },
-                xpackagesProvider: true
-            }
+                xpackagesProvider: true,
+            },
         }
         return Observable.of({
             op: 'add',
             path: '',
-            value: result
+            value: result,
         } as Operation)
     }
 
@@ -392,8 +392,8 @@ export class TypeScriptService {
                             uri: locationUri(definition.fileName),
                             range: {
                                 start,
-                                end
-                            }
+                                end,
+                            },
                         }
                     })
             })
@@ -460,9 +460,9 @@ export class TypeScriptService {
                                         uri: definitionUri,
                                         range: {
                                             start: ts.getLineAndCharacterOfPosition(sourceFile, definition.textSpan.start),
-                                            end: ts.getLineAndCharacterOfPosition(sourceFile, definition.textSpan.start + definition.textSpan.length)
-                                        }
-                                    }
+                                            end: ts.getLineAndCharacterOfPosition(sourceFile, definition.textSpan.start + definition.textSpan.length),
+                                        },
+                                    },
                                 }
                             })
                     })
@@ -486,7 +486,7 @@ export class TypeScriptService {
                 const parts: url.UrlObject = url.parse(uri)
                 const packageJsonUri = url.format({
                     ...parts,
-                    pathname: parts.pathname!.slice(0, parts.pathname!.lastIndexOf('/node_modules/' + encodedPackageName)) + `/node_modules/${encodedPackageName}/package.json`
+                    pathname: parts.pathname!.slice(0, parts.pathname!.lastIndexOf('/node_modules/' + encodedPackageName)) + `/node_modules/${encodedPackageName}/package.json`,
                 })
                 // Fetch the package.json of the dependency
                 return this.updater.ensure(packageJsonUri, span)
@@ -606,8 +606,8 @@ export class TypeScriptService {
                     contents,
                     range: {
                         start,
-                        end
-                    }
+                        end,
+                    },
                 }
             })
     }
@@ -664,8 +664,8 @@ export class TypeScriptService {
                             uri: path2uri(reference.fileName),
                             range: {
                                 start,
-                                end
-                            }
+                                end,
+                            },
                         }
                     })
             }))
@@ -878,9 +878,9 @@ export class TypeScriptService {
                                                 uri: locationUri(source.fileName),
                                                 range: {
                                                     start: ts.getLineAndCharacterOfPosition(source, node.pos),
-                                                    end: ts.getLineAndCharacterOfPosition(source, node.end)
-                                                }
-                                            }
+                                                    end: ts.getLineAndCharacterOfPosition(source, node.end),
+                                                },
+                                            },
                                         }))
                                 } catch (err) {
                                     // Continue with next node on error
@@ -921,11 +921,11 @@ export class TypeScriptService {
                         // Get the directory names
                         .map((uri): PackageInformation => ({
                             package: {
-                                name: '@types/' + decodeURIComponent(uri.substr(typesUri.length).split('/')[0])
+                                name: '@types/' + decodeURIComponent(uri.substr(typesUri.length).split('/')[0]),
                                 // TODO report a version by looking at subfolders like v6
                             },
                             // TODO parse /// <reference types="node" /> comments in .d.ts files for collecting dependencies between @types packages
-                            dependencies: []
+                            dependencies: [],
                         }))
                 }
                 // For other workspaces, search all package.json files
@@ -944,7 +944,7 @@ export class TypeScriptService {
                         const packageDescriptor: PackageDescriptor = {
                             name: packageJson.name,
                             version: packageJson.version,
-                            repoURL: typeof packageJson.repository === 'object' && packageJson.repository.url || undefined
+                            repoURL: typeof packageJson.repository === 'object' && packageJson.repository.url || undefined,
                         }
                         // Collect all dependencies for this package.json
                         return Observable.from(DEPENDENCY_KEYS)
@@ -955,16 +955,16 @@ export class TypeScriptService {
                             .map(([name, version]): DependencyReference => ({
                                 attributes: {
                                     name,
-                                    version
+                                    version,
                                 },
                                 hints: {
-                                    dependeePackageName: packageJson.name
-                                }
+                                    dependeePackageName: packageJson.name,
+                                },
                             }))
                             .toArray()
                             .map((dependencies): PackageInformation => ({
                                 package: packageDescriptor,
-                                dependencies
+                                dependencies,
                             }))
                     })
             })
@@ -996,11 +996,11 @@ export class TypeScriptService {
                     .map(([name, version]): DependencyReference => ({
                         attributes: {
                             name,
-                            version
+                            version,
                         },
                         hints: {
-                            dependeePackageName: packageJson.name
-                        }
+                            dependeePackageName: packageJson.name,
+                        },
                     }))
             )
             .map((dependency): Operation => ({ op: 'add', path: '/-', value: dependency }))
@@ -1063,7 +1063,7 @@ export class TypeScriptService {
                         item.data = {
                             uri,
                             offset,
-                            entryName: entry.name
+                            entryName: entry.name,
                         }
 
                         return { op: 'add', path: '/items/-', value: item } as Operation
@@ -1151,19 +1151,19 @@ export class TypeScriptService {
                     const suffix = ts.displayPartsToString(item.suffixDisplayParts)
                     const parameters = item.parameters.map((p): ParameterInformation => ({
                         label: ts.displayPartsToString(p.displayParts),
-                        documentation: ts.displayPartsToString(p.documentation)
+                        documentation: ts.displayPartsToString(p.documentation),
                     }))
                     return {
                         label: prefix + params + suffix,
                         documentation: ts.displayPartsToString(item.documentation),
-                        parameters
+                        parameters,
                     }
                 })
 
                 return {
                     signatures: signatureInformations,
                     activeSignature: signatures.selectedItemIndex,
-                    activeParameter: signatures.argumentIndex
+                    activeParameter: signatures.argumentIndex,
                 }
             })
             .map(signatureHelp => ({ op: 'add', path: '', value: signatureHelp }) as Operation)
@@ -1209,8 +1209,8 @@ export class TypeScriptService {
                 value: {
                     title: action.description,
                     command: 'codeFix',
-                    arguments: action.changes
-                } as Command
+                    arguments: action.changes,
+                } as Command,
             }))
             .startWith({ op: 'add', path: '', value: [] } as Operation)
     }
@@ -1258,9 +1258,9 @@ export class TypeScriptService {
                     changes[uri] = change.textChanges.map(({ span, newText }): TextEdit => ({
                         range: {
                             start: ts.getLineAndCharacterOfPosition(sourceFile, span.start),
-                            end: ts.getLineAndCharacterOfPosition(sourceFile, span.start + span.length)
+                            end: ts.getLineAndCharacterOfPosition(sourceFile, span.start + span.length),
                         },
-                        newText
+                        newText,
                     }))
                 }
 

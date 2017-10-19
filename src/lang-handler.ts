@@ -8,7 +8,7 @@ import {
     LogMessageParams,
     PublishDiagnosticsParams,
     TextDocumentIdentifier,
-    TextDocumentItem
+    TextDocumentItem,
 } from 'vscode-languageserver'
 import { HasMeta } from './connection'
 import { MessageEmitter, MessageWriter } from './connection'
@@ -16,7 +16,7 @@ import {
     CacheGetParams,
     CacheSetParams,
     TextDocumentContentParams,
-    WorkspaceFilesParams
+    WorkspaceFilesParams,
 } from './request-type'
 import { traceObservable } from './tracing'
 

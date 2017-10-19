@@ -42,7 +42,7 @@ export const DEPENDENCY_KEYS: ReadonlyArray<
     'dependencies',
     'devDependencies',
     'peerDependencies',
-    'optionalDependencies'
+    'optionalDependencies',
 ]
 
 /**
