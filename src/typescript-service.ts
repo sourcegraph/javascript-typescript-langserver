@@ -1,7 +1,7 @@
 import { Operation } from 'fast-json-patch'
 import iterate from 'iterare'
-import { toPairs } from 'lodash'
 import { castArray, merge, omit } from 'lodash'
+import { toPairs } from 'lodash'
 import hashObject = require('object-hash')
 import { Span } from 'opentracing'
 import { Observable } from 'rxjs'
@@ -40,7 +40,7 @@ import { FileSystem, FileSystemUpdater, LocalFileSystem, RemoteFileSystem } from
 import { LanguageClient } from './lang-handler'
 import { Logger, LSPLogger } from './logging'
 import { InMemoryFileSystem, isTypeScriptLibrary } from './memfs'
-import { extractDefinitelyTypedPackageName, extractNodeModulesPackageName, PackageJson, PackageManager } from './packages'
+import { DEPENDENCY_KEYS, extractDefinitelyTypedPackageName, extractNodeModulesPackageName, PackageJson, PackageManager } from './packages'
 import { ProjectConfiguration, ProjectManager } from './project-manager'
 import {
     CompletionItem,
@@ -582,10 +582,13 @@ export class TypeScriptService {
                             || info.kind !== ts.ScriptElementKind.constructorImplementationElement
                         ))
                         // Make proper adjectives
-                        .map(mod => ({
-                            [ts.ScriptElementKindModifier.ambientModifier]: 'ambient',
-                            [ts.ScriptElementKindModifier.exportedModifier]: 'exported'
-                        })[mod] || mod)
+                        .map(mod => {
+                            switch (mod) {
+                                case ts.ScriptElementKindModifier.ambientModifier: return 'ambient'
+                                case ts.ScriptElementKindModifier.exportedModifier: return 'exported'
+                                default: return mod
+                            }
+                        })
                     if (modifiers.length > 0) {
                         kind += ' _(' + modifiers.join(', ') + ')_'
                     }
@@ -714,7 +717,7 @@ export class TypeScriptService {
                                 throw new Error(`Could not find tsconfig for ${packageRootUri}`)
                             }
                             // Don't match PackageDescriptor on symbols
-                            return this._getSymbolsInConfig(config, omit<Partial<SymbolDescriptor>, Partial<SymbolDescriptor>>(params.symbol!, 'package'), span)
+                            return this._getSymbolsInConfig(config, omit(params.symbol!, 'package'), span)
                         }))
                 }
                 // Regular workspace symbol search
@@ -801,7 +804,7 @@ export class TypeScriptService {
      * @return Observable of JSON Patches that build a `ReferenceInformation[]` result
      */
     public workspaceXreferences(params: WorkspaceReferenceParams, span = new Span()): Observable<Operation> {
-        const queryWithoutPackage = omit<Partial<SymbolDescriptor>, Partial<SymbolDescriptor>>(params.query, 'package')
+        const queryWithoutPackage = omit(params.query, 'package')
         const minScore = Math.min(4.75, getPropertyCount(queryWithoutPackage))
         return this.isDefinitelyTyped
             .mergeMap(isDefinitelyTyped => {
@@ -944,10 +947,10 @@ export class TypeScriptService {
                             repoURL: typeof packageJson.repository === 'object' && packageJson.repository.url || undefined
                         }
                         // Collect all dependencies for this package.json
-                        return Observable.of<keyof  PackageJson>('dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies')
+                        return Observable.from(DEPENDENCY_KEYS)
                             .filter(key => !!packageJson[key])
                             // Get [name, version] pairs
-                            .mergeMap(key => toPairs(packageJson[key]) as [string, string][])
+                            .mergeMap(key => toPairs(packageJson[key]))
                             // Map to DependencyReferences
                             .map(([name, version]): DependencyReference => ({
                                 attributes: {
@@ -986,10 +989,10 @@ export class TypeScriptService {
             .mergeMap(uri => this.packageManager.getPackageJson(uri))
             // Map package.json to DependencyReferences
             .mergeMap(packageJson =>
-                Observable.of<keyof PackageJson>('dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies')
+                Observable.from(DEPENDENCY_KEYS)
                     .filter(key => !!packageJson[key])
                     // Get [name, version] pairs
-                    .mergeMap(key => toPairs(packageJson[key]) as [string, string][])
+                    .mergeMap(key => toPairs(packageJson[key]))
                     .map(([name, version]): DependencyReference => ({
                         attributes: {
                             name,
@@ -1458,7 +1461,7 @@ export class TypeScriptService {
                     // Same score for all
                     .map(item => [1, navigateToItemToSymbolInformation(item, program, this.root)] as [number, SymbolInformation])
             } else {
-                const queryWithoutPackage = query && omit<Partial<SymbolDescriptor>, Partial<SymbolDescriptor>>(query, 'package') as SymbolDescriptor
+                const queryWithoutPackage = query && omit(query, 'package') as SymbolDescriptor
                 // Require at least 2 properties to match (or all if less provided)
                 const minScore = Math.min(2, getPropertyCount(query))
                 const minScoreWithoutPackage = Math.min(2, getPropertyCount(queryWithoutPackage))

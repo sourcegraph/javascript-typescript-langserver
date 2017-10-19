@@ -302,7 +302,7 @@ export function registerLanguageHandler(
                         error: {
                             message: err.message + '',
                             code: typeof err.code === 'number' ? err.code : ErrorCodes.UnknownErrorCode,
-                            data: omit<any, any>(err, ['message', 'code'])
+                            data: omit(err, ['message', 'code'])
                         }
                     })
                 })
