@@ -2311,7 +2311,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
 
     })
 
-    describe('textDocumentCompletion() with snippets', function(this: TestContext & ISuiteCallbackContext): void{
+    describe('textDocumentCompletion() with snippets', function(this: TestContext & ISuiteCallbackContext): void {
         beforeEach(initializeTypeScriptService(createService, rootUri, new Map([
             [rootUri + 'a.ts', [
                 'class A {',
