@@ -1324,6 +1324,10 @@ export class TypeScriptService {
             .startWith({ op: 'add', path: '', value: { changes: {} } as WorkspaceEdit } as Operation)
     }
 
+    public async initialized(): Promise<void> {
+        // nop
+    }
+
     /**
      * The document open notification is sent from the client to the server to signal newly opened
      * text documents. The document's truth is now managed by the client and the server must not try
