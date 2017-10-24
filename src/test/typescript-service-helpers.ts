@@ -2326,7 +2326,7 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
                 '}',
                 'const a = new A();',
                 'a.',
-                ''
+                '',
             ].join('\n')],
         ]), {
             textDocument: {
@@ -2482,18 +2482,18 @@ export function describeTypeScriptService(createService: TypeScriptServiceFactor
                 '}',
                 'const a = new A();',
                 'a.',
-                ''
+                '',
             ].join('\n')],
             [rootUri + 'uses-import.ts', [
                 'import * as i from "./import"',
                 'i.',
-                ''
+                '',
             ].join('\n')],
             [rootUri + 'import.ts', '/** d doc*/ export function d() {}'],
             [rootUri + 'uses-reference.ts', [
                 '/// <reference path="reference.ts" />',
                 'let z : foo. ',
-                ''
+                '',
             ].join('\n')],
             [rootUri + 'reference.ts', [
                 'namespace foo {',
