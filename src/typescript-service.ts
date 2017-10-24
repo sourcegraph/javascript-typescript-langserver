@@ -1245,7 +1245,13 @@ export class TypeScriptService {
 
         return this.projectManager.ensureOwnFiles(span)
             .concat(Observable.defer(() => {
-                const configuration = this.projectManager.getConfiguration(fileTextChanges[0].fileName)
+                // Configuration lookup uses Windows paths, FileTextChanges uses unix paths. Convert to backslashes.
+                const unixFilePath = fileTextChanges[0].fileName
+                const firstChangedFile = /^[a-z]:\//i.test(unixFilePath) ?
+                    unixFilePath.replace(/\//g, '\\') :
+                    unixFilePath
+
+                const configuration = this.projectManager.getConfiguration(firstChangedFile)
                 configuration.ensureBasicFiles(span)
 
                 const changes: {[uri: string]: TextEdit[]} = {}
