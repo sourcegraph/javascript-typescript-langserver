@@ -1,5 +1,5 @@
-import { Observable } from '@reactivex/rxjs'
 import { FORMAT_TEXT_MAP, Span } from 'opentracing'
+import { Observable } from 'rxjs'
 import { inspect } from 'util'
 import { isResponseMessage, Message, NotificationMessage, RequestMessage, ResponseMessage } from 'vscode-jsonrpc/lib/messages'
 import {
@@ -8,7 +8,7 @@ import {
     LogMessageParams,
     PublishDiagnosticsParams,
     TextDocumentIdentifier,
-    TextDocumentItem
+    TextDocumentItem,
 } from 'vscode-languageserver'
 import { HasMeta } from './connection'
 import { MessageEmitter, MessageWriter } from './connection'
@@ -16,7 +16,7 @@ import {
     CacheGetParams,
     CacheSetParams,
     TextDocumentContentParams,
-    WorkspaceFilesParams
+    WorkspaceFilesParams,
 } from './request-type'
 import { traceObservable } from './tracing'
 

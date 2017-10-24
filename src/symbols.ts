@@ -15,7 +15,7 @@ export function definitionInfoToSymbolDescriptor(info: ts.DefinitionInfo, rootPa
         name: info.name || '',
         containerKind: info.containerKind || '',
         containerName: info.containerName || '',
-        filePath: info.fileName
+        filePath: info.fileName,
     }
     // If the symbol is an external module representing a file, set name to the file path
     if (info.kind === ts.ScriptElementKind.moduleElement && info.name && /[\\\/]/.test(info.name)) {
@@ -59,9 +59,9 @@ export function navigateToItemToSymbolInformation(item: ts.NavigateToItem, progr
             uri: locationUri(sourceFile.fileName),
             range: {
                 start: ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start),
-                end: ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start + item.textSpan.length)
-            }
-        }
+                end: ts.getLineAndCharacterOfPosition(sourceFile, item.textSpan.start + item.textSpan.length),
+            },
+        },
     }
     if (item.containerName) {
         symbolInformation.containerName = item.containerName.replace(rootPath, '')
@@ -125,9 +125,9 @@ export function navigationTreeToSymbolInformation(tree: ts.NavigationTree, paren
             uri: locationUri(sourceFile.fileName),
             range: {
                 start: ts.getLineAndCharacterOfPosition(sourceFile, span.start),
-                end: ts.getLineAndCharacterOfPosition(sourceFile, span.start + span.length)
-            }
-        }
+                end: ts.getLineAndCharacterOfPosition(sourceFile, span.start + span.length),
+            },
+        },
     }
     if (parent && navigationTreeIsSymbol(parent) && parent.text) {
         symbolInformation.containerName = parent.text.replace(rootPath, '')
@@ -144,7 +144,7 @@ export function navigationTreeToSymbolDescriptor(tree: ts.NavigationTree, parent
         name: tree.text ? tree.text.replace(rootPath, '') : '',
         containerKind: '',
         containerName: '',
-        filePath
+        filePath,
     }
     if (parent && navigationTreeIsSymbol(parent)) {
         symbolDescriptor.containerKind = parent.kind

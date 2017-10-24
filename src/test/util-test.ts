@@ -15,21 +15,21 @@ describe('util', () => {
                 containerName: 'ts',
                 kind: 'interface',
                 name: 'Program',
-                package: undefined
+                package: undefined,
             }, {
                 containerKind: 'module',
                 containerName: 'ts',
                 kind: 'interface',
                 name: 'Program',
-                package: undefined
+                package: undefined,
             })
             assert.equal(score, 4)
         })
         it('should return a score of 0.6 if a string property is 60% similar', () => {
             const score = getMatchingPropertyCount({
-                filePath: 'lib/foo.d.ts'
+                filePath: 'lib/foo.d.ts',
             }, {
-                filePath: 'src/foo.ts'
+                filePath: 'src/foo.ts',
             })
             assert.equal(score, 0.6)
         })
@@ -39,13 +39,13 @@ describe('util', () => {
                 containerName: 'util',
                 kind: 'var',
                 name: 'colors',
-                package: undefined
+                package: undefined,
             }, {
                 containerKind: '',
                 containerName: '',
                 kind: 'var',
                 name: 'colors',
-                package: undefined
+                package: undefined,
             })
             assert.equal(score, 4)
         })
@@ -54,13 +54,13 @@ describe('util', () => {
                 name: 'a',
                 kind: 'class',
                 package: { name: 'mypkg' },
-                containerKind: undefined
+                containerKind: undefined,
             }, {
                 kind: 'class',
                 name: 'a',
                 containerKind: '',
                 containerName: '',
-                package: { name: 'mypkg' }
+                package: { name: 'mypkg' },
             })
             assert.equal(score, 3)
         })
@@ -71,9 +71,9 @@ describe('util', () => {
                 name: 'a', // 1
                 kind: 'class', // 2
                 package: {
-                    name: 'mypkg' // 3
+                    name: 'mypkg', // 3
                 },
-                containerKind: '' // 4
+                containerKind: '', // 4
             })
             assert.equal(count, 4)
         })
@@ -86,14 +86,14 @@ describe('util', () => {
                 kind: 'interface',
                 name: 'Program',
                 filePath: 'foo/bar.ts',
-                package: undefined
+                package: undefined,
             }, {
                 containerKind: 'module',
                 containerName: 'ts',
                 kind: 'interface',
                 name: 'Program',
                 filePath: 'foo/bar.ts',
-                package: undefined
+                package: undefined,
             })
             assert.equal(matches, true)
         })
@@ -103,14 +103,14 @@ describe('util', () => {
                 kind: 'class',
                 package: { name: 'mypkg' },
                 filePath: 'foo/bar.ts',
-                containerKind: undefined
+                containerKind: undefined,
             }, {
                 kind: 'class',
                 name: 'a',
                 containerKind: '',
                 containerName: '',
                 filePath: 'foo/bar.ts',
-                package: { name: 'mypkg' }
+                package: { name: 'mypkg' },
             })
             assert.equal(matches, true)
         })

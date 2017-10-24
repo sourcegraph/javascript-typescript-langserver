@@ -27,7 +27,7 @@ const options: ServeOptions & TypeScriptServiceOptions = {
     strict: program.strict,
     logMessages: program.trace,
     logger: program.logfile ? new FileLogger(program.logfile) : new StdioLogger(),
-    tracer: program.enableJaeger ? initTracer({ serviceName: 'javascript-typescript-langserver', sampler: { type: 'const', param: 1 } }) : new Tracer()
+    tracer: program.enableJaeger ? initTracer({ serviceName: 'javascript-typescript-langserver', sampler: { type: 'const', param: 1 } }) : new Tracer(),
 }
 
 serve(options, client => new TypeScriptService(client, options))

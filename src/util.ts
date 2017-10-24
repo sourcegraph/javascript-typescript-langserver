@@ -1,5 +1,5 @@
-import { Observable } from '@reactivex/rxjs'
 import { escapePathComponent } from 'fast-json-patch'
+import { Observable } from 'rxjs'
 import { compareTwoStrings } from 'string-similarity'
 import * as ts from 'typescript'
 import * as url from 'url'
@@ -121,7 +121,7 @@ const globalTSPatterns = [
     /node_modules\/(?:\@|%40)types\/(node|jasmine|jest|mocha)\/.*\.d\.ts$/,
     /(^|\/)typings\/.*\.d\.ts$/,
     /(^|\/)tsd\.d\.ts($|\/)/,
-    /(^|\/)tslib\.d\.ts$/ // for the 'synthetic reference' created by typescript when using importHelpers
+    /(^|\/)tslib\.d\.ts$/, // for the 'synthetic reference' created by typescript when using importHelpers
 ]
 
 // isGlobalTSFile returns whether or not the filename contains global

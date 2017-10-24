@@ -20,7 +20,7 @@ describe('ProjectManager', () => {
                 memfs = new InMemoryFileSystem(rootPath)
                 const configFileUri = rootUri + 'foo/tsconfig.json'
                 const localfs = new MapFileSystem(new Map([
-                    [configFileUri, '{}']
+                    [configFileUri, '{}'],
                 ]))
                 const updater = new FileSystemUpdater(localfs, memfs)
                 projectManager = new ProjectManager(rootPath, memfs, updater, true)
@@ -40,7 +40,7 @@ describe('ProjectManager', () => {
                         [rootUri + 'project/tsconfig.json', '{ "compilerOptions": { "typeRoots": ["../types"]} }'],
                         [rootUri + 'project/node_modules/%40types/mocha/index.d.ts', 'declare var describe { (description: string, spec: () => void): void; }'],
                         [rootUri + 'project/file.ts', 'describe("test", () => console.log(GLOBALCONSTANT));'],
-                        [rootUri + 'types/types.d.ts', 'declare var GLOBALCONSTANT=1;']
+                        [rootUri + 'types/types.d.ts', 'declare var GLOBALCONSTANT=1;'],
 
                     ]))
                     const updater = new FileSystemUpdater(localfs, memfs)
@@ -80,7 +80,7 @@ describe('ProjectManager', () => {
                         [rootUri + 'package.json', '{"name": "package-name-1"}'],
                         [rootUri + 'subdirectory-with-tsconfig/package.json', '{"name": "package-name-2"}'],
                         [rootUri + 'subdirectory-with-tsconfig/src/tsconfig.json', '{}'],
-                        [rootUri + 'subdirectory-with-tsconfig/src/dummy.ts', '']
+                        [rootUri + 'subdirectory-with-tsconfig/src/dummy.ts', ''],
                     ]))
                     const updater = new FileSystemUpdater(localfs, memfs)
                     projectManager = new ProjectManager(rootPath, memfs, updater, true)
@@ -97,7 +97,7 @@ describe('ProjectManager', () => {
                         [rootUri + 'node_modules/somelib/index.js', '/// <reference path="./pathref.d.ts"/>\n/// <reference types="node"/>'],
                         [rootUri + 'node_modules/somelib/pathref.d.ts', ''],
                         [rootUri + 'node_modules/%40types/node/index.d.ts', ''],
-                        [rootUri + 'src/dummy.ts', 'import * as somelib from "somelib";']
+                        [rootUri + 'src/dummy.ts', 'import * as somelib from "somelib";'],
                     ]))
                     const updater = new FileSystemUpdater(localfs, memfs)
                     projectManager = new ProjectManager(rootPath, memfs, updater, true)
@@ -115,7 +115,7 @@ describe('ProjectManager', () => {
                     memfs = new InMemoryFileSystem(rootPath)
                     const localfs = new MapFileSystem(new Map([
                         [rootUri + 'tsconfig.json', '{}'],
-                        [rootUri + 'src/jsconfig.json', '{}']
+                        [rootUri + 'src/jsconfig.json', '{}'],
                     ]))
                     const updater = new FileSystemUpdater(localfs, memfs)
                     projectManager = new ProjectManager(rootPath, memfs, updater, true)
@@ -135,7 +135,7 @@ describe('ProjectManager', () => {
                     memfs = new InMemoryFileSystem(rootPath)
                     const localfs = new MapFileSystem(new Map([
                         [rootUri + 'tsconfig.json', '{}'],
-                        [rootUri + 'src/jsconfig.json', '{}']
+                        [rootUri + 'src/jsconfig.json', '{}'],
                     ]))
                     const updater = new FileSystemUpdater(localfs, memfs)
                     projectManager = new ProjectManager(rootPath, memfs, updater, true)
@@ -155,7 +155,7 @@ describe('ProjectManager', () => {
                     const localfs = new MapFileSystem(new Map([
                         [rootUri + 'tsconfig.json', '{}'],
                         [rootUri + 'foo/bar/tsconfig.json', '{}'],
-                        [rootUri + 'foo/baz/tsconfig.json', '{}']
+                        [rootUri + 'foo/baz/tsconfig.json', '{}'],
                     ]))
                     const updater = new FileSystemUpdater(localfs, memfs)
                     projectManager = new ProjectManager(rootPath, memfs, updater, true)
@@ -165,7 +165,7 @@ describe('ProjectManager', () => {
                     const configs = Array.from(projectManager.getChildConfigurations(rootUri + 'foo')).map(config => config.configFilePath)
                     assert.deepEqual(configs, [
                         uri2path(rootUri + 'foo/bar/tsconfig.json'),
-                        uri2path(rootUri + 'foo/baz/tsconfig.json')
+                        uri2path(rootUri + 'foo/baz/tsconfig.json'),
                     ])
                     assert.equal(Array.from(projectManager.configurations()).length, 4)
                 })

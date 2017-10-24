@@ -1,9 +1,9 @@
 
-import { Observable, Subject } from '@reactivex/rxjs'
 import * as assert from 'assert'
 import { EventEmitter } from 'events'
 import { Operation } from 'fast-json-patch'
 import { Span } from 'opentracing'
+import { Observable, Subject } from 'rxjs'
 import * as sinon from 'sinon'
 import { PassThrough } from 'stream'
 import { ErrorCodes } from 'vscode-jsonrpc'
@@ -17,7 +17,7 @@ describe('connection', () => {
             const handler: TypeScriptService = Object.create(TypeScriptService.prototype)
             const emitter = new EventEmitter()
             const writer = {
-                write: sinon.spy()
+                write: sinon.spy(),
             }
             registerLanguageHandler(emitter as MessageEmitter, writer as any as MessageWriter, handler as TypeScriptService)
             const params = [1, 1]
@@ -29,7 +29,7 @@ describe('connection', () => {
             const handler = { _privateMethod: sinon.spy() }
             const emitter = new EventEmitter()
             const writer = {
-                write: sinon.spy()
+                write: sinon.spy(),
             }
             registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as any)
             const params = [1, 1]
@@ -44,7 +44,7 @@ describe('connection', () => {
             handler.textDocumentHover.returns(Promise.resolve(2))
             const emitter = new EventEmitter()
             const writer = {
-                write: sinon.spy()
+                write: sinon.spy(),
             }
             registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as any)
             emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'initialize', params: { capabilities: {} } })
@@ -54,11 +54,11 @@ describe('connection', () => {
         })
         it('should ignore exit notifications', async () => {
             const handler = {
-                exit: sinon.spy()
+                exit: sinon.spy(),
             }
             const emitter = new EventEmitter()
             const writer = {
-                write: sinon.spy()
+                write: sinon.spy(),
             }
             registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as any)
             emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'exit' })
@@ -67,11 +67,11 @@ describe('connection', () => {
         })
         it('should ignore responses', async () => {
             const handler = {
-                whatever: sinon.spy()
+                whatever: sinon.spy(),
             }
             const emitter = new EventEmitter()
             const writer = {
-                write: sinon.spy()
+                write: sinon.spy(),
             }
             registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as any)
             emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'whatever', result: 123 })
@@ -79,11 +79,11 @@ describe('connection', () => {
         })
         it('should log invalid messages', async () => {
             const handler = {
-                whatever: sinon.spy()
+                whatever: sinon.spy(),
             }
             const emitter = new EventEmitter()
             const writer = {
-                write: sinon.spy()
+                write: sinon.spy(),
             }
             const logger = new NoopLogger() as NoopLogger & { error: sinon.SinonStub }
             sinon.stub(logger, 'error')
@@ -99,7 +99,7 @@ describe('connection', () => {
             ))
             const emitter = new EventEmitter()
             const writer = {
-                write: sinon.spy()
+                write: sinon.spy(),
             }
             registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as TypeScriptService)
             const params = [1, 1]
@@ -112,11 +112,11 @@ describe('connection', () => {
             const handler: TypeScriptService = Object.create(TypeScriptService.prototype)
             const hoverStub = sinon.stub(handler, 'textDocumentHover').returns(Observable.throw(Object.assign(new Error('Something happened'), {
                 code: ErrorCodes.serverErrorStart,
-                whatever: 123
+                whatever: 123,
             })))
             const emitter = new EventEmitter()
             const writer = {
-                write: sinon.spy()
+                write: sinon.spy(),
             }
             registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as TypeScriptService)
             const params = [1, 1]
@@ -130,8 +130,8 @@ describe('connection', () => {
                 error: {
                     message: 'Something happened',
                     code: ErrorCodes.serverErrorStart,
-                    data: { whatever: 123 }
-                }
+                    data: { whatever: 123 },
+                },
             }))
         })
         it('should call a handler on request and send the returned synchronous value', async () => {
@@ -139,7 +139,7 @@ describe('connection', () => {
             const hoverStub = sinon.stub(handler, 'textDocumentHover').returns(Observable.of({ op: 'add', path: '', value: 2 }))
             const emitter = new EventEmitter()
             const writer = {
-                write: sinon.spy()
+                write: sinon.spy(),
             }
             registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as TypeScriptService)
             emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params: [1, 2] })
@@ -152,7 +152,7 @@ describe('connection', () => {
             const hoverStub = sinon.stub(handler, 'textDocumentHover').returns(Observable.of({ op: 'add', path: '', value: 2 }))
             const emitter = new EventEmitter()
             const writer = {
-                write: sinon.spy()
+                write: sinon.spy(),
             }
             registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as TypeScriptService)
             const params = [1, 1]
@@ -167,7 +167,7 @@ describe('connection', () => {
             const hoverStub = sinon.stub(handler, 'textDocumentHover').returns(new Observable<never>(subscriber => unsubscribeHandler))
             const emitter = new EventEmitter()
             const writer = {
-                write: sinon.spy()
+                write: sinon.spy(),
             }
             registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as TypeScriptService)
             const params = [1, 1]
@@ -185,7 +185,7 @@ describe('connection', () => {
             const hoverStub = sinon.stub(handler, 'textDocumentHover').returns(new Observable<never>(subscriber => unsubscribeHandler))
             const emitter = new EventEmitter()
             const writer = {
-                write: sinon.spy()
+                write: sinon.spy(),
             }
             registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as TypeScriptService)
             const params = [1, 1]
@@ -200,7 +200,7 @@ describe('connection', () => {
             const hoverStub = sinon.stub(handler, 'textDocumentHover').returns(new Observable<never>(subscriber => unsubscribeHandler))
             const emitter = new EventEmitter()
             const writer = {
-                write: sinon.spy()
+                write: sinon.spy(),
             }
             registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as TypeScriptService)
             const params = [1, 1]
@@ -213,11 +213,11 @@ describe('connection', () => {
             it(`should call shutdown on ${event} if the service was initialized`, async () => {
                 const handler = {
                     initialize: sinon.stub().returns(Observable.of({ op: 'add', path: '', value: { capabilities: {} }})),
-                    shutdown: sinon.stub().returns(Observable.of({ op: 'add', path: '', value: null }))
+                    shutdown: sinon.stub().returns(Observable.of({ op: 'add', path: '', value: null })),
                 }
                 const emitter = new EventEmitter()
                 const writer = {
-                    write: sinon.spy()
+                    write: sinon.spy(),
                 }
                 registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as any)
                 emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'initialize', params: { capabilities: {} } })
@@ -229,11 +229,11 @@ describe('connection', () => {
             it(`should not call shutdown on ${event} if the service was not initialized`, async () => {
                 const handler = {
                     initialize: sinon.stub().returns(Observable.of({ op: 'add', path: '', value: { capabilities: {} }})),
-                    shutdown: sinon.stub().returns(Observable.of({ op: 'add', path: '', value: null }))
+                    shutdown: sinon.stub().returns(Observable.of({ op: 'add', path: '', value: null })),
                 }
                 const emitter = new EventEmitter()
                 const writer = {
-                    write: sinon.spy()
+                    write: sinon.spy(),
                 }
                 registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as any)
                 emitter.emit(event)
@@ -242,11 +242,11 @@ describe('connection', () => {
             it(`should not call shutdown again on ${event} if shutdown was already called`, async () => {
                 const handler = {
                     initialize: sinon.stub().returns(Observable.of({ op: 'add', path: '', value: { capabilities: {} }})),
-                    shutdown: sinon.stub().returns(Observable.of({ op: 'add', path: '', value: null }))
+                    shutdown: sinon.stub().returns(Observable.of({ op: 'add', path: '', value: null })),
                 }
                 const emitter = new EventEmitter()
                 const writer = {
-                    write: sinon.spy()
+                    write: sinon.spy(),
                 }
                 registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as any)
                 emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'shutdown', params: {} })
@@ -266,7 +266,7 @@ describe('connection', () => {
 
                 const emitter = new EventEmitter()
                 const writer = {
-                    write: sinon.spy()
+                    write: sinon.spy(),
                 }
 
                 registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as any)
@@ -278,13 +278,13 @@ describe('connection', () => {
                     method: '$/partialResult',
                     params: {
                         id: 1,
-                        patch: [{ op: 'add', path: '', value: { capabilities: { streaming: true }}}]
-                    }
+                        patch: [{ op: 'add', path: '', value: { capabilities: { streaming: true }}}],
+                    },
                 }], 'Expected to send partial result for initialize')
                 assert.deepEqual(writer.write.args[1], [{
                     jsonrpc: '2.0',
                     id: 1,
-                    result: { capabilities: { streaming: true } }
+                    result: { capabilities: { streaming: true } },
                 }], 'Expected to send final result for initialize')
 
                 // Send hover
@@ -296,7 +296,7 @@ describe('connection', () => {
                 assert.deepEqual(writer.write.args[2], [{
                     jsonrpc: '2.0',
                     method: '$/partialResult',
-                    params: { id: 2, patch: [{ op: 'add', path: '', value: [] }] }
+                    params: { id: 2, patch: [{ op: 'add', path: '', value: [] }] },
                 }], 'Expected to send partial result that initializes array')
 
                 // Simulate streamed value
@@ -304,7 +304,7 @@ describe('connection', () => {
                 assert.deepEqual(writer.write.args[3], [{
                     jsonrpc: '2.0',
                     method: '$/partialResult',
-                    params: { id: 2, patch: [{ op: 'add', path: '/-', value: 123 }] }
+                    params: { id: 2, patch: [{ op: 'add', path: '/-', value: 123 }] },
                 }], 'Expected to send partial result that adds 123 to array')
 
                 // Complete Subject to trigger final response
@@ -312,7 +312,7 @@ describe('connection', () => {
                 assert.deepEqual(writer.write.args[4], [{
                     jsonrpc: '2.0',
                     id: 2,
-                    result: [123]
+                    result: [123],
                 }], 'Expected to send final result [123]')
             })
         })

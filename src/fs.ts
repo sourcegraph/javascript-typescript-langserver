@@ -1,7 +1,7 @@
-import { Observable } from '@reactivex/rxjs'
 import { Glob } from 'glob'
 import * as fs from 'mz/fs'
 import { Span } from 'opentracing'
+import { Observable } from 'rxjs'
 import Semaphore from 'semaphore-async-await'
 import { LanguageClient } from './lang-handler'
 import { InMemoryFileSystem } from './memfs'
@@ -75,7 +75,7 @@ export class LocalFileSystem implements FileSystem {
                 cwd,
                 nodir: true,
                 matchBase: true,
-                follow: true
+                follow: true,
             })
             globber.on('match', (file: string) => {
                 subscriber.next(normalizeUri(base + file))
@@ -189,9 +189,8 @@ export class FileSystemUpdater {
      * @param span An OpenTracing span for tracing
      */
     public ensureStructure(childOf = new Span()): Observable<never> {
-        return traceObservable('Ensure structure', childOf, span => {
-            return this.structureFetch || this.fetchStructure(span)
-        })
+        return traceObservable('Ensure structure', childOf, span =>
+            this.structureFetch || this.fetchStructure(span))
     }
 
     /**

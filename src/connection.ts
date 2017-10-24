@@ -1,8 +1,8 @@
-import { Observable, Subscription, Symbol } from '@reactivex/rxjs'
 import { EventEmitter } from 'events'
 import { applyReducer, Operation } from 'fast-json-patch'
 import { camelCase, omit } from 'lodash'
 import { FORMAT_TEXT_MAP, SpanContext, Tracer } from 'opentracing'
+import { Observable, Subscription, Symbol } from 'rxjs'
 import { inspect } from 'util'
 import { ErrorCodes, Message, StreamMessageReader as VSCodeStreamMessageReader, StreamMessageWriter as VSCodeStreamMessageWriter } from 'vscode-jsonrpc'
 import { isNotificationMessage, isRequestMessage, isResponseMessage, NotificationMessage, RequestMessage, ResponseMessage } from 'vscode-jsonrpc/lib/messages'
@@ -209,8 +209,8 @@ export function registerLanguageHandler(
                     id: message.params.id,
                     error: {
                         message: 'Request cancelled',
-                        code: ErrorCodes.RequestCancelled
-                    }
+                        code: ErrorCodes.RequestCancelled,
+                    },
                 })
                 return
         }
@@ -230,8 +230,8 @@ export function registerLanguageHandler(
                     id: message.id,
                     error: {
                         code: ErrorCodes.MethodNotFound,
-                        message: `Method ${method} not implemented`
-                    }
+                        message: `Method ${method} not implemented`,
+                    },
                 })
             } else {
                 logger.warn(`Method ${method} not implemented`)
@@ -264,8 +264,8 @@ export function registerLanguageHandler(
                             method: '$/partialResult',
                             params: {
                                 id: message.id,
-                                patch: [patch]
-                            } as PartialResultParams
+                                patch: [patch],
+                            } as PartialResultParams,
                         })
                     }
                 })
@@ -287,7 +287,7 @@ export function registerLanguageHandler(
                     messageWriter.write({
                         jsonrpc: '2.0',
                         id: message.id,
-                        result
+                        result,
                     })
                 }, err => {
                     // Set error on span
@@ -302,8 +302,8 @@ export function registerLanguageHandler(
                         error: {
                             message: err.message + '',
                             code: typeof err.code === 'number' ? err.code : ErrorCodes.UnknownErrorCode,
-                            data: omit<any, any>(err, ['message', 'code'])
-                        }
+                            data: omit(err, ['message', 'code']),
+                        },
                     })
                 })
             // Save subscription for $/cancelRequest

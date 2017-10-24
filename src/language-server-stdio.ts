@@ -26,7 +26,7 @@ const options: TypeScriptServiceOptions & MessageLogOptions & RegisterLanguageHa
     strict: program.strict,
     logMessages: program.trace,
     logger,
-    tracer
+    tracer,
 }
 
 const messageEmitter = new MessageEmitter(process.stdin, options)

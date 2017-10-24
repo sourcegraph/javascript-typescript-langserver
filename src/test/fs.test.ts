@@ -59,13 +59,13 @@ describe('fs.ts', () => {
                     rootUri + 'tweedledum',
                     rootUri + 'foo/bar.ts',
                     rootUri + '%40types/diff/index.d.ts',
-                    rootUri + 'node_modules/some_package/src/function.ts'
+                    rootUri + 'node_modules/some_package/src/function.ts',
                 ])
             })
             it('should return all files under specific root', async () => {
                 const files = await fileSystem.getWorkspaceFiles(rootUri + 'foo').toArray().toPromise()
                 assert.sameMembers(files, [
-                    rootUri + 'foo/bar.ts'
+                    rootUri + 'foo/bar.ts',
                 ])
             })
         })

@@ -1,6 +1,6 @@
 
-import { Observable } from '@reactivex/rxjs'
 import { Span } from 'opentracing'
+import { Observable } from 'rxjs'
 
 /**
  * Traces a synchronous function by passing it a new child span.

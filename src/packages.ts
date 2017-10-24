@@ -1,8 +1,9 @@
 
-import { Observable, Subscription } from '@reactivex/rxjs'
 import { EventEmitter } from 'events'
 import { Span } from 'opentracing'
 import * as path from 'path'
+import { Observable, Subscription } from 'rxjs'
+import { SelectorMethodSignature } from 'rxjs/observable/FromEventObservable'
 import * as url from 'url'
 import { Disposable } from './disposable'
 import { FileSystemUpdater } from './fs'
@@ -31,6 +32,18 @@ export interface PackageJson {
         [packageName: string]: string;
     }
 }
+
+export const DEPENDENCY_KEYS: ReadonlyArray<
+    'dependencies' |
+    'devDependencies' |
+    'peerDependencies' |
+    'optionalDependencies'
+> = [
+    'dependencies',
+    'devDependencies',
+    'peerDependencies',
+    'optionalDependencies',
+]
 
 /**
  * Matches:
@@ -96,7 +109,7 @@ export class PackageManager extends EventEmitter implements Disposable {
         let rootPackageJsonLevel = Infinity
         // Find locations of package.jsons _not_ inside node_modules
         this.subscriptions.add(
-            Observable.fromEvent<[string, string]>(this.inMemoryFileSystem, 'add', Array.of)
+            Observable.fromEvent(this.inMemoryFileSystem, 'add', Array.of as SelectorMethodSignature<[string, string]>)
                 .subscribe(([uri, content]) => {
                     const parts = url.parse(uri)
                     if (!parts.pathname    || !parts.pathname.endsWith('/package.json') || parts.pathname.includes('/node_modules/')) {

@@ -1,5 +1,5 @@
 
-import * as chalk from 'chalk'
+import chalk from 'chalk'
 import * as fs from 'fs'
 import { inspect } from 'util'
 import { MessageType } from 'vscode-languageserver'
