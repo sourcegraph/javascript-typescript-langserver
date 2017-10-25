@@ -1467,7 +1467,7 @@ export class TypeScriptService {
                     // Same score for all
                     .map(item => [1, navigateToItemToSymbolInformation(item, program, this.root)] as [number, SymbolInformation])
             } else {
-                const queryWithoutPackage = query && omit(query, 'package') as SymbolDescriptor
+                const queryWithoutPackage = query && omit<Partial<SymbolDescriptor>>(query, 'package')
                 // Require at least 2 properties to match (or all if less provided)
                 const minScore = Math.min(2, getPropertyCount(query))
                 const minScoreWithoutPackage = Math.min(2, getPropertyCount(queryWithoutPackage))
