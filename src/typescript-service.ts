@@ -1324,6 +1324,12 @@ export class TypeScriptService {
             .startWith({ op: 'add', path: '', value: { changes: {} } as WorkspaceEdit } as Operation)
     }
 
+    /**
+     * The initialized notification is sent from the client to the server after the client received
+     * the result of the initialize request but before the client is sending any other request or
+     * notification to the server. The server can use the initialized notification for example to
+     * dynamically register capabilities.
+     */
     public async initialized(): Promise<void> {
         // nop
     }
