@@ -1331,6 +1331,16 @@ export class TypeScriptService {
     }
 
     /**
+     * The initialized notification is sent from the client to the server after the client received
+     * the result of the initialize request but before the client is sending any other request or
+     * notification to the server. The server can use the initialized notification for example to
+     * dynamically register capabilities.
+     */
+    public async initialized(): Promise<void> {
+        // nop
+    }
+
+    /**
      * The document open notification is sent from the client to the server to signal newly opened
      * text documents. The document's truth is now managed by the client and the server must not try
      * to read the document's truth using the document's uri.
