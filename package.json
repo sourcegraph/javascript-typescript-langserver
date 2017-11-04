@@ -56,7 +56,7 @@
   },
   "devDependencies": {
     "@sourcegraph/tsconfig": "^1.0.0",
-    "@sourcegraph/tslint-config": "^6.0.0",
+    "@sourcegraph/tslint-config": "^7.0.0",
     "@types/chai": "^4.0.0",
     "@types/chai-as-promised": "^7.1.0",
     "@types/glob": "^5.0.30",
