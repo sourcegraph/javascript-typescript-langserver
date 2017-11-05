@@ -1,4 +1,3 @@
-
 import * as ts from 'typescript'
 import { SymbolInformation, SymbolKind } from 'vscode-languageserver-types'
 import { isTypeScriptLibrary } from './memfs'
@@ -47,7 +46,11 @@ export function locationUri(filePath: string): string {
  *
  * @param rootPath The workspace rootPath to remove from symbol names and containerNames
  */
-export function navigateToItemToSymbolInformation(item: ts.NavigateToItem, program: ts.Program, rootPath: string): SymbolInformation {
+export function navigateToItemToSymbolInformation(
+    item: ts.NavigateToItem,
+    program: ts.Program,
+    rootPath: string
+): SymbolInformation {
     const sourceFile = program.getSourceFile(item.fileName)
     if (!sourceFile) {
         throw new Error(`Source file ${item.fileName} does not exist`)
@@ -74,27 +77,48 @@ export function navigateToItemToSymbolInformation(item: ts.NavigateToItem, progr
  */
 export function stringtoSymbolKind(kind: string): SymbolKind {
     switch (kind) {
-        case 'module': return SymbolKind.Module
-        case 'class': return SymbolKind.Class
-        case 'local class': return SymbolKind.Class
-        case 'interface': return SymbolKind.Interface
-        case 'enum': return SymbolKind.Enum
-        case 'enum member': return SymbolKind.Constant
-        case 'var': return SymbolKind.Variable
-        case 'local var': return SymbolKind.Variable
-        case 'function': return SymbolKind.Function
-        case 'local function': return SymbolKind.Function
-        case 'method': return SymbolKind.Method
-        case 'getter': return SymbolKind.Method
-        case 'setter': return SymbolKind.Method
-        case 'property': return SymbolKind.Property
-        case 'constructor': return SymbolKind.Constructor
-        case 'parameter': return SymbolKind.Variable
-        case 'type parameter': return SymbolKind.Variable
-        case 'alias': return SymbolKind.Variable
-        case 'let': return SymbolKind.Variable
-        case 'const': return SymbolKind.Constant
-        case 'JSX attribute': return SymbolKind.Property
+        case 'module':
+            return SymbolKind.Module
+        case 'class':
+            return SymbolKind.Class
+        case 'local class':
+            return SymbolKind.Class
+        case 'interface':
+            return SymbolKind.Interface
+        case 'enum':
+            return SymbolKind.Enum
+        case 'enum member':
+            return SymbolKind.Constant
+        case 'var':
+            return SymbolKind.Variable
+        case 'local var':
+            return SymbolKind.Variable
+        case 'function':
+            return SymbolKind.Function
+        case 'local function':
+            return SymbolKind.Function
+        case 'method':
+            return SymbolKind.Method
+        case 'getter':
+            return SymbolKind.Method
+        case 'setter':
+            return SymbolKind.Method
+        case 'property':
+            return SymbolKind.Property
+        case 'constructor':
+            return SymbolKind.Constructor
+        case 'parameter':
+            return SymbolKind.Variable
+        case 'type parameter':
+            return SymbolKind.Variable
+        case 'alias':
+            return SymbolKind.Variable
+        case 'let':
+            return SymbolKind.Variable
+        case 'const':
+            return SymbolKind.Constant
+        case 'JSX attribute':
+            return SymbolKind.Property
         // case 'script'
         // case 'keyword'
         // case 'type'
@@ -106,14 +130,20 @@ export function stringtoSymbolKind(kind: string): SymbolKind {
         // case 'directory'
         // case 'external module name'
         // case 'external module name'
-        default: return SymbolKind.Variable
+        default:
+            return SymbolKind.Variable
     }
 }
 
 /**
  * Returns an LSP SymbolInformation for a TypeScript NavigationTree node
  */
-export function navigationTreeToSymbolInformation(tree: ts.NavigationTree, parent: ts.NavigationTree | undefined, sourceFile: ts.SourceFile, rootPath: string): SymbolInformation {
+export function navigationTreeToSymbolInformation(
+    tree: ts.NavigationTree,
+    parent: ts.NavigationTree | undefined,
+    sourceFile: ts.SourceFile,
+    rootPath: string
+): SymbolInformation {
     const span = tree.spans[0]
     if (!span) {
         throw new Error('NavigationTree has no TextSpan')
@@ -138,7 +168,12 @@ export function navigationTreeToSymbolInformation(tree: ts.NavigationTree, paren
 /**
  * Returns a SymbolDescriptor for a TypeScript NavigationTree node
  */
-export function navigationTreeToSymbolDescriptor(tree: ts.NavigationTree, parent: ts.NavigationTree | undefined, filePath: string, rootPath: string): SymbolDescriptor {
+export function navigationTreeToSymbolDescriptor(
+    tree: ts.NavigationTree,
+    parent: ts.NavigationTree | undefined,
+    filePath: string,
+    rootPath: string
+): SymbolDescriptor {
     const symbolDescriptor: SymbolDescriptor = {
         kind: tree.kind,
         name: tree.text ? tree.text.replace(rootPath, '') : '',
@@ -169,7 +204,10 @@ export function navigationTreeToSymbolDescriptor(tree: ts.NavigationTree, parent
 /**
  * Walks a NaviationTree and emits items with a node and its parent node (if exists)
  */
-export function *walkNavigationTree(tree: ts.NavigationTree, parent?: ts.NavigationTree): IterableIterator<{ tree: ts.NavigationTree, parent?: ts.NavigationTree }> {
+export function* walkNavigationTree(
+    tree: ts.NavigationTree,
+    parent?: ts.NavigationTree
+): IterableIterator<{ tree: ts.NavigationTree; parent?: ts.NavigationTree }> {
     yield { tree, parent }
     for (const childItem of tree.childItems || []) {
         yield* walkNavigationTree(childItem, tree)

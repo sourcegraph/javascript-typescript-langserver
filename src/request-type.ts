@@ -15,7 +15,6 @@ export interface PluginSettings {
 }
 
 export interface ClientCapabilities extends vscode.ClientCapabilities {
-
     /**
      * The client provides support for workspace/xfiles.
      */
@@ -54,7 +53,6 @@ export interface InitializeResult extends vscode.InitializeResult {
 }
 
 export interface TextDocumentContentParams {
-
     /**
      * The text document to receive the content for.
      */
@@ -62,7 +60,6 @@ export interface TextDocumentContentParams {
 }
 
 export interface WorkspaceFilesParams {
-
     /**
      * The URI of a directory to search.
      * Can be relative to the rootPath.
@@ -80,7 +77,6 @@ export interface WorkspaceFilesParams {
  * metadata about the symbol.
  */
 export interface SymbolDescriptor {
-
     /**
      * The kind of the symbol as a ts.ScriptElementKind
      */
@@ -138,7 +134,6 @@ export interface WorkspaceSymbolParams {
  * spec).
  */
 export interface WorkspaceReferenceParams {
-
     /**
      * Metadata about the symbol that is being searched for.
      */
@@ -153,7 +148,6 @@ export interface WorkspaceReferenceParams {
 }
 
 export interface SymbolLocationInformation {
-
     /**
      * The location where the symbol is defined, if any
      */
@@ -206,7 +200,6 @@ export interface DependencyReference {
  * identified by the provided key.
  */
 export interface CacheGetParams {
-
     /**
      * The key that identifies the cache item
      */
@@ -219,7 +212,6 @@ export interface CacheGetParams {
  * the server is not supposed to act differently if the cache set failed.
  */
 export interface CacheSetParams {
-
     /**
      * The key that identifies the cache item
      */

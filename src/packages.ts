@@ -1,4 +1,3 @@
-
 import { EventEmitter } from 'events'
 import { Span } from 'opentracing'
 import * as path from 'path'
@@ -18,32 +17,24 @@ export interface PackageJson {
     name?: string
     version?: string
     typings?: string
-    repository?: string | { type: string, url: string }
+    repository?: string | { type: string; url: string }
     dependencies?: {
-        [packageName: string]: string;
+        [packageName: string]: string
     }
     devDependencies?: {
-        [packageName: string]: string;
+        [packageName: string]: string
     }
     peerDependencies?: {
-        [packageName: string]: string;
+        [packageName: string]: string
     }
     optionalDependencies?: {
-        [packageName: string]: string;
+        [packageName: string]: string
     }
 }
 
 export const DEPENDENCY_KEYS: ReadonlyArray<
-    'dependencies' |
-    'devDependencies' |
-    'peerDependencies' |
-    'optionalDependencies'
-> = [
-    'dependencies',
-    'devDependencies',
-    'peerDependencies',
-    'optionalDependencies',
-]
+    'dependencies' | 'devDependencies' | 'peerDependencies' | 'optionalDependencies'
+> = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']
 
 /**
  * Matches:
@@ -81,7 +72,6 @@ export function extractDefinitelyTypedPackageName(uri: string): string | undefin
 }
 
 export class PackageManager extends EventEmitter implements Disposable {
-
     /**
      * Map of package.json URIs _defined_ in the workspace to optional content.
      * Does not include package.jsons of dependencies.
@@ -109,33 +99,38 @@ export class PackageManager extends EventEmitter implements Disposable {
         let rootPackageJsonLevel = Infinity
         // Find locations of package.jsons _not_ inside node_modules
         this.subscriptions.add(
-            Observable.fromEvent(this.inMemoryFileSystem, 'add', Array.of as SelectorMethodSignature<[string, string]>)
-                .subscribe(([uri, content]) => {
-                    const parts = url.parse(uri)
-                    if (!parts.pathname    || !parts.pathname.endsWith('/package.json') || parts.pathname.includes('/node_modules/')) {
-                        return
+            Observable.fromEvent(this.inMemoryFileSystem, 'add', Array.of as SelectorMethodSignature<
+                [string, string]
+            >).subscribe(([uri, content]) => {
+                const parts = url.parse(uri)
+                if (
+                    !parts.pathname ||
+                    !parts.pathname.endsWith('/package.json') ||
+                    parts.pathname.includes('/node_modules/')
+                ) {
+                    return
+                }
+                let parsed: PackageJson | undefined
+                if (content) {
+                    try {
+                        parsed = JSON.parse(content)
+                    } catch (err) {
+                        logger.error(`Error parsing package.json:`, err)
                     }
-                    let parsed: PackageJson | undefined
-                    if (content) {
-                        try {
-                            parsed = JSON.parse(content)
-                        } catch (err) {
-                            logger.error(`Error parsing package.json:`, err)
-                        }
-                    }
-                    // Don't override existing content with undefined
-                    if (parsed || !this.packages.get(uri)) {
-                        this.packages.set(uri, parsed)
-                        this.logger.log(`Found package ${uri}`)
-                        this.emit('parsed', uri, parsed)
-                    }
-                    // If the current root package.json is further nested than this one, replace it
-                    const level = parts.pathname.split('/').length
-                    if (level < rootPackageJsonLevel) {
-                        this.rootPackageJsonUri = uri
-                        rootPackageJsonLevel = level
-                    }
-                })
+                }
+                // Don't override existing content with undefined
+                if (parsed || !this.packages.get(uri)) {
+                    this.packages.set(uri, parsed)
+                    this.logger.log(`Found package ${uri}`)
+                    this.emit('parsed', uri, parsed)
+                }
+                // If the current root package.json is further nested than this one, replace it
+                const level = parts.pathname.split('/').length
+                if (level < rootPackageJsonLevel) {
+                    this.rootPackageJsonUri = uri
+                    rootPackageJsonLevel = level
+                }
+            })
         )
     }
 
@@ -162,14 +157,15 @@ export class PackageManager extends EventEmitter implements Disposable {
      * @return Observable that emits a single PackageJson or never
      */
     public getClosestPackageJson(uri: string, span = new Span()): Observable<PackageJson> {
-        return this.updater.ensureStructure()
-            .concat(Observable.defer(() => {
+        return this.updater.ensureStructure().concat(
+            Observable.defer(() => {
                 const packageJsonUri = this.getClosestPackageJsonUri(uri)
                 if (!packageJsonUri) {
                     return Observable.empty<never>()
                 }
                 return this.getPackageJson(packageJsonUri, span)
-            }))
+            })
+        )
     }
 
     /**
@@ -188,14 +184,15 @@ export class PackageManager extends EventEmitter implements Disposable {
             if (packageJson) {
                 return Observable.of(packageJson)
             }
-            return this.updater.ensure(uri, span)
-                .concat(Observable.defer(() => {
+            return this.updater.ensure(uri, span).concat(
+                Observable.defer(() => {
                     packageJson = this.packages.get(uri)!
                     if (!packageJson) {
                         return Observable.throw(new Error(`Expected ${uri} to be registered in PackageManager`))
                     }
                     return Observable.of(packageJson)
-                }))
+                })
+            )
         })
     }
 

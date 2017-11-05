@@ -9,7 +9,6 @@ import { TypeScriptService } from './typescript-service'
 
 /** Options to `serve()` */
 export interface ServeOptions extends MessageLogOptions {
-
     /** Amount of workers to spawn */
     clusterSize: number
 
@@ -36,7 +35,10 @@ export function createClusterLogger(logger = new StdioLogger()): Logger {
  * @param options
  * @param createLangHandler Factory function that is called for each new connection
  */
-export function serve(options: ServeOptions, createLangHandler = (remoteClient: RemoteLanguageClient) => new TypeScriptService(remoteClient)): void {
+export function serve(
+    options: ServeOptions,
+    createLangHandler = (remoteClient: RemoteLanguageClient) => new TypeScriptService(remoteClient)
+): void {
     const logger = options.logger || createClusterLogger()
     if (options.clusterSize > 1 && cluster.isMaster) {
         logger.log(`Spawning ${options.clusterSize} workers`)
@@ -44,7 +46,10 @@ export function serve(options: ServeOptions, createLangHandler = (remoteClient: 
             logger.log(`Worker ${worker.id} (PID ${worker.process.pid}) online`)
         })
         cluster.on('exit', (worker, code, signal) => {
-            logger.error(`Worker ${worker.id} (PID ${worker.process.pid}) exited from signal ${signal} with code ${code}, restarting`)
+            logger.error(
+                `Worker ${worker.id} (PID ${worker.process
+                    .pid}) exited from signal ${signal} with code ${code}, restarting`
+            )
             cluster.fork()
         })
         for (let i = 0; i < options.clusterSize; ++i) {

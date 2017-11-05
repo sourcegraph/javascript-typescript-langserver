@@ -41,7 +41,7 @@ export interface PluginCreateInfo {
  */
 export interface Project {
     projectService: {
-        logger: Logger;
+        logger: Logger
     }
 }
 
@@ -65,10 +65,9 @@ export type ServerHost = object
 /**
  * The result of a node require: a module or an error.
  */
-type RequireResult = { module: {}, error: undefined } | { module: undefined, error: {} }
+type RequireResult = { module: {}; error: undefined } | { module: undefined; error: {} }
 
 export class PluginLoader {
-
     private allowLocalPluginLoads = false
     private globalPlugins: string[] = []
     private pluginProbeLocations: string[] = []
@@ -79,7 +78,8 @@ export class PluginLoader {
         pluginSettings?: PluginSettings,
         private logger = new NoopLogger(),
         private resolutionHost = new LocalModuleResolutionHost(),
-        private requireModule: (moduleName: string) => any = require) {
+        private requireModule: (moduleName: string) => any = require
+    ) {
         if (pluginSettings) {
             this.allowLocalPluginLoads = pluginSettings.allowLocalPluginLoads || false
             this.globalPlugins = pluginSettings.globalPlugins || []
@@ -130,9 +130,13 @@ export class PluginLoader {
      * @param pluginConfigEntry
      * @param searchPaths
      */
-    private enablePlugin(pluginConfigEntry: ts.PluginImport, searchPaths: string[], enableProxy: EnableProxyFunc): void {
+    private enablePlugin(
+        pluginConfigEntry: ts.PluginImport,
+        searchPaths: string[],
+        enableProxy: EnableProxyFunc
+    ): void {
         for (const searchPath of searchPaths) {
-            const resolvedModule =  this.resolveModule(pluginConfigEntry.name, searchPath) as PluginModuleFactory
+            const resolvedModule = this.resolveModule(pluginConfigEntry.name, searchPath) as PluginModuleFactory
             if (resolvedModule) {
                 enableProxy(resolvedModule, pluginConfigEntry)
                 return
@@ -179,14 +183,13 @@ export class PluginLoader {
      */
     private resolveJavaScriptModule(moduleName: string, initialDir: string, host: ts.ModuleResolutionHost): string {
         // TODO: this should set jsOnly=true to the internal resolver, but this parameter is not exposed on a public api.
-        const result =
-            ts.nodeModuleNameResolver(
-                moduleName,
-                initialDir.replace('\\', '/') + '/package.json', /* containingFile */
-                { moduleResolution: ts.ModuleResolutionKind.NodeJs, allowJs: true },
-                this.resolutionHost,
-                undefined
-            )
+        const result = ts.nodeModuleNameResolver(
+            moduleName,
+            initialDir.replace('\\', '/') + '/package.json' /* containingFile */,
+            { moduleResolution: ts.ModuleResolutionKind.NodeJs, allowJs: true },
+            this.resolutionHost,
+            undefined
+        )
         if (!result.resolvedModule) {
             // this.logger.error(result.failedLookupLocations);
             throw new Error(`Could not resolve JS module ${moduleName} starting at ${initialDir}.`)

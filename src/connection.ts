@@ -4,8 +4,20 @@ import { camelCase, omit } from 'lodash'
 import { FORMAT_TEXT_MAP, SpanContext, Tracer } from 'opentracing'
 import { Observable, Subscription, Symbol } from 'rxjs'
 import { inspect } from 'util'
-import { ErrorCodes, Message, StreamMessageReader as VSCodeStreamMessageReader, StreamMessageWriter as VSCodeStreamMessageWriter } from 'vscode-jsonrpc'
-import { isNotificationMessage, isRequestMessage, isResponseMessage, NotificationMessage, RequestMessage, ResponseMessage } from 'vscode-jsonrpc/lib/messages'
+import {
+    ErrorCodes,
+    Message,
+    StreamMessageReader as VSCodeStreamMessageReader,
+    StreamMessageWriter as VSCodeStreamMessageWriter,
+} from 'vscode-jsonrpc'
+import {
+    isNotificationMessage,
+    isRequestMessage,
+    isResponseMessage,
+    NotificationMessage,
+    RequestMessage,
+    ResponseMessage,
+} from 'vscode-jsonrpc/lib/messages'
 import { Logger, NoopLogger } from './logging'
 import { InitializeParams, PartialResultParams } from './request-type'
 import { TypeScriptService } from './typescript-service'
@@ -21,7 +33,12 @@ export interface HasMeta {
  * Returns true if the passed argument has a meta field
  */
 function hasMeta(candidate: any): candidate is HasMeta {
-    return typeof candidate === 'object' && candidate !== null && typeof candidate.meta === 'object' && candidate.meta !== null
+    return (
+        typeof candidate === 'object' &&
+        candidate !== null &&
+        typeof candidate.meta === 'object' &&
+        candidate.meta !== null
+    )
 }
 
 /**
@@ -51,7 +68,6 @@ export interface MessageLogOptions {
  * In opposite to StreamMessageReader, supports multiple listeners and is compatible with Observables
  */
 export class MessageEmitter extends EventEmitter {
-
     constructor(input: NodeJS.ReadableStream, options: MessageLogOptions = {}) {
         super()
         const reader = new VSCodeStreamMessageReader(input)
@@ -104,7 +120,6 @@ export class MessageEmitter extends EventEmitter {
  * consistent event API
  */
 export class MessageWriter {
-
     private logger: Logger
     private logMessages: boolean
     private vscodeWriter: VSCodeStreamMessageWriter
@@ -134,7 +149,6 @@ export class MessageWriter {
 }
 
 export interface RegisterLanguageHandlerOptions {
-
     logger?: Logger
 
     /** An opentracing-compatible tracer */
@@ -154,7 +168,6 @@ export function registerLanguageHandler(
     handler: TypeScriptService,
     options: RegisterLanguageHandlerOptions = {}
 ): void {
-
     const logger = options.logger || new NoopLogger()
     const tracer = options.tracer || new Tracer()
 
@@ -282,30 +295,33 @@ export function registerLanguageHandler(
                         subscriptions.delete(message.id)
                     })
                 })
-                .subscribe(result => {
-                    // Send final result
-                    messageWriter.write({
-                        jsonrpc: '2.0',
-                        id: message.id,
-                        result,
-                    })
-                }, err => {
-                    // Set error on span
-                    span.setTag('error', true)
-                    span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack })
-                    // Log error
-                    logger.error(`Handler for ${message.method} failed:`, err, '\nMessage:', message)
-                    // Send error response
-                    messageWriter.write({
-                        jsonrpc: '2.0',
-                        id: message.id,
-                        error: {
-                            message: err.message + '',
-                            code: typeof err.code === 'number' ? err.code : ErrorCodes.UnknownErrorCode,
-                            data: omit(err, ['message', 'code']),
-                        },
-                    })
-                })
+                .subscribe(
+                    result => {
+                        // Send final result
+                        messageWriter.write({
+                            jsonrpc: '2.0',
+                            id: message.id,
+                            result,
+                        })
+                    },
+                    err => {
+                        // Set error on span
+                        span.setTag('error', true)
+                        span.log({ event: 'error', 'error.object': err, message: err.message, stack: err.stack })
+                        // Log error
+                        logger.error(`Handler for ${message.method} failed:`, err, '\nMessage:', message)
+                        // Send error response
+                        messageWriter.write({
+                            jsonrpc: '2.0',
+                            id: message.id,
+                            error: {
+                                message: err.message + '',
+                                code: typeof err.code === 'number' ? err.code : ErrorCodes.UnknownErrorCode,
+                                data: omit(err, ['message', 'code']),
+                            },
+                        })
+                    }
+                )
             // Save subscription for $/cancelRequest
             subscriptions.set(message.id, subscription)
         } else {

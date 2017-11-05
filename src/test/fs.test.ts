@@ -17,7 +17,7 @@ describe('fs.ts', () => {
 
         before(async () => {
             temporaryDir = await new Promise<string>((resolve, reject) => {
-                temp.mkdir('local-fs', (err: Error, dirPath: string) => err ? reject(err) : resolve(dirPath))
+                temp.mkdir('local-fs', (err: Error, dirPath: string) => (err ? reject(err) : resolve(dirPath)))
             })
 
             // global packages contains a package
@@ -47,13 +47,16 @@ describe('fs.ts', () => {
         })
         after(async () => {
             await new Promise<void>((resolve, reject) => {
-                rimraf(temporaryDir, err => err ? reject(err) : resolve())
+                rimraf(temporaryDir, err => (err ? reject(err) : resolve()))
             })
         })
 
         describe('getWorkspaceFiles()', () => {
             it('should return all files in the workspace', async () => {
-                const files = await fileSystem.getWorkspaceFiles().toArray().toPromise()
+                const files = await fileSystem
+                    .getWorkspaceFiles()
+                    .toArray()
+                    .toPromise()
                 assert.sameMembers(files, [
                     rootUri + 'tweedledee',
                     rootUri + 'tweedledum',
@@ -63,10 +66,11 @@ describe('fs.ts', () => {
                 ])
             })
             it('should return all files under specific root', async () => {
-                const files = await fileSystem.getWorkspaceFiles(rootUri + 'foo').toArray().toPromise()
-                assert.sameMembers(files, [
-                    rootUri + 'foo/bar.ts',
-                ])
+                const files = await fileSystem
+                    .getWorkspaceFiles(rootUri + 'foo')
+                    .toArray()
+                    .toPromise()
+                assert.sameMembers(files, [rootUri + 'foo/bar.ts'])
             })
         })
         describe('getTextDocumentContent()', () => {

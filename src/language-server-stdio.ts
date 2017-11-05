@@ -2,7 +2,13 @@
 
 import { Tracer } from 'opentracing'
 import { isNotificationMessage } from 'vscode-jsonrpc/lib/messages'
-import { MessageEmitter, MessageLogOptions, MessageWriter, registerLanguageHandler, RegisterLanguageHandlerOptions } from './connection'
+import {
+    MessageEmitter,
+    MessageLogOptions,
+    MessageWriter,
+    registerLanguageHandler,
+    RegisterLanguageHandlerOptions,
+} from './connection'
 import { RemoteLanguageClient } from './lang-handler'
 import { FileLogger, StderrLogger } from './logging'
 import { TypeScriptService, TypeScriptServiceOptions } from './typescript-service'
@@ -20,7 +26,9 @@ program
     .parse(process.argv)
 
 const logger = program.logfile ? new FileLogger(program.logfile) : new StderrLogger()
-const tracer = program.enableJaeger ? initTracer({ serviceName: 'javascript-typescript-langserver', sampler: { type: 'const', param: 1 } }) : new Tracer()
+const tracer = program.enableJaeger
+    ? initTracer({ serviceName: 'javascript-typescript-langserver', sampler: { type: 'const', param: 1 } })
+    : new Tracer()
 
 const options: TypeScriptServiceOptions & MessageLogOptions & RegisterLanguageHandlerOptions = {
     strict: program.strict,

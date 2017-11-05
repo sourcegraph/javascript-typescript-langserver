@@ -1,4 +1,3 @@
-
 import * as assert from 'assert'
 import { EventEmitter } from 'events'
 import { Operation } from 'fast-json-patch'
@@ -19,11 +18,18 @@ describe('connection', () => {
             const writer = {
                 write: sinon.spy(),
             }
-            registerLanguageHandler(emitter as MessageEmitter, writer as any as MessageWriter, handler as TypeScriptService)
+            registerLanguageHandler(
+                emitter as MessageEmitter,
+                (writer as any) as MessageWriter,
+                handler as TypeScriptService
+            )
             const params = [1, 1]
             emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'whatever', params })
             sinon.assert.calledOnce(writer.write)
-            sinon.assert.calledWithExactly(writer.write, sinon.match({ jsonrpc: '2.0', id: 1, error: { code: ErrorCodes.MethodNotFound } }))
+            sinon.assert.calledWithExactly(
+                writer.write,
+                sinon.match({ jsonrpc: '2.0', id: 1, error: { code: ErrorCodes.MethodNotFound } })
+            )
         })
         it('should return MethodNotFound error when the method is prefixed with an underscore', async () => {
             const handler = { _privateMethod: sinon.spy() }
@@ -36,11 +42,16 @@ describe('connection', () => {
             emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params })
             sinon.assert.notCalled(handler._privateMethod)
             sinon.assert.calledOnce(writer.write)
-            sinon.assert.calledWithExactly(writer.write, sinon.match({ jsonrpc: '2.0', id: 1, error: { code: ErrorCodes.MethodNotFound } }))
+            sinon.assert.calledWithExactly(
+                writer.write,
+                sinon.match({ jsonrpc: '2.0', id: 1, error: { code: ErrorCodes.MethodNotFound } })
+            )
         })
         it('should call a handler on request and send the result of the returned Promise', async () => {
-            const handler: { [K in keyof TypeScriptService]: TypeScriptService[K] & sinon.SinonStub } = sinon.createStubInstance(TypeScriptService)
-            handler.initialize.returns(Promise.resolve({ op: 'add', path: '', value: { capabilities: {} }}))
+            const handler: {
+                [K in keyof TypeScriptService]: TypeScriptService[K] & sinon.SinonStub
+            } = sinon.createStubInstance(TypeScriptService)
+            handler.initialize.returns(Promise.resolve({ op: 'add', path: '', value: { capabilities: {} } }))
             handler.textDocumentHover.returns(Promise.resolve(2))
             const emitter = new EventEmitter()
             const writer = {
@@ -50,7 +61,10 @@ describe('connection', () => {
             emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'initialize', params: { capabilities: {} } })
             await new Promise<void>(resolve => setTimeout(resolve, 0))
             sinon.assert.calledOnce(handler.initialize)
-            sinon.assert.calledWithExactly(writer.write, sinon.match({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } }))
+            sinon.assert.calledWithExactly(
+                writer.write,
+                sinon.match({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } })
+            )
         })
         it('should ignore exit notifications', async () => {
             const handler = {
@@ -93,10 +107,11 @@ describe('connection', () => {
         })
         it('should call a handler on request and send the result of the returned Observable', async () => {
             const handler: TypeScriptService = Object.create(TypeScriptService.prototype)
-            const hoverStub = sinon.stub(handler, 'textDocumentHover').returns(Observable.of<Operation>(
-                { op: 'add', path: '', value: [] },
-                { op: 'add', path: '/-', value: 123 }
-            ))
+            const hoverStub = sinon
+                .stub(handler, 'textDocumentHover')
+                .returns(
+                    Observable.of<Operation>({ op: 'add', path: '', value: [] }, { op: 'add', path: '/-', value: 123 })
+                )
             const emitter = new EventEmitter()
             const writer = {
                 write: sinon.spy(),
@@ -110,10 +125,14 @@ describe('connection', () => {
         })
         it('should call a handler on request and send the thrown error of the returned Observable', async () => {
             const handler: TypeScriptService = Object.create(TypeScriptService.prototype)
-            const hoverStub = sinon.stub(handler, 'textDocumentHover').returns(Observable.throw(Object.assign(new Error('Something happened'), {
-                code: ErrorCodes.serverErrorStart,
-                whatever: 123,
-            })))
+            const hoverStub = sinon.stub(handler, 'textDocumentHover').returns(
+                Observable.throw(
+                    Object.assign(new Error('Something happened'), {
+                        code: ErrorCodes.serverErrorStart,
+                        whatever: 123,
+                    })
+                )
+            )
             const emitter = new EventEmitter()
             const writer = {
                 write: sinon.spy(),
@@ -124,19 +143,24 @@ describe('connection', () => {
             sinon.assert.calledOnce(hoverStub)
             sinon.assert.calledWithExactly(hoverStub, params, sinon.match.instanceOf(Span))
             sinon.assert.calledOnce(writer.write)
-            sinon.assert.calledWithExactly(writer.write, sinon.match({
-                jsonrpc: '2.0',
-                id: 1,
-                error: {
-                    message: 'Something happened',
-                    code: ErrorCodes.serverErrorStart,
-                    data: { whatever: 123 },
-                },
-            }))
+            sinon.assert.calledWithExactly(
+                writer.write,
+                sinon.match({
+                    jsonrpc: '2.0',
+                    id: 1,
+                    error: {
+                        message: 'Something happened',
+                        code: ErrorCodes.serverErrorStart,
+                        data: { whatever: 123 },
+                    },
+                })
+            )
         })
         it('should call a handler on request and send the returned synchronous value', async () => {
             const handler: TypeScriptService = Object.create(TypeScriptService.prototype)
-            const hoverStub = sinon.stub(handler, 'textDocumentHover').returns(Observable.of({ op: 'add', path: '', value: 2 }))
+            const hoverStub = sinon
+                .stub(handler, 'textDocumentHover')
+                .returns(Observable.of({ op: 'add', path: '', value: 2 }))
             const emitter = new EventEmitter()
             const writer = {
                 write: sinon.spy(),
@@ -149,7 +173,9 @@ describe('connection', () => {
         })
         it('should call a handler on request and send the result of the returned Observable', async () => {
             const handler: TypeScriptService = Object.create(TypeScriptService.prototype)
-            const hoverStub = sinon.stub(handler, 'textDocumentHover').returns(Observable.of({ op: 'add', path: '', value: 2 }))
+            const hoverStub = sinon
+                .stub(handler, 'textDocumentHover')
+                .returns(Observable.of({ op: 'add', path: '', value: 2 }))
             const emitter = new EventEmitter()
             const writer = {
                 write: sinon.spy(),
@@ -164,7 +190,9 @@ describe('connection', () => {
         it('should unsubscribe from the returned Observable when $/cancelRequest was sent and return a RequestCancelled error', async () => {
             const handler: TypeScriptService = Object.create(TypeScriptService.prototype)
             const unsubscribeHandler = sinon.spy()
-            const hoverStub = sinon.stub(handler, 'textDocumentHover').returns(new Observable<never>(subscriber => unsubscribeHandler))
+            const hoverStub = sinon
+                .stub(handler, 'textDocumentHover')
+                .returns(new Observable<never>(subscriber => unsubscribeHandler))
             const emitter = new EventEmitter()
             const writer = {
                 write: sinon.spy(),
@@ -177,12 +205,17 @@ describe('connection', () => {
             emitter.emit('message', { jsonrpc: '2.0', method: '$/cancelRequest', params: { id: 1 } })
             sinon.assert.calledOnce(unsubscribeHandler)
             sinon.assert.calledOnce(writer.write)
-            sinon.assert.calledWithExactly(writer.write, sinon.match({ jsonrpc: '2.0', id: 1, error: { code: ErrorCodes.RequestCancelled } }))
+            sinon.assert.calledWithExactly(
+                writer.write,
+                sinon.match({ jsonrpc: '2.0', id: 1, error: { code: ErrorCodes.RequestCancelled } })
+            )
         })
         it('should unsubscribe from the returned Observable when the connection was closed', async () => {
             const handler: TypeScriptService = Object.create(TypeScriptService.prototype)
             const unsubscribeHandler = sinon.spy()
-            const hoverStub = sinon.stub(handler, 'textDocumentHover').returns(new Observable<never>(subscriber => unsubscribeHandler))
+            const hoverStub = sinon
+                .stub(handler, 'textDocumentHover')
+                .returns(new Observable<never>(subscriber => unsubscribeHandler))
             const emitter = new EventEmitter()
             const writer = {
                 write: sinon.spy(),
@@ -197,7 +230,9 @@ describe('connection', () => {
         it('should unsubscribe from the returned Observable on exit notification', async () => {
             const handler: TypeScriptService = Object.create(TypeScriptService.prototype)
             const unsubscribeHandler = sinon.spy()
-            const hoverStub = sinon.stub(handler, 'textDocumentHover').returns(new Observable<never>(subscriber => unsubscribeHandler))
+            const hoverStub = sinon
+                .stub(handler, 'textDocumentHover')
+                .returns(new Observable<never>(subscriber => unsubscribeHandler))
             const emitter = new EventEmitter()
             const writer = {
                 write: sinon.spy(),
@@ -212,7 +247,9 @@ describe('connection', () => {
         for (const event of ['close', 'error']) {
             it(`should call shutdown on ${event} if the service was initialized`, async () => {
                 const handler = {
-                    initialize: sinon.stub().returns(Observable.of({ op: 'add', path: '', value: { capabilities: {} }})),
+                    initialize: sinon
+                        .stub()
+                        .returns(Observable.of({ op: 'add', path: '', value: { capabilities: {} } })),
                     shutdown: sinon.stub().returns(Observable.of({ op: 'add', path: '', value: null })),
                 }
                 const emitter = new EventEmitter()
@@ -228,7 +265,9 @@ describe('connection', () => {
             })
             it(`should not call shutdown on ${event} if the service was not initialized`, async () => {
                 const handler = {
-                    initialize: sinon.stub().returns(Observable.of({ op: 'add', path: '', value: { capabilities: {} }})),
+                    initialize: sinon
+                        .stub()
+                        .returns(Observable.of({ op: 'add', path: '', value: { capabilities: {} } })),
                     shutdown: sinon.stub().returns(Observable.of({ op: 'add', path: '', value: null })),
                 }
                 const emitter = new EventEmitter()
@@ -241,7 +280,9 @@ describe('connection', () => {
             })
             it(`should not call shutdown again on ${event} if shutdown was already called`, async () => {
                 const handler = {
-                    initialize: sinon.stub().returns(Observable.of({ op: 'add', path: '', value: { capabilities: {} }})),
+                    initialize: sinon
+                        .stub()
+                        .returns(Observable.of({ op: 'add', path: '', value: { capabilities: {} } })),
                     shutdown: sinon.stub().returns(Observable.of({ op: 'add', path: '', value: null })),
                 }
                 const emitter = new EventEmitter()
@@ -258,8 +299,12 @@ describe('connection', () => {
         }
         describe('Client with streaming support', () => {
             it('should call a handler on request and send partial results of the returned Observable', async () => {
-                const handler: { [K in keyof TypeScriptService]: TypeScriptService[K] & sinon.SinonStub } = sinon.createStubInstance(TypeScriptService)
-                handler.initialize.returns(Observable.of({ op: 'add', path: '', value: { capabilities: { streaming: true }}}))
+                const handler: {
+                    [K in keyof TypeScriptService]: TypeScriptService[K] & sinon.SinonStub
+                } = sinon.createStubInstance(TypeScriptService)
+                handler.initialize.returns(
+                    Observable.of({ op: 'add', path: '', value: { capabilities: { streaming: true } } })
+                )
 
                 const hoverSubject = new Subject<Operation>()
                 handler.textDocumentHover.returns(hoverSubject)
@@ -272,20 +317,37 @@ describe('connection', () => {
                 registerLanguageHandler(emitter as MessageEmitter, writer as any, handler as any)
 
                 // Send initialize
-                emitter.emit('message', { jsonrpc: '2.0', id: 1, method: 'initialize', params: { capabilities: { streaming: true }}})
-                assert.deepEqual(writer.write.args[0], [{
-                    jsonrpc: '2.0',
-                    method: '$/partialResult',
-                    params: {
-                        id: 1,
-                        patch: [{ op: 'add', path: '', value: { capabilities: { streaming: true }}}],
-                    },
-                }], 'Expected to send partial result for initialize')
-                assert.deepEqual(writer.write.args[1], [{
+                emitter.emit('message', {
                     jsonrpc: '2.0',
                     id: 1,
-                    result: { capabilities: { streaming: true } },
-                }], 'Expected to send final result for initialize')
+                    method: 'initialize',
+                    params: { capabilities: { streaming: true } },
+                })
+                assert.deepEqual(
+                    writer.write.args[0],
+                    [
+                        {
+                            jsonrpc: '2.0',
+                            method: '$/partialResult',
+                            params: {
+                                id: 1,
+                                patch: [{ op: 'add', path: '', value: { capabilities: { streaming: true } } }],
+                            },
+                        },
+                    ],
+                    'Expected to send partial result for initialize'
+                )
+                assert.deepEqual(
+                    writer.write.args[1],
+                    [
+                        {
+                            jsonrpc: '2.0',
+                            id: 1,
+                            result: { capabilities: { streaming: true } },
+                        },
+                    ],
+                    'Expected to send final result for initialize'
+                )
 
                 // Send hover
                 emitter.emit('message', { jsonrpc: '2.0', id: 2, method: 'textDocument/hover', params: [1, 2] })
@@ -293,27 +355,45 @@ describe('connection', () => {
 
                 // Simulate initializing JSON Patch Operation
                 hoverSubject.next({ op: 'add', path: '', value: [] })
-                assert.deepEqual(writer.write.args[2], [{
-                    jsonrpc: '2.0',
-                    method: '$/partialResult',
-                    params: { id: 2, patch: [{ op: 'add', path: '', value: [] }] },
-                }], 'Expected to send partial result that initializes array')
+                assert.deepEqual(
+                    writer.write.args[2],
+                    [
+                        {
+                            jsonrpc: '2.0',
+                            method: '$/partialResult',
+                            params: { id: 2, patch: [{ op: 'add', path: '', value: [] }] },
+                        },
+                    ],
+                    'Expected to send partial result that initializes array'
+                )
 
                 // Simulate streamed value
                 hoverSubject.next({ op: 'add', path: '/-', value: 123 })
-                assert.deepEqual(writer.write.args[3], [{
-                    jsonrpc: '2.0',
-                    method: '$/partialResult',
-                    params: { id: 2, patch: [{ op: 'add', path: '/-', value: 123 }] },
-                }], 'Expected to send partial result that adds 123 to array')
+                assert.deepEqual(
+                    writer.write.args[3],
+                    [
+                        {
+                            jsonrpc: '2.0',
+                            method: '$/partialResult',
+                            params: { id: 2, patch: [{ op: 'add', path: '/-', value: 123 }] },
+                        },
+                    ],
+                    'Expected to send partial result that adds 123 to array'
+                )
 
                 // Complete Subject to trigger final response
                 hoverSubject.complete()
-                assert.deepEqual(writer.write.args[4], [{
-                    jsonrpc: '2.0',
-                    id: 2,
-                    result: [123],
-                }], 'Expected to send final result [123]')
+                assert.deepEqual(
+                    writer.write.args[4],
+                    [
+                        {
+                            jsonrpc: '2.0',
+                            id: 2,
+                            result: [123],
+                        },
+                    ],
+                    'Expected to send final result [123]'
+                )
             })
         })
     })

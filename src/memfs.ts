@@ -23,7 +23,6 @@ export interface FileSystemNode {
  * In-memory file system, can be served as a ParseConfigHost (thus allowing listing files that belong to project based on tsconfig.json options)
  */
 export class InMemoryFileSystem extends EventEmitter implements ts.ParseConfigHost, ts.ModuleResolutionHost {
-
     /**
      * Contains a Map of all URIs that exist in the workspace, optionally with a content.
      * File contents for URIs in it do not neccessarily have to be fetched already.
@@ -208,21 +207,14 @@ export class InMemoryFileSystem extends EventEmitter implements ts.ParseConfigHo
      * Called by TS service to scan virtual directory when TS service looks for source files that belong to a project
      */
     public readDirectory(rootDir: string, extensions: string[], excludes: string[], includes: string[]): string[] {
-        return matchFiles(rootDir,
-            extensions,
-            excludes,
-            includes,
-            true,
-            this.path,
-            p => this.getFileSystemEntries(p)
-        )
+        return matchFiles(rootDir, extensions, excludes, includes, true, this.path, p => this.getFileSystemEntries(p))
     }
 
     /**
      * Called by TS service to scan virtual directory when TS service looks for source files that belong to a project
      */
     public getFileSystemEntries(path: string): FileSystemEntries {
-        const ret: { files: string[], directories: string[] } = { files: [], directories: [] }
+        const ret: { files: string[]; directories: string[] } = { files: [], directories: [] }
         let node = this.rootNode
         const components = path.split('/').filter(c => c)
         if (components.length !== 1 || components[0]) {

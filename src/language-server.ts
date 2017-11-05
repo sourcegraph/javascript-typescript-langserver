@@ -15,7 +15,11 @@ program
     .version(packageJson.version)
     .option('-s, --strict', 'enabled strict mode')
     .option('-p, --port [port]', 'specifies LSP port to use (' + defaultLspPort + ')', parseInt)
-    .option('-c, --cluster [num]', 'number of concurrent cluster workers (defaults to number of CPUs, ' + numCPUs + ')', parseInt)
+    .option(
+        '-c, --cluster [num]',
+        'number of concurrent cluster workers (defaults to number of CPUs, ' + numCPUs + ')',
+        parseInt
+    )
     .option('-t, --trace', 'print all requests and responses')
     .option('-l, --logfile [file]', 'log to this file')
     .option('-j, --enable-jaeger', 'enable OpenTracing through Jaeger')
@@ -27,7 +31,9 @@ const options: ServeOptions & TypeScriptServiceOptions = {
     strict: program.strict,
     logMessages: program.trace,
     logger: program.logfile ? new FileLogger(program.logfile) : new StdioLogger(),
-    tracer: program.enableJaeger ? initTracer({ serviceName: 'javascript-typescript-langserver', sampler: { type: 'const', param: 1 } }) : new Tracer(),
+    tracer: program.enableJaeger
+        ? initTracer({ serviceName: 'javascript-typescript-langserver', sampler: { type: 'const', param: 1 } })
+        : new Tracer(),
 }
 
 serve(options, client => new TypeScriptService(client, options))

@@ -1,7 +1,13 @@
 import { FORMAT_TEXT_MAP, Span } from 'opentracing'
 import { Observable } from 'rxjs'
 import { inspect } from 'util'
-import { isResponseMessage, Message, NotificationMessage, RequestMessage, ResponseMessage } from 'vscode-jsonrpc/lib/messages'
+import {
+    isResponseMessage,
+    Message,
+    NotificationMessage,
+    RequestMessage,
+    ResponseMessage,
+} from 'vscode-jsonrpc/lib/messages'
 import {
     ApplyWorkspaceEditParams,
     ApplyWorkspaceEditResponse,
@@ -12,12 +18,7 @@ import {
 } from 'vscode-languageserver'
 import { HasMeta } from './connection'
 import { MessageEmitter, MessageWriter } from './connection'
-import {
-    CacheGetParams,
-    CacheSetParams,
-    TextDocumentContentParams,
-    WorkspaceFilesParams,
-} from './request-type'
+import { CacheGetParams, CacheSetParams, TextDocumentContentParams, WorkspaceFilesParams } from './request-type'
 import { traceObservable } from './tracing'
 
 export interface LanguageClient {
@@ -73,7 +74,6 @@ export interface LanguageClient {
  * Methods are named after the camelCase version of the LSP method name
  */
 export class RemoteLanguageClient {
-
     /** The next request ID to use */
     private idCounter = 1
 
@@ -197,7 +197,10 @@ export class RemoteLanguageClient {
      *
      * @param params The edits to apply.
      */
-    public workspaceApplyEdit(params: ApplyWorkspaceEditParams, childOf = new Span()): Observable<ApplyWorkspaceEditResponse> {
+    public workspaceApplyEdit(
+        params: ApplyWorkspaceEditParams,
+        childOf = new Span()
+    ): Observable<ApplyWorkspaceEditResponse> {
         return this.request('workspace/applyEdit', params, childOf)
     }
 }

@@ -1,4 +1,3 @@
-
 /**
  * Interface for objects to perform actions if they are not needed anymore
  */

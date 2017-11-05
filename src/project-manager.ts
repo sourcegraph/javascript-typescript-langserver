@@ -33,7 +33,6 @@ const LAST_FORWARD_OR_BACKWARD_SLASH = /[\\\/][^\\\/]*$/
  * @implements ts.LanguageServiceHost
  */
 export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
-
     public complete: boolean
 
     /**
@@ -70,7 +69,13 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
      */
     private versions: Map<string, number>
 
-    constructor(rootPath: string, options: ts.CompilerOptions, fs: InMemoryFileSystem, versions: Map<string, number>, private logger: Logger = new NoopLogger()) {
+    constructor(
+        rootPath: string,
+        options: ts.CompilerOptions,
+        fs: InMemoryFileSystem,
+        versions: Map<string, number>,
+        private logger: Logger = new NoopLogger()
+    ) {
         this.rootPath = rootPath
         this.options = options
         this.fs = fs
@@ -191,7 +196,6 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
  * expectedFilePaths and typeRoots)
  */
 export class ProjectConfiguration {
-
     private service?: ts.LanguageService
 
     /**
@@ -349,9 +353,9 @@ export class ProjectConfiguration {
 
         const options = configParseResult.options
         const pathResolver = /^[a-z]:\//i.test(base) ? path.win32 : path.posix
-        this.typeRoots = options.typeRoots ?
-            options.typeRoots.map((r: string) => toUnixPath(pathResolver.resolve(this.rootFilePath, r))) :
-            []
+        this.typeRoots = options.typeRoots
+            ? options.typeRoots.map((r: string) => toUnixPath(pathResolver.resolve(this.rootFilePath, r)))
+            : []
 
         if (/(^|\/)jsconfig\.json$/.test(this.configFilePath)) {
             options.allowJs = true
@@ -359,13 +363,7 @@ export class ProjectConfiguration {
         if (this.traceModuleResolution) {
             options.traceResolution = true
         }
-        this.host = new InMemoryLanguageServiceHost(
-            this.fs.path,
-            options,
-            this.fs,
-            this.versions,
-            this.logger
-        )
+        this.host = new InMemoryLanguageServiceHost(this.fs.path, options, this.fs, this.versions, this.logger)
         this.service = ts.createLanguageService(this.host, this.documentRegistry)
         const pluginLoader = new PluginLoader(this.rootFilePath, this.fs, this.pluginSettings, this.logger)
         pluginLoader.loadPlugins(options, (factory, config) => this.wrapService(factory, config))
@@ -380,13 +378,15 @@ export class ProjectConfiguration {
     private wrapService(pluginModuleFactory: PluginModuleFactory, configEntry: ts.PluginImport): void {
         try {
             if (typeof pluginModuleFactory !== 'function') {
-                this.logger.info(`Skipped loading plugin ${configEntry.name} because it didn't expose a proper factory function`)
+                this.logger.info(
+                    `Skipped loading plugin ${configEntry.name} because it didn't expose a proper factory function`
+                )
                 return
             }
 
             const info: PluginCreateInfo = {
                 config: configEntry,
-                project: { projectService: { logger: this.logger }}, // TODO: may need more support
+                project: { projectService: { logger: this.logger } }, // TODO: may need more support
                 languageService: this.getService(),
                 languageServiceHost: this.getHost(),
                 serverHost: {}, // TODO: may need an adapter
@@ -411,9 +411,10 @@ export class ProjectConfiguration {
      * @param fileName A Unix-like absolute file path.
      */
     public isExpectedDeclarationFile(fileName: string): boolean {
-        return isDeclarationFile(fileName) &&
-                (this.expectedFilePaths.has(fileName) ||
-                this.typeRoots.some(root => fileName.startsWith(root)))
+        return (
+            isDeclarationFile(fileName) &&
+            (this.expectedFilePaths.has(fileName) || this.typeRoots.some(root => fileName.startsWith(root)))
+        )
     }
 
     /**
@@ -435,8 +436,7 @@ export class ProjectConfiguration {
         for (const uri of this.fs.uris()) {
             const fileName = uri2path(uri)
             const unixPath = toUnixPath(fileName)
-            if (isGlobalTSFile(unixPath) ||
-                this.isExpectedDeclarationFile(unixPath)) {
+            if (isGlobalTSFile(unixPath) || this.isExpectedDeclarationFile(unixPath)) {
                 const sourceFile = program.getSourceFile(fileName)
                 if (!sourceFile) {
                     this.getHost().addFile(fileName)
@@ -499,7 +499,6 @@ export type ConfigType = 'js' | 'ts'
  * ProjectManager preserves Windows paths until passed to ProjectConfiguration or TS APIs.
  */
 export class ProjectManager implements Disposable {
-
     /**
      * Root path with slashes
      */
@@ -599,7 +598,7 @@ export class ProjectManager implements Disposable {
         // Create catch-all fallback configs in case there are no tsconfig.json files
         // They are removed once at least one tsconfig.json is found
         const trimmedRootPath = this.rootPath.replace(/[\\\/]+$/, '')
-        const fallbackConfigs: {js?: ProjectConfiguration, ts?: ProjectConfiguration} = {}
+        const fallbackConfigs: { js?: ProjectConfiguration; ts?: ProjectConfiguration } = {}
         for (const configType of ['js', 'ts'] as ConfigType[]) {
             const configs = this.configs[configType]
             const tsConfig: any = {
@@ -628,24 +627,29 @@ export class ProjectManager implements Disposable {
         // Whenever a file with content is added to the InMemoryFileSystem, check if it's a tsconfig.json and add a new ProjectConfiguration
         this.subscriptions.add(
             Observable.fromEvent(inMemoryFileSystem, 'add', Array.of as SelectorMethodSignature<[string, string]>)
-                .filter(([uri, content]) => !!content && /\/[tj]sconfig\.json/.test(uri) && !uri.includes('/node_modules/'))
+                .filter(
+                    ([uri, content]) => !!content && /\/[tj]sconfig\.json/.test(uri) && !uri.includes('/node_modules/')
+                )
                 .subscribe(([uri, content]) => {
                     const filePath = uri2path(uri)
                     const pos = filePath.search(LAST_FORWARD_OR_BACKWARD_SLASH)
                     const dir = pos <= 0 ? '' : filePath.substring(0, pos)
                     const configType = this.getConfigurationType(filePath)
                     const configs = this.configs[configType]
-                    configs.set(dir, new ProjectConfiguration(
-                        this.inMemoryFs,
-                        documentRegistry,
+                    configs.set(
                         dir,
-                        this.versions,
-                        filePath,
-                        undefined,
-                        this.traceModuleResolution,
-                        this.pluginSettings,
-                        this.logger
-                    ))
+                        new ProjectConfiguration(
+                            this.inMemoryFs,
+                            documentRegistry,
+                            dir,
+                            this.versions,
+                            filePath,
+                            undefined,
+                            this.traceModuleResolution,
+                            this.pluginSettings,
+                            this.logger
+                        )
+                    )
                     // Remove catch-all config (if exists)
                     if (configs.get(trimmedRootPath) === fallbackConfigs[configType]) {
                         configs.delete(trimmedRootPath)
@@ -701,22 +705,27 @@ export class ProjectManager implements Disposable {
     public ensureModuleStructure(childOf = new Span()): Observable<never> {
         return traceObservable('Ensure module structure', childOf, span => {
             if (!this.ensuredModuleStructure) {
-                this.ensuredModuleStructure = this.updater.ensureStructure()
+                this.ensuredModuleStructure = this.updater
+                    .ensureStructure()
                     // Ensure content of all all global .d.ts, [tj]sconfig.json, package.json files
                     .concat(Observable.defer(() => observableFromIterable(this.inMemoryFs.uris())))
                     .filter(uri => isGlobalTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
                     .mergeMap(uri => this.updater.ensure(uri))
-                    .do(noop, err => {
-                        this.ensuredModuleStructure = undefined
-                    }, () => {
-                        // Reset all compilation state
-                        // TODO ze incremental compilation instead
-                        for (const config of this.configurations()) {
-                            config.reset()
+                    .do(
+                        noop,
+                        err => {
+                            this.ensuredModuleStructure = undefined
+                        },
+                        () => {
+                            // Reset all compilation state
+                            // TODO ze incremental compilation instead
+                            for (const config of this.configurations()) {
+                                config.reset()
+                            }
+                            // Require re-processing of file references
+                            this.invalidateReferencedFiles()
                         }
-                        // Require re-processing of file references
-                        this.invalidateReferencedFiles()
-                    })
+                    )
                     .publishReplay()
                     .refCount() as Observable<never>
             }
@@ -742,9 +751,15 @@ export class ProjectManager implements Disposable {
     public ensureOwnFiles(childOf = new Span()): Observable<never> {
         return traceObservable('Ensure own files', childOf, span => {
             if (!this.ensuredOwnFiles) {
-                this.ensuredOwnFiles = this.updater.ensureStructure(span)
+                this.ensuredOwnFiles = this.updater
+                    .ensureStructure(span)
                     .concat(Observable.defer(() => observableFromIterable(this.inMemoryFs.uris())))
-                    .filter(uri => !uri.includes('/node_modules/') && isJSTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
+                    .filter(
+                        uri =>
+                            (!uri.includes('/node_modules/') && isJSTSFile(uri)) ||
+                            isConfigFile(uri) ||
+                            isPackageJsonFile(uri)
+                    )
                     .mergeMap(uri => this.updater.ensure(uri))
                     .do(noop, err => {
                         this.ensuredOwnFiles = undefined
@@ -763,7 +778,8 @@ export class ProjectManager implements Disposable {
     public ensureAllFiles(childOf = new Span()): Observable<never> {
         return traceObservable('Ensure all files', childOf, span => {
             if (!this.ensuredAllFiles) {
-                this.ensuredAllFiles = this.updater.ensureStructure(span)
+                this.ensuredAllFiles = this.updater
+                    .ensureStructure(span)
                     .concat(Observable.defer(() => observableFromIterable(this.inMemoryFs.uris())))
                     .filter(uri => isJSTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
                     .mergeMap(uri => this.updater.ensure(uri))
@@ -794,25 +810,36 @@ export class ProjectManager implements Disposable {
      * @param childOf OpenTracing parent span for tracing
      * @return Observable of file URIs ensured
      */
-    public ensureReferencedFiles(uri: string, maxDepth = 30, ignore = new Set<string>(), childOf = new Span()): Observable<string> {
+    public ensureReferencedFiles(
+        uri: string,
+        maxDepth = 30,
+        ignore = new Set<string>(),
+        childOf = new Span()
+    ): Observable<string> {
         return traceObservable('Ensure referenced files', childOf, span => {
             span.addTags({ uri, maxDepth })
             ignore.add(uri)
-            return this.ensureModuleStructure(span)
-                .concat(Observable.defer(() => this.ensureConfigDependencies()))
-                // If max depth was reached, don't go any further
-                .concat(Observable.defer(() => maxDepth === 0 ? Observable.empty<never>() : this.resolveReferencedFiles(uri)))
-                // Prevent cycles
-                .filter(referencedUri => !ignore.has(referencedUri))
-                // Call method recursively with one less dep level
-                .mergeMap(referencedUri =>
-                    this.ensureReferencedFiles(referencedUri, maxDepth - 1, ignore)
-                        // Continue even if an import wasn't found
-                        .catch(err => {
-                            this.logger.error(`Error resolving file references for ${uri}:`, err)
-                            return []
-                        })
-                )
+            return (
+                this.ensureModuleStructure(span)
+                    .concat(Observable.defer(() => this.ensureConfigDependencies()))
+                    // If max depth was reached, don't go any further
+                    .concat(
+                        Observable.defer(
+                            () => (maxDepth === 0 ? Observable.empty<never>() : this.resolveReferencedFiles(uri))
+                        )
+                    )
+                    // Prevent cycles
+                    .filter(referencedUri => !ignore.has(referencedUri))
+                    // Call method recursively with one less dep level
+                    .mergeMap(referencedUri =>
+                        this.ensureReferencedFiles(referencedUri, maxDepth - 1, ignore)
+                            // Continue even if an import wasn't found
+                            .catch(err => {
+                                this.logger.error(`Error resolving file references for ${uri}:`, err)
+                                return []
+                            })
+                    )
+            )
         })
     }
 
@@ -837,13 +864,13 @@ export class ProjectManager implements Disposable {
         return traceObservable('Ensure config dependencies', childOf, span => {
             if (!this.ensuredConfigDependencies) {
                 this.ensuredConfigDependencies = observableFromIterable(this.inMemoryFs.uris())
-                .filter(uri => this.isConfigDependency(toUnixPath(uri2path(uri))))
-                .mergeMap(uri => this.updater.ensure(uri))
-                .do(noop, err => {
-                    this.ensuredConfigDependencies = undefined
-                })
-                .publishReplay()
-                .refCount() as Observable<never>
+                    .filter(uri => this.isConfigDependency(toUnixPath(uri2path(uri))))
+                    .mergeMap(uri => this.updater.ensure(uri))
+                    .do(noop, err => {
+                        this.ensuredConfigDependencies = undefined
+                    })
+                    .publishReplay()
+                    .refCount() as Observable<never>
             }
             return this.ensuredConfigDependencies
         })
@@ -874,36 +901,66 @@ export class ProjectManager implements Disposable {
         if (observable) {
             return observable
         }
-        observable = this.updater.ensure(uri)
-            .concat(Observable.defer(() => {
-                const referencingFilePath = uri2path(uri)
-                const config = this.getConfiguration(referencingFilePath)
-                config.ensureBasicFiles(span)
-                const contents = this.inMemoryFs.getContent(uri)
-                const info = ts.preProcessFile(contents, true, true)
-                const compilerOpt = config.getHost().getCompilationSettings()
-                const pathResolver = referencingFilePath.includes('\\') ? path.win32 : path.posix
-                // Iterate imported files
-                return Observable.merge(
-                    // References with `import`
-                    Observable.from(info.importedFiles)
-                        .map(importedFile => ts.resolveModuleName(importedFile.fileName, toUnixPath(referencingFilePath), compilerOpt, this.inMemoryFs))
-                        // false means we didn't find a file defining the module. It could still
-                        // exist as an ambient module, which is why we fetch global*.d.ts files.
-                        .filter(resolved => !!(resolved && resolved.resolvedModule))
-                        .map(resolved => resolved.resolvedModule!.resolvedFileName),
-                    // References with `<reference path="..."/>`
-                    Observable.from(info.referencedFiles)
-                        // Resolve triple slash references relative to current file instead of using
-                        // module resolution host because it behaves differently in "nodejs" mode
-                        .map(referencedFile => pathResolver.resolve(this.rootPath, pathResolver.dirname(referencingFilePath), toUnixPath(referencedFile.fileName))),
-                    // References with `<reference types="..."/>`
-                    Observable.from(info.typeReferenceDirectives)
-                        .map(typeReferenceDirective => ts.resolveTypeReferenceDirective(typeReferenceDirective.fileName, referencingFilePath, compilerOpt, this.inMemoryFs))
-                        .filter(resolved => !!(resolved && resolved.resolvedTypeReferenceDirective && resolved.resolvedTypeReferenceDirective.resolvedFileName))
-                        .map(resolved => resolved.resolvedTypeReferenceDirective!.resolvedFileName!)
-                )
-            }))
+        observable = this.updater
+            .ensure(uri)
+            .concat(
+                Observable.defer(() => {
+                    const referencingFilePath = uri2path(uri)
+                    const config = this.getConfiguration(referencingFilePath)
+                    config.ensureBasicFiles(span)
+                    const contents = this.inMemoryFs.getContent(uri)
+                    const info = ts.preProcessFile(contents, true, true)
+                    const compilerOpt = config.getHost().getCompilationSettings()
+                    const pathResolver = referencingFilePath.includes('\\') ? path.win32 : path.posix
+                    // Iterate imported files
+                    return Observable.merge(
+                        // References with `import`
+                        Observable.from(info.importedFiles)
+                            .map(importedFile =>
+                                ts.resolveModuleName(
+                                    importedFile.fileName,
+                                    toUnixPath(referencingFilePath),
+                                    compilerOpt,
+                                    this.inMemoryFs
+                                )
+                            )
+                            // false means we didn't find a file defining the module. It could still
+                            // exist as an ambient module, which is why we fetch global*.d.ts files.
+                            .filter(resolved => !!(resolved && resolved.resolvedModule))
+                            .map(resolved => resolved.resolvedModule!.resolvedFileName),
+                        // References with `<reference path="..."/>`
+                        Observable.from(info.referencedFiles)
+                            // Resolve triple slash references relative to current file instead of using
+                            // module resolution host because it behaves differently in "nodejs" mode
+                            .map(referencedFile =>
+                                pathResolver.resolve(
+                                    this.rootPath,
+                                    pathResolver.dirname(referencingFilePath),
+                                    toUnixPath(referencedFile.fileName)
+                                )
+                            ),
+                        // References with `<reference types="..."/>`
+                        Observable.from(info.typeReferenceDirectives)
+                            .map(typeReferenceDirective =>
+                                ts.resolveTypeReferenceDirective(
+                                    typeReferenceDirective.fileName,
+                                    referencingFilePath,
+                                    compilerOpt,
+                                    this.inMemoryFs
+                                )
+                            )
+                            .filter(
+                                resolved =>
+                                    !!(
+                                        resolved &&
+                                        resolved.resolvedTypeReferenceDirective &&
+                                        resolved.resolvedTypeReferenceDirective.resolvedFileName
+                                    )
+                            )
+                            .map(resolved => resolved.resolvedTypeReferenceDirective!.resolvedFileName!)
+                    )
+                })
+            )
             // Use same scheme, slashes, host for referenced URI as input file
             .map(path2uri)
             // Don't cache errors
@@ -921,7 +978,10 @@ export class ProjectManager implements Disposable {
      * @param filePath source file path, absolute
      * @return project configuration for a given source file. Climbs directory tree up to workspace root if needed
      */
-    public getConfiguration(filePath: string, configType: ConfigType = this.getConfigurationType(filePath)): ProjectConfiguration {
+    public getConfiguration(
+        filePath: string,
+        configType: ConfigType = this.getConfigurationType(filePath)
+    ): ProjectConfiguration {
         const config = this.getConfigurationIfExists(filePath, configType)
         if (!config) {
             throw new Error(`TypeScript config file for ${filePath} not found`)
@@ -933,7 +993,10 @@ export class ProjectManager implements Disposable {
      * @param filePath source file path, absolute
      * @return closest configuration for a given file path or undefined if there is no such configuration
      */
-    public getConfigurationIfExists(filePath: string, configType = this.getConfigurationType(filePath)): ProjectConfiguration | undefined {
+    public getConfigurationIfExists(
+        filePath: string,
+        configType = this.getConfigurationType(filePath)
+    ): ProjectConfiguration | undefined {
         let dir = filePath
         let config: ProjectConfiguration | undefined
         const configs = this.configs[configType]
@@ -970,7 +1033,8 @@ export class ProjectManager implements Disposable {
      */
     public getChildConfigurations(uri: string): IterableIterator<ProjectConfiguration> {
         const pathPrefix = uri2path(uri)
-        return iterate(this.configs.ts).concat(this.configs.js)
+        return iterate(this.configs.ts)
+            .concat(this.configs.js)
             .filter(([folderPath, config]) => folderPath.startsWith(pathPrefix))
             .map(([folderPath, config]) => config)
     }

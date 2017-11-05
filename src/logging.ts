@@ -1,4 +1,3 @@
-
 import chalk from 'chalk'
 import * as fs from 'fs'
 import { inspect } from 'util'
@@ -16,14 +15,13 @@ export interface Logger {
  * Formats values to a message by pretty-printing objects
  */
 function format(values: any[]): string {
-    return values.map(value => typeof value === 'string' ? value : inspect(value, {depth: Infinity})).join(' ')
+    return values.map(value => (typeof value === 'string' ? value : inspect(value, { depth: Infinity }))).join(' ')
 }
 
 /**
  * A logger implementation that sends window/logMessage notifications to an LSP client
  */
 export class LSPLogger implements Logger {
-
     /**
      * @param client The client to send window/logMessage notifications to
      */
@@ -135,7 +133,6 @@ export class FileLogger extends StreamLogger {
  * Logger implementation that wraps another logger and prefixes every message with a given prefix
  */
 export class PrefixedLogger {
-
     constructor(private logger: Logger, private prefix: string) {}
 
     public log(...values: any[]): void {

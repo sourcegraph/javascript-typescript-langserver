@@ -40,7 +40,13 @@ import { FileSystem, FileSystemUpdater, LocalFileSystem, RemoteFileSystem } from
 import { LanguageClient } from './lang-handler'
 import { Logger, LSPLogger } from './logging'
 import { InMemoryFileSystem, isTypeScriptLibrary } from './memfs'
-import { DEPENDENCY_KEYS, extractDefinitelyTypedPackageName, extractNodeModulesPackageName, PackageJson, PackageManager } from './packages'
+import {
+    DEPENDENCY_KEYS,
+    extractDefinitelyTypedPackageName,
+    extractNodeModulesPackageName,
+    PackageJson,
+    PackageManager,
+} from './packages'
 import { ProjectConfiguration, ProjectManager } from './project-manager'
 import {
     CompletionItem,
@@ -127,7 +133,6 @@ const completionKinds: { [name: string]: CompletionItemKind } = {
  * underscore.
  */
 export class TypeScriptService {
-
     public projectManager: ProjectManager
 
     /**
@@ -236,16 +241,20 @@ export class TypeScriptService {
             this.rootUri = params.rootUri || path2uri(params.rootPath!)
             // tslint:enable:deprecation
 
-            this.supportsCompletionWithSnippets = params.capabilities.textDocument &&
-                params.capabilities.textDocument.completion &&
-                params.capabilities.textDocument.completion.completionItem &&
-                params.capabilities.textDocument.completion.completionItem.snippetSupport || false
+            this.supportsCompletionWithSnippets =
+                (params.capabilities.textDocument &&
+                    params.capabilities.textDocument.completion &&
+                    params.capabilities.textDocument.completion.completionItem &&
+                    params.capabilities.textDocument.completion.completionItem.snippetSupport) ||
+                false
 
             // The root URI always refers to a directory
             if (!this.rootUri.endsWith('/')) {
                 this.rootUri += '/'
             }
-            this._initializeFileSystems(!this.options.strict && !(params.capabilities.xcontentProvider && params.capabilities.xfilesProvider))
+            this._initializeFileSystems(
+                !this.options.strict && !(params.capabilities.xcontentProvider && params.capabilities.xfilesProvider)
+            )
             this.updater = new FileSystemUpdater(this.fileSystem, this.inMemoryFileSystem)
             this.projectManager = new ProjectManager(
                 this.root,
@@ -365,7 +374,8 @@ export class TypeScriptService {
         const uri = normalizeUri(params.textDocument.uri)
 
         // Fetch files needed to resolve definition
-        return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
+        return this.projectManager
+            .ensureReferencedFiles(uri, undefined, undefined, span)
             .toArray()
             .mergeMap(() => {
                 const fileName: string = uri2path(uri)
@@ -377,25 +387,33 @@ export class TypeScriptService {
                     throw new Error(`Expected source file ${fileName} to exist`)
                 }
 
-                const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character)
-                const definitions: ts.DefinitionInfo[] | undefined = configuration.getService().getDefinitionAtPosition(fileName, offset)
+                const offset: number = ts.getPositionOfLineAndCharacter(
+                    sourceFile,
+                    params.position.line,
+                    params.position.character
+                )
+                const definitions: ts.DefinitionInfo[] | undefined = configuration
+                    .getService()
+                    .getDefinitionAtPosition(fileName, offset)
 
-                return Observable.from(definitions || [])
-                    .map((definition): Location => {
-                        const sourceFile = this._getSourceFile(configuration, definition.fileName, span)
-                        if (!sourceFile) {
-                            throw new Error('expected source file "' + definition.fileName + '" to exist in configuration')
-                        }
-                        const start = ts.getLineAndCharacterOfPosition(sourceFile, definition.textSpan.start)
-                        const end = ts.getLineAndCharacterOfPosition(sourceFile, definition.textSpan.start + definition.textSpan.length)
-                        return {
-                            uri: locationUri(definition.fileName),
-                            range: {
-                                start,
-                                end,
-                            },
-                        }
-                    })
+                return Observable.from(definitions || []).map((definition): Location => {
+                    const sourceFile = this._getSourceFile(configuration, definition.fileName, span)
+                    if (!sourceFile) {
+                        throw new Error('expected source file "' + definition.fileName + '" to exist in configuration')
+                    }
+                    const start = ts.getLineAndCharacterOfPosition(sourceFile, definition.textSpan.start)
+                    const end = ts.getLineAndCharacterOfPosition(
+                        sourceFile,
+                        definition.textSpan.start + definition.textSpan.length
+                    )
+                    return {
+                        uri: locationUri(definition.fileName),
+                        range: {
+                            start,
+                            end,
+                        },
+                    }
+                })
             })
     }
 
@@ -421,10 +439,14 @@ export class TypeScriptService {
     /**
      * Returns an Observable of SymbolLocationInformations for the definition of a symbol at the given position
      */
-    protected _getSymbolLocationInformations(params: TextDocumentPositionParams, span = new Span()): Observable<SymbolLocationInformation> {
+    protected _getSymbolLocationInformations(
+        params: TextDocumentPositionParams,
+        span = new Span()
+    ): Observable<SymbolLocationInformation> {
         const uri = normalizeUri(params.textDocument.uri)
         // Ensure files needed to resolve SymbolLocationInformation are fetched
-        return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
+        return this.projectManager
+            .ensureReferencedFiles(uri, undefined, undefined, span)
             .toArray()
             .mergeMap(() => {
                 // Convert URI to file path
@@ -437,35 +459,43 @@ export class TypeScriptService {
                     throw new Error(`Unknown text document ${uri}`)
                 }
                 // Convert line/character to offset
-                const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character)
+                const offset: number = ts.getPositionOfLineAndCharacter(
+                    sourceFile,
+                    params.position.line,
+                    params.position.character
+                )
                 // Query TypeScript for references
-                return Observable.from(configuration.getService().getDefinitionAtPosition(fileName, offset) || [])
-                    .mergeMap((definition: ts.DefinitionInfo): Observable<SymbolLocationInformation> => {
-                        const definitionUri = locationUri(definition.fileName)
-                        // Get the PackageDescriptor
-                        return this._getPackageDescriptor(definitionUri)
-                            .defaultIfEmpty(undefined)
-                            .map((packageDescriptor: PackageDescriptor | undefined): SymbolLocationInformation => {
-                                const sourceFile = this._getSourceFile(configuration, definition.fileName, span)
-                                if (!sourceFile) {
-                                    throw new Error(`Expected source file ${definition.fileName} to exist in configuration`)
-                                }
-                                const symbol = definitionInfoToSymbolDescriptor(definition, this.root)
-                                if (packageDescriptor) {
-                                    symbol.package = packageDescriptor
-                                }
-                                return {
-                                    symbol,
-                                    location: {
-                                        uri: definitionUri,
-                                        range: {
-                                            start: ts.getLineAndCharacterOfPosition(sourceFile, definition.textSpan.start),
-                                            end: ts.getLineAndCharacterOfPosition(sourceFile, definition.textSpan.start + definition.textSpan.length),
-                                        },
+                return Observable.from(
+                    configuration.getService().getDefinitionAtPosition(fileName, offset) || []
+                ).mergeMap((definition: ts.DefinitionInfo): Observable<SymbolLocationInformation> => {
+                    const definitionUri = locationUri(definition.fileName)
+                    // Get the PackageDescriptor
+                    return this._getPackageDescriptor(definitionUri)
+                        .defaultIfEmpty(undefined)
+                        .map((packageDescriptor: PackageDescriptor | undefined): SymbolLocationInformation => {
+                            const sourceFile = this._getSourceFile(configuration, definition.fileName, span)
+                            if (!sourceFile) {
+                                throw new Error(`Expected source file ${definition.fileName} to exist in configuration`)
+                            }
+                            const symbol = definitionInfoToSymbolDescriptor(definition, this.root)
+                            if (packageDescriptor) {
+                                symbol.package = packageDescriptor
+                            }
+                            return {
+                                symbol,
+                                location: {
+                                    uri: definitionUri,
+                                    range: {
+                                        start: ts.getLineAndCharacterOfPosition(sourceFile, definition.textSpan.start),
+                                        end: ts.getLineAndCharacterOfPosition(
+                                            sourceFile,
+                                            definition.textSpan.start + definition.textSpan.length
+                                        ),
                                     },
-                                }
-                            })
-                    })
+                                },
+                            }
+                        })
+                })
             })
     }
 
@@ -482,15 +512,20 @@ export class TypeScriptService {
             if (packageName) {
                 // The symbol is part of a dependency in node_modules
                 // Build URI to package.json of the Dependency
-                const encodedPackageName = packageName.split('/').map(encodeURIComponent).join('/')
+                const encodedPackageName = packageName
+                    .split('/')
+                    .map(encodeURIComponent)
+                    .join('/')
                 const parts: url.UrlObject = url.parse(uri)
                 const packageJsonUri = url.format({
                     ...parts,
-                    pathname: parts.pathname!.slice(0, parts.pathname!.lastIndexOf('/node_modules/' + encodedPackageName)) + `/node_modules/${encodedPackageName}/package.json`,
+                    pathname:
+                        parts.pathname!.slice(0, parts.pathname!.lastIndexOf('/node_modules/' + encodedPackageName)) +
+                        `/node_modules/${encodedPackageName}/package.json`,
                 })
                 // Fetch the package.json of the dependency
-                return this.updater.ensure(packageJsonUri, span)
-                    .concat(Observable.defer((): Observable<PackageDescriptor> => {
+                return this.updater.ensure(packageJsonUri, span).concat(
+                    Observable.defer((): Observable<PackageDescriptor> => {
                         const packageJson: PackageJson = JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri))
                         const { name, version } = packageJson
                         if (!name) {
@@ -503,32 +538,33 @@ export class TypeScriptService {
                             repoURL = 'https://github.com/DefinitelyTyped/DefinitelyTyped'
                         } else {
                             // else use repository field from package.json
-                            repoURL = typeof packageJson.repository === 'object' ? packageJson.repository.url : undefined
+                            repoURL =
+                                typeof packageJson.repository === 'object' ? packageJson.repository.url : undefined
                         }
                         return Observable.of({ name, version, repoURL })
-                    }))
+                    })
+                )
             } else {
                 // The symbol is defined in the root package of the workspace, not in a dependency
                 // Get root package.json
-                return this.packageManager.getClosestPackageJson(uri, span)
-                    .mergeMap(packageJson => {
-                        let { name, version } = packageJson
+                return this.packageManager.getClosestPackageJson(uri, span).mergeMap(packageJson => {
+                    let { name, version } = packageJson
+                    if (!name) {
+                        return []
+                    }
+                    let repoURL = typeof packageJson.repository === 'object' ? packageJson.repository.url : undefined
+                    // If the root package is DefinitelyTyped, find out the proper @types package name for each typing
+                    if (name === 'definitely-typed') {
+                        name = extractDefinitelyTypedPackageName(uri)
                         if (!name) {
+                            this.logger.error(`Could not extract package name from DefinitelyTyped URI ${uri}`)
                             return []
                         }
-                        let repoURL = typeof packageJson.repository === 'object' ? packageJson.repository.url : undefined
-                        // If the root package is DefinitelyTyped, find out the proper @types package name for each typing
-                        if (name === 'definitely-typed') {
-                            name = extractDefinitelyTypedPackageName(uri)
-                            if (!name) {
-                                this.logger.error(`Could not extract package name from DefinitelyTyped URI ${uri}`)
-                                return []
-                            }
-                            version = undefined
-                            repoURL = 'https://github.com/DefinitelyTyped/DefinitelyTyped'
-                        }
-                        return [{ name, version, repoURL } as PackageDescriptor]
-                    })
+                        version = undefined
+                        repoURL = 'https://github.com/DefinitelyTyped/DefinitelyTyped'
+                    }
+                    return [{ name, version, repoURL } as PackageDescriptor]
+                })
             }
         })
     }
@@ -540,8 +576,7 @@ export class TypeScriptService {
      * @return Observable of JSON Patches that build a `Hover` result
      */
     public textDocumentHover(params: TextDocumentPositionParams, span = new Span()): Observable<Operation> {
-        return this._getHover(params, span)
-            .map(hover => ({ op: 'add', path: '', value: hover }) as Operation)
+        return this._getHover(params, span).map(hover => ({ op: 'add', path: '', value: hover } as Operation))
     }
 
     /**
@@ -551,7 +586,8 @@ export class TypeScriptService {
         const uri = normalizeUri(params.textDocument.uri)
 
         // Ensure files needed to resolve hover are fetched
-        return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
+        return this.projectManager
+            .ensureReferencedFiles(uri, undefined, undefined, span)
             .toArray()
             .map((): Hover => {
                 const fileName: string = uri2path(uri)
@@ -562,7 +598,11 @@ export class TypeScriptService {
                 if (!sourceFile) {
                     throw new Error(`Unknown text document ${uri}`)
                 }
-                const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character)
+                const offset: number = ts.getPositionOfLineAndCharacter(
+                    sourceFile,
+                    params.position.line,
+                    params.position.character
+                )
                 const info = configuration.getService().getQuickInfoAtPosition(fileName, offset)
                 if (!info) {
                     return { contents: [] }
@@ -577,16 +617,21 @@ export class TypeScriptService {
                     const modifiers = info.kindModifiers
                         .split(',')
                         // Filter out some quirks like "constructor (exported)"
-                        .filter(mod => mod && (
-                            mod !== ts.ScriptElementKindModifier.exportedModifier
-                            || info.kind !== ts.ScriptElementKind.constructorImplementationElement
-                        ))
+                        .filter(
+                            mod =>
+                                mod &&
+                                (mod !== ts.ScriptElementKindModifier.exportedModifier ||
+                                    info.kind !== ts.ScriptElementKind.constructorImplementationElement)
+                        )
                         // Make proper adjectives
                         .map(mod => {
                             switch (mod) {
-                                case ts.ScriptElementKindModifier.ambientModifier: return 'ambient'
-                                case ts.ScriptElementKindModifier.exportedModifier: return 'exported'
-                                default: return mod
+                                case ts.ScriptElementKindModifier.ambientModifier:
+                                    return 'ambient'
+                                case ts.ScriptElementKindModifier.exportedModifier:
+                                    return 'exported'
+                                default:
+                                    return mod
                             }
                         })
                     if (modifiers.length > 0) {
@@ -624,54 +669,70 @@ export class TypeScriptService {
         const uri = normalizeUri(params.textDocument.uri)
 
         // Ensure all files were fetched to collect all references
-        return this.projectManager.ensureOwnFiles(span)
-            .concat(Observable.defer(() => {
-                // Convert URI to file path because TypeScript doesn't work with URIs
-                const fileName = uri2path(uri)
-                // Get tsconfig configuration for requested file
-                const configuration = this.projectManager.getConfiguration(fileName)
-                // Ensure all files have been added
-                configuration.ensureAllFiles(span)
-                const program = configuration.getProgram(span)
-                if (!program) {
-                    return Observable.empty<never>()
-                }
-                // Get SourceFile object for requested file
-                const sourceFile = this._getSourceFile(configuration, fileName, span)
-                if (!sourceFile) {
-                    throw new Error(`Source file ${fileName} does not exist`)
-                }
-                // Convert line/character to offset
-                const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character)
-                // Request references at position from TypeScript
-                // Despite the signature, getReferencesAtPosition() can return undefined
-                return Observable.from(configuration.getService().getReferencesAtPosition(fileName, offset) || [])
-                    .filter(reference =>
-                        // Filter declaration if not requested
-                        (!reference.isDefinition || (params.context && params.context.includeDeclaration))
-                        // Filter references in node_modules
-                        && !reference.fileName.includes('/node_modules/')
-                    )
-                    .map((reference): Location => {
-                        const sourceFile = program.getSourceFile(reference.fileName)
+        return (
+            this.projectManager
+                .ensureOwnFiles(span)
+                .concat(
+                    Observable.defer(() => {
+                        // Convert URI to file path because TypeScript doesn't work with URIs
+                        const fileName = uri2path(uri)
+                        // Get tsconfig configuration for requested file
+                        const configuration = this.projectManager.getConfiguration(fileName)
+                        // Ensure all files have been added
+                        configuration.ensureAllFiles(span)
+                        const program = configuration.getProgram(span)
+                        if (!program) {
+                            return Observable.empty<never>()
+                        }
+                        // Get SourceFile object for requested file
+                        const sourceFile = this._getSourceFile(configuration, fileName, span)
                         if (!sourceFile) {
-                            throw new Error(`Source file ${reference.fileName} does not exist`)
+                            throw new Error(`Source file ${fileName} does not exist`)
                         }
-                        // Convert offset to line/character position
-                        const start = ts.getLineAndCharacterOfPosition(sourceFile, reference.textSpan.start)
-                        const end = ts.getLineAndCharacterOfPosition(sourceFile, reference.textSpan.start + reference.textSpan.length)
-                        return {
-                            uri: path2uri(reference.fileName),
-                            range: {
-                                start,
-                                end,
-                            },
-                        }
+                        // Convert line/character to offset
+                        const offset: number = ts.getPositionOfLineAndCharacter(
+                            sourceFile,
+                            params.position.line,
+                            params.position.character
+                        )
+                        // Request references at position from TypeScript
+                        // Despite the signature, getReferencesAtPosition() can return undefined
+                        return Observable.from(
+                            configuration.getService().getReferencesAtPosition(fileName, offset) || []
+                        )
+                            .filter(
+                                reference =>
+                                    // Filter declaration if not requested
+                                    (!reference.isDefinition ||
+                                        (params.context && params.context.includeDeclaration)) &&
+                                    // Filter references in node_modules
+                                    !reference.fileName.includes('/node_modules/')
+                            )
+                            .map((reference): Location => {
+                                const sourceFile = program.getSourceFile(reference.fileName)
+                                if (!sourceFile) {
+                                    throw new Error(`Source file ${reference.fileName} does not exist`)
+                                }
+                                // Convert offset to line/character position
+                                const start = ts.getLineAndCharacterOfPosition(sourceFile, reference.textSpan.start)
+                                const end = ts.getLineAndCharacterOfPosition(
+                                    sourceFile,
+                                    reference.textSpan.start + reference.textSpan.length
+                                )
+                                return {
+                                    uri: path2uri(reference.fileName),
+                                    range: {
+                                        start,
+                                        end,
+                                    },
+                                }
+                            })
                     })
-            }))
-            .map((location: Location): Operation => ({ op: 'add', path: '/-', value: location }))
-            // Initialize with array
-            .startWith({ op: 'add', path: '', value: [] })
+                )
+                .map((location: Location): Operation => ({ op: 'add', path: '/-', value: location }))
+                // Initialize with array
+                .startWith({ op: 'add', path: '', value: [] })
+        )
     }
 
     /**
@@ -682,7 +743,6 @@ export class TypeScriptService {
      * @return Observable of JSON Patches that build a `SymbolInformation[]` result
      */
     public workspaceSymbol(params: WorkspaceSymbolParams, span = new Span()): Observable<Operation> {
-
         // Return cached result for empty query, if available
         if (!params.query && !params.symbol && this.emptyQueryWorkspaceSymbols) {
             return this.emptyQueryWorkspaceSymbols
@@ -697,8 +757,17 @@ export class TypeScriptService {
                 // Search only in the correct subdirectory for the given PackageDescriptor
                 if (isDefinitelyTyped) {
                     // Error if not passed a SymbolDescriptor query with an `@types` PackageDescriptor
-                    if (!params.symbol || !params.symbol.package || !params.symbol.package.name || !params.symbol.package.name.startsWith('@types/')) {
-                        return Observable.throw(new Error('workspace/symbol on DefinitelyTyped is only supported with a SymbolDescriptor query with an @types PackageDescriptor'))
+                    if (
+                        !params.symbol ||
+                        !params.symbol.package ||
+                        !params.symbol.package.name ||
+                        !params.symbol.package.name.startsWith('@types/')
+                    ) {
+                        return Observable.throw(
+                            new Error(
+                                'workspace/symbol on DefinitelyTyped is only supported with a SymbolDescriptor query with an @types PackageDescriptor'
+                            )
+                        )
                     }
 
                     // Fetch all files in the package subdirectory
@@ -706,40 +775,63 @@ export class TypeScriptService {
                     const normRootUri = this.rootUri.endsWith('/') ? this.rootUri : this.rootUri + '/'
                     const packageRootUri = normRootUri + params.symbol.package.name.substr(1) + '/'
 
-                    return this.updater.ensureStructure(span)
+                    return this.updater
+                        .ensureStructure(span)
                         .concat(Observable.defer(() => observableFromIterable(this.inMemoryFileSystem.uris())))
                         .filter(uri => uri.startsWith(packageRootUri))
                         .mergeMap(uri => this.updater.ensure(uri, span))
-                        .concat(Observable.defer(() => {
-                            span.log({ event: 'fetched package files' })
-                            const config = this.projectManager.getParentConfiguration(packageRootUri, 'ts')
-                            if (!config) {
-                                throw new Error(`Could not find tsconfig for ${packageRootUri}`)
-                            }
-                            // Don't match PackageDescriptor on symbols
-                            return this._getSymbolsInConfig(config, omit(params.symbol!, 'package'), span)
-                        }))
+                        .concat(
+                            Observable.defer(() => {
+                                span.log({ event: 'fetched package files' })
+                                const config = this.projectManager.getParentConfiguration(packageRootUri, 'ts')
+                                if (!config) {
+                                    throw new Error(`Could not find tsconfig for ${packageRootUri}`)
+                                }
+                                // Don't match PackageDescriptor on symbols
+                                return this._getSymbolsInConfig(config, omit(params.symbol!, 'package'), span)
+                            })
+                        )
                 }
                 // Regular workspace symbol search
                 // Search all symbols in own code, but not in dependencies
-                return this.projectManager.ensureOwnFiles(span)
-                    .concat(Observable.defer(() => {
-                        if (params.symbol && params.symbol.package && params.symbol.package.name) {
-                            // If SymbolDescriptor query with PackageDescriptor, search for package.jsons with matching package name
-                            return observableFromIterable(this.packageManager.packageJsonUris())
-                                .filter(packageJsonUri => (JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri)) as PackageJson).name === params.symbol!.package!.name)
-                                // Find their parent and child tsconfigs
-                                .mergeMap(packageJsonUri => Observable.merge(
-                                    castArray<ProjectConfiguration>(this.projectManager.getParentConfiguration(packageJsonUri) || []),
-                                    // Search child directories starting at the directory of the package.json
-                                    observableFromIterable(this.projectManager.getChildConfigurations(url.resolve(packageJsonUri, '.')))
-                                ))
-                        }
-                        // Else search all tsconfigs in the workspace
-                        return observableFromIterable(this.projectManager.configurations())
-                    }))
-                    // If PackageDescriptor is given, only search project with the matching package name
-                    .mergeMap(config => this._getSymbolsInConfig(config, params.query || params.symbol, span))
+                return (
+                    this.projectManager
+                        .ensureOwnFiles(span)
+                        .concat(
+                            Observable.defer(() => {
+                                if (params.symbol && params.symbol.package && params.symbol.package.name) {
+                                    // If SymbolDescriptor query with PackageDescriptor, search for package.jsons with matching package name
+                                    return (
+                                        observableFromIterable(this.packageManager.packageJsonUris())
+                                            .filter(
+                                                packageJsonUri =>
+                                                    (JSON.parse(
+                                                        this.inMemoryFileSystem.getContent(packageJsonUri)
+                                                    ) as PackageJson).name === params.symbol!.package!.name
+                                            )
+                                            // Find their parent and child tsconfigs
+                                            .mergeMap(packageJsonUri =>
+                                                Observable.merge(
+                                                    castArray<ProjectConfiguration>(
+                                                        this.projectManager.getParentConfiguration(packageJsonUri) || []
+                                                    ),
+                                                    // Search child directories starting at the directory of the package.json
+                                                    observableFromIterable(
+                                                        this.projectManager.getChildConfigurations(
+                                                            url.resolve(packageJsonUri, '.')
+                                                        )
+                                                    )
+                                                )
+                                            )
+                                    )
+                                }
+                                // Else search all tsconfigs in the workspace
+                                return observableFromIterable(this.projectManager.configurations())
+                            })
+                        )
+                        // If PackageDescriptor is given, only search project with the matching package name
+                        .mergeMap(config => this._getSymbolsInConfig(config, params.query || params.symbol, span))
+                )
             })
             // Filter duplicate symbols
             // There may be few configurations that contain the same file(s)
@@ -777,7 +869,8 @@ export class TypeScriptService {
         const uri = normalizeUri(params.textDocument.uri)
 
         // Ensure files needed to resolve symbols are fetched
-        return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
+        return this.projectManager
+            .ensureReferencedFiles(uri, undefined, undefined, span)
             .toArray()
             .mergeMap(() => {
                 const fileName = uri2path(uri)
@@ -793,7 +886,7 @@ export class TypeScriptService {
                     .filter(({ tree, parent }) => navigationTreeIsSymbol(tree))
                     .map(({ tree, parent }) => navigationTreeToSymbolInformation(tree, parent, sourceFile, this.root))
             })
-            .map(symbol => ({ op: 'add', path: '/-', value: symbol }) as Operation)
+            .map(symbol => ({ op: 'add', path: '/-', value: symbol } as Operation))
             .startWith({ op: 'add', path: '', value: [] } as Operation)
     }
 
@@ -813,84 +906,115 @@ export class TypeScriptService {
                 }
                 return this.projectManager.ensureAllFiles(span)
             })
-            .concat(Observable.defer(() => {
-                // if we were hinted that we should only search a specific package, find it and only search the owning tsconfig.json
-                if (params.hints && params.hints.dependeePackageName) {
-                    return observableFromIterable(this.packageManager.packageJsonUris())
-                        .filter(uri => (JSON.parse(this.inMemoryFileSystem.getContent(uri)) as PackageJson).name === params.hints!.dependeePackageName)
-                        .take(1)
-                        .mergeMap(uri => {
-                            const config = this.projectManager.getParentConfiguration(uri)
-                            if (!config) {
-                                return observableFromIterable(this.projectManager.configurations())
-                            }
-                            return [config]
-                        })
-                }
-                // else search all tsconfig.jsons
-                return observableFromIterable(this.projectManager.configurations())
-            }))
+            .concat(
+                Observable.defer(() => {
+                    // if we were hinted that we should only search a specific package, find it and only search the owning tsconfig.json
+                    if (params.hints && params.hints.dependeePackageName) {
+                        return observableFromIterable(this.packageManager.packageJsonUris())
+                            .filter(
+                                uri =>
+                                    (JSON.parse(this.inMemoryFileSystem.getContent(uri)) as PackageJson).name ===
+                                    params.hints!.dependeePackageName
+                            )
+                            .take(1)
+                            .mergeMap(uri => {
+                                const config = this.projectManager.getParentConfiguration(uri)
+                                if (!config) {
+                                    return observableFromIterable(this.projectManager.configurations())
+                                }
+                                return [config]
+                            })
+                    }
+                    // else search all tsconfig.jsons
+                    return observableFromIterable(this.projectManager.configurations())
+                })
+            )
             .mergeMap((config: ProjectConfiguration) => {
                 config.ensureAllFiles(span)
                 const program = config.getProgram(span)
                 if (!program) {
                     return Observable.empty<never>()
                 }
-                return Observable.from(program.getSourceFiles())
-                    // Ignore dependency files
-                    .filter(source => !toUnixPath(source.fileName).includes('/node_modules/'))
-                    .mergeMap(source =>
-                        // Iterate AST of source file
-                        observableFromIterable(walkMostAST(source))
-                            // Filter Identifier Nodes
-                            // TODO: include string-interpolated references
-                            .filter((node): node is ts.Identifier => node.kind === ts.SyntaxKind.Identifier)
-                            .mergeMap(node => {
-                                try {
-                                    // Find definition for node
-                                    return Observable.from(config.getService().getDefinitionAtPosition(source.fileName, node.pos + 1) || [])
-                                        .mergeMap(definition => {
-                                            const symbol = definitionInfoToSymbolDescriptor(definition, this.root)
-                                            // Check if SymbolDescriptor without PackageDescriptor matches
-                                            const score = getMatchingPropertyCount(queryWithoutPackage, symbol)
-                                            if (score < minScore || (params.query.package && !definition.fileName.includes(params.query.package.name))) {
-                                                return []
-                                            }
-                                            span.log({ event: 'match', score })
-                                            // If no PackageDescriptor query, return match
-                                            if (!params.query.package || !params.query.package) {
-                                                return [symbol]
-                                            }
-                                            // If SymbolDescriptor matched and the query contains a PackageDescriptor, get package.json and match PackageDescriptor name
-                                            // TODO match full PackageDescriptor (version) and fill out the symbol.package field
-                                            const uri = path2uri(definition.fileName)
-                                            return this._getPackageDescriptor(uri, span)
-                                                .defaultIfEmpty(undefined)
-                                                .filter(packageDescriptor => !!(packageDescriptor && packageDescriptor.name === params.query.package!.name!))
-                                                .map(packageDescriptor => {
-                                                    symbol.package = packageDescriptor
-                                                    return symbol
-                                                })
-                                        })
-                                        .map((symbol: SymbolDescriptor): ReferenceInformation => ({
-                                            symbol,
-                                            reference: {
-                                                uri: locationUri(source.fileName),
-                                                range: {
-                                                    start: ts.getLineAndCharacterOfPosition(source, node.pos),
-                                                    end: ts.getLineAndCharacterOfPosition(source, node.end),
+                return (
+                    Observable.from(program.getSourceFiles())
+                        // Ignore dependency files
+                        .filter(source => !toUnixPath(source.fileName).includes('/node_modules/'))
+                        .mergeMap(source =>
+                            // Iterate AST of source file
+                            observableFromIterable(walkMostAST(source))
+                                // Filter Identifier Nodes
+                                // TODO: include string-interpolated references
+                                .filter((node): node is ts.Identifier => node.kind === ts.SyntaxKind.Identifier)
+                                .mergeMap(node => {
+                                    try {
+                                        // Find definition for node
+                                        return Observable.from(
+                                            config
+                                                .getService()
+                                                .getDefinitionAtPosition(source.fileName, node.pos + 1) || []
+                                        )
+                                            .mergeMap(definition => {
+                                                const symbol = definitionInfoToSymbolDescriptor(definition, this.root)
+                                                // Check if SymbolDescriptor without PackageDescriptor matches
+                                                const score = getMatchingPropertyCount(queryWithoutPackage, symbol)
+                                                if (
+                                                    score < minScore ||
+                                                    (params.query.package &&
+                                                        !definition.fileName.includes(params.query.package.name))
+                                                ) {
+                                                    return []
+                                                }
+                                                span.log({ event: 'match', score })
+                                                // If no PackageDescriptor query, return match
+                                                if (!params.query.package || !params.query.package) {
+                                                    return [symbol]
+                                                }
+                                                // If SymbolDescriptor matched and the query contains a PackageDescriptor, get package.json and match PackageDescriptor name
+                                                // TODO match full PackageDescriptor (version) and fill out the symbol.package field
+                                                const uri = path2uri(definition.fileName)
+                                                return this._getPackageDescriptor(uri, span)
+                                                    .defaultIfEmpty(undefined)
+                                                    .filter(
+                                                        packageDescriptor =>
+                                                            !!(
+                                                                packageDescriptor &&
+                                                                packageDescriptor.name === params.query.package!.name!
+                                                            )
+                                                    )
+                                                    .map(packageDescriptor => {
+                                                        symbol.package = packageDescriptor
+                                                        return symbol
+                                                    })
+                                            })
+                                            .map((symbol: SymbolDescriptor): ReferenceInformation => ({
+                                                symbol,
+                                                reference: {
+                                                    uri: locationUri(source.fileName),
+                                                    range: {
+                                                        start: ts.getLineAndCharacterOfPosition(source, node.pos),
+                                                        end: ts.getLineAndCharacterOfPosition(source, node.end),
+                                                    },
                                                 },
-                                            },
-                                        }))
-                                } catch (err) {
-                                    // Continue with next node on error
-                                    // Workaround for https://github.com/Microsoft/TypeScript/issues/15219
-                                    this.logger.error(`workspace/xreferences: Error getting definition for ${source.fileName} at offset ${node.pos + 1}`, err)
-                                    span.log({ 'event': 'error', 'error.object': err, 'message': err.message, 'stack': err.stack })
-                                    return []
-                                }
-                            })
-                    )
+                                            }))
+                                    } catch (err) {
+                                        // Continue with next node on error
+                                        // Workaround for https://github.com/Microsoft/TypeScript/issues/15219
+                                        this.logger.error(
+                                            `workspace/xreferences: Error getting definition for ${source.fileName} at offset ${node.pos +
+                                                1}`,
+                                            err
+                                        )
+                                        span.log({
+                                            event: 'error',
+                                            'error.object': err,
+                                            message: err.message,
+                                            stack: err.stack,
+                                        })
+                                        return []
+                                    }
+                                })
+                        )
+                )
             })
             .map((reference): Operation => ({ op: 'add', path: '/-', value: reference }))
             .startWith({ op: 'add', path: '', value: [] })
@@ -915,58 +1039,67 @@ export class TypeScriptService {
                 // In DefinitelyTyped, report all @types/ packages
                 if (isDefinitelyTyped) {
                     const typesUri = url.resolve(this.rootUri, 'types/')
-                    return observableFromIterable(this.inMemoryFileSystem.uris())
-                        // Find all types/ subdirectories
-                        .filter(uri => uri.startsWith(typesUri))
-                        // Get the directory names
-                        .map((uri): PackageInformation => ({
-                            package: {
-                                name: '@types/' + decodeURIComponent(uri.substr(typesUri.length).split('/')[0]),
-                                // TODO report a version by looking at subfolders like v6
-                            },
-                            // TODO parse /// <reference types="node" /> comments in .d.ts files for collecting dependencies between @types packages
-                            dependencies: [],
-                        }))
+                    return (
+                        observableFromIterable(this.inMemoryFileSystem.uris())
+                            // Find all types/ subdirectories
+                            .filter(uri => uri.startsWith(typesUri))
+                            // Get the directory names
+                            .map((uri): PackageInformation => ({
+                                package: {
+                                    name: '@types/' + decodeURIComponent(uri.substr(typesUri.length).split('/')[0]),
+                                    // TODO report a version by looking at subfolders like v6
+                                },
+                                // TODO parse /// <reference types="node" /> comments in .d.ts files for collecting dependencies between @types packages
+                                dependencies: [],
+                            }))
+                    )
                 }
                 // For other workspaces, search all package.json files
-                return this.projectManager.ensureModuleStructure(span)
-                    // Iterate all files
-                    .concat(Observable.defer(() => observableFromIterable(this.inMemoryFileSystem.uris())))
-                    // Filter own package.jsons
-                    .filter(uri => uri.includes('/package.json') && !uri.includes('/node_modules/'))
-                    // Map to contents of package.jsons
-                    .mergeMap(uri => this.packageManager.getPackageJson(uri))
-                    // Map each package.json to a PackageInformation
-                    .mergeMap(packageJson => {
-                        if (!packageJson.name) {
-                            return []
-                        }
-                        const packageDescriptor: PackageDescriptor = {
-                            name: packageJson.name,
-                            version: packageJson.version,
-                            repoURL: typeof packageJson.repository === 'object' && packageJson.repository.url || undefined,
-                        }
-                        // Collect all dependencies for this package.json
-                        return Observable.from(DEPENDENCY_KEYS)
-                            .filter(key => !!packageJson[key])
-                            // Get [name, version] pairs
-                            .mergeMap(key => toPairs(packageJson[key]))
-                            // Map to DependencyReferences
-                            .map(([name, version]): DependencyReference => ({
-                                attributes: {
-                                    name,
-                                    version,
-                                },
-                                hints: {
-                                    dependeePackageName: packageJson.name,
-                                },
-                            }))
-                            .toArray()
-                            .map((dependencies): PackageInformation => ({
-                                package: packageDescriptor,
-                                dependencies,
-                            }))
-                    })
+                return (
+                    this.projectManager
+                        .ensureModuleStructure(span)
+                        // Iterate all files
+                        .concat(Observable.defer(() => observableFromIterable(this.inMemoryFileSystem.uris())))
+                        // Filter own package.jsons
+                        .filter(uri => uri.includes('/package.json') && !uri.includes('/node_modules/'))
+                        // Map to contents of package.jsons
+                        .mergeMap(uri => this.packageManager.getPackageJson(uri))
+                        // Map each package.json to a PackageInformation
+                        .mergeMap(packageJson => {
+                            if (!packageJson.name) {
+                                return []
+                            }
+                            const packageDescriptor: PackageDescriptor = {
+                                name: packageJson.name,
+                                version: packageJson.version,
+                                repoURL:
+                                    (typeof packageJson.repository === 'object' && packageJson.repository.url) ||
+                                    undefined,
+                            }
+                            // Collect all dependencies for this package.json
+                            return (
+                                Observable.from(DEPENDENCY_KEYS)
+                                    .filter(key => !!packageJson[key])
+                                    // Get [name, version] pairs
+                                    .mergeMap(key => toPairs(packageJson[key]))
+                                    // Map to DependencyReferences
+                                    .map(([name, version]): DependencyReference => ({
+                                        attributes: {
+                                            name,
+                                            version,
+                                        },
+                                        hints: {
+                                            dependeePackageName: packageJson.name,
+                                        },
+                                    }))
+                                    .toArray()
+                                    .map((dependencies): PackageInformation => ({
+                                        package: packageDescriptor,
+                                        dependencies,
+                                    }))
+                            )
+                        })
+                )
             })
             .map((packageInfo): Operation => ({ op: 'add', path: '/-', value: packageInfo }))
             .startWith({ op: 'add', path: '', value: [] })
@@ -980,31 +1113,34 @@ export class TypeScriptService {
      */
     public workspaceXdependencies(params = {}, span = new Span()): Observable<Operation> {
         // Ensure package.json files
-        return this.projectManager.ensureModuleStructure()
-            // Iterate all files
-            .concat(Observable.defer(() => observableFromIterable(this.inMemoryFileSystem.uris())))
-            // Filter own package.jsons
-            .filter(uri => uri.includes('/package.json') && !uri.includes('/node_modules/'))
-            // Ensure contents of own package.jsons
-            .mergeMap(uri => this.packageManager.getPackageJson(uri))
-            // Map package.json to DependencyReferences
-            .mergeMap(packageJson =>
-                Observable.from(DEPENDENCY_KEYS)
-                    .filter(key => !!packageJson[key])
-                    // Get [name, version] pairs
-                    .mergeMap(key => toPairs(packageJson[key]))
-                    .map(([name, version]): DependencyReference => ({
-                        attributes: {
-                            name,
-                            version,
-                        },
-                        hints: {
-                            dependeePackageName: packageJson.name,
-                        },
-                    }))
-            )
-            .map((dependency): Operation => ({ op: 'add', path: '/-', value: dependency }))
-            .startWith({ op: 'add', path: '', value: [] })
+        return (
+            this.projectManager
+                .ensureModuleStructure()
+                // Iterate all files
+                .concat(Observable.defer(() => observableFromIterable(this.inMemoryFileSystem.uris())))
+                // Filter own package.jsons
+                .filter(uri => uri.includes('/package.json') && !uri.includes('/node_modules/'))
+                // Ensure contents of own package.jsons
+                .mergeMap(uri => this.packageManager.getPackageJson(uri))
+                // Map package.json to DependencyReferences
+                .mergeMap(packageJson =>
+                    Observable.from(DEPENDENCY_KEYS)
+                        .filter(key => !!packageJson[key])
+                        // Get [name, version] pairs
+                        .mergeMap(key => toPairs(packageJson[key]))
+                        .map(([name, version]): DependencyReference => ({
+                            attributes: {
+                                name,
+                                version,
+                            },
+                            hints: {
+                                dependeePackageName: packageJson.name,
+                            },
+                        }))
+                )
+                .map((dependency): Operation => ({ op: 'add', path: '/-', value: dependency }))
+                .startWith({ op: 'add', path: '', value: [] })
+        )
     }
 
     /**
@@ -1026,10 +1162,10 @@ export class TypeScriptService {
         const uri = normalizeUri(params.textDocument.uri)
 
         // Ensure files needed to suggest completions are fetched
-        return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
+        return this.projectManager
+            .ensureReferencedFiles(uri, undefined, undefined, span)
             .toArray()
             .mergeMap(() => {
-
                 const fileName: string = uri2path(uri)
 
                 const configuration = this.projectManager.getConfiguration(fileName)
@@ -1040,7 +1176,11 @@ export class TypeScriptService {
                     return []
                 }
 
-                const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character)
+                const offset: number = ts.getPositionOfLineAndCharacter(
+                    sourceFile,
+                    params.position.line,
+                    params.position.character
+                )
                 const completions = configuration.getService().getCompletionsAtPosition(fileName, offset)
 
                 if (!completions) {
@@ -1048,7 +1188,7 @@ export class TypeScriptService {
                 }
 
                 return Observable.from(completions.entries)
-                    .map(entry =>  {
+                    .map(entry => {
                         const item: CompletionItem = { label: entry.name }
 
                         const kind = completionKinds[entry.kind]
@@ -1083,12 +1223,12 @@ export class TypeScriptService {
         if (!item.data) {
             throw new Error('Cannot resolve completion item without data')
         }
-        const {uri, offset, entryName} = item.data
+        const { uri, offset, entryName } = item.data
         const fileName: string = uri2path(uri)
-        return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
+        return this.projectManager
+            .ensureReferencedFiles(uri, undefined, undefined, span)
             .toArray()
             .map(() => {
-
                 const configuration = this.projectManager.getConfiguration(fileName)
                 configuration.ensureBasicFiles(span)
 
@@ -1096,8 +1236,10 @@ export class TypeScriptService {
                 if (details) {
                     item.documentation = ts.displayPartsToString(details.documentation)
                     item.detail = ts.displayPartsToString(details.displayParts)
-                    if (this.supportsCompletionWithSnippets &&
-                        (details.kind === 'method' || details.kind === 'function')) {
+                    if (
+                        this.supportsCompletionWithSnippets &&
+                        (details.kind === 'method' || details.kind === 'function')
+                    ) {
                         const parameters = details.displayParts
                             .filter(p => p.kind === 'parameterName')
                             // tslint:disable-next-line:no-invalid-template-strings
@@ -1113,7 +1255,7 @@ export class TypeScriptService {
                 }
                 return item
             })
-            .map(completionItem => ({ op: 'add', path: '', value: completionItem }) as Operation)
+            .map(completionItem => ({ op: 'add', path: '', value: completionItem } as Operation))
     }
 
     /**
@@ -1126,10 +1268,10 @@ export class TypeScriptService {
         const uri = normalizeUri(params.textDocument.uri)
 
         // Ensure files needed to resolve signature are fetched
-        return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
+        return this.projectManager
+            .ensureReferencedFiles(uri, undefined, undefined, span)
             .toArray()
             .map((): SignatureHelp => {
-
                 const filePath = uri2path(uri)
                 const configuration = this.projectManager.getConfiguration(filePath)
                 configuration.ensureBasicFiles(span)
@@ -1138,9 +1280,15 @@ export class TypeScriptService {
                 if (!sourceFile) {
                     throw new Error(`expected source file ${filePath} to exist in configuration`)
                 }
-                const offset: number = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character)
+                const offset: number = ts.getPositionOfLineAndCharacter(
+                    sourceFile,
+                    params.position.line,
+                    params.position.character
+                )
 
-                const signatures: ts.SignatureHelpItems = configuration.getService().getSignatureHelpItems(filePath, offset)
+                const signatures: ts.SignatureHelpItems = configuration
+                    .getService()
+                    .getSignatureHelpItems(filePath, offset)
                 if (!signatures) {
                     return { signatures: [], activeParameter: 0, activeSignature: 0 }
                 }
@@ -1166,7 +1314,7 @@ export class TypeScriptService {
                     activeParameter: signatures.argumentIndex,
                 }
             })
-            .map(signatureHelp => ({ op: 'add', path: '', value: signatureHelp }) as Operation)
+            .map(signatureHelp => ({ op: 'add', path: '', value: signatureHelp } as Operation))
     }
 
     /**
@@ -1178,7 +1326,8 @@ export class TypeScriptService {
      */
     public textDocumentCodeAction(params: CodeActionParams, span = new Span()): Observable<Operation> {
         const uri = normalizeUri(params.textDocument.uri)
-        return this.projectManager.ensureReferencedFiles(uri, undefined, undefined, span)
+        return this.projectManager
+            .ensureReferencedFiles(uri, undefined, undefined, span)
             .toArray()
             .mergeMap(() => {
                 const configuration = this.projectManager.getParentConfiguration(uri)
@@ -1193,15 +1342,27 @@ export class TypeScriptService {
                     throw new Error(`Expected source file ${filePath} to exist in configuration`)
                 }
 
-                const start = ts.getPositionOfLineAndCharacter(sourceFile, params.range.start.line, params.range.start.character)
-                const end = ts.getPositionOfLineAndCharacter(sourceFile, params.range.end.line, params.range.end.character)
+                const start = ts.getPositionOfLineAndCharacter(
+                    sourceFile,
+                    params.range.start.line,
+                    params.range.start.character
+                )
+                const end = ts.getPositionOfLineAndCharacter(
+                    sourceFile,
+                    params.range.end.line,
+                    params.range.end.character
+                )
 
                 const errorCodes = iterate(params.context.diagnostics)
                     .map(diagnostic => diagnostic.code)
                     .filter(code => typeof code === 'number')
                     .toArray() as number[]
 
-                return configuration.getService().getCodeFixesAtPosition(filePath, start, end, errorCodes, this.settings.format || {}) || []
+                return (
+                    configuration
+                        .getService()
+                        .getCodeFixesAtPosition(filePath, start, end, errorCodes, this.settings.format || {}) || []
+                )
             })
             .map((action: ts.CodeAction): Operation => ({
                 op: 'add',
@@ -1243,36 +1404,39 @@ export class TypeScriptService {
             return Observable.throw(new Error('No changes supplied for code fix command'))
         }
 
-        return this.projectManager.ensureOwnFiles(span)
-            .concat(Observable.defer(() => {
-                // Configuration lookup uses Windows paths, FileTextChanges uses unix paths. Convert to backslashes.
-                const unixFilePath = fileTextChanges[0].fileName
-                const firstChangedFile = /^[a-z]:\//i.test(unixFilePath) ?
-                    unixFilePath.replace(/\//g, '\\') :
-                    unixFilePath
+        return this.projectManager
+            .ensureOwnFiles(span)
+            .concat(
+                Observable.defer(() => {
+                    // Configuration lookup uses Windows paths, FileTextChanges uses unix paths. Convert to backslashes.
+                    const unixFilePath = fileTextChanges[0].fileName
+                    const firstChangedFile = /^[a-z]:\//i.test(unixFilePath)
+                        ? unixFilePath.replace(/\//g, '\\')
+                        : unixFilePath
 
-                const configuration = this.projectManager.getConfiguration(firstChangedFile)
-                configuration.ensureBasicFiles(span)
+                    const configuration = this.projectManager.getConfiguration(firstChangedFile)
+                    configuration.ensureBasicFiles(span)
 
-                const changes: {[uri: string]: TextEdit[]} = {}
-                for (const change of fileTextChanges) {
-                    const sourceFile = this._getSourceFile(configuration, change.fileName, span)
-                    if (!sourceFile) {
-                        throw new Error(`Expected source file ${change.fileName} to exist in configuration`)
+                    const changes: { [uri: string]: TextEdit[] } = {}
+                    for (const change of fileTextChanges) {
+                        const sourceFile = this._getSourceFile(configuration, change.fileName, span)
+                        if (!sourceFile) {
+                            throw new Error(`Expected source file ${change.fileName} to exist in configuration`)
+                        }
+                        const uri = path2uri(change.fileName)
+                        changes[uri] = change.textChanges.map(({ span, newText }): TextEdit => ({
+                            range: {
+                                start: ts.getLineAndCharacterOfPosition(sourceFile, span.start),
+                                end: ts.getLineAndCharacterOfPosition(sourceFile, span.start + span.length),
+                            },
+                            newText,
+                        }))
                     }
-                    const uri = path2uri(change.fileName)
-                    changes[uri] = change.textChanges.map(({ span, newText }): TextEdit => ({
-                        range: {
-                            start: ts.getLineAndCharacterOfPosition(sourceFile, span.start),
-                            end: ts.getLineAndCharacterOfPosition(sourceFile, span.start + span.length),
-                        },
-                        newText,
-                    }))
-                }
 
-                return this.client.workspaceApplyEdit({ edit: { changes }}, span)
-            }))
-            .map(() => ({ op: 'add', path: '', value: null }) as Operation)
+                    return this.client.workspaceApplyEdit({ edit: { changes } }, span)
+                })
+            )
+            .map(() => ({ op: 'add', path: '', value: null } as Operation))
     }
 
     /**
@@ -1283,41 +1447,51 @@ export class TypeScriptService {
     public textDocumentRename(params: RenameParams, span = new Span()): Observable<Operation> {
         const uri = normalizeUri(params.textDocument.uri)
         const editUris = new Set<string>()
-        return this.projectManager.ensureOwnFiles(span)
-            .concat(Observable.defer(() => {
+        return this.projectManager
+            .ensureOwnFiles(span)
+            .concat(
+                Observable.defer(() => {
+                    const filePath = uri2path(uri)
+                    const configuration = this.projectManager.getParentConfiguration(params.textDocument.uri)
+                    if (!configuration) {
+                        throw new Error(`tsconfig.json not found for ${filePath}`)
+                    }
+                    configuration.ensureAllFiles(span)
 
-                const filePath = uri2path(uri)
-                const configuration = this.projectManager.getParentConfiguration(params.textDocument.uri)
-                if (!configuration) {
-                    throw new Error(`tsconfig.json not found for ${filePath}`)
-                }
-                configuration.ensureAllFiles(span)
+                    const sourceFile = this._getSourceFile(configuration, filePath, span)
+                    if (!sourceFile) {
+                        throw new Error(`Expected source file ${filePath} to exist in configuration`)
+                    }
 
-                const sourceFile = this._getSourceFile(configuration, filePath, span)
-                if (!sourceFile) {
-                    throw new Error(`Expected source file ${filePath} to exist in configuration`)
-                }
+                    const position = ts.getPositionOfLineAndCharacter(
+                        sourceFile,
+                        params.position.line,
+                        params.position.character
+                    )
 
-                const position = ts.getPositionOfLineAndCharacter(sourceFile, params.position.line, params.position.character)
+                    const renameInfo = configuration.getService().getRenameInfo(filePath, position)
+                    if (!renameInfo.canRename) {
+                        throw new Error('This symbol cannot be renamed')
+                    }
 
-                const renameInfo = configuration.getService().getRenameInfo(filePath, position)
-                if (!renameInfo.canRename) {
-                    throw new Error('This symbol cannot be renamed')
-                }
-
-                return Observable.from(configuration.getService().findRenameLocations(filePath, position, false, true))
-                    .map((location: ts.RenameLocation): [string, TextEdit] => {
+                    return Observable.from(
+                        configuration.getService().findRenameLocations(filePath, position, false, true)
+                    ).map((location: ts.RenameLocation): [string, TextEdit] => {
                         const sourceFile = this._getSourceFile(configuration, location.fileName, span)
                         if (!sourceFile) {
                             throw new Error(`expected source file ${location.fileName} to exist in configuration`)
                         }
                         const editUri = path2uri(location.fileName)
                         const start = ts.getLineAndCharacterOfPosition(sourceFile, location.textSpan.start)
-                        const end = ts.getLineAndCharacterOfPosition(sourceFile, location.textSpan.start + location.textSpan.length)
+                        const end = ts.getLineAndCharacterOfPosition(
+                            sourceFile,
+                            location.textSpan.start + location.textSpan.length
+                        )
                         const edit: TextEdit = { range: { start, end }, newText: params.newName }
                         return [editUri, edit]
                     })
-            }))
+                })
+            )
             .map(([uri, edit]): Operation => {
                 // if file has no edit yet, initialize array
                 if (!editUris.has(uri)) {
@@ -1387,7 +1561,10 @@ export class TypeScriptService {
             return
         }
         const fileName = uri2path(uri)
-        const tsDiagnostics = config.getService().getSyntacticDiagnostics(fileName).concat(config.getService().getSemanticDiagnostics(fileName))
+        const tsDiagnostics = config
+            .getService()
+            .getSyntacticDiagnostics(fileName)
+            .concat(config.getService().getSemanticDiagnostics(fileName))
         const diagnostics = iterate(tsDiagnostics)
             // TS can report diagnostics without a file and range in some cases
             // These cannot be represented as LSP Diagnostics since the range and URI is required
@@ -1434,7 +1611,11 @@ export class TypeScriptService {
      * @param fileName file name to fetch source file for or create it
      * @param span Span for tracing
      */
-    private _getSourceFile(configuration: ProjectConfiguration, fileName: string, span = new Span()): ts.SourceFile | undefined {
+    private _getSourceFile(
+        configuration: ProjectConfiguration,
+        fileName: string,
+        span = new Span()
+    ): ts.SourceFile | undefined {
         let program = configuration.getProgram(span)
         if (!program) {
             return undefined
@@ -1458,7 +1639,11 @@ export class TypeScriptService {
      * @param query A text or SymbolDescriptor query
      * @return Observable of [match score, SymbolInformation]
      */
-    protected _getSymbolsInConfig(config: ProjectConfiguration, query?: string | Partial<SymbolDescriptor>, childOf = new Span()): Observable<[number, SymbolInformation]> {
+    protected _getSymbolsInConfig(
+        config: ProjectConfiguration,
+        query?: string | Partial<SymbolDescriptor>,
+        childOf = new Span()
+    ): Observable<[number, SymbolInformation]> {
         return traceObservable('Get symbols in config', childOf, span => {
             span.addTags({ config: config.configFilePath, query })
             config.ensureAllFiles(span)
@@ -1471,66 +1656,102 @@ export class TypeScriptService {
             if (typeof query === 'string') {
                 // Query by text query
                 // Limit the amount of symbols searched for text queries
-                return Observable.from(config.getService().getNavigateToItems(query, 100, undefined, false))
-                    // Exclude dependencies and standard library
-                    .filter(item => !isTypeScriptLibrary(item.fileName) && !item.fileName.includes('/node_modules/'))
-                    // Same score for all
-                    .map(item => [1, navigateToItemToSymbolInformation(item, program, this.root)] as [number, SymbolInformation])
+                return (
+                    Observable.from(config.getService().getNavigateToItems(query, 100, undefined, false))
+                        // Exclude dependencies and standard library
+                        .filter(
+                            item => !isTypeScriptLibrary(item.fileName) && !item.fileName.includes('/node_modules/')
+                        )
+                        // Same score for all
+                        .map(
+                            item =>
+                                [1, navigateToItemToSymbolInformation(item, program, this.root)] as [
+                                    number,
+                                    SymbolInformation
+                                ]
+                        )
+                )
             } else {
                 const queryWithoutPackage = query && omit<Partial<SymbolDescriptor>>(query, 'package')
                 // Require at least 2 properties to match (or all if less provided)
                 const minScore = Math.min(2, getPropertyCount(query))
                 const minScoreWithoutPackage = Math.min(2, getPropertyCount(queryWithoutPackage))
                 const service = config.getService()
-                return Observable.from(program.getSourceFiles())
-                    // Exclude dependencies and standard library
-                    .filter(sourceFile => !isTypeScriptLibrary(sourceFile.fileName) && !sourceFile.fileName.includes('/node_modules/'))
-                    .mergeMap(sourceFile => {
-                        try {
-                            const tree = service.getNavigationTree(sourceFile.fileName)
-                            const nodes = observableFromIterable(walkNavigationTree(tree))
-                                .filter(({ tree, parent }) => navigationTreeIsSymbol(tree))
-                            let matchedNodes: Observable<{ score: number, tree: ts.NavigationTree, parent?: ts.NavigationTree }>
-                            if (!query) {
-                                matchedNodes = nodes
-                                    .map(({ tree, parent }) => ({ score: 1, tree, parent }))
-                            } else {
-                                matchedNodes = nodes
-                                    // Get a score how good the symbol matches the SymbolDescriptor (ignoring PackageDescriptor)
-                                    .map(({ tree, parent }) => {
-                                        const symbolDescriptor = navigationTreeToSymbolDescriptor(tree, parent, sourceFile.fileName, this.root)
-                                        const score = getMatchingPropertyCount(queryWithoutPackage, symbolDescriptor)
-                                        return { score, tree, parent }
-                                    })
-                                    // Require the minimum score without the PackageDescriptor name
-                                    .filter(({ score }) => score >= minScoreWithoutPackage)
-                                    // If SymbolDescriptor matched, get package.json and match PackageDescriptor name
-                                    // TODO get and match full PackageDescriptor (version)
-                                    .mergeMap(({ score, tree, parent }) => {
-                                        if (!query.package || !query.package.name) {
-                                            return [{ score, tree, parent }]
-                                        }
-                                        const uri = path2uri(sourceFile.fileName)
-                                        return this.packageManager.getClosestPackageJson(uri, span)
-                                            // If PackageDescriptor matches, increase score
-                                            .defaultIfEmpty(undefined)
-                                            .map(packageJson => {
-                                                if (packageJson && packageJson.name === query.package!.name!) {
-                                                    score++
-                                                }
-                                                return { score, tree, parent }
-                                            })
-                                    })
-                                    // Require a minimum score to not return thousands of results
-                                    .filter(({ score }) => score >= minScore)
+                return (
+                    Observable.from(program.getSourceFiles())
+                        // Exclude dependencies and standard library
+                        .filter(
+                            sourceFile =>
+                                !isTypeScriptLibrary(sourceFile.fileName) &&
+                                !sourceFile.fileName.includes('/node_modules/')
+                        )
+                        .mergeMap(sourceFile => {
+                            try {
+                                const tree = service.getNavigationTree(sourceFile.fileName)
+                                const nodes = observableFromIterable(
+                                    walkNavigationTree(tree)
+                                ).filter(({ tree, parent }) => navigationTreeIsSymbol(tree))
+                                let matchedNodes: Observable<{
+                                    score: number
+                                    tree: ts.NavigationTree
+                                    parent?: ts.NavigationTree
+                                }>
+                                if (!query) {
+                                    matchedNodes = nodes.map(({ tree, parent }) => ({ score: 1, tree, parent }))
+                                } else {
+                                    matchedNodes = nodes
+                                        // Get a score how good the symbol matches the SymbolDescriptor (ignoring PackageDescriptor)
+                                        .map(({ tree, parent }) => {
+                                            const symbolDescriptor = navigationTreeToSymbolDescriptor(
+                                                tree,
+                                                parent,
+                                                sourceFile.fileName,
+                                                this.root
+                                            )
+                                            const score = getMatchingPropertyCount(
+                                                queryWithoutPackage,
+                                                symbolDescriptor
+                                            )
+                                            return { score, tree, parent }
+                                        })
+                                        // Require the minimum score without the PackageDescriptor name
+                                        .filter(({ score }) => score >= minScoreWithoutPackage)
+                                        // If SymbolDescriptor matched, get package.json and match PackageDescriptor name
+                                        // TODO get and match full PackageDescriptor (version)
+                                        .mergeMap(({ score, tree, parent }) => {
+                                            if (!query.package || !query.package.name) {
+                                                return [{ score, tree, parent }]
+                                            }
+                                            const uri = path2uri(sourceFile.fileName)
+                                            return (
+                                                this.packageManager
+                                                    .getClosestPackageJson(uri, span)
+                                                    // If PackageDescriptor matches, increase score
+                                                    .defaultIfEmpty(undefined)
+                                                    .map(packageJson => {
+                                                        if (packageJson && packageJson.name === query.package!.name!) {
+                                                            score++
+                                                        }
+                                                        return { score, tree, parent }
+                                                    })
+                                            )
+                                        })
+                                        // Require a minimum score to not return thousands of results
+                                        .filter(({ score }) => score >= minScore)
+                                }
+                                return matchedNodes.map(
+                                    ({ score, tree, parent }) =>
+                                        [
+                                            score,
+                                            navigationTreeToSymbolInformation(tree, parent, sourceFile, this.root),
+                                        ] as [number, SymbolInformation]
+                                )
+                            } catch (e) {
+                                this.logger.error('Could not get navigation tree for file', sourceFile.fileName)
+                                return []
                             }
-                            return matchedNodes
-                                .map(({ score, tree, parent }) => [score, navigationTreeToSymbolInformation(tree, parent, sourceFile, this.root)] as [number, SymbolInformation])
-                        } catch (e) {
-                            this.logger.error('Could not get navigation tree for file', sourceFile.fileName)
-                            return []
-                        }
-                    })
+                        })
+                )
             }
         })
     }

@@ -1,4 +1,3 @@
-
 import { Span } from 'opentracing'
 import { Observable } from 'rxjs'
 
@@ -17,7 +16,7 @@ export function traceSync<T>(operationName: string, childOf: Span, operation: (s
         return operation(span)
     } catch (err) {
         span.setTag('error', true)
-        span.log({ 'event': 'error', 'error.object': err, 'stack': err.stack, 'message': err.message })
+        span.log({ event: 'error', 'error.object': err, stack: err.stack, message: err.message })
         throw err
     } finally {
         span.finish()
@@ -33,13 +32,17 @@ export function traceSync<T>(operationName: string, childOf: Span, operation: (s
  * @param childOf The parent span
  * @param operation The function to call
  */
-export async function tracePromise<T>(operationName: string, childOf: Span, operation: (span: Span) => Promise<T>): Promise<T> {
+export async function tracePromise<T>(
+    operationName: string,
+    childOf: Span,
+    operation: (span: Span) => Promise<T>
+): Promise<T> {
     const span = childOf.tracer().startSpan(operationName, { childOf })
     try {
         return await operation(span)
     } catch (err) {
         span.setTag('error', true)
-        span.log({ 'event': 'error', 'error.object': err, 'stack': err.stack, 'message': err.message })
+        span.log({ event: 'error', 'error.object': err, stack: err.stack, message: err.message })
         throw err
     } finally {
         span.finish()
@@ -55,20 +58,24 @@ export async function tracePromise<T>(operationName: string, childOf: Span, oper
  * @param childOf The parent span
  * @param operation The function to call
  */
-export function traceObservable<T>(operationName: string, childOf: Span, operation: (span: Span) => Observable<T>): Observable<T> {
+export function traceObservable<T>(
+    operationName: string,
+    childOf: Span,
+    operation: (span: Span) => Observable<T>
+): Observable<T> {
     const span = childOf.tracer().startSpan(operationName, { childOf })
     try {
         return operation(span)
             .do(undefined as any, err => {
                 span.setTag('error', true)
-                span.log({ 'event': 'error', 'error.object': err, 'stack': err.stack, 'message': err.message })
+                span.log({ event: 'error', 'error.object': err, stack: err.stack, message: err.message })
             })
             .finally(() => {
                 span.finish()
             })
     } catch (err) {
         span.setTag('error', true)
-        span.log({ 'event': 'error', 'error.object': err, 'stack': err.stack, 'message': err.message })
+        span.log({ event: 'error', 'error.object': err, stack: err.stack, message: err.message })
         span.finish()
         return Observable.throw(err)
     }

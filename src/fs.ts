@@ -27,7 +27,6 @@ export interface FileSystem {
 }
 
 export class RemoteFileSystem implements FileSystem {
-
     constructor(private client: LanguageClient) {}
 
     /**
@@ -35,7 +34,8 @@ export class RemoteFileSystem implements FileSystem {
      * A language server can use the result to index files by filtering and doing a content request for each text document of interest.
      */
     public getWorkspaceFiles(base?: string, childOf = new Span()): Observable<string> {
-        return this.client.workspaceXfiles({ base }, childOf)
+        return this.client
+            .workspaceXfiles({ base }, childOf)
             .mergeMap(textDocuments => textDocuments)
             .map(textDocument => normalizeUri(textDocument.uri))
     }
@@ -46,13 +46,13 @@ export class RemoteFileSystem implements FileSystem {
      * directly.
      */
     public getTextDocumentContent(uri: string, childOf = new Span()): Observable<string> {
-        return this.client.textDocumentXcontent({ textDocument: { uri } }, childOf)
+        return this.client
+            .textDocumentXcontent({ textDocument: { uri } }, childOf)
             .map(textDocument => textDocument.text)
     }
 }
 
 export class LocalFileSystem implements FileSystem {
-
     /**
      * @param rootUri The root URI that is used if `base` is not specified
      */
@@ -104,7 +104,6 @@ export class LocalFileSystem implements FileSystem {
  * TODO: Implement Disposable with Disposer
  */
 export class FileSystemUpdater {
-
     /**
      * Observable for a pending or completed structure fetch
      */
@@ -133,12 +132,15 @@ export class FileSystemUpdater {
         // Limit concurrent fetches
         const observable = Observable.fromPromise(this.concurrencyLimit.wait())
             .mergeMap(() => this.remoteFs.getTextDocumentContent(uri))
-            .do(content => {
-                this.concurrencyLimit.signal()
-                this.inMemoryFs.add(uri, content)
-            }, err => {
-                this.fetches.delete(uri)
-            })
+            .do(
+                content => {
+                    this.concurrencyLimit.signal()
+                    this.inMemoryFs.add(uri, content)
+                },
+                err => {
+                    this.fetches.delete(uri)
+                }
+            )
             .ignoreElements()
             .publishReplay()
             .refCount() as Observable<never>
@@ -167,16 +169,23 @@ export class FileSystemUpdater {
      * @param childOf A parent span for tracing
      */
     public fetchStructure(childOf = new Span()): Observable<never> {
-        const observable = traceObservable('Fetch workspace structure', childOf, span =>
-            this.remoteFs.getWorkspaceFiles(undefined, span)
-                .do(uri => {
-                    this.inMemoryFs.add(uri)
-                }, err => {
-                    this.structureFetch = undefined
-                })
-                .ignoreElements()
-                .publishReplay()
-                .refCount() as Observable<never>
+        const observable = traceObservable(
+            'Fetch workspace structure',
+            childOf,
+            span =>
+                this.remoteFs
+                    .getWorkspaceFiles(undefined, span)
+                    .do(
+                        uri => {
+                            this.inMemoryFs.add(uri)
+                        },
+                        err => {
+                            this.structureFetch = undefined
+                        }
+                    )
+                    .ignoreElements()
+                    .publishReplay()
+                    .refCount() as Observable<never>
         )
         this.structureFetch = observable
         return observable
@@ -189,8 +198,7 @@ export class FileSystemUpdater {
      * @param span An OpenTracing span for tracing
      */
     public ensureStructure(childOf = new Span()): Observable<never> {
-        return traceObservable('Ensure structure', childOf, span =>
-            this.structureFetch || this.fetchStructure(span))
+        return traceObservable('Ensure structure', childOf, span => this.structureFetch || this.fetchStructure(span))
     }
 
     /**

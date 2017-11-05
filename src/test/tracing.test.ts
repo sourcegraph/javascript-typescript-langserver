@@ -1,4 +1,3 @@
-
 import * as chai from 'chai'
 import chaiAsPromised = require('chai-as-promised')
 import { Span } from 'opentracing'
@@ -41,15 +40,17 @@ describe('tracing.ts', () => {
             let setTagStub: sinon.SinonStub | undefined
             let logStub: sinon.SinonStub | undefined
             let finishStub: sinon.SinonStub | undefined
-            await Promise.resolve(assert.isRejected(
-                tracePromise('Foo', new Span(), async span => {
-                    setTagStub = sandbox.stub(span, 'setTag')
-                    logStub = sandbox.stub(span, 'log')
-                    finishStub = sandbox.stub(span, 'finish')
-                    throw new Error('Bar')
-                }),
-                'Bar'
-            ))
+            await Promise.resolve(
+                assert.isRejected(
+                    tracePromise('Foo', new Span(), async span => {
+                        setTagStub = sandbox.stub(span, 'setTag')
+                        logStub = sandbox.stub(span, 'log')
+                        finishStub = sandbox.stub(span, 'finish')
+                        throw new Error('Bar')
+                    }),
+                    'Bar'
+                )
+            )
             await new Promise<void>(resolve => setTimeout(resolve, 0))
             sinon.assert.calledOnce(setTagStub!)
             sinon.assert.calledOnce(logStub!)
@@ -61,15 +62,17 @@ describe('tracing.ts', () => {
             let setTagStub: sinon.SinonStub | undefined
             let logStub: sinon.SinonStub | undefined
             let finishStub: sinon.SinonStub | undefined
-            await Promise.resolve(assert.isRejected(
-                tracePromise('Foo', new Span(), span => {
-                    setTagStub = sandbox.stub(span, 'setTag')
-                    logStub = sandbox.stub(span, 'log')
-                    finishStub = sandbox.stub(span, 'finish')
-                    throw new Error('Bar')
-                }),
-                'Bar'
-            ))
+            await Promise.resolve(
+                assert.isRejected(
+                    tracePromise('Foo', new Span(), span => {
+                        setTagStub = sandbox.stub(span, 'setTag')
+                        logStub = sandbox.stub(span, 'log')
+                        finishStub = sandbox.stub(span, 'finish')
+                        throw new Error('Bar')
+                    }),
+                    'Bar'
+                )
+            )
             await new Promise<void>(resolve => setTimeout(resolve, 0))
             sinon.assert.calledOnce(setTagStub!)
             sinon.assert.calledOnce(logStub!)
@@ -83,15 +86,17 @@ describe('tracing.ts', () => {
             let setTagStub: sinon.SinonStub | undefined
             let logStub: sinon.SinonStub | undefined
             let finishStub: sinon.SinonStub | undefined
-            await Promise.resolve(assert.isRejected(
-                traceObservable('Foo', new Span(), span => {
-                    setTagStub = sandbox.stub(span, 'setTag')
-                    logStub = sandbox.stub(span, 'log')
-                    finishStub = sandbox.stub(span, 'finish')
-                    return Observable.throw(new Error('Bar'))
-                }).toPromise(),
-                'Bar'
-            ))
+            await Promise.resolve(
+                assert.isRejected(
+                    traceObservable('Foo', new Span(), span => {
+                        setTagStub = sandbox.stub(span, 'setTag')
+                        logStub = sandbox.stub(span, 'log')
+                        finishStub = sandbox.stub(span, 'finish')
+                        return Observable.throw(new Error('Bar'))
+                    }).toPromise(),
+                    'Bar'
+                )
+            )
             await new Promise<void>(resolve => setTimeout(resolve, 0))
             sinon.assert.calledOnce(setTagStub!)
             sinon.assert.calledOnce(logStub!)
@@ -103,15 +108,17 @@ describe('tracing.ts', () => {
             let setTagStub: sinon.SinonStub | undefined
             let logStub: sinon.SinonStub | undefined
             let finishStub: sinon.SinonStub | undefined
-            await Promise.resolve(assert.isRejected(
-                traceObservable('Foo', new Span(), span => {
-                    setTagStub = sandbox.stub(span, 'setTag')
-                    logStub = sandbox.stub(span, 'log')
-                    finishStub = sandbox.stub(span, 'finish')
-                    throw new Error('Bar')
-                }).toPromise(),
-                'Bar'
-            ))
+            await Promise.resolve(
+                assert.isRejected(
+                    traceObservable('Foo', new Span(), span => {
+                        setTagStub = sandbox.stub(span, 'setTag')
+                        logStub = sandbox.stub(span, 'log')
+                        finishStub = sandbox.stub(span, 'finish')
+                        throw new Error('Bar')
+                    }).toPromise(),
+                    'Bar'
+                )
+            )
             await new Promise<void>(resolve => setTimeout(resolve, 0))
             sinon.assert.calledOnce(setTagStub!)
             sinon.assert.calledOnce(logStub!)

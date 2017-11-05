@@ -1,16 +1,17 @@
 # JavaScript/TypeScript language server
 
 [![npm](https://img.shields.io/npm/v/javascript-typescript-langserver.svg)](https://www.npmjs.com/package/javascript-typescript-langserver)
-[![npm](https://img.shields.io/npm/dm/javascript-typescript-langserver.svg)](https://www.npmjs.com/package/javascript-typescript-langserver)
-[![Build Status](https://travis-ci.org/sourcegraph/javascript-typescript-langserver.svg?branch=master)](https://travis-ci.org/sourcegraph/javascript-typescript-langserver)
-[![Windows Build Status](https://ci.appveyor.com/api/projects/status/2wj7xe035pm7r76v/branch/master?svg=true
+[![downloads](https://img.shields.io/npm/dm/javascript-typescript-langserver.svg)](https://www.npmjs.com/package/javascript-typescript-langserver)
+[![build](https://travis-ci.org/sourcegraph/javascript-typescript-langserver.svg?branch=master)](https://travis-ci.org/sourcegraph/javascript-typescript-langserver)
+[![appveyor build](https://ci.appveyor.com/api/projects/status/2wj7xe035pm7r76v/branch/master?svg=true
 )](https://ci.appveyor.com/project/sourcegraph/javascript-typescript-langserver/branch/master)
 [![codecov](https://codecov.io/gh/sourcegraph/javascript-typescript-langserver/branch/master/graph/badge.svg)](https://codecov.io/gh/sourcegraph/javascript-typescript-langserver)
-[![Dependencies](https://david-dm.org/sourcegraph/javascript-typescript-langserver.svg)](https://david-dm.org/sourcegraph/javascript-typescript-langserver)
+[![dependencies](https://david-dm.org/sourcegraph/javascript-typescript-langserver.svg)](https://david-dm.org/sourcegraph/javascript-typescript-langserver)
+[![OpenTracing: enabled](https://img.shields.io/badge/OpenTracing-enabled-blue.svg)](http://opentracing.io)
 [![semantic-release](https://img.shields.io/badge/%20%20%F0%9F%93%A6%F0%9F%9A%80-semantic--release-e10079.svg)](https://github.com/semantic-release/semantic-release)
-[![OpenTracing Badge](https://img.shields.io/badge/OpenTracing-enabled-blue.svg)](http://opentracing.io)
-[![License](https://img.shields.io/github/license/sourcegraph/javascript-typescript-langserver.svg)]()
-[![Gitter](https://badges.gitter.im/sourcegraph/javascript-typescript-langserver.svg)](https://gitter.im/sourcegraph/javascript-typescript-langserver?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
+[![code style: prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg)](https://github.com/prettier/prettier)
+[![license](https://img.shields.io/github/license/sourcegraph/javascript-typescript-langserver.svg)]()
+[![chat: on gitter](https://badges.gitter.im/sourcegraph/javascript-typescript-langserver.svg)](https://gitter.im/sourcegraph/javascript-typescript-langserver?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
 This is a language server for JavaScript and TypeScript that adheres to the [Language Server Protocol (LSP)](https://github.com/Microsoft/language-server-protocol/blob/master/protocol.md). It uses [TypeScript's](http://www.typescriptlang.org/) LanguageService to perform source code analysis.
 
@@ -76,15 +77,15 @@ npm test
 
 This language server implements some LSP extensions, prefixed with an `x`.
 
-- **[Files extension](https://github.com/sourcegraph/language-server-protocol/blob/master/extension-files.md)**  
+- **[Files extension](https://github.com/sourcegraph/language-server-protocol/blob/master/extension-files.md)**
   Allows the server to request file contents without accessing the file system
-- **[SymbolDescriptor extension](https://github.com/sourcegraph/language-server-protocol/blob/master/extension-workspace-references.md)**  
+- **[SymbolDescriptor extension](https://github.com/sourcegraph/language-server-protocol/blob/master/extension-workspace-references.md)**
   Get a SymbolDescriptor for a symbol, search the workspace for symbols or references to it
-- **[Streaming](https://github.com/sourcegraph/language-server-protocol/blob/streaming/protocol.md#partialResult)**  
+- **[Streaming](https://github.com/sourcegraph/language-server-protocol/blob/streaming/protocol.md#partialResult)**
   Supports streaming partial results for all endpoints through JSON Patches
-- **Packages extension**  
+- **Packages extension**
   Methods to get information about dependencies
-- **TCP / multiple client support**  
+- **TCP / multiple client support**
   When running over TCP, the `exit` notification will not kill the process, but close the TCP socket
 
 ## Versioning
