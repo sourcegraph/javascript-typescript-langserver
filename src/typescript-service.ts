@@ -1000,8 +1000,9 @@ export class TypeScriptService {
                                         // Continue with next node on error
                                         // Workaround for https://github.com/Microsoft/TypeScript/issues/15219
                                         this.logger.error(
-                                            `workspace/xreferences: Error getting definition for ${source.fileName} at offset ${node.pos +
-                                                1}`,
+                                            `workspace/xreferences: Error getting definition for ${
+                                                source.fileName
+                                            } at offset ${node.pos + 1}`,
                                             err
                                         )
                                         span.log({
@@ -1688,9 +1689,9 @@ export class TypeScriptService {
                         .mergeMap(sourceFile => {
                             try {
                                 const tree = service.getNavigationTree(sourceFile.fileName)
-                                const nodes = observableFromIterable(
-                                    walkNavigationTree(tree)
-                                ).filter(({ tree, parent }) => navigationTreeIsSymbol(tree))
+                                const nodes = observableFromIterable(walkNavigationTree(tree)).filter(
+                                    ({ tree, parent }) => navigationTreeIsSymbol(tree)
+                                )
                                 let matchedNodes: Observable<{
                                     score: number
                                     tree: ts.NavigationTree
