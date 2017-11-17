@@ -57,7 +57,7 @@
     "vscode-languageserver-types": "^3.0.3"
   },
   "devDependencies": {
-    "@sourcegraph/prettierrc": "^1.1.0",
+    "@sourcegraph/prettierrc": "^2.0.0",
     "@sourcegraph/tsconfig": "^1.0.0",
     "@sourcegraph/tslint-config": "^8.0.0",
     "@types/chai": "^4.0.0",
