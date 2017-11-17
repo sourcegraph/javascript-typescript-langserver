@@ -58,7 +58,7 @@
   },
   "devDependencies": {
     "@sourcegraph/prettierrc": "^1.1.0",
-    "@sourcegraph/tsconfig": "^1.0.0",
+    "@sourcegraph/tsconfig": "^2.0.0",
     "@sourcegraph/tslint-config": "^8.0.0",
     "@types/chai": "^4.0.0",
     "@types/chai-as-promised": "^7.1.0",
