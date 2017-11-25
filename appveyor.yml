@@ -1,6 +1,10 @@
 version: '{build}'
 
+image: Visual Studio 2017
+
 clone_depth: 1
+skip_branch_with_pr: true
+skip_tags: true
 
 cache:
  - '%LOCALAPPDATA%\Yarn'

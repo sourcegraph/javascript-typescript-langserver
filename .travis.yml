@@ -5,7 +5,8 @@ node_js:
   - '6'
 
 cache:
-  yarn: true
+  directories:
+    - $HOME/.npm
 
 script:
   - npm run lint
@@ -13,9 +14,22 @@ script:
   - npm run cover
 
 after_success:
-  # Upload coverage to codecov
-  - 'nyc report --reporter=lcov > coverage.lcov && bash <(curl -s https://codecov.io/bash) -f coverage/lcov.info'
-  - npm run semantic-release
+  - nyc report --reporter=json
+  - bash <(curl -s https://codecov.io/bash)
+
+jobs:
+  include:
+    - stage: release
+      node_js: '8'
+      script:
+        - npm run build
+        - npm run semantic-release
+      after_success: skip
+
+stages:
+  - test
+  - name: release
+    if: branch = master AND type = push AND fork = false
 
 branches:
   except:
