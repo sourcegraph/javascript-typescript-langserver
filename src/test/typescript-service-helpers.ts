@@ -612,9 +612,8 @@ export function describeTypeScriptService(
         afterEach(shutdownService)
 
         describe('workspaceSymbol()', function(this: TestContext & ISuiteCallbackContext): void {
-            it('should find a symbol by SymbolDescriptor query with name and package name', async function(
-                this: TestContext & ITestCallbackContext
-            ): Promise<void> {
+            it('should find a symbol by SymbolDescriptor query with name and package name', async function(this: TestContext &
+                ITestCallbackContext): Promise<void> {
                 const result: SymbolInformation[] = await this.service
                     .workspaceSymbol({
                         symbol: { name: 'resolveCallback', package: { name: '@types/resolve' } },
@@ -641,9 +640,8 @@ export function describeTypeScriptService(
                     },
                 ])
             })
-            it('should find a symbol by SymbolDescriptor query with name, containerKind and package name', async function(
-                this: TestContext & ITestCallbackContext
-            ): Promise<void> {
+            it('should find a symbol by SymbolDescriptor query with name, containerKind and package name', async function(this: TestContext &
+                ITestCallbackContext): Promise<void> {
                 const result: SymbolInformation[] = await this.service
                     .workspaceSymbol({
                         symbol: {
@@ -700,9 +698,8 @@ export function describeTypeScriptService(
 
         describe('workspaceSymbol()', function(this: TestContext & ISuiteCallbackContext): void {
             describe('with SymbolDescriptor query', function(this: TestContext & ISuiteCallbackContext): void {
-                it('should find a symbol by name, kind and package name', async function(
-                    this: TestContext & ITestCallbackContext
-                ): Promise<void> {
+                it('should find a symbol by name, kind and package name', async function(this: TestContext &
+                    ITestCallbackContext): Promise<void> {
                     const result: SymbolInformation[] = await this.service
                         .workspaceSymbol({
                             symbol: {
@@ -733,9 +730,8 @@ export function describeTypeScriptService(
                         name: 'a',
                     })
                 })
-                it('should find a symbol by name, kind, package name and ignore package version', async function(
-                    this: TestContext & ITestCallbackContext
-                ): Promise<void> {
+                it('should find a symbol by name, kind, package name and ignore package version', async function(this: TestContext &
+                    ITestCallbackContext): Promise<void> {
                     const result: SymbolInformation[] = await this.service
                         .workspaceSymbol({
                             symbol: { name: 'a', kind: 'class', package: { name: 'mypkg', version: '203940234' } },
@@ -760,9 +756,9 @@ export function describeTypeScriptService(
                         name: 'a',
                     })
                 })
-                it('should find a symbol by name', async function(
-                    this: TestContext & ITestCallbackContext
-                ): Promise<void> {
+                it('should find a symbol by name', async function(this: TestContext & ITestCallbackContext): Promise<
+                    void
+                > {
                     const result: SymbolInformation[] = await this.service
                         .workspaceSymbol({
                             symbol: {
@@ -791,9 +787,8 @@ export function describeTypeScriptService(
                         },
                     ])
                 })
-                it('should return no result if the PackageDescriptor does not match', async function(
-                    this: TestContext & ITestCallbackContext
-                ): Promise<void> {
+                it('should return no result if the PackageDescriptor does not match', async function(this: TestContext &
+                    ITestCallbackContext): Promise<void> {
                     const result: SymbolInformation[] = await this.service
                         .workspaceSymbol({
                             symbol: {
@@ -835,9 +830,8 @@ export function describeTypeScriptService(
                         },
                     ])
                 })
-                it('should return all symbols for an empty query excluding dependencies', async function(
-                    this: TestContext & ITestCallbackContext
-                ): Promise<void> {
+                it('should return all symbols for an empty query excluding dependencies', async function(this: TestContext &
+                    ITestCallbackContext): Promise<void> {
                     const result: SymbolInformation[] = await this.service
                         .workspaceSymbol({ query: '' })
                         .reduce<Operation, SymbolInformation[]>(applyReducer, null as any)
@@ -1007,9 +1001,8 @@ export function describeTypeScriptService(
         })
 
         describe('workspaceXreferences()', function(this: TestContext & ISuiteCallbackContext): void {
-            it('should return all references to a method', async function(
-                this: TestContext & ITestCallbackContext
-            ): Promise<void> {
+            it('should return all references to a method', async function(this: TestContext &
+                ITestCallbackContext): Promise<void> {
                 const result: ReferenceInformation[] = await this.service
                     .workspaceXreferences({ query: { name: 'foo', kind: 'method', containerName: 'a' } })
                     .reduce<Operation, ReferenceInformation[]>(applyReducer, null as any)
@@ -1039,9 +1032,8 @@ export function describeTypeScriptService(
                     },
                 ])
             })
-            it('should return all references to a method with hinted dependee package name', async function(
-                this: TestContext & ITestCallbackContext
-            ): Promise<void> {
+            it('should return all references to a method with hinted dependee package name', async function(this: TestContext &
+                ITestCallbackContext): Promise<void> {
                 const result: ReferenceInformation[] = await this.service
                     .workspaceXreferences({
                         query: {
@@ -1080,9 +1072,8 @@ export function describeTypeScriptService(
                     },
                 ])
             })
-            it('should return no references to a method if hinted dependee package name was not found', async function(
-                this: TestContext & ITestCallbackContext
-            ): Promise<void> {
+            it('should return no references to a method if hinted dependee package name was not found', async function(this: TestContext &
+                ITestCallbackContext): Promise<void> {
                 const result = await this.service
                     .workspaceXreferences({
                         query: {
@@ -1098,9 +1089,8 @@ export function describeTypeScriptService(
                     .toPromise()
                 assert.deepEqual(result, [])
             })
-            it('should return all references to a symbol from a dependency', async function(
-                this: TestContext & ITestCallbackContext
-            ): Promise<void> {
+            it('should return all references to a symbol from a dependency', async function(this: TestContext &
+                ITestCallbackContext): Promise<void> {
                 const result: ReferenceInformation[] = await this.service
                     .workspaceXreferences({ query: { name: 'x' } })
                     .reduce<Operation, ReferenceInformation[]>(applyReducer, null as any)
@@ -1130,9 +1120,8 @@ export function describeTypeScriptService(
                     },
                 ])
             })
-            it('should return all references to a symbol from a dependency with PackageDescriptor query', async function(
-                this: TestContext & ITestCallbackContext
-            ): Promise<void> {
+            it('should return all references to a symbol from a dependency with PackageDescriptor query', async function(this: TestContext &
+                ITestCallbackContext): Promise<void> {
                 const result: ReferenceInformation[] = await this.service
                     .workspaceXreferences({ query: { name: 'x', package: { name: 'dep' } } })
                     .reduce<Operation, ReferenceInformation[]>(applyReducer, null as any)
@@ -1167,9 +1156,8 @@ export function describeTypeScriptService(
                     },
                 ])
             })
-            it('should return all references to all symbols if empty SymbolDescriptor query is passed', async function(
-                this: TestContext & ITestCallbackContext
-            ): Promise<void> {
+            it('should return all references to all symbols if empty SymbolDescriptor query is passed', async function(this: TestContext &
+                ITestCallbackContext): Promise<void> {
                 const result: ReferenceInformation[] = await this.service
                     .workspaceXreferences({ query: {} })
                     .reduce<Operation, ReferenceInformation[]>(applyReducer, null as any)
@@ -1434,9 +1422,9 @@ export function describeTypeScriptService(
         afterEach(shutdownService)
 
         describe('workspaceXdependencies()', function(this: TestContext & ISuiteCallbackContext): void {
-            it('should account for all dependencies', async function(
-                this: TestContext & ITestCallbackContext
-            ): Promise<void> {
+            it('should account for all dependencies', async function(this: TestContext & ITestCallbackContext): Promise<
+                void
+            > {
                 const result: DependencyReference[] = await this.service
                     .workspaceXdependencies()
                     .reduce<Operation, DependencyReference[]>(applyReducer, null as any)
@@ -1536,9 +1524,9 @@ export function describeTypeScriptService(
             })
         })
         describe('workspaceXpackages()', function(this: TestContext & ISuiteCallbackContext): void {
-            it('should accournt for all packages', async function(
-                this: TestContext & ITestCallbackContext
-            ): Promise<void> {
+            it('should accournt for all packages', async function(this: TestContext & ITestCallbackContext): Promise<
+                void
+            > {
                 const result: PackageInformation[] = await this.service
                     .workspaceXpackages()
                     .reduce<Operation, PackageInformation[]>(applyReducer, null as any)
@@ -1697,9 +1685,8 @@ export function describeTypeScriptService(
 
         afterEach(shutdownService)
 
-        it('should handle didChange when configuration is not yet initialized', async function(
-            this: TestContext & ITestCallbackContext
-        ): Promise<void> {
+        it('should handle didChange when configuration is not yet initialized', async function(this: TestContext &
+            ITestCallbackContext): Promise<void> {
             const hoverParams = {
                 textDocument: {
                     uri: rootUri + 'a.ts',
@@ -1743,9 +1730,8 @@ export function describeTypeScriptService(
             })
         })
 
-        it('should handle didClose when configuration is not yet initialized', async function(
-            this: TestContext & ITestCallbackContext
-        ): Promise<void> {
+        it('should handle didClose when configuration is not yet initialized', async function(this: TestContext &
+            ITestCallbackContext): Promise<void> {
             const hoverParams = {
                 textDocument: {
                     uri: rootUri + 'a.ts',
@@ -1889,9 +1875,9 @@ export function describeTypeScriptService(
 
         afterEach(shutdownService)
 
-        it('should publish diagnostics on didOpen', async function(
-            this: TestContext & ITestCallbackContext
-        ): Promise<void> {
+        it('should publish diagnostics on didOpen', async function(this: TestContext & ITestCallbackContext): Promise<
+            void
+        > {
             await this.service.textDocumentDidOpen({
                 textDocument: {
                     uri: rootUri + 'src/errors.ts',
@@ -1916,9 +1902,9 @@ export function describeTypeScriptService(
             })
         })
 
-        it('should publish diagnostics on didChange', async function(
-            this: TestContext & ITestCallbackContext
-        ): Promise<void> {
+        it('should publish diagnostics on didChange', async function(this: TestContext & ITestCallbackContext): Promise<
+            void
+        > {
             await this.service.textDocumentDidOpen({
                 textDocument: {
                     uri: rootUri + 'src/errors.ts',
@@ -1953,9 +1939,8 @@ export function describeTypeScriptService(
             })
         })
 
-        it('should publish empty diagnostics on didChange if error was fixed', async function(
-            this: TestContext & ITestCallbackContext
-        ): Promise<void> {
+        it('should publish empty diagnostics on didChange if error was fixed', async function(this: TestContext &
+            ITestCallbackContext): Promise<void> {
             await this.service.textDocumentDidOpen({
                 textDocument: {
                     uri: rootUri + 'src/errors.ts',
@@ -1982,9 +1967,9 @@ export function describeTypeScriptService(
             })
         })
 
-        it('should clear diagnostics on didClose', async function(
-            this: TestContext & ITestCallbackContext
-        ): Promise<void> {
+        it('should clear diagnostics on didClose', async function(this: TestContext & ITestCallbackContext): Promise<
+            void
+        > {
             await this.service.textDocumentDidClose({
                 textDocument: {
                     uri: rootUri + 'src/errors.ts',
@@ -2038,9 +2023,8 @@ export function describeTypeScriptService(
         afterEach(shutdownService)
 
         describe('textDocumentDefinition()', function(this: TestContext & ISuiteCallbackContext): void {
-            it('should resolve symbol imported with tripe-slash reference', async function(
-                this: TestContext & ITestCallbackContext
-            ): Promise<void> {
+            it('should resolve symbol imported with tripe-slash reference', async function(this: TestContext &
+                ITestCallbackContext): Promise<void> {
                 const result: Location[] = await this.service
                     .textDocumentDefinition({
                         textDocument: {
@@ -2077,9 +2061,8 @@ export function describeTypeScriptService(
                     },
                 ])
             })
-            it('should resolve symbol imported with import statement', async function(
-                this: TestContext & ITestCallbackContext
-            ): Promise<void> {
+            it('should resolve symbol imported with import statement', async function(this: TestContext &
+                ITestCallbackContext): Promise<void> {
                 const result: Location[] = await this.service
                     .textDocumentDefinition({
                         textDocument: {
@@ -2108,9 +2091,8 @@ export function describeTypeScriptService(
                     },
                 ])
             })
-            it('should resolve definition with missing reference', async function(
-                this: TestContext & ITestCallbackContext
-            ): Promise<void> {
+            it('should resolve definition with missing reference', async function(this: TestContext &
+                ITestCallbackContext): Promise<void> {
                 const result: Location[] = await this.service
                     .textDocumentDefinition({
                         textDocument: {
@@ -2139,9 +2121,9 @@ export function describeTypeScriptService(
                     },
                 ])
             })
-            it('should resolve deep definitions', async function(
-                this: TestContext & ITestCallbackContext
-            ): Promise<void> {
+            it('should resolve deep definitions', async function(this: TestContext & ITestCallbackContext): Promise<
+                void
+            > {
                 // This test passes only because we expect no response from LSP server
                 // for definition located in file references with depth 3 or more (a -> b -> c -> d (...))
                 // This test will fail once we'll increase (or remove) depth limit
@@ -2198,9 +2180,9 @@ export function describeTypeScriptService(
         afterEach(shutdownService)
 
         describe('textDocumentHover()', function(this: TestContext & ISuiteCallbackContext): void {
-            it('should load local library file', async function(
-                this: TestContext & ITestCallbackContext
-            ): Promise<void> {
+            it('should load local library file', async function(this: TestContext & ITestCallbackContext): Promise<
+                void
+            > {
                 const result: Hover = await this.service
                     .textDocumentHover({
                         textDocument: {
@@ -2259,9 +2241,8 @@ export function describeTypeScriptService(
             })
         })
         describe('textDocumentDefinition()', function(this: TestContext & ISuiteCallbackContext): void {
-            it('should resolve TS libraries to github URL', async function(
-                this: TestContext & ITestCallbackContext
-            ): Promise<void> {
+            it('should resolve TS libraries to github URL', async function(this: TestContext &
+                ITestCallbackContext): Promise<void> {
                 assert.deepEqual(
                     await this.service
                         .textDocumentDefinition({
@@ -2374,9 +2355,8 @@ export function describeTypeScriptService(
 
         afterEach(shutdownService)
 
-        it('should provide an empty response when no reference is found', async function(
-            this: TestContext & ITestCallbackContext
-        ): Promise<void> {
+        it('should provide an empty response when no reference is found', async function(this: TestContext &
+            ITestCallbackContext): Promise<void> {
             const result = await this.service
                 .textDocumentReferences({
                     textDocument: {
@@ -2393,9 +2373,8 @@ export function describeTypeScriptService(
             assert.deepEqual(result, [])
         })
 
-        it('should include the declaration if requested', async function(
-            this: TestContext & ITestCallbackContext
-        ): Promise<void> {
+        it('should include the declaration if requested', async function(this: TestContext &
+            ITestCallbackContext): Promise<void> {
             const result = await this.service
                 .textDocumentReferences({
                     textDocument: {
@@ -2426,9 +2405,8 @@ export function describeTypeScriptService(
             ])
         })
 
-        it('should provide a reference within the same file', async function(
-            this: TestContext & ITestCallbackContext
-        ): Promise<void> {
+        it('should provide a reference within the same file', async function(this: TestContext &
+            ITestCallbackContext): Promise<void> {
             const result = await this.service
                 .textDocumentReferences({
                     textDocument: {
@@ -2458,9 +2436,8 @@ export function describeTypeScriptService(
                 },
             ])
         })
-        it('should provide two references from imports', async function(
-            this: TestContext & ITestCallbackContext
-        ): Promise<void> {
+        it('should provide two references from imports', async function(this: TestContext &
+            ITestCallbackContext): Promise<void> {
             const result = await this.service
                 .textDocumentReferences({
                     textDocument: {
@@ -2549,9 +2526,8 @@ export function describeTypeScriptService(
 
         afterEach(shutdownService)
 
-        it('should provide a valid empty response when no signature is found', async function(
-            this: TestContext & ITestCallbackContext
-        ): Promise<void> {
+        it('should provide a valid empty response when no signature is found', async function(this: TestContext &
+            ITestCallbackContext): Promise<void> {
             const result: SignatureHelp = await this.service
                 .textDocumentSignatureHelp({
                     textDocument: {
@@ -2571,9 +2547,8 @@ export function describeTypeScriptService(
             })
         })
 
-        it('should provide signature help with parameters in the same file', async function(
-            this: TestContext & ITestCallbackContext
-        ): Promise<void> {
+        it('should provide signature help with parameters in the same file', async function(this: TestContext &
+            ITestCallbackContext): Promise<void> {
             const result: SignatureHelp = await this.service
                 .textDocumentSignatureHelp({
                     textDocument: {
@@ -2608,9 +2583,8 @@ export function describeTypeScriptService(
             })
         })
 
-        it('should provide signature help from imported symbols', async function(
-            this: TestContext & ITestCallbackContext
-        ): Promise<void> {
+        it('should provide signature help from imported symbols', async function(this: TestContext &
+            ITestCallbackContext): Promise<void> {
             const result: SignatureHelp = await this.service
                 .textDocumentSignatureHelp({
                     textDocument: {
@@ -2734,9 +2708,8 @@ export function describeTypeScriptService(
             ])
         })
 
-        it('should resolve completions with snippets', async function(
-            this: TestContext & ITestCallbackContext
-        ): Promise<void> {
+        it('should resolve completions with snippets', async function(this: TestContext &
+            ITestCallbackContext): Promise<void> {
             const result: CompletionList = await this.service
                 .textDocumentCompletion({
                     textDocument: {
@@ -2851,9 +2824,9 @@ export function describeTypeScriptService(
 
         afterEach(shutdownService)
 
-        it('produces completions in the same file', async function(
-            this: TestContext & ITestCallbackContext
-        ): Promise<void> {
+        it('produces completions in the same file', async function(this: TestContext & ITestCallbackContext): Promise<
+            void
+        > {
             const result: CompletionList = await this.service
                 .textDocumentCompletion({
                     textDocument: {
@@ -2911,9 +2884,9 @@ export function describeTypeScriptService(
             ])
         })
 
-        it('resolves completions in the same file', async function(
-            this: TestContext & ITestCallbackContext
-        ): Promise<void> {
+        it('resolves completions in the same file', async function(this: TestContext & ITestCallbackContext): Promise<
+            void
+        > {
             const result: CompletionList = await this.service
                 .textDocumentCompletion({
                     textDocument: {
@@ -2980,9 +2953,8 @@ export function describeTypeScriptService(
             ])
         })
 
-        it('produces completions for imported symbols', async function(
-            this: TestContext & ITestCallbackContext
-        ): Promise<void> {
+        it('produces completions for imported symbols', async function(this: TestContext &
+            ITestCallbackContext): Promise<void> {
             const result: CompletionList = await this.service
                 .textDocumentCompletion({
                     textDocument: {
@@ -3011,9 +2983,8 @@ export function describeTypeScriptService(
                 ],
             })
         })
-        it('produces completions for referenced symbols', async function(
-            this: TestContext & ITestCallbackContext
-        ): Promise<void> {
+        it('produces completions for referenced symbols', async function(this: TestContext &
+            ITestCallbackContext): Promise<void> {
             const result: CompletionList = await this.service
                 .textDocumentCompletion({
                     textDocument: {
@@ -3042,9 +3013,9 @@ export function describeTypeScriptService(
                 ],
             })
         })
-        it('produces completions for empty files', async function(
-            this: TestContext & ITestCallbackContext
-        ): Promise<void> {
+        it('produces completions for empty files', async function(this: TestContext & ITestCallbackContext): Promise<
+            void
+        > {
             this.timeout(10000)
             const result: CompletionList = await this.service
                 .textDocumentCompletion({
@@ -3094,9 +3065,9 @@ export function describeTypeScriptService(
 
         afterEach(shutdownService)
 
-        it('should error on an invalid symbol', async function(
-            this: TestContext & ITestCallbackContext
-        ): Promise<void> {
+        it('should error on an invalid symbol', async function(this: TestContext & ITestCallbackContext): Promise<
+            void
+        > {
             await Promise.resolve(
                 assert.isRejected(
                     this.service
@@ -3116,9 +3087,8 @@ export function describeTypeScriptService(
                 )
             )
         })
-        it('should return a correct WorkspaceEdit to rename a class', async function(
-            this: TestContext & ITestCallbackContext
-        ): Promise<void> {
+        it('should return a correct WorkspaceEdit to rename a class', async function(this: TestContext &
+            ITestCallbackContext): Promise<void> {
             const result: WorkspaceEdit = await this.service
                 .textDocumentRename({
                     textDocument: {
@@ -3165,9 +3135,8 @@ export function describeTypeScriptService(
                 },
             })
         })
-        it('should return a correct WorkspaceEdit to rename an imported function', async function(
-            this: TestContext & ITestCallbackContext
-        ): Promise<void> {
+        it('should return a correct WorkspaceEdit to rename an imported function', async function(this: TestContext &
+            ITestCallbackContext): Promise<void> {
             const result: WorkspaceEdit = await this.service
                 .textDocumentRename({
                     textDocument: {
@@ -3340,9 +3309,8 @@ export function describeTypeScriptService(
         afterEach(shutdownService)
 
         describe('codeFix', () => {
-            it('should apply a WorkspaceEdit for the passed FileTextChanges', async function(
-                this: TestContext & ITestCallbackContext
-            ): Promise<void> {
+            it('should apply a WorkspaceEdit for the passed FileTextChanges', async function(this: TestContext &
+                ITestCallbackContext): Promise<void> {
                 await this.service
                     .workspaceExecuteCommand({
                         command: 'codeFix',
@@ -3405,9 +3373,8 @@ export function describeTypeScriptService(
 
         afterEach(shutdownService)
 
-        it('should accept files with TypeScript keywords in path', async function(
-            this: TestContext & ITestCallbackContext
-        ): Promise<void> {
+        it('should accept files with TypeScript keywords in path', async function(this: TestContext &
+            ITestCallbackContext): Promise<void> {
             const result: Hover = await this.service
                 .textDocumentHover({
                     textDocument: {
@@ -3434,9 +3401,8 @@ export function describeTypeScriptService(
                 contents: [{ language: 'typescript', value: 'function a(): void' }, '**function** _(exported)_'],
             })
         })
-        it('should accept files with special characters in path', async function(
-            this: TestContext & ITestCallbackContext
-        ): Promise<void> {
+        it('should accept files with special characters in path', async function(this: TestContext &
+            ITestCallbackContext): Promise<void> {
             const result: Hover = await this.service
                 .textDocumentHover({
                     textDocument: {
@@ -3463,9 +3429,8 @@ export function describeTypeScriptService(
                 contents: [{ language: 'typescript', value: 'function b(): void' }, '**function** _(exported)_'],
             })
         })
-        it('should handle Windows-style paths in triple slash references', async function(
-            this: TestContext & ITestCallbackContext
-        ): Promise<void> {
+        it('should handle Windows-style paths in triple slash references', async function(this: TestContext &
+            ITestCallbackContext): Promise<void> {
             const result = await this.service
                 .textDocumentDefinition({
                     textDocument: {
