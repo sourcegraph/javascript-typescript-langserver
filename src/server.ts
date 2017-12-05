@@ -47,9 +47,9 @@ export function serve(
         })
         cluster.on('exit', (worker, code, signal) => {
             logger.error(
-                `Worker ${worker.id} (PID ${worker.process.pid}) exited from signal ${signal} with code ${
-                    code
-                }, restarting`
+                `Worker ${worker.id} (PID ${
+                    worker.process.pid
+                }) exited from signal ${signal} with code ${code}, restarting`
             )
             cluster.fork()
         })
