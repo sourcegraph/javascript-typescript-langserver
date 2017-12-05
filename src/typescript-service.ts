@@ -609,7 +609,7 @@ export class TypeScriptService {
                 }
                 const contents: (MarkedString | string)[] = []
                 // Add declaration without the kind
-                const declaration = ts.displayPartsToString(info.displayParts).replace(/^\(.+\)\s+/, '')
+                const declaration = ts.displayPartsToString(info.displayParts).replace(/^\(.+?\)\s+/, '')
                 contents.push({ language: 'typescript', value: declaration })
                 // Add kind with modifiers, e.g. "method (private, ststic)", "class (exported)"
                 if (info.kind) {

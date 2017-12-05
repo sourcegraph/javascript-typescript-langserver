@@ -125,6 +125,10 @@ export function describeTypeScriptService(
                     [rootUri + 'foo/c.ts', 'import {Foo} from "./b";'],
                     [rootUri + 'd.ts', ['export interface I {', '  target: string;', '}'].join('\n')],
                     [
+                        rootUri + 'local_callback.ts',
+                        'function local(): void { function act(handle: () => void): void { handle() } }',
+                    ],
+                    [
                         rootUri + 'e.ts',
                         [
                             'import * as d from "./d";',
@@ -320,6 +324,38 @@ export function describeTypeScriptService(
                         },
                     },
                     contents: [{ language: 'typescript', value: 'const abc: 1' }, '**const**'],
+                })
+            })
+            specify('local function with callback argument', async function(
+                this: TestContext & ITestCallbackContext
+            ): Promise<void> {
+                const result: Hover = await this.service
+                    .textDocumentHover({
+                        textDocument: {
+                            uri: rootUri + 'local_callback.ts',
+                        },
+                        position: {
+                            line: 0,
+                            character: 36,
+                        },
+                    })
+                    .reduce<Operation, Hover>(applyReducer, null as any)
+                    .toPromise()
+                assert.deepEqual(result, {
+                    range: {
+                        start: {
+                            line: 0,
+                            character: 34,
+                        },
+                        end: {
+                            line: 0,
+                            character: 37,
+                        },
+                    },
+                    contents: [
+                        { language: 'typescript', value: 'act(handle: () => void): void' },
+                        '**local function**',
+                    ],
                 })
             })
             specify('in other file', async function(this: TestContext & ITestCallbackContext): Promise<void> {
