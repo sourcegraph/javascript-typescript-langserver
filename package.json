@@ -61,7 +61,7 @@
     "@semantic-release/github": "^2.0.0",
     "@sourcegraph/prettierrc": "^2.0.0",
     "@sourcegraph/tsconfig": "^1.0.0",
-    "@sourcegraph/tslint-config": "^9.0.2",
+    "@sourcegraph/tslint-config": "^10.0.0",
     "@types/chai": "4.0.6",
     "@types/chai-as-promised": "^7.1.0",
     "@types/glob": "^5.0.30",
