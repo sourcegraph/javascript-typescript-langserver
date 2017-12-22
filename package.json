@@ -57,8 +57,6 @@
     "vscode-languageserver-types": "^3.0.3"
   },
   "devDependencies": {
-    "@semantic-release/npm": "^2.0.0",
-    "@semantic-release/github": "^3.0.0",
     "@sourcegraph/prettierrc": "^2.0.0",
     "@sourcegraph/tsconfig": "^1.0.0",
     "@sourcegraph/tslint-config": "^9.0.2",
