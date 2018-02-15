@@ -2297,11 +2297,11 @@ export function describeTypeScriptService(
                             uri: 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/lib.dom.d.ts',
                             range: {
                                 start: {
-                                    line: 8259,
+                                    line: 8428,
                                     character: 10,
                                 },
                                 end: {
-                                    line: 8259,
+                                    line: 8428,
                                     character: 14,
                                 },
                             },
@@ -2310,11 +2310,11 @@ export function describeTypeScriptService(
                             uri: 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/lib.dom.d.ts',
                             range: {
                                 start: {
-                                    line: 8311,
+                                    line: 8480,
                                     character: 12,
                                 },
                                 end: {
-                                    line: 8311,
+                                    line: 8480,
                                     character: 16,
                                 },
                             },
@@ -3028,7 +3028,7 @@ export function describeTypeScriptService(
                     },
                     position: {
                         line: 1,
-                        character: 13,
+                        character: 12,
                     },
                 })
                 .reduce<Operation, CompletionList>(applyReducer, null as any)
@@ -3039,7 +3039,7 @@ export function describeTypeScriptService(
                     {
                         data: {
                             entryName: 'bar',
-                            offset: 51,
+                            offset: 50,
                             uri: rootUri + 'uses-reference.ts',
                         },
                         label: 'bar',
