@@ -100,25 +100,25 @@ export interface Settings extends PluginSettings {
 /**
  * Maps string-based CompletionEntry::kind to enum-based CompletionItemKind
  */
-const completionKinds: { [name: string]: CompletionItemKind } = {
-    class: CompletionItemKind.Class,
-    constructor: CompletionItemKind.Constructor,
-    enum: CompletionItemKind.Enum,
-    field: CompletionItemKind.Field,
-    file: CompletionItemKind.File,
-    function: CompletionItemKind.Function,
-    interface: CompletionItemKind.Interface,
-    keyword: CompletionItemKind.Keyword,
-    method: CompletionItemKind.Method,
-    module: CompletionItemKind.Module,
-    property: CompletionItemKind.Property,
-    reference: CompletionItemKind.Reference,
-    snippet: CompletionItemKind.Snippet,
-    text: CompletionItemKind.Text,
-    unit: CompletionItemKind.Unit,
-    value: CompletionItemKind.Value,
-    variable: CompletionItemKind.Variable,
-}
+const completionKinds = new Map<string, CompletionItemKind>([
+    [`class`, CompletionItemKind.Class],
+    [`constructor`, CompletionItemKind.Constructor],
+    [`enum`, CompletionItemKind.Enum],
+    [`field`, CompletionItemKind.Field],
+    [`file`, CompletionItemKind.File],
+    [`function`, CompletionItemKind.Function],
+    [`interface`, CompletionItemKind.Interface],
+    [`keyword`, CompletionItemKind.Keyword],
+    [`method`, CompletionItemKind.Method],
+    [`module`, CompletionItemKind.Module],
+    [`property`, CompletionItemKind.Property],
+    [`reference`, CompletionItemKind.Reference],
+    [`snippet`, CompletionItemKind.Snippet],
+    [`text`, CompletionItemKind.Text],
+    [`unit`, CompletionItemKind.Unit],
+    [`value`, CompletionItemKind.Value],
+    [`variable`, CompletionItemKind.Variable],
+])
 
 /**
  * Handles incoming requests and return responses. There is a one-to-one-to-one
@@ -609,7 +609,7 @@ export class TypeScriptService {
                 }
                 const contents: (MarkedString | string)[] = []
                 // Add declaration without the kind
-                const declaration = ts.displayPartsToString(info.displayParts).replace(/^\(.+\)\s+/, '')
+                const declaration = ts.displayPartsToString(info.displayParts).replace(/^\(.+?\)\s+/, '')
                 contents.push({ language: 'typescript', value: declaration })
                 // Add kind with modifiers, e.g. "method (private, ststic)", "class (exported)"
                 if (info.kind) {
@@ -1182,7 +1182,7 @@ export class TypeScriptService {
                     params.position.line,
                     params.position.character
                 )
-                const completions = configuration.getService().getCompletionsAtPosition(fileName, offset)
+                const completions = configuration.getService().getCompletionsAtPosition(fileName, offset, undefined)
 
                 if (!completions) {
                     return []
@@ -1192,7 +1192,7 @@ export class TypeScriptService {
                     .map(entry => {
                         const item: CompletionItem = { label: entry.name }
 
-                        const kind = completionKinds[entry.kind]
+                        const kind = completionKinds.get(entry.kind)
                         if (kind) {
                             item.kind = kind
                         }
@@ -1233,7 +1233,10 @@ export class TypeScriptService {
                 const configuration = this.projectManager.getConfiguration(fileName)
                 configuration.ensureBasicFiles(span)
 
-                const details = configuration.getService().getCompletionEntryDetails(fileName, offset, entryName)
+                const details = configuration
+                    .getService()
+                    .getCompletionEntryDetails(fileName, offset, entryName, undefined, undefined)
+
                 if (details) {
                     item.documentation = ts.displayPartsToString(details.documentation)
                     item.detail = ts.displayPartsToString(details.displayParts)

@@ -22,6 +22,7 @@ This is a language server for JavaScript and TypeScript that adheres to the [Lan
  - In [Visual Studio Code](https://github.com/sourcegraph/vscode-javascript-typescript) (as an alternative to the built-in TypeScript integration)
  - In [Eclipse Che](https://eclipse.org/che/)
  - In [NeoVim](https://github.com/autozimu/LanguageClient-neovim)
+ - In [Sublime Text](https://lsp.readthedocs.io/en/latest/#javascripttypescript)
 
 ## Features
 
