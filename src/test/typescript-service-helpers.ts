@@ -382,7 +382,7 @@ export function describeTypeScriptService(
                             character: 8,
                         },
                     },
-                    contents: [{ language: 'typescript', value: 'import Foo' }, '**alias**'],
+                    contents: [{ language: 'typescript', value: 'class Foo\nimport Foo' }, '**alias**'],
                 })
             })
             specify('over keyword (non-null)', async function(this: TestContext & ITestCallbackContext): Promise<void> {
@@ -2297,11 +2297,11 @@ export function describeTypeScriptService(
                             uri: 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/lib.dom.d.ts',
                             range: {
                                 start: {
-                                    line: 8428,
+                                    line: 8446,
                                     character: 10,
                                 },
                                 end: {
-                                    line: 8428,
+                                    line: 8446,
                                     character: 14,
                                 },
                             },
@@ -2310,11 +2310,11 @@ export function describeTypeScriptService(
                             uri: 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/lib.dom.d.ts',
                             range: {
                                 start: {
-                                    line: 8480,
+                                    line: 8498,
                                     character: 12,
                                 },
                                 end: {
-                                    line: 8480,
+                                    line: 8498,
                                     character: 16,
                                 },
                             },
@@ -3302,7 +3302,7 @@ export function describeTypeScriptService(
                 .toPromise()
             assert.deepEqual(actions, [
                 {
-                    title: "Add 'this.' to unresolved variable.",
+                    title: "Add 'this.' to unresolved variable",
                     command: 'codeFix',
                     arguments: [
                         {
