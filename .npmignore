@@ -12,7 +12,6 @@ CONTRIBUTING.md
 coverage.*
 coverage/
 DCO
-lib/test/
 node_modules/
 npm-debug.log
 prettier.config.js
