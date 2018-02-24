@@ -395,7 +395,6 @@ export class TypeScriptService {
                 const definitions: ts.DefinitionInfo[] | undefined = configuration
                     .getService()
                     .getDefinitionAtPosition(fileName, offset)
-
                 return Observable.from(definitions || []).map((definition): Location => {
                     const sourceFile = this._getSourceFile(configuration, definition.fileName, span)
                     if (!sourceFile) {
@@ -1615,7 +1614,7 @@ export class TypeScriptService {
      * @param fileName file name to fetch source file for or create it
      * @param span Span for tracing
      */
-    private _getSourceFile(
+    protected _getSourceFile(
         configuration: ProjectConfiguration,
         fileName: string,
         span = new Span()

@@ -1097,7 +1097,7 @@ export class ProjectManager implements Disposable {
      * @param filePath path to source (or config) file
      * @return configuration type to use for a given file
      */
-    private getConfigurationType(filePath: string): ConfigType {
+    public getConfigurationType(filePath: string): ConfigType {
         const unixPath = toUnixPath(filePath)
         const name = path.posix.basename(unixPath)
         if (name === 'tsconfig.json') {
