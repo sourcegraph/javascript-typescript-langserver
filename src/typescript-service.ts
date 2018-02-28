@@ -395,6 +395,7 @@ export class TypeScriptService {
                 const definitions: ts.DefinitionInfo[] | undefined = configuration
                     .getService()
                     .getDefinitionAtPosition(fileName, offset)
+
                 return Observable.from(definitions || []).map((definition): Location => {
                     const sourceFile = this._getSourceFile(configuration, definition.fileName, span)
                     if (!sourceFile) {
