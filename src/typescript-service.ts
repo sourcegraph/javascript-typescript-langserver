@@ -1615,7 +1615,7 @@ export class TypeScriptService {
      * @param fileName file name to fetch source file for or create it
      * @param span Span for tracing
      */
-    private _getSourceFile(
+    protected _getSourceFile(
         configuration: ProjectConfiguration,
         fileName: string,
         span = new Span()
