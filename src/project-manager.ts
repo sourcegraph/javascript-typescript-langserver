@@ -3,7 +3,6 @@ import { noop } from 'lodash'
 import { Span } from 'opentracing'
 import * as path from 'path'
 import { Observable, Subscription } from 'rxjs'
-import { SelectorMethodSignature } from 'rxjs/observable/FromEventObservable'
 import * as ts from 'typescript'
 import { Disposable } from './disposable'
 import { FileSystemUpdater } from './fs'
@@ -626,7 +625,7 @@ export class ProjectManager implements Disposable {
 
         // Whenever a file with content is added to the InMemoryFileSystem, check if it's a tsconfig.json and add a new ProjectConfiguration
         this.subscriptions.add(
-            Observable.fromEvent(inMemoryFileSystem, 'add', Array.of as SelectorMethodSignature<[string, string]>)
+            Observable.fromEvent<[string, string]>(inMemoryFileSystem, 'add', (k, v) => [k, v])
                 .filter(
                     ([uri, content]) => !!content && /\/[tj]sconfig\.json/.test(uri) && !uri.includes('/node_modules/')
                 )

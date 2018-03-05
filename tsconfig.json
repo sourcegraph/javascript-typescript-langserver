@@ -5,19 +5,16 @@
     "target": "es2016",
     "module": "commonjs",
     "moduleResolution": "node",
-    "lib": [
-      "es2016",
-      "dom"
-    ],
+    "lib": ["es2016", "dom"],
     "sourceMap": true,
     "declaration": true,
+    "strictFunctionTypes": false,
+    "strictPropertyInitialization": false,
     "plugins": [
       {
         "name": "tslint-language-service"
       }
     ]
   },
-  "include": [
-    "src/**/*.ts"
-  ]
+  "include": ["src/**/*.ts"]
 }

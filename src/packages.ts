@@ -2,7 +2,6 @@ import { EventEmitter } from 'events'
 import { Span } from 'opentracing'
 import * as path from 'path'
 import { Observable, Subscription } from 'rxjs'
-import { SelectorMethodSignature } from 'rxjs/observable/FromEventObservable'
 import * as url from 'url'
 import { Disposable } from './disposable'
 import { FileSystemUpdater } from './fs'
@@ -99,38 +98,38 @@ export class PackageManager extends EventEmitter implements Disposable {
         let rootPackageJsonLevel = Infinity
         // Find locations of package.jsons _not_ inside node_modules
         this.subscriptions.add(
-            Observable.fromEvent(this.inMemoryFileSystem, 'add', Array.of as SelectorMethodSignature<
-                [string, string]
-            >).subscribe(([uri, content]) => {
-                const parts = url.parse(uri)
-                if (
-                    !parts.pathname ||
-                    !parts.pathname.endsWith('/package.json') ||
-                    parts.pathname.includes('/node_modules/')
-                ) {
-                    return
-                }
-                let parsed: PackageJson | undefined
-                if (content) {
-                    try {
-                        parsed = JSON.parse(content)
-                    } catch (err) {
-                        logger.error(`Error parsing package.json:`, err)
+            Observable.fromEvent<[string, string]>(this.inMemoryFileSystem, 'add', (k, v) => [k, v]).subscribe(
+                ([uri, content]) => {
+                    const parts = url.parse(uri)
+                    if (
+                        !parts.pathname ||
+                        !parts.pathname.endsWith('/package.json') ||
+                        parts.pathname.includes('/node_modules/')
+                    ) {
+                        return
+                    }
+                    let parsed: PackageJson | undefined
+                    if (content) {
+                        try {
+                            parsed = JSON.parse(content)
+                        } catch (err) {
+                            logger.error(`Error parsing package.json:`, err)
+                        }
+                    }
+                    // Don't override existing content with undefined
+                    if (parsed || !this.packages.get(uri)) {
+                        this.packages.set(uri, parsed)
+                        this.logger.log(`Found package ${uri}`)
+                        this.emit('parsed', uri, parsed)
+                    }
+                    // If the current root package.json is further nested than this one, replace it
+                    const level = parts.pathname.split('/').length
+                    if (level < rootPackageJsonLevel) {
+                        this.rootPackageJsonUri = uri
+                        rootPackageJsonLevel = level
                     }
                 }
-                // Don't override existing content with undefined
-                if (parsed || !this.packages.get(uri)) {
-                    this.packages.set(uri, parsed)
-                    this.logger.log(`Found package ${uri}`)
-                    this.emit('parsed', uri, parsed)
-                }
-                // If the current root package.json is further nested than this one, replace it
-                const level = parts.pathname.split('/').length
-                if (level < rootPackageJsonLevel) {
-                    this.rootPackageJsonUri = uri
-                    rootPackageJsonLevel = level
-                }
-            })
+            )
         )
     }
 
