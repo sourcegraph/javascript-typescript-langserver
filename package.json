@@ -54,7 +54,7 @@
     "typescript": "2.7.2",
     "vscode-jsonrpc": "^3.3.1",
     "vscode-languageserver": "^3.1.0",
-    "vscode-languageserver-types": "^3.0.3"
+    "vscode-languageserver-types": "^3.7.1"
   },
   "devDependencies": {
     "@sourcegraph/prettierrc": "^2.0.0",
