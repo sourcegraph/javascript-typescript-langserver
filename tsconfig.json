@@ -9,6 +9,7 @@
     "sourceMap": true,
     "declaration": true,
     "strictFunctionTypes": false,
+    "esModuleInterop": true,
     "strictPropertyInitialization": false,
     "plugins": [
       {
