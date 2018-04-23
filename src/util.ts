@@ -4,6 +4,7 @@ import { compareTwoStrings } from 'string-similarity'
 import * as ts from 'typescript'
 import * as url from 'url'
 import { PackageDescriptor, SymbolDescriptor } from './request-type'
+import * as safeDecodeURIComponent from 'safe-decode-uri-component';
 
 /**
  * Converts an Iterable to an Observable.
@@ -43,7 +44,7 @@ export function normalizeUri(uri: string): string {
     if (!parts.pathname) {
         return uri
     }
-    const pathParts = parts.pathname.split('/').map(segment => encodeURIComponent(decodeURIComponent(segment)))
+    const pathParts = parts.pathname.split('/').map(segment => encodeURIComponent(safeDecodeURIComponent(segment)))
     // Decode Windows drive letter colon
     if (/^[a-z]%3A$/i.test(pathParts[1])) {
         pathParts[1] = decodeURIComponent(pathParts[1])
@@ -95,7 +96,7 @@ export function uri2path(uri: string): string {
         filePath = filePath.substr(1).replace(/\//g, '\\')
     }
 
-    return decodeURIComponent(filePath)
+    return safeDecodeURIComponent(filePath)
 }
 
 const jstsPattern = /\.[tj]sx?$/
