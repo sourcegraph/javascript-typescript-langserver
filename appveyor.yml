@@ -10,7 +10,7 @@ cache:
  - '%LOCALAPPDATA%\Yarn'
 
 environment:
-  NODEJS_VERSION: '6.9.4'
+  NODEJS_VERSION: '8.9.4'
 
 install:
   - ps: Install-Product node $env:NODEJS_VERSION
