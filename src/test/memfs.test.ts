@@ -18,6 +18,14 @@ describe('memfs.ts', () => {
                 sinon.assert.calledOnce(listener)
                 sinon.assert.calledWithExactly(listener, 'file:///foo/bar.txt', undefined)
             })
+            it('should add a URI with `%` character and emit an event', () => {
+                const listener = sinon.spy()
+                const fs = new InMemoryFileSystem('/')
+                fs.on('add', listener)
+                fs.add('file:///foo/%bar.txt')
+                sinon.assert.calledOnce(listener)
+                sinon.assert.calledWithExactly(listener, 'file:///foo/%bar.txt', undefined)
+            })
             it('should add content for a URI and emit an event', () => {
                 const listener = sinon.spy()
                 const fs = new InMemoryFileSystem('/')
