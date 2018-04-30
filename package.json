@@ -76,7 +76,7 @@
     "husky": "^0.14.0",
     "mocha": "^5.0.0",
     "nyc": "^11.0.2",
-    "prettier": "1.9.1",
+    "prettier": "1.12.1",
     "rimraf": "^2.6.1",
     "semantic-release": "^10.0.1",
     "sinon": "^5.0.0",
