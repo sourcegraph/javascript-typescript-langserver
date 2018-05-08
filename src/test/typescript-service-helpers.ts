@@ -2297,11 +2297,11 @@ export function describeTypeScriptService(
                             uri: 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/lib.dom.d.ts',
                             range: {
                                 start: {
-                                    line: 8446,
+                                    line: 9378,
                                     character: 10,
                                 },
                                 end: {
-                                    line: 8446,
+                                    line: 9378,
                                     character: 14,
                                 },
                             },
@@ -2310,11 +2310,11 @@ export function describeTypeScriptService(
                             uri: 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/lib.dom.d.ts',
                             range: {
                                 start: {
-                                    line: 8498,
+                                    line: 9429,
                                     character: 12,
                                 },
                                 end: {
-                                    line: 8498,
+                                    line: 9429,
                                     character: 16,
                                 },
                             },
@@ -3309,8 +3309,8 @@ export function describeTypeScriptService(
                             fileName: toUnixPath(uri2path(rootUri + 'a.ts')), // path only used by TS service
                             textChanges: [
                                 {
-                                    span: { start: 49, length: 13 },
-                                    newText: '\t\tthis.missingThis',
+                                    span: { start: 51, length: 11 },
+                                    newText: 'this.missingThis',
                                 },
                             ],
                         },
