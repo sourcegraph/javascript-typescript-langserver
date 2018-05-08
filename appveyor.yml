@@ -7,21 +7,22 @@ skip_branch_with_pr: true
 skip_tags: true
 
 cache:
- - '%LOCALAPPDATA%\Yarn'
+ - '%AppData%/npm-cache'
 
 environment:
   NODEJS_VERSION: '8.9.4'
 
 install:
   - ps: Install-Product node $env:NODEJS_VERSION
-  - yarn install
+  - npm install -g npm@6.0.0
+  - npm ci
 
 build_script:
-  - yarn run build
+  - npm run build
 
 test_script:
-  - yarn run lint
-  - yarn run cover
+  - npm run lint
+  - npm run cover
 
 after_test:
   - ps: |
