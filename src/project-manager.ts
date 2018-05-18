@@ -385,10 +385,11 @@ export class ProjectConfiguration {
 
             const info: PluginCreateInfo = {
                 config: configEntry,
-                project: { // TODO: may need more support
-                    getCurrentDirectory: this.getHost().getCurrentDirectory,
+                project: {
+                    // TODO: may need more support
+                    getCurrentDirectory: this.getHost().getCurrentDirectory.bind(this),
                     projectService: { logger: this.logger },
-                }, 
+                },
                 languageService: this.getService(),
                 languageServiceHost: this.getHost(),
                 serverHost: {}, // TODO: may need an adapter

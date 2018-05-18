@@ -40,7 +40,7 @@ export interface PluginCreateInfo {
  * The portion of tsserver's Project API exposed to plugins
  */
 export interface Project {
-    getCurrentDirectory: () => string,
+    getCurrentDirectory: () => string
     projectService: {
         logger: Logger
     }
