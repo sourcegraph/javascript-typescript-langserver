@@ -387,7 +387,7 @@ export class ProjectConfiguration {
                 config: configEntry,
                 project: {
                     // TODO: may need more support
-                    getCurrentDirectory: this.getHost().getCurrentDirectory.bind(this),
+                    getCurrentDirectory: () => this.getHost().getCurrentDirectory(),
                     projectService: { logger: this.logger },
                 },
                 languageService: this.getService(),
