@@ -46,12 +46,17 @@ export function serve(
             logger.log(`Worker ${worker.id} (PID ${worker.process.pid}) online`)
         })
         cluster.on('exit', (worker, code, signal) => {
-            logger.error(
-                `Worker ${worker.id} (PID ${
-                    worker.process.pid
-                }) exited from signal ${signal} with code ${code}, restarting`
-            )
-            cluster.fork()
+            const baseLogMessage = `Worker ${worker.id} (PID ${
+                worker.process.pid
+            }) exited from signal ${signal} with code ${code}`
+
+            if (!worker.exitedAfterDisconnect) {
+                logger.error(`${baseLogMessage}, restarting`)
+                cluster.fork()
+                return
+            }
+
+            logger.info(`${baseLogMessage}, not restarting since exit was voluntary`)
         })
         for (let i = 0; i < options.clusterSize; ++i) {
             cluster.fork()
