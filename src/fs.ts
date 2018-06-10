@@ -78,7 +78,11 @@ export class LocalFileSystem implements FileSystem {
                 follow: true,
             })
             globber.on('match', (file: string) => {
-                subscriber.next(normalizeUri(base + file))
+                const encodedPath = file
+                    .split('/')
+                    .map(encodeURIComponent)
+                    .join('/')
+                subscriber.next(normalizeUri(base + encodedPath))
             })
             globber.on('error', (err: any) => {
                 subscriber.error(err)
