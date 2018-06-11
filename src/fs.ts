@@ -78,11 +78,7 @@ export class LocalFileSystem implements FileSystem {
                 follow: true,
             })
             globber.on('match', (file: string) => {
-                const encodedPath = file
-                    .split('/')
-                    .map(encodeURIComponent)
-                    .join('/')
-                subscriber.next(normalizeUri(base + encodedPath))
+                subscriber.next(file)
             })
             globber.on('error', (err: any) => {
                 subscriber.error(err)
@@ -93,6 +89,12 @@ export class LocalFileSystem implements FileSystem {
             return () => {
                 globber.abort()
             }
+        }).map(file => {
+            const encodedPath = file
+                .split('/')
+                .map(encodeURIComponent)
+                .join('/')
+            return normalizeUri(base + encodedPath)
         })
     }
 
