@@ -7,7 +7,7 @@ import * as ts from 'typescript'
 import { Disposable } from './disposable'
 import { FileSystemUpdater } from './fs'
 import { Logger, NoopLogger } from './logging'
-import { InMemoryFileSystem } from './memfs'
+import { OverlayFileSystem } from './memfs'
 import { PluginCreateInfo, PluginLoader, PluginModuleFactory } from './plugins'
 import { PluginSettings } from './request-type'
 import { traceObservable, traceSync } from './tracing'
@@ -48,7 +48,7 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
     /**
      * Local file cache where we looking for file content
      */
-    private fs: InMemoryFileSystem
+    private fs: OverlayFileSystem
 
     /**
      * Current list of files that were implicitly added to project
@@ -71,7 +71,7 @@ export class InMemoryLanguageServiceHost implements ts.LanguageServiceHost {
     constructor(
         rootPath: string,
         options: ts.CompilerOptions,
-        fs: InMemoryFileSystem,
+        fs: OverlayFileSystem,
         versions: Map<string, number>,
         private logger: Logger = new NoopLogger()
     ) {
@@ -205,7 +205,7 @@ export class ProjectConfiguration {
     /**
      * Local file cache
      */
-    private fs: InMemoryFileSystem
+    private fs: OverlayFileSystem
 
     /**
      * Relative path to configuration file (tsconfig.json/jsconfig.json)
@@ -256,7 +256,7 @@ export class ProjectConfiguration {
      * @param configContent optional configuration content to use instead of reading configuration file)
      */
     constructor(
-        fs: InMemoryFileSystem,
+        fs: OverlayFileSystem,
         private documentRegistry: ts.DocumentRegistry,
         rootFilePath: string,
         versions: Map<string, number>,
@@ -436,7 +436,7 @@ export class ProjectConfiguration {
         }
 
         // Add all global declaration files from the workspace and all declarations from the project
-        for (const uri of this.fs.uris()) {
+        for (const uri of this.fs.asyncUris()) {
             const fileName = uri2path(uri)
             const unixPath = toUnixPath(fileName)
             if (isGlobalTSFile(unixPath) || this.isExpectedDeclarationFile(unixPath)) {
@@ -517,10 +517,15 @@ export class ProjectManager implements Disposable {
         ts: new Map<string, ProjectConfiguration>(),
     }
 
+    private configLinks = {
+        js: new Map<string, ProjectConfiguration>(),
+        ts: new Map<string, ProjectConfiguration>(),
+    }
+
     /**
      * Local side of file content provider which keeps cache of fetched files
      */
-    private inMemoryFs: InMemoryFileSystem
+    private overlayFileSystem: OverlayFileSystem
 
     /**
      * File system updater that takes care of updating the in-memory file system
@@ -574,15 +579,22 @@ export class ProjectManager implements Disposable {
      */
     private pluginSettings?: PluginSettings
 
+    // Share DocumentRegistry between all ProjectConfigurations
+    private documentRegistry: ts.DocumentRegistry = ts.createDocumentRegistry()
+
+    private fallbackConfigs: { js: ProjectConfiguration; ts: ProjectConfiguration }
+
+    private retrievedAllConfigurations = false
+
     /**
      * @param rootPath root path as passed to `initialize`
-     * @param inMemoryFileSystem File system that keeps structure and contents in memory
+     * @param overlayFileSystem File system that keeps structure and contents in memory
      * @param strict indicates if we are working in strict mode (VFS) or with a local file system
      * @param traceModuleResolution allows to enable module resolution tracing (done by TS compiler)
      */
     constructor(
         rootPath: string,
-        inMemoryFileSystem: InMemoryFileSystem,
+        overlayFileSystem: OverlayFileSystem,
         updater: FileSystemUpdater,
         traceModuleResolution?: boolean,
         pluginSettings?: PluginSettings,
@@ -590,75 +602,58 @@ export class ProjectManager implements Disposable {
     ) {
         this.rootPath = rootPath
         this.updater = updater
-        this.inMemoryFs = inMemoryFileSystem
+        this.overlayFileSystem = overlayFileSystem
         this.versions = new Map<string, number>()
         this.pluginSettings = pluginSettings
         this.traceModuleResolution = traceModuleResolution || false
 
-        // Share DocumentRegistry between all ProjectConfigurations
-        const documentRegistry = ts.createDocumentRegistry()
+        this.fallbackConfigs = { js: this.getFallbackConfiguration('js'), ts: this.getFallbackConfiguration('ts') }
+    }
 
-        // Create catch-all fallback configs in case there are no tsconfig.json files
-        // They are removed once at least one tsconfig.json is found
+    private getFallbackConfiguration(configType: ConfigType): ProjectConfiguration {
         const trimmedRootPath = this.rootPath.replace(/[\\\/]+$/, '')
-        const fallbackConfigs: { js?: ProjectConfiguration; ts?: ProjectConfiguration } = {}
-        for (const configType of ['js', 'ts'] as ConfigType[]) {
-            const configs = this.configs[configType]
-            const tsConfig: any = {
-                compilerOptions: {
-                    module: ts.ModuleKind.CommonJS,
-                    allowNonTsExtensions: false,
-                    allowJs: configType === 'js',
-                },
-                include: { js: ['**/*.js', '**/*.jsx'], ts: ['**/*.ts', '**/*.tsx'] }[configType],
-            }
-            const config = new ProjectConfiguration(
-                this.inMemoryFs,
-                documentRegistry,
-                trimmedRootPath,
+        const tsConfig: any = {
+            compilerOptions: {
+                module: ts.ModuleKind.CommonJS,
+                allowNonTsExtensions: false,
+                allowJs: configType === 'js',
+            },
+            include: { js: ['**/*.js', '**/*.jsx'], ts: ['**/*.ts', '**/*.tsx'] }[configType],
+        }
+        return new ProjectConfiguration(
+            this.overlayFileSystem,
+            this.documentRegistry,
+            trimmedRootPath,
+            this.versions,
+            '',
+            tsConfig,
+            this.traceModuleResolution,
+            this.pluginSettings,
+            this.logger
+        )
+    }
+
+    private addConfig(filePath: string): ConfigType {
+        const pos = filePath.search(LAST_FORWARD_OR_BACKWARD_SLASH)
+        const dir = filePath.substring(0, pos + 1)
+        const configType = this.getConfigurationType(filePath)
+        const configs = this.configs[configType]
+        configs.set(
+            dir,
+            new ProjectConfiguration(
+                this.overlayFileSystem,
+                this.documentRegistry,
+                dir,
                 this.versions,
-                '',
-                tsConfig,
+                filePath,
+                undefined,
                 this.traceModuleResolution,
                 this.pluginSettings,
                 this.logger
             )
-            configs.set(trimmedRootPath, config)
-            fallbackConfigs[configType] = config
-        }
-
-        // Whenever a file with content is added to the InMemoryFileSystem, check if it's a tsconfig.json and add a new ProjectConfiguration
-        this.subscriptions.add(
-            Observable.fromEvent<[string, string]>(inMemoryFileSystem, 'add', (k, v) => [k, v])
-                .filter(
-                    ([uri, content]) => !!content && /\/[tj]sconfig\.json/.test(uri) && !uri.includes('/node_modules/')
-                )
-                .subscribe(([uri, content]) => {
-                    const filePath = uri2path(uri)
-                    const pos = filePath.search(LAST_FORWARD_OR_BACKWARD_SLASH)
-                    const dir = pos <= 0 ? '' : filePath.substring(0, pos)
-                    const configType = this.getConfigurationType(filePath)
-                    const configs = this.configs[configType]
-                    configs.set(
-                        dir,
-                        new ProjectConfiguration(
-                            this.inMemoryFs,
-                            documentRegistry,
-                            dir,
-                            this.versions,
-                            filePath,
-                            undefined,
-                            this.traceModuleResolution,
-                            this.pluginSettings,
-                            this.logger
-                        )
-                    )
-                    // Remove catch-all config (if exists)
-                    if (configs.get(trimmedRootPath) === fallbackConfigs[configType]) {
-                        configs.delete(trimmedRootPath)
-                    }
-                })
         )
+        this.configLinks[configType].clear()
+        return configType
     }
 
     /**
@@ -678,8 +673,8 @@ export class ProjectManager implements Disposable {
     /**
      * @return local side of file content provider which keeps cached copies of fethed files
      */
-    public getFs(): InMemoryFileSystem {
-        return this.inMemoryFs
+    public getFs(): OverlayFileSystem {
+        return this.overlayFileSystem
     }
 
     /**
@@ -687,7 +682,7 @@ export class ProjectManager implements Disposable {
      * @return true if there is a fetched file with a given path
      */
     public hasFile(filePath: string): boolean {
-        return this.inMemoryFs.fileExists(filePath)
+        return this.overlayFileSystem.fileExists(filePath)
     }
 
     /**
@@ -695,8 +690,16 @@ export class ProjectManager implements Disposable {
      * Sub-project is mainly a folder which contains tsconfig.json, jsconfig.json, package.json,
      * or a root folder which serves as a fallback
      */
-    public configurations(): IterableIterator<ProjectConfiguration> {
-        return iterate(this.configs.js.values()).concat(this.configs.ts.values())
+    public configurations(): ReadonlyArray<ProjectConfiguration> {
+        if (!this.retrievedAllConfigurations) {
+            this.getChildConfigurations(path2uri(this.rootPath))
+            this.retrievedAllConfigurations = true
+        }
+        const result = Array.from(iterate(this.configs.ts.values()).concat(this.configs.js.values()))
+        if (result.length === 0) {
+            return [this.fallbackConfigs.ts, this.fallbackConfigs.js]
+        }
+        return result
     }
 
     /**
@@ -711,7 +714,7 @@ export class ProjectManager implements Disposable {
                 this.ensuredModuleStructure = this.updater
                     .ensureStructure()
                     // Ensure content of all all global .d.ts, [tj]sconfig.json, package.json files
-                    .concat(Observable.defer(() => observableFromIterable(this.inMemoryFs.uris())))
+                    .concat(Observable.defer(() => observableFromIterable(this.overlayFileSystem.asyncUris())))
                     .filter(uri => isGlobalTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
                     .mergeMap(uri => this.updater.ensure(uri))
                     .do(
@@ -756,7 +759,7 @@ export class ProjectManager implements Disposable {
             if (!this.ensuredOwnFiles) {
                 this.ensuredOwnFiles = this.updater
                     .ensureStructure(span)
-                    .concat(Observable.defer(() => observableFromIterable(this.inMemoryFs.uris())))
+                    .concat(Observable.defer(() => observableFromIterable(this.overlayFileSystem.asyncUris())))
                     .filter(
                         uri =>
                             (!uri.includes('/node_modules/') && isJSTSFile(uri)) ||
@@ -783,7 +786,7 @@ export class ProjectManager implements Disposable {
             if (!this.ensuredAllFiles) {
                 this.ensuredAllFiles = this.updater
                     .ensureStructure(span)
-                    .concat(Observable.defer(() => observableFromIterable(this.inMemoryFs.uris())))
+                    .concat(Observable.defer(() => observableFromIterable(this.overlayFileSystem.asyncUris())))
                     .filter(uri => isJSTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
                     .mergeMap(uri => this.updater.ensure(uri))
                     .do(noop, err => {
@@ -866,7 +869,7 @@ export class ProjectManager implements Disposable {
     public ensureConfigDependencies(childOf = new Span()): Observable<never> {
         return traceObservable('Ensure config dependencies', childOf, span => {
             if (!this.ensuredConfigDependencies) {
-                this.ensuredConfigDependencies = observableFromIterable(this.inMemoryFs.uris())
+                this.ensuredConfigDependencies = observableFromIterable(this.overlayFileSystem.asyncUris())
                     .filter(uri => this.isConfigDependency(toUnixPath(uri2path(uri))))
                     .mergeMap(uri => this.updater.ensure(uri))
                     .do(noop, err => {
@@ -911,7 +914,7 @@ export class ProjectManager implements Disposable {
                     const referencingFilePath = uri2path(uri)
                     const config = this.getConfiguration(referencingFilePath)
                     config.ensureBasicFiles(span)
-                    const contents = this.inMemoryFs.getContent(uri)
+                    const contents = this.overlayFileSystem.getContent(uri)
                     const info = ts.preProcessFile(contents, true, true)
                     const compilerOpt = config.getHost().getCompilationSettings()
                     const pathResolver = referencingFilePath.includes('\\') ? path.win32 : path.posix
@@ -924,7 +927,7 @@ export class ProjectManager implements Disposable {
                                     importedFile.fileName,
                                     toUnixPath(referencingFilePath),
                                     compilerOpt,
-                                    this.inMemoryFs
+                                    this.overlayFileSystem
                                 )
                             )
                             // false means we didn't find a file defining the module. It could still
@@ -949,7 +952,7 @@ export class ProjectManager implements Disposable {
                                     typeReferenceDirective.fileName,
                                     referencingFilePath,
                                     compilerOpt,
-                                    this.inMemoryFs
+                                    this.overlayFileSystem
                                 )
                             )
                             .filter(
@@ -1000,26 +1003,50 @@ export class ProjectManager implements Disposable {
         filePath: string,
         configType = this.getConfigurationType(filePath)
     ): ProjectConfiguration | undefined {
-        let dir = filePath
-        let config: ProjectConfiguration | undefined
         const configs = this.configs[configType]
         if (!configs) {
             return undefined
         }
-        const rootPath = this.rootPath.replace(/[\\\/]+$/, '')
-        while (dir && dir !== rootPath) {
-            config = configs.get(dir)
-            if (config) {
-                return config
-            }
-            const pos = dir.search(LAST_FORWARD_OR_BACKWARD_SLASH)
-            if (pos <= 0) {
-                dir = ''
-            } else {
-                dir = dir.substring(0, pos)
-            }
+        return this.getDirConfigurationIfExists(this.getParentPath(filePath), configType)
+    }
+
+    private getDirConfigurationIfExists(dir: string, configType: ConfigType): ProjectConfiguration {
+        const configLinks = this.configLinks[configType]
+        let config = configLinks.get(dir)
+        if (config) {
+            return config
         }
-        return configs.get(rootPath)
+        config = this.getConfigurationIfExistsUncached(dir, configType)
+        configLinks.set(dir, config)
+        return config
+    }
+
+    private getConfigurationIfExistsUncached(dir: string, configType: ConfigType): ProjectConfiguration {
+        let config: ProjectConfiguration | undefined
+        const configs = this.configs[configType]
+
+        config = configs.get(dir)
+        if (config) {
+            return config
+        }
+
+        const files = this.overlayFileSystem.getFileSystemEntries(dir).files
+        const configFiles = files.filter(file => file === this.getConfigurationFileNameForType(configType))
+        if (configFiles.length > 0) {
+            this.addConfig(dir + configFiles[0])
+            return configs.get(dir) as ProjectConfiguration
+        }
+
+        if (dir === '/' || dir === 'c:\\') {
+            return this.fallbackConfigs[configType]
+        }
+
+        return this.getDirConfigurationIfExists(this.getParentPath(dir), configType)
+    }
+
+    private getParentPath(path: string): string {
+        const pos = path.substring(0, path.length - 1).search(LAST_FORWARD_OR_BACKWARD_SLASH)
+        return path.substring(0, pos + 1)
     }
 
     /**
@@ -1030,16 +1057,22 @@ export class ProjectManager implements Disposable {
     }
 
     /**
-     * Returns all ProjectConfigurations contained in the given directory or one of its childrens
+     * Returns all ProjectConfigurations contained in the given directory or one of its children
      *
      * @param uri URI of a directory
      */
-    public getChildConfigurations(uri: string): IterableIterator<ProjectConfiguration> {
+    public getChildConfigurations(uri: string): ReadonlyArray<ProjectConfiguration> {
         const pathPrefix = uri2path(uri)
-        return iterate(this.configs.ts)
-            .concat(this.configs.js)
-            .filter(([folderPath, config]) => folderPath.startsWith(pathPrefix))
-            .map(([folderPath, config]) => config)
+        const possiblePaths = this.overlayFileSystem.readDirectory(pathPrefix, undefined, [], ['**/*sconfig.json'])
+        const result = []
+        for (const possiblePath of possiblePaths) {
+            const normalizedPath = uri2path(path2uri(possiblePath)) // readDirectory results alway use '/' as a separator even for windows paths.
+            const configuration = this.getConfigurationIfExists(normalizedPath, this.getConfigurationType(possiblePath))
+            if (configuration) {
+                result.push(configuration)
+            }
+        }
+        return result
     }
 
     /**
@@ -1058,7 +1091,7 @@ export class ProjectManager implements Disposable {
      */
     public didClose(uri: string, span = new Span()): void {
         const filePath = uri2path(uri)
-        this.inMemoryFs.didClose(uri)
+        this.overlayFileSystem.didClose(uri)
         let version = this.versions.get(uri) || 0
         this.versions.set(uri, ++version)
         const config = this.getConfigurationIfExists(filePath)
@@ -1076,7 +1109,7 @@ export class ProjectManager implements Disposable {
      */
     public didChange(uri: string, text: string, span = new Span()): void {
         const filePath = uri2path(uri)
-        this.inMemoryFs.didChange(uri, text)
+        this.overlayFileSystem.didChange(uri, text)
         let version = this.versions.get(uri) || 0
         this.versions.set(uri, ++version)
         const config = this.getConfigurationIfExists(filePath)
@@ -1093,7 +1126,7 @@ export class ProjectManager implements Disposable {
      * @param uri file's URI
      */
     public didSave(uri: string): void {
-        this.inMemoryFs.didSave(uri)
+        this.overlayFileSystem.didSave(uri)
     }
 
     /**
@@ -1113,5 +1146,14 @@ export class ProjectManager implements Disposable {
             return 'js'
         }
         return 'ts'
+    }
+
+    private getConfigurationFileNameForType(type: ConfigType): string {
+        if (type === 'js') {
+            return 'jsconfig.json'
+        } else if (type === 'ts') {
+            return 'tsconfig.json'
+        }
+        throw new Error('woeps')
     }
 }

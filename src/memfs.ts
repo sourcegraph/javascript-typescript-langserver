@@ -1,7 +1,10 @@
 import { EventEmitter } from 'events'
 import * as fs from 'fs'
+import { Span } from 'opentracing'
 import * as path from 'path'
+import { Observable } from 'rxjs'
 import * as ts from 'typescript'
+import { FileSystem } from './fs'
 import { Logger, NoopLogger } from './logging'
 import { FileSystemEntries, matchFiles } from './match-files'
 import { path2uri, toUnixPath, uri2path } from './util'
@@ -20,53 +23,19 @@ export interface FileSystemNode {
 }
 
 /**
- * In-memory file system, can be served as a ParseConfigHost (thus allowing listing files that belong to project based on tsconfig.json options)
+ * In-memory file system
  */
-export class InMemoryFileSystem extends EventEmitter implements ts.ParseConfigHost, ts.ModuleResolutionHost {
+export abstract class InMemoryFileSystem implements FileSystem {
+    /**
+     * File tree root
+     */
+    public rootNode: FileSystemNode = { file: false, children: new Map<string, FileSystemNode>() }
+
     /**
      * Contains a Map of all URIs that exist in the workspace, optionally with a content.
      * File contents for URIs in it do not neccessarily have to be fetched already.
      */
-    private files = new Map<string, string | undefined>()
-
-    /**
-     * Map (URI -> string content) of temporary files made while user modifies local file(s)
-     */
-    public overlay: Map<string, string>
-
-    /**
-     * Should we take into account register when performing a file name match or not. On Windows when using local file system, file names are case-insensitive
-     */
-    public useCaseSensitiveFileNames: boolean
-
-    /**
-     * Root path
-     */
-    public path: string
-
-    /**
-     * File tree root
-     */
-    public rootNode: FileSystemNode
-
-    constructor(path: string, private logger: Logger = new NoopLogger()) {
-        super()
-        this.path = path
-        this.overlay = new Map<string, string>()
-        this.rootNode = { file: false, children: new Map<string, FileSystemNode>() }
-    }
-
-    /** Emitted when a file was added */
-    public on(event: 'add', listener: (uri: string, content?: string) => void): this {
-        return super.on(event, listener)
-    }
-
-    /**
-     * Returns an IterableIterator for all URIs known to exist in the workspace (content loaded or not)
-     */
-    public uris(): IterableIterator<string> {
-        return this.files.keys()
-    }
+    constructor(readonly files: Map<string, string | undefined>) {}
 
     /**
      * Adds a file to the local cache
@@ -74,7 +43,7 @@ export class InMemoryFileSystem extends EventEmitter implements ts.ParseConfigHo
      * @param uri The URI of the file
      * @param content The optional content
      */
-    public add(uri: string, content?: string): void {
+    public cacheFile(uri: string, content?: string): void {
         // Make sure not to override existing content with undefined
         if (content !== undefined || !this.files.has(uri)) {
             this.files.set(uri, content)
@@ -98,7 +67,104 @@ export class InMemoryFileSystem extends EventEmitter implements ts.ParseConfigHo
                 node = n
             }
         }
-        this.emit('add', uri, content)
+    }
+
+    /**
+     * Called by TS service to scan virtual directory when TS service looks for source files that belong to a project
+     */
+    public getFileSystemEntries(directory: string): FileSystemEntries {
+        const ret: { files: string[]; directories: string[] } = { files: [], directories: [] }
+        let node = this.rootNode
+        const components = directory.split(/[\\\/]/).filter(c => c)
+        if (components.length !== 1 || components[0]) {
+            for (const component of components) {
+                const n = node.children.get(component)
+                if (!n) {
+                    return ret
+                }
+                node = n
+            }
+        }
+        for (const [name, value] of node.children.entries()) {
+            if (value.file) {
+                ret.files.push(name)
+            } else {
+                ret.directories.push(name)
+            }
+        }
+        return ret
+    }
+
+    /**
+     * Returns an IterableIterator for all URIs known to exist in the workspace (content loaded or not)
+     */
+    public asyncUris(): IterableIterator<string> {
+        return this.files.keys()
+    }
+    /**
+     * Returns true if the given file is known to exist in the workspace (content loaded or not)
+     *
+     * @param uri URI to a file
+     */
+    public has(uri: string): boolean {
+        return this.files.has(uri)
+    }
+    /**
+     * Returns the file content for the given URI.
+     * Will throw an Error if no available in-memory.
+     * Use FileSystemUpdater.ensure() to ensure that the file is available.
+     */
+    public get(uri: string): string | undefined {
+        return this.files.get(uri)
+    }
+
+    /**
+     * Returns all files in the workspace under base
+     *
+     * @param base A URI under which to search, resolved relative to the rootUri
+     * @return An Observable that emits URIs
+     */
+    public abstract getAsyncWorkspaceFiles(base?: string | undefined, childOf?: Span | undefined): Observable<string>
+
+    /**
+     * Returns the content of a text document
+     *
+     * @param uri The URI of the text document, resolved relative to the rootUri
+     * @return An Observable that emits the text document content
+     */
+    public abstract getTextDocumentContent(uri: string, childOf?: Span | undefined): Observable<string>
+}
+
+/**
+ * Overlay on top of an existing file system, can be served as a ParseConfigHost (thus allowing listing files that belong to project based on tsconfig.json options)
+ */
+export class OverlayFileSystem extends EventEmitter implements ts.ParseConfigHost, ts.ModuleResolutionHost {
+    /**
+     * Map (URI -> string content) of temporary files made while user modifies local file(s)
+     */
+    public overlay: Map<string, string>
+
+    /**
+     * Should we take into account register when performing a file name match or not. On Windows when using local file system, file names are case-insensitive
+     */
+    public useCaseSensitiveFileNames: boolean
+
+    /**
+     * Root path
+     */
+    public path: string
+
+    constructor(readonly fileSystem: FileSystem, path: string, private logger: Logger = new NoopLogger()) {
+        super()
+        this.path = path
+        this.overlay = new Map<string, string>()
+    }
+
+    /**
+     * Returns an IterableIterator for all URIs known to exist in the workspace (content loaded or not)
+     */
+    public asyncUris(): IterableIterator<string> {
+        return this.fileSystem.asyncUris()
     }
 
     /**
@@ -107,7 +173,7 @@ export class InMemoryFileSystem extends EventEmitter implements ts.ParseConfigHo
      * @param uri URI to a file
      */
     public has(uri: string): boolean {
-        return this.files.has(uri) || this.fileExists(uri2path(uri))
+        return this.fileSystem.has(uri) || this.fileExists(uri2path(uri))
     }
 
     /**
@@ -118,7 +184,7 @@ export class InMemoryFileSystem extends EventEmitter implements ts.ParseConfigHo
     public getContent(uri: string): string {
         let content = this.overlay.get(uri)
         if (content === undefined) {
-            content = this.files.get(uri)
+            content = this.fileSystem.get(uri)
         }
         if (content === undefined) {
             content = typeScriptLibraries.get(uri2path(uri))
@@ -136,7 +202,7 @@ export class InMemoryFileSystem extends EventEmitter implements ts.ParseConfigHo
      */
     public fileExists(path: string): boolean {
         const uri = path2uri(path)
-        return this.overlay.has(uri) || this.files.has(uri) || typeScriptLibraries.has(path)
+        return this.overlay.has(uri) || this.fileSystem.has(uri) || typeScriptLibraries.has(path)
     }
 
     /**
@@ -158,7 +224,7 @@ export class InMemoryFileSystem extends EventEmitter implements ts.ParseConfigHo
      * @return file's content in the following order (overlay then cache).
      * If there is no such file, returns undefined
      */
-    private readFileIfExists(path: string): string | undefined {
+    public readFileIfExists(path: string): string | undefined {
         const uri = path2uri(path)
         let content = this.overlay.get(uri)
         if (content !== undefined) {
@@ -168,7 +234,7 @@ export class InMemoryFileSystem extends EventEmitter implements ts.ParseConfigHo
         // TODO This assumes that the URI was a file:// URL.
         //      In reality it could be anything, and the first URI matching the path should be used.
         //      With the current Map, the search would be O(n), it would require a tree to get O(log(n))
-        content = this.files.get(uri)
+        content = this.fileSystem.get(uri)
         if (content !== undefined) {
             return content
         }
@@ -191,7 +257,7 @@ export class InMemoryFileSystem extends EventEmitter implements ts.ParseConfigHo
     public didSave(uri: string): void {
         const content = this.overlay.get(uri)
         if (content !== undefined) {
-            this.add(uri, content)
+            this.fileSystem.cacheFile(uri, content)
         }
     }
 
@@ -206,34 +272,19 @@ export class InMemoryFileSystem extends EventEmitter implements ts.ParseConfigHo
     /**
      * Called by TS service to scan virtual directory when TS service looks for source files that belong to a project
      */
-    public readDirectory(rootDir: string, extensions: string[], excludes: string[], includes: string[]): string[] {
-        return matchFiles(rootDir, extensions, excludes, includes, true, this.path, p => this.getFileSystemEntries(p))
+    public readDirectory(
+        rootDir: string,
+        extensions: ReadonlyArray<string> | undefined,
+        excludes: ReadonlyArray<string> | undefined,
+        includes: ReadonlyArray<string>
+    ): string[] {
+        return matchFiles(rootDir, extensions, excludes, includes, true, this.path, p =>
+            this.fileSystem.getFileSystemEntries(p)
+        )
     }
 
-    /**
-     * Called by TS service to scan virtual directory when TS service looks for source files that belong to a project
-     */
     public getFileSystemEntries(path: string): FileSystemEntries {
-        const ret: { files: string[]; directories: string[] } = { files: [], directories: [] }
-        let node = this.rootNode
-        const components = path.split('/').filter(c => c)
-        if (components.length !== 1 || components[0]) {
-            for (const component of components) {
-                const n = node.children.get(component)
-                if (!n) {
-                    return ret
-                }
-                node = n
-            }
-        }
-        for (const [name, value] of node.children.entries()) {
-            if (value.file) {
-                ret.files.push(name)
-            } else {
-                ret.directories.push(name)
-            }
-        }
-        return ret
+        return this.fileSystem.getFileSystemEntries(path)
     }
 
     public trace(message: string): void {

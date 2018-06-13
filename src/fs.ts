@@ -1,21 +1,22 @@
-import { Glob } from 'glob'
 import * as fs from 'mz/fs'
 import { Span } from 'opentracing'
+import * as path from 'path'
 import { Observable } from 'rxjs'
 import Semaphore from 'semaphore-async-await'
 import { LanguageClient } from './lang-handler'
+import { FileSystemEntries } from './match-files'
 import { InMemoryFileSystem } from './memfs'
 import { traceObservable } from './tracing'
 import { normalizeUri, uri2path } from './util'
 
 export interface FileSystem {
     /**
-     * Returns all files in the workspace under base
+     * Returns files in the workspace under base that cannot be fetched synchronously, such as remote files.
      *
      * @param base A URI under which to search, resolved relative to the rootUri
      * @return An Observable that emits URIs
      */
-    getWorkspaceFiles(base?: string, childOf?: Span): Observable<string>
+    getAsyncWorkspaceFiles(base?: string, childOf?: Span): Observable<string>
 
     /**
      * Returns the content of a text document
@@ -24,16 +25,47 @@ export interface FileSystem {
      * @return An Observable that emits the text document content
      */
     getTextDocumentContent(uri: string, childOf?: Span): Observable<string>
+
+    /**
+     * Returns an IterableIterator for all URIs known to exist in the workspace (content loaded or not)
+     */
+    asyncUris(): IterableIterator<string>
+
+    /**
+     * Returns true if the given file is known to exist in the workspace (content loaded or not)
+     *
+     * @param uri URI to a file
+     */
+    has(uri: string): boolean
+
+    /**
+     * Returns the file content for the given URI.
+     * Will throw an Error if no available in-memory.
+     * Use FileSystemUpdater.ensure() to ensure that the file is available.
+     */
+    get(uri: string): string | undefined
+
+    /**
+     * Adds a file to the local cache
+     *
+     * @param uri The URI of the file
+     * @param content The optional content
+     */
+    cacheFile(uri: string, content?: string): void
+
+    getFileSystemEntries(path: string): FileSystemEntries
 }
 
-export class RemoteFileSystem implements FileSystem {
-    constructor(private client: LanguageClient) {}
+export class RemoteFileSystem extends InMemoryFileSystem implements FileSystem {
+    constructor(private client: LanguageClient) {
+        super(new Map<string, string | undefined>())
+    }
 
     /**
      * The files request is sent from the server to the client to request a list of all files in the workspace or inside the directory of the base parameter, if given.
      * A language server can use the result to index files by filtering and doing a content request for each text document of interest.
      */
-    public getWorkspaceFiles(base?: string, childOf = new Span()): Observable<string> {
+    public getAsyncWorkspaceFiles(base?: string, childOf = new Span()): Observable<string> {
         return this.client
             .workspaceXfiles({ base }, childOf)
             .mergeMap(textDocuments => textDocuments)
@@ -58,49 +90,56 @@ export class LocalFileSystem implements FileSystem {
      */
     constructor(private rootUri: string) {}
 
-    /**
-     * Converts the URI to an absolute path on the local disk
-     */
-    protected resolveUriToPath(uri: string): string {
-        return uri2path(uri)
-    }
-
-    public getWorkspaceFiles(base = this.rootUri): Observable<string> {
-        if (!base.endsWith('/')) {
-            base += '/'
-        }
-        const cwd = this.resolveUriToPath(base)
-        return new Observable<string>(subscriber => {
-            const globber = new Glob('*', {
-                cwd,
-                nodir: true,
-                matchBase: true,
-                follow: true,
-            })
-            globber.on('match', (file: string) => {
-                subscriber.next(file)
-            })
-            globber.on('error', (err: any) => {
-                subscriber.error(err)
-            })
-            globber.on('end', () => {
-                subscriber.complete()
-            })
-            return () => {
-                globber.abort()
-            }
-        }).map(file => {
-            const encodedPath = file
-                .split('/')
-                .map(encodeURIComponent)
-                .join('/')
-            return normalizeUri(base + encodedPath)
-        })
+    public getAsyncWorkspaceFiles(base = this.rootUri): Observable<string> {
+        return Observable.empty()
     }
 
     public getTextDocumentContent(uri: string): Observable<string> {
-        const filePath = this.resolveUriToPath(uri)
+        const filePath = uri2path(uri)
         return Observable.fromPromise(fs.readFile(filePath, 'utf8'))
+    }
+
+    /**
+     * Returns an IterableIterator for all URIs known to exist in the workspace (content loaded or not)
+     */
+    public asyncUris(): IterableIterator<string> {
+        return new Map().keys()
+    }
+
+    /**
+     * Returns true if the given file is known to exist in the workspace (content loaded or not)
+     *
+     * @param uri URI to a file
+     */
+    public has(uri: string): boolean {
+        return fs.existsSync(uri2path(uri))
+    }
+    /**
+     * Returns the file content for the given URI.
+     * Will throw an Error if no available in-memory.
+     * Use FileSystemUpdater.ensure() to ensure that the file is available.
+     */
+    public get(uri: string): string | undefined {
+        return fs.readFileSync(uri2path(uri), 'utf8')
+    }
+
+    public cacheFile(uri: string, content?: string): void {
+        // no-op
+    }
+
+    public getFileSystemEntries(directory: string): FileSystemEntries {
+        const files: string[] = []
+        const directories: string[] = []
+        for (const name of fs.readdirSync(directory)) {
+            const filePath = path.join(directory, name)
+            const stat = fs.statSync(filePath)
+            if (stat.isFile()) {
+                files.push(name)
+            } else if (stat.isDirectory()) {
+                directories.push(name)
+            }
+        }
+        return { files, directories }
     }
 }
 
@@ -125,7 +164,7 @@ export class FileSystemUpdater {
      */
     private concurrencyLimit = new Semaphore(100)
 
-    constructor(private remoteFs: FileSystem, private inMemoryFs: InMemoryFileSystem) {}
+    constructor(private fileSystem: FileSystem) {}
 
     /**
      * Fetches the file content for the given URI and adds the content to the in-memory file system
@@ -137,11 +176,11 @@ export class FileSystemUpdater {
     public fetch(uri: string, childOf = new Span()): Observable<never> {
         // Limit concurrent fetches
         const observable = Observable.fromPromise(this.concurrencyLimit.wait())
-            .mergeMap(() => this.remoteFs.getTextDocumentContent(uri))
+            .mergeMap(() => this.fileSystem.getTextDocumentContent(uri))
             .do(
                 content => {
                     this.concurrencyLimit.signal()
-                    this.inMemoryFs.add(uri, content)
+                    this.fileSystem.cacheFile(uri, content)
                 },
                 err => {
                     this.fetches.delete(uri)
@@ -179,11 +218,11 @@ export class FileSystemUpdater {
             'Fetch workspace structure',
             childOf,
             span =>
-                this.remoteFs
-                    .getWorkspaceFiles(undefined, span)
+                this.fileSystem
+                    .getAsyncWorkspaceFiles(undefined, span)
                     .do(
                         uri => {
-                            this.inMemoryFs.add(uri)
+                            this.fileSystem.cacheFile(uri)
                         },
                         err => {
                             this.structureFetch = undefined

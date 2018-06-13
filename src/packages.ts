@@ -6,8 +6,9 @@ import * as url from 'url'
 import { Disposable } from './disposable'
 import { FileSystemUpdater } from './fs'
 import { Logger, NoopLogger } from './logging'
-import { InMemoryFileSystem } from './memfs'
+import { OverlayFileSystem } from './memfs'
 import { traceObservable } from './tracing'
+import { path2uri, uri2path } from './util'
 
 /**
  * Schema of a package.json file
@@ -89,48 +90,51 @@ export class PackageManager extends EventEmitter implements Disposable {
      */
     private subscriptions = new Subscription()
 
+    private rootPackageJsonLevel = Infinity
+    private foundAllPackages = false
+
     constructor(
         private updater: FileSystemUpdater,
-        private inMemoryFileSystem: InMemoryFileSystem,
+        private overlayFileSystem: OverlayFileSystem,
         private logger: Logger = new NoopLogger()
     ) {
         super()
-        let rootPackageJsonLevel = Infinity
-        // Find locations of package.jsons _not_ inside node_modules
-        this.subscriptions.add(
-            Observable.fromEvent<[string, string]>(this.inMemoryFileSystem, 'add', (k, v) => [k, v]).subscribe(
-                ([uri, content]) => {
-                    const parts = url.parse(uri)
-                    if (
-                        !parts.pathname ||
-                        !parts.pathname.endsWith('/package.json') ||
-                        parts.pathname.includes('/node_modules/')
-                    ) {
-                        return
-                    }
-                    let parsed: PackageJson | undefined
-                    if (content) {
-                        try {
-                            parsed = JSON.parse(content)
-                        } catch (err) {
-                            logger.error(`Error parsing package.json:`, err)
-                        }
-                    }
-                    // Don't override existing content with undefined
-                    if (parsed || !this.packages.get(uri)) {
-                        this.packages.set(uri, parsed)
-                        this.logger.log(`Found package ${uri}`)
-                        this.emit('parsed', uri, parsed)
-                    }
-                    // If the current root package.json is further nested than this one, replace it
-                    const level = parts.pathname.split('/').length
-                    if (level < rootPackageJsonLevel) {
-                        this.rootPackageJsonUri = uri
-                        rootPackageJsonLevel = level
-                    }
-                }
-            )
-        )
+    }
+
+    private ensurePackage(uri: string): void {
+        if (this.packages.get(uri)) {
+            return
+        }
+
+        const parts = url.parse(uri)
+        if (!parts.pathname || !parts.pathname.endsWith('/package.json') || parts.pathname.includes('/node_modules/')) {
+            return
+        }
+
+        const content = this.overlayFileSystem.readFileIfExists(uri2path(uri))
+        if (!content) {
+            return
+        }
+
+        let parsed: PackageJson | undefined
+        try {
+            parsed = JSON.parse(content)
+        } catch (err) {
+            this.logger.error(`Error parsing package.json:`, err)
+        }
+
+        // Don't override existing content with undefined
+        if (parsed || !this.packages.get(uri)) {
+            this.packages.set(uri, parsed)
+            this.logger.log(`Found package ${uri}`)
+            this.emit('parsed', uri, parsed)
+        }
+        // If the current root package.json is further nested than this one, replace it
+        const level = parts.pathname.split('/').length
+        if (level < this.rootPackageJsonLevel) {
+            this.rootPackageJsonUri = uri
+            this.rootPackageJsonLevel = level
+        }
     }
 
     public dispose(): void {
@@ -147,6 +151,13 @@ export class PackageManager extends EventEmitter implements Disposable {
      * Returns an Iterable for all package.jsons in the workspace
      */
     public packageJsonUris(): IterableIterator<string> {
+        if (!this.foundAllPackages) {
+            const possiblePaths = this.overlayFileSystem.readDirectory('/', undefined, [], ['**/package.json'])
+            for (const possiblePath of possiblePaths) {
+                this.ensurePackage(path2uri(possiblePath))
+            }
+            this.foundAllPackages = true
+        }
         return this.packages.keys()
     }
 
@@ -176,15 +187,19 @@ export class PackageManager extends EventEmitter implements Disposable {
     public getPackageJson(uri: string, childOf = new Span()): Observable<PackageJson> {
         return traceObservable('Get package.json', childOf, span => {
             span.addTags({ uri })
+
             if (uri.includes('/node_modules/')) {
                 return Observable.throw(new Error(`Not an own package.json: ${uri}`))
             }
+
+            this.ensurePackage(uri)
             let packageJson = this.packages.get(uri)
             if (packageJson) {
                 return Observable.of(packageJson)
             }
             return this.updater.ensure(uri, span).concat(
                 Observable.defer(() => {
+                    this.ensurePackage(uri)
                     packageJson = this.packages.get(uri)!
                     if (!packageJson) {
                         return Observable.throw(new Error(`Expected ${uri} to be registered in PackageManager`))
@@ -196,19 +211,21 @@ export class PackageManager extends EventEmitter implements Disposable {
     }
 
     /**
-     * Walks the parent directories of a given URI to find the first package.json that is known to the InMemoryFileSystem
+     * Walks the parent directories of a given URI to find the first package.json that is known to the OverlayFileSystem
      *
      * @param uri URI of a file or directory in the workspace
      * @return The found package.json or undefined if none found
      */
     public getClosestPackageJsonUri(uri: string): string | undefined {
         const parts: url.UrlObject = url.parse(uri)
+
         while (true) {
             if (!parts.pathname) {
                 return undefined
             }
             const packageJsonUri = url.format({ ...parts, pathname: path.posix.join(parts.pathname, 'package.json') })
-            if (this.packages.has(packageJsonUri)) {
+            this.ensurePackage(packageJsonUri)
+            if (this.packages.get(packageJsonUri)) {
                 return packageJsonUri
             }
             if (parts.pathname === '/') {

@@ -1,15 +1,18 @@
-import { Observable } from 'rxjs'
+import { Span } from 'opentracing'
+import { Observable, Subject } from 'rxjs'
 import { FileSystem } from '../fs'
-import { observableFromIterable } from '../util'
+import { InMemoryFileSystem } from '../memfs'
 
 /**
  * Map-based file system that holds map (URI -> content)
  */
-export class MapFileSystem implements FileSystem {
-    constructor(private files: Map<string, string>) {}
+export class MapFileSystem extends InMemoryFileSystem implements FileSystem {
+    constructor(files: Map<string, string> = new Map()) {
+        super(files)
+    }
 
-    public getWorkspaceFiles(base?: string): Observable<string> {
-        return observableFromIterable(this.files.keys()).filter(path => !base || path.startsWith(base))
+    public getAsyncWorkspaceFiles(base?: string): Observable<string> {
+        return Observable.empty()
     }
 
     public getTextDocumentContent(uri: string): Observable<string> {
@@ -18,5 +21,32 @@ export class MapFileSystem implements FileSystem {
             return Observable.throw(new Error(`Attempt to read not-existent file ${uri}`))
         }
         return Observable.of(ret)
+    }
+}
+
+export class AddFileSystem extends InMemoryFileSystem {
+    private fileAdditions = new Subject<string>()
+    private filesAdded = this.fileAdditions.publishReplay()
+    private remoteFiles: Map<string, string> = new Map()
+    constructor() {
+        super(new Map())
+        this.filesAdded.connect()
+    }
+
+    public addRemoteFile(uri: string, content: string): void {
+        this.remoteFiles.set(uri, content)
+        this.fileAdditions.next(uri)
+    }
+
+    public finishAddingFiles(): void {
+        this.fileAdditions.complete()
+    }
+
+    public getTextDocumentContent(uri: string, childOf?: Span | undefined): Observable<string> {
+        return Observable.from([this.remoteFiles.get(uri) as string])
+    }
+
+    public getAsyncWorkspaceFiles(base?: string, childOf = new Span()): Observable<string> {
+        return this.filesAdded
     }
 }

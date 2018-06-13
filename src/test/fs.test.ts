@@ -5,7 +5,7 @@ import * as path from 'path'
 import * as rimraf from 'rimraf'
 import * as temp from 'temp'
 import { LocalFileSystem } from '../fs'
-import { path2uri } from '../util'
+import { path2uri, uri2path } from '../util'
 chai.use(chaiAsPromised)
 const assert = chai.assert
 
@@ -51,32 +51,33 @@ describe('fs.ts', () => {
             })
         })
 
-        describe('getWorkspaceFiles()', () => {
+        describe('getAsyncWorkspaceFiles()', () => {
             it('should return all files in the workspace', async () => {
                 const files = await fileSystem
-                    .getWorkspaceFiles()
+                    .getAsyncWorkspaceFiles()
                     .toArray()
                     .toPromise()
-                assert.sameMembers(files, [
-                    rootUri + 'tweedledee',
-                    rootUri + 'tweedledum',
-                    rootUri + 'foo/bar.ts',
-                    rootUri + '%40types/diff/index.d.ts',
-                    rootUri + 'node_modules/some_package/src/function.ts',
-                ])
+                assert.sameMembers(files, [])
             })
             it('should return all files under specific root', async () => {
                 const files = await fileSystem
-                    .getWorkspaceFiles(rootUri + 'foo')
+                    .getAsyncWorkspaceFiles(rootUri + 'foo')
                     .toArray()
                     .toPromise()
-                assert.sameMembers(files, [rootUri + 'foo/bar.ts'])
+                assert.sameMembers(files, [])
             })
         })
         describe('getTextDocumentContent()', () => {
             it('should read files denoted by absolute URI', async () => {
                 const content = await fileSystem.getTextDocumentContent(rootUri + 'tweedledee').toPromise()
                 assert.equal(content, 'hi')
+            })
+        })
+        describe('getFileSystemEntries()', () => {
+            it('should return all non-nested files and directories inside a directory', async () => {
+                const entries = fileSystem.getFileSystemEntries(uri2path(rootUri))
+                assert.sameMembers(['tweedledee', 'tweedledum'], entries.files)
+                assert.sameMembers(['foo', '@types', 'node_modules'], entries.directories)
             })
         })
     })
