@@ -297,6 +297,7 @@ export class TypeScriptService {
                     triggerCharacters: ['(', ','],
                 },
                 definitionProvider: true,
+                typeDefinitionProvider: true,
                 referencesProvider: true,
                 documentSymbolProvider: true,
                 workspaceSymbolProvider: true,
@@ -362,7 +363,19 @@ export class TypeScriptService {
      */
 
     public textDocumentDefinition(params: TextDocumentPositionParams, span = new Span()): Observable<Operation> {
-        return this._getDefinitionLocations(params, span)
+        return this._getDefinitionLocations(params, span, false)
+            .map((location: Location): Operation => ({ op: 'add', path: '/-', value: location }))
+            .startWith({ op: 'add', path: '', value: [] })
+    }
+
+    /**
+     * The goto type definition request is sent from the client to the server to resolve the type
+     * location of a symbol at a given text document position.
+     *
+     * @return Observable of JSON Patches that build a `Location[]` result
+     */
+    public textDocumentTypeDefinition(params: TextDocumentPositionParams, span = new Span()): Observable<Operation> {
+        return this._getDefinitionLocations(params, span, true)
             .map((location: Location): Operation => ({ op: 'add', path: '/-', value: location }))
             .startWith({ op: 'add', path: '', value: [] })
     }
@@ -370,7 +383,11 @@ export class TypeScriptService {
     /**
      * Returns an Observable of all definition locations found for a symbol.
      */
-    protected _getDefinitionLocations(params: TextDocumentPositionParams, span = new Span()): Observable<Location> {
+    protected _getDefinitionLocations(
+        params: TextDocumentPositionParams,
+        span = new Span(),
+        goToType = false
+    ): Observable<Location> {
         const uri = normalizeUri(params.textDocument.uri)
 
         // Fetch files needed to resolve definition
@@ -392,9 +409,9 @@ export class TypeScriptService {
                     params.position.line,
                     params.position.character
                 )
-                const definitions: ts.DefinitionInfo[] | undefined = configuration
-                    .getService()
-                    .getDefinitionAtPosition(fileName, offset)
+                const definitions: ts.DefinitionInfo[] | undefined = goToType
+                    ? configuration.getService().getTypeDefinitionAtPosition(fileName, offset)
+                    : configuration.getService().getDefinitionAtPosition(fileName, offset)
 
                 return Observable.from(definitions || []).map((definition): Location => {
                     const sourceFile = this._getSourceFile(configuration, definition.fileName, span)
