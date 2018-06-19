@@ -93,6 +93,12 @@ export const initializeTypeScriptService = (
                 processId: process.pid,
                 rootUri,
                 capabilities: clientCapabilities || DEFAULT_CAPABILITIES,
+                workspaceFolders: [
+                    {
+                        uri: rootUri,
+                        name: 'test',
+                    },
+                ],
             })
             .toPromise()
     }
