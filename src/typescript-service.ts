@@ -298,6 +298,7 @@ export class TypeScriptService {
                 },
                 definitionProvider: true,
                 typeDefinitionProvider: true,
+                implementationProvider: true,
                 referencesProvider: true,
                 documentSymbolProvider: true,
                 workspaceSymbolProvider: true,
@@ -451,6 +452,70 @@ export class TypeScriptService {
         return this._getSymbolLocationInformations(params, span)
             .map(symbol => ({ op: 'add', path: '/-', value: symbol } as Operation))
             .startWith({ op: 'add', path: '', value: [] })
+    }
+
+    /**
+     * The goto type definition request is sent from the client to the server to resolve the type
+     * location of a symbol at a given text document position.
+     *
+     * @return Observable of JSON Patches that build a `Location[]` result
+     */
+    public textDocumentImplementation(params: TextDocumentPositionParams, span = new Span()): Observable<Operation> {
+        return this._getImplementationLocations(params, span)
+            .map((location: Location): Operation => ({ op: 'add', path: '/-', value: location }))
+            .startWith({ op: 'add', path: '', value: [] })
+    }
+
+    /**
+     * Returns an Observable of all implementation locations found for a symbol.
+     */
+    private _getImplementationLocations(params: TextDocumentPositionParams, span = new Span()): Observable<Location> {
+        const uri = normalizeUri(params.textDocument.uri)
+
+        // Fetch files needed to resolve definition
+        return this.projectManager
+            .ensureReferencedFiles(uri, undefined, undefined, span)
+            .toArray()
+            .mergeMap(() => {
+                const fileName: string = uri2path(uri)
+                const configuration = this.projectManager.getConfiguration(fileName)
+                configuration.ensureBasicFiles(span)
+
+                const sourceFile = this._getSourceFile(configuration, fileName, span)
+                if (!sourceFile) {
+                    throw new Error(`Expected source file ${fileName} to exist`)
+                }
+
+                const offset: number = ts.getPositionOfLineAndCharacter(
+                    sourceFile,
+                    params.position.line,
+                    params.position.character
+                )
+                const implementations:
+                    | ts.ImplementationLocation[]
+                    | undefined = configuration.getService().getImplementationAtPosition(fileName, offset)
+
+                return Observable.from(implementations || []).map((implementation): Location => {
+                    const sourceFile = this._getSourceFile(configuration, implementation.fileName, span)
+                    if (!sourceFile) {
+                        throw new Error(
+                            'expected source file "' + implementation.fileName + '" to exist in configuration'
+                        )
+                    }
+                    const start = ts.getLineAndCharacterOfPosition(sourceFile, implementation.textSpan.start)
+                    const end = ts.getLineAndCharacterOfPosition(
+                        sourceFile,
+                        implementation.textSpan.start + implementation.textSpan.length
+                    )
+                    return {
+                        uri: locationUri(implementation.fileName),
+                        range: {
+                            start,
+                            end,
+                        },
+                    }
+                })
+            })
     }
 
     /**
