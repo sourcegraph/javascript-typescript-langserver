@@ -143,6 +143,8 @@ export function describeTypeScriptService(
                             'let target = i.target;',
                         ].join('\n'),
                     ],
+                    [rootUri + 'foo/f.ts', ['import {Foo} from "./b";', '', 'let foo: Foo = Object({});'].join('\n')],
+                    [rootUri + 'foo/g.ts', ['class Foo = {}', '', 'let foo: Foo = Object({});'].join('\n')],
                 ])
             )
         )
@@ -224,6 +226,68 @@ export function describeTypeScriptService(
                 ])
             })
         })
+
+        describe('textDocumentTypeDefinition()', function(this: TestContext & ISuiteCallbackContext): void {
+            specify('in other file', async function(this: TestContext & ITestCallbackContext): Promise<void> {
+                const result: Location[] = await this.service
+                    .textDocumentTypeDefinition({
+                        textDocument: {
+                            uri: rootUri + 'foo/f.ts',
+                        },
+                        position: {
+                            line: 2,
+                            character: 5,
+                        },
+                    })
+                    .reduce<Operation, Location[]>(applyReducer, null as any)
+                    .toPromise()
+                assert.deepEqual(result, [
+                    {
+                        uri: rootUri + 'foo/b.ts',
+                        range: {
+                            start: {
+                                line: 1,
+                                character: 13,
+                            },
+                            end: {
+                                line: 1,
+                                character: 16,
+                            },
+                        },
+                    },
+                ])
+            })
+            specify('in same file', async function(this: TestContext & ITestCallbackContext): Promise<void> {
+                const result: Location[] = await this.service
+                    .textDocumentTypeDefinition({
+                        textDocument: {
+                            uri: rootUri + 'foo/g.ts',
+                        },
+                        position: {
+                            line: 2,
+                            character: 5,
+                        },
+                    })
+                    .reduce<Operation, Location[]>(applyReducer, null as any)
+                    .toPromise()
+                assert.deepEqual(result, [
+                    {
+                        uri: rootUri + 'foo/g.ts',
+                        range: {
+                            start: {
+                                line: 0,
+                                character: 6,
+                            },
+                            end: {
+                                line: 0,
+                                character: 9,
+                            },
+                        },
+                    },
+                ])
+            })
+        })
+
         describe('textDocumentXdefinition()', function(this: TestContext & ISuiteCallbackContext): void {
             specify('on interface field reference', async function(
                 this: TestContext & ITestCallbackContext

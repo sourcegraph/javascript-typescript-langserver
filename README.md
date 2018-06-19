@@ -28,6 +28,7 @@ This is a language server for JavaScript and TypeScript that adheres to the [Lan
 
  - Hovers
  - Goto definition
+ - Goto type definition
  - Find all references
  - Document symbols
  - Workspace symbol search
