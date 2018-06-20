@@ -1,5 +1,5 @@
 import * as chai from 'chai'
-import chaiAsPromised = require('chai-as-promised')
+import * as chaiAsPromised from 'chai-as-promised'
 import iterate from 'iterare'
 import * as sinon from 'sinon'
 import { InMemoryFileSystem, typeScriptLibraries } from '../memfs'

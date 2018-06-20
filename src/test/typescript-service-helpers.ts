@@ -1,5 +1,5 @@
 import * as chai from 'chai'
-import chaiAsPromised = require('chai-as-promised')
+import * as chaiAsPromised from 'chai-as-promised'
 import { applyReducer, Operation } from 'fast-json-patch'
 import { IBeforeAndAfterContext, ISuiteCallbackContext, ITestCallbackContext } from 'mocha'
 import { Observable } from 'rxjs'
