@@ -4,7 +4,7 @@ import { FileSystemUpdater } from '../fs'
 import { OverlayFileSystem } from '../memfs'
 import { ProjectManager } from '../project-manager'
 import { uri2path } from '../util'
-import { AddFileSystem, MapFileSystem } from './fs-helpers'
+import { MapFileSystem } from './fs-helpers'
 chai.use(chaiAsPromised)
 const assert = chai.assert
 
@@ -14,16 +14,16 @@ describe('ProjectManager', () => {
             let projectManager: ProjectManager
             let memfs: OverlayFileSystem
             it('should add a ProjectConfiguration when a tsconfig.json is added to the InMemoryFileSystem', async () => {
-                const remoteFileSystem = new AddFileSystem()
+                const configFileUri = rootUri + 'tsconfig.json'
+                const remoteFileSystem = new MapFileSystem(new Map([
+                    [configFileUri, '{}'],
+                ]))
 
                 const rootPath = uri2path(rootUri)
-                const configFileUri = rootUri + 'tsconfig.json'
                 memfs = new OverlayFileSystem(remoteFileSystem, rootPath)
                 const updater = new FileSystemUpdater(remoteFileSystem)
                 const structureFetched = updater.fetchStructure().toPromise()
                 projectManager = new ProjectManager(rootPath, memfs, updater, true)
-                remoteFileSystem.addRemoteFile(configFileUri, '{}')
-                remoteFileSystem.finishAddingFiles()
                 await structureFetched
 
                 const tsConfig = projectManager.getConfiguration(uri2path(rootUri + 'src/foo.ts'))

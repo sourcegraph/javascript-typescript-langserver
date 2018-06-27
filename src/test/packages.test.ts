@@ -3,7 +3,7 @@ import * as sinon from 'sinon'
 import { FileSystemUpdater } from '../fs'
 import { OverlayFileSystem } from '../memfs'
 import { extractDefinitelyTypedPackageName, extractNodeModulesPackageName, PackageManager } from '../packages'
-import { AddFileSystem } from './fs-helpers'
+import { MapFileSystem } from './fs-helpers'
 
 describe('packages.ts', () => {
     describe('extractDefinitelyTypedPackageName()', () => {
@@ -36,7 +36,9 @@ describe('packages.ts', () => {
     })
     describe('PackageManager', () => {
         it('should register new packages as they are added to InMemoryFileSystem', async () => {
-            const fileSystem = new AddFileSystem()
+            const fileSystem =  new MapFileSystem(new Map([
+                    ['file:///foo/package.json', '{}'],
+                ]))
             const memfs = new OverlayFileSystem(fileSystem, '/')
             const updater = new FileSystemUpdater(fileSystem)
             const packageManager = new PackageManager(updater, memfs)
@@ -45,8 +47,6 @@ describe('packages.ts', () => {
             packageManager.on('parsed', listener)
 
             const packageJsonEnsured = updater.ensure('file:///foo/package.json').toPromise()
-            fileSystem.addRemoteFile('file:///foo/package.json', '{}')
-            fileSystem.finishAddingFiles()
             await packageJsonEnsured
 
             const packages = Array.from(packageManager.packageJsonUris())
