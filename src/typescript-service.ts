@@ -795,7 +795,11 @@ export class TypeScriptService {
 
                     return this.updater
                         .ensureStructure(span)
-                        .concat(Observable.defer(() => observableFromIterable(this.overlayFileSystem.knownUrisWithoutAvailableContent())))
+                        .concat(
+                            Observable.defer(() =>
+                                observableFromIterable(this.overlayFileSystem.knownUrisWithoutAvailableContent())
+                            )
+                        )
                         .filter(uri => uri.startsWith(packageRootUri))
                         .mergeMap(uri => this.updater.ensure(uri, span))
                         .concat(
@@ -1059,7 +1063,9 @@ export class TypeScriptService {
                 if (isDefinitelyTyped) {
                     const typesUri = url.resolve(this.rootUri, 'types/')
                     return (
-                        observableFromIterable(this.overlayFileSystem.readDirectory(uri2path(typesUri), undefined, undefined, ['*']))
+                        observableFromIterable(
+                            this.overlayFileSystem.readDirectory(uri2path(typesUri), undefined, undefined, ['*'])
+                        )
                             // Get the directory names
                             .map((uri): PackageInformation => ({
                                 package: {

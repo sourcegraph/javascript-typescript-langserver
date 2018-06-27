@@ -691,7 +691,8 @@ export class ProjectManager implements Disposable {
      * Sub-project is mainly a folder which contains tsconfig.json, jsconfig.json, package.json,
      * or a root folder which serves as a fallback
      */
-    public configurations(): ReadonlyArray<ProjectConfiguration> { //Bekijk usages.
+    public configurations(): ReadonlyArray<ProjectConfiguration> {
+        // TODO: inspect usages.
         if (!this.retrievedAllConfigurations) {
             this.getChildConfigurations(path2uri(this.rootPath))
             this.retrievedAllConfigurations = true
@@ -715,7 +716,11 @@ export class ProjectManager implements Disposable {
                 this.ensuredModuleStructure = this.updater
                     .ensureStructure()
                     // Ensure content of all all global .d.ts, [tj]sconfig.json, package.json files
-                    .concat(Observable.defer(() => observableFromIterable(this.overlayFileSystem.knownUrisWithoutAvailableContent())))
+                    .concat(
+                        Observable.defer(() =>
+                            observableFromIterable(this.overlayFileSystem.knownUrisWithoutAvailableContent())
+                        )
+                    )
                     .filter(uri => isGlobalTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
                     .mergeMap(uri => this.updater.ensure(uri))
                     .do(
@@ -726,7 +731,8 @@ export class ProjectManager implements Disposable {
                         () => {
                             // Reset all compilation state
                             // TODO ze incremental compilation instead
-                            for (const config of this.configurations()) { //Change this so it does not fetch all configurations
+                            for (const config of this.configurations()) {
+                                // TODO: Change this so it does not fetch all configurations
                                 config.reset()
                             }
                             // Require re-processing of file references
@@ -760,7 +766,11 @@ export class ProjectManager implements Disposable {
             if (!this.ensuredOwnFiles) {
                 this.ensuredOwnFiles = this.updater
                     .ensureStructure(span)
-                    .concat(Observable.defer(() => observableFromIterable(this.overlayFileSystem.knownUrisWithoutAvailableContent())))
+                    .concat(
+                        Observable.defer(() =>
+                            observableFromIterable(this.overlayFileSystem.knownUrisWithoutAvailableContent())
+                        )
+                    )
                     .filter(
                         uri =>
                             (!uri.includes('/node_modules/') && isJSTSFile(uri)) ||
@@ -787,7 +797,11 @@ export class ProjectManager implements Disposable {
             if (!this.ensuredAllFiles) {
                 this.ensuredAllFiles = this.updater
                     .ensureStructure(span)
-                    .concat(Observable.defer(() => observableFromIterable(this.overlayFileSystem.knownUrisWithoutAvailableContent())))
+                    .concat(
+                        Observable.defer(() =>
+                            observableFromIterable(this.overlayFileSystem.knownUrisWithoutAvailableContent())
+                        )
+                    )
                     .filter(uri => isJSTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
                     .mergeMap(uri => this.updater.ensure(uri))
                     .do(noop, err => {
@@ -870,7 +884,9 @@ export class ProjectManager implements Disposable {
     public ensureConfigDependencies(childOf = new Span()): Observable<never> {
         return traceObservable('Ensure config dependencies', childOf, span => {
             if (!this.ensuredConfigDependencies) {
-                this.ensuredConfigDependencies = observableFromIterable(this.overlayFileSystem.knownUrisWithoutAvailableContent())
+                this.ensuredConfigDependencies = observableFromIterable(
+                    this.overlayFileSystem.knownUrisWithoutAvailableContent()
+                )
                     .filter(uri => this.isConfigDependency(toUnixPath(uri2path(uri))))
                     .mergeMap(uri => this.updater.ensure(uri))
                     .do(noop, err => {
@@ -1067,10 +1083,11 @@ export class ProjectManager implements Disposable {
         const possiblePaths = this.overlayFileSystem.readDirectory(pathPrefix, undefined, [], ['**/*sconfig.json'])
         const result = []
         for (const possiblePath of possiblePaths) {
-            if (!possiblePath.endsWith('tsconfig.json') && !possiblePath.endsWith('jsconfig.json'))
+            if (!possiblePath.endsWith('tsconfig.json') && !possiblePath.endsWith('jsconfig.json')) {
                 continue
+            }
 
-            const normalizedPath = uri2path(path2uri(possiblePath)) // readDirectory results always use '/' as a separator even for windows paths.
+            const normalizedPath = useBackwardSlashForWindows(possiblePath)
             const configuration = this.getConfigurationIfExists(normalizedPath, this.getConfigurationType(possiblePath))
             if (configuration) {
                 result.push(configuration)

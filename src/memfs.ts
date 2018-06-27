@@ -98,10 +98,11 @@ export abstract class InMemoryFileSystem implements FileSystem {
     /**
      * Returns an IterableIterator for all URIs known to exist in the workspace whose content is not synchronously available.
      */
-    public * knownUrisWithoutAvailableContent(): IterableIterator<string> {
-        for(let file of this.files.keys()) {
-            if (this.files.get(file) === undefined)
+    public *knownUrisWithoutAvailableContent(): IterableIterator<string> {
+        for (const file of this.files.keys()) {
+            if (this.files.get(file) === undefined) {
                 yield file
+            }
         }
     }
 
@@ -223,7 +224,7 @@ export class OverlayFileSystem extends EventEmitter implements ts.ParseConfigHos
      * Use FileSystemUpdater.ensure() to ensure that the file is available.
      */
     public getContent(uri: string): string {
-        let content = this.readFileIfExists(uri2path(uri))
+        const content = this.readFileIfExists(uri2path(uri))
         if (content === undefined) {
             throw new Error(`Content of ${uri} is not available in memory`)
         }

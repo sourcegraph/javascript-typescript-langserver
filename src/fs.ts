@@ -10,7 +10,6 @@ import { traceObservable } from './tracing'
 import { normalizeUri, uri2path } from './util'
 
 export interface FileSystem {
-
     /**
      * Returns files in the workspace under base that cannot be fetched synchronously, such as remote files.
      *
@@ -103,7 +102,8 @@ export class LocalFileSystem implements FileSystem {
     /**
      * Returns an IterableIterator for all URIs known to exist in the workspace (content loaded or not)
      */
-    public * knownUrisWithoutAvailableContent(): IterableIterator<string> {
+    public *knownUrisWithoutAvailableContent(): IterableIterator<string> {
+        // no-op
     }
 
     /**
@@ -121,7 +121,7 @@ export class LocalFileSystem implements FileSystem {
         try {
             return fs.readFileSync(uri2path(uri), 'utf8')
         } catch (e) {
-            return undefined;
+            return undefined
         }
     }
 
