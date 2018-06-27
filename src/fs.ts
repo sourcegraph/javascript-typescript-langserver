@@ -11,8 +11,6 @@ import { normalizeUri, uri2path } from './util'
 
 export interface FileSystem {
 
-    uris(): IterableIterator<string>
-
     /**
      * Returns files in the workspace under base that cannot be fetched synchronously, such as remote files.
      *
@@ -100,9 +98,6 @@ export class LocalFileSystem implements FileSystem {
 
     public readFile(uri: string): Observable<string> {
         return Observable.fromPromise(fs.readFile(uri2path(uri), 'utf8'))
-    }
-
-    public * uris(): IterableIterator<string> {        
     }
 
     /**

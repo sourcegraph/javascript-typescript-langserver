@@ -21,6 +21,7 @@ import {
     path2uri,
     toUnixPath,
     uri2path,
+    useBackwardSlashForWindows,
 } from './util'
 
 const LAST_FORWARD_OR_BACKWARD_SLASH = /[\\\/][^\\\/]*$/
@@ -436,10 +437,8 @@ export class ProjectConfiguration {
         }
 
         // Add all global declaration files from the workspace and all declarations from the project
-        //const files = this.fs.readDirectory(this.fs.path, undefined, undefined, ['**/*'])
-        for (let uri of this.fs.uris()) {
-            const fileName = uri2path(uri)
-            //fileName = uri2path(path2uri(fileName))
+        for (let fileName of this.fs.readDirectory(this.fs.path, undefined, undefined, ['**/*'])) {
+            fileName = useBackwardSlashForWindows(fileName)
             const unixPath = toUnixPath(fileName)
             if (isGlobalTSFile(unixPath) || this.isExpectedDeclarationFile(unixPath)) {
                 const sourceFile = program.getSourceFile(fileName)

@@ -95,10 +95,6 @@ export abstract class InMemoryFileSystem implements FileSystem {
         return ret
     }
 
-    public uris(): IterableIterator<string> {
-        return this.files.keys()
-    }
-
     /**
      * Returns an IterableIterator for all URIs known to exist in the workspace whose content is not synchronously available.
      */
@@ -165,10 +161,6 @@ export class OverlayFileSystem extends EventEmitter implements ts.ParseConfigHos
         super()
         this.path = path
         this.overlay = new Map<string, string>()
-    }
-
-    public uris(): IterableIterator<string> { // TODO: remove this since it doesn't work for the local filesystem.
-        return this.fileSystem.uris()
     }
 
     /**

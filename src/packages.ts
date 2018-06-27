@@ -152,7 +152,7 @@ export class PackageManager extends EventEmitter implements Disposable {
      */
     public packageJsonUris(): IterableIterator<string> {
         if (!this.foundAllPackages) {
-            const possiblePaths = this.overlayFileSystem.readDirectory('/', undefined, [], ['**/package.json'])
+            const possiblePaths = this.overlayFileSystem.readDirectory(this.overlayFileSystem.path, undefined, [], ['**/package.json'])
             for (const possiblePath of possiblePaths) {
                 this.ensurePackage(path2uri(possiblePath))
             }

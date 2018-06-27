@@ -10,7 +10,7 @@ const assert = chai.assert
 
 describe('ProjectManager', () => {
     for (const rootUri of ['file:///', 
-    //'file:///c:/foo/bar/', 
+    'file:///c:/foo/bar/', 
     'file:///foo/bar/'
 ]) {
         describe(`with rootUri ${rootUri}`, () => {
