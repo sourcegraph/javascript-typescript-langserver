@@ -103,8 +103,8 @@ export abstract class InMemoryFileSystem implements FileSystem {
      * Returns an IterableIterator for all URIs known to exist in the workspace whose content is not synchronously available.
      */
     public * knownUrisWithoutAvailableContent(): IterableIterator<string> {
-        for(let file in this.files.keys()) {
-            if (!this.files.get(file))
+        for(let file of this.files.keys()) {
+            if (this.files.get(file) === undefined)
                 yield file
         }
     }
@@ -167,7 +167,7 @@ export class OverlayFileSystem extends EventEmitter implements ts.ParseConfigHos
         this.overlay = new Map<string, string>()
     }
 
-    public uris(): IterableIterator<string> {
+    public uris(): IterableIterator<string> { // TODO: remove this since it doesn't work for the local filesystem.
         return this.fileSystem.uris()
     }
 
@@ -175,7 +175,7 @@ export class OverlayFileSystem extends EventEmitter implements ts.ParseConfigHos
      * Returns an IterableIterator for all URIs known to exist in the workspace but who's content is not synchronously available.
      */
     public knownUrisWithoutAvailableContent(): IterableIterator<string> {
-        return this.uris() // TODO replace with this.fileSystem.knownUrisWithoutAvailableContent()
+        return this.fileSystem.knownUrisWithoutAvailableContent()
     }
 
     /**

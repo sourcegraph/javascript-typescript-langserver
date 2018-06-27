@@ -1071,7 +1071,7 @@ export class ProjectManager implements Disposable {
             if (!possiblePath.endsWith('tsconfig.json') && !possiblePath.endsWith('jsconfig.json'))
                 continue
 
-            const normalizedPath = uri2path(path2uri(possiblePath)) // readDirectory results alway use '/' as a separator even for windows paths.
+            const normalizedPath = uri2path(path2uri(possiblePath)) // readDirectory results always use '/' as a separator even for windows paths.
             const configuration = this.getConfigurationIfExists(normalizedPath, this.getConfigurationType(possiblePath))
             if (configuration) {
                 result.push(configuration)
