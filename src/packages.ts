@@ -95,7 +95,7 @@ export class PackageManager extends EventEmitter implements Disposable {
 
     constructor(
         private updater: FileSystemUpdater,
-        private overlayFileSystem: OverlayFileSystem,
+        private fs: OverlayFileSystem,
         private logger: Logger = new NoopLogger()
     ) {
         super()
@@ -111,7 +111,7 @@ export class PackageManager extends EventEmitter implements Disposable {
             return
         }
 
-        const content = this.overlayFileSystem.readFileIfExists(uri2path(uri))
+        const content = this.fs.readFileIfExists(uri2path(uri))
         if (!content) {
             return
         }
@@ -152,7 +152,7 @@ export class PackageManager extends EventEmitter implements Disposable {
      */
     public packageJsonUris(): IterableIterator<string> {
         if (!this.foundAllPackages) {
-            const possiblePaths = this.overlayFileSystem.readDirectory(this.overlayFileSystem.path, undefined, [], ['**/package.json'])
+            const possiblePaths = this.fs.readDirectory(this.fs.path, undefined, [], ['**/package.json'])
             for (const possiblePath of possiblePaths) {
                 this.ensurePackage(path2uri(possiblePath))
             }
