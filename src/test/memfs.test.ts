@@ -12,7 +12,7 @@ describe('memfs.ts', () => {
         describe('uris()', () => {
             it('should hide TypeScript library files', async () => {
                 const fs = new OverlayFileSystem(new MapFileSystem(), '/')
-                assert.isFalse(iterate(fs.asyncUris()).some(uri => typeScriptLibraries.has(uri2path(uri))))
+                assert.isFalse(iterate(fs.knownUrisWithoutAvailableContent()).some(uri => typeScriptLibraries.has(uri2path(uri))))
             })
         })
         describe('fileExists()', () => {

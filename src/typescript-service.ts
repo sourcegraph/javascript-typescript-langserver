@@ -795,7 +795,7 @@ export class TypeScriptService {
 
                     return this.updater
                         .ensureStructure(span)
-                        .concat(Observable.defer(() => observableFromIterable(this.overlayFileSystem.asyncUris())))
+                        .concat(Observable.defer(() => observableFromIterable(this.overlayFileSystem.knownUrisWithoutAvailableContent())))
                         .filter(uri => uri.startsWith(packageRootUri))
                         .mergeMap(uri => this.updater.ensure(uri, span))
                         .concat(
@@ -987,7 +987,7 @@ export class TypeScriptService {
                                                 if (!params.query.package || !params.query.package) {
                                                     return [symbol]
                                                 }
-                                                // If SymbolDescriptor matched and the query contains a PackageDescriptor, get package.json and match PackageDescriptor name
+                                                // If SymbolDescriptor matched and the query contains a PackageDescriptor, readFileIfAvailable package.json and match PackageDescriptor name
                                                 // TODO match full PackageDescriptor (version) and fill out the symbol.package field
                                                 const uri = path2uri(definition.fileName)
                                                 return this._getPackageDescriptor(uri, span)
@@ -1059,9 +1059,7 @@ export class TypeScriptService {
                 if (isDefinitelyTyped) {
                     const typesUri = url.resolve(this.rootUri, 'types/')
                     return (
-                        observableFromIterable(this.overlayFileSystem.asyncUris())
-                            // Find all types/ subdirectories
-                            .filter(uri => uri.startsWith(typesUri))
+                        observableFromIterable(this.overlayFileSystem.readDirectory(uri2path(typesUri), undefined, undefined, ['*']))
                             // Get the directory names
                             .map((uri): PackageInformation => ({
                                 package: {
@@ -1078,9 +1076,9 @@ export class TypeScriptService {
                     this.projectManager
                         .ensureModuleStructure(span)
                         // Iterate all files
-                        .concat(Observable.defer(() => observableFromIterable(this.overlayFileSystem.asyncUris())))
+                        .concat(Observable.defer(() => observableFromIterable(this.packageManager.packageJsonUris())))
                         // Filter own package.jsons
-                        .filter(uri => uri.includes('/package.json') && !uri.includes('/node_modules/'))
+                        .filter(uri => !uri.includes('/node_modules/'))
                         // Map to contents of package.jsons
                         .mergeMap(uri => this.packageManager.getPackageJson(uri))
                         // Map each package.json to a PackageInformation
@@ -1136,9 +1134,9 @@ export class TypeScriptService {
             this.projectManager
                 .ensureModuleStructure()
                 // Iterate all files
-                .concat(Observable.defer(() => observableFromIterable(this.overlayFileSystem.asyncUris())))
+                .concat(Observable.defer(() => observableFromIterable(this.packageManager.packageJsonUris())))
                 // Filter own package.jsons
-                .filter(uri => uri.includes('/package.json') && !uri.includes('/node_modules/'))
+                .filter(uri => !uri.includes('/node_modules/'))
                 // Ensure contents of own package.jsons
                 .mergeMap(uri => this.packageManager.getPackageJson(uri))
                 // Map package.json to DependencyReferences
@@ -1738,8 +1736,8 @@ export class TypeScriptService {
                                         })
                                         // Require the minimum score without the PackageDescriptor name
                                         .filter(({ score }) => score >= minScoreWithoutPackage)
-                                        // If SymbolDescriptor matched, get package.json and match PackageDescriptor name
-                                        // TODO get and match full PackageDescriptor (version)
+                                        // If SymbolDescriptor matched, readFileIfAvailable package.json and match PackageDescriptor name
+                                        // TODO readFileIfAvailable and match full PackageDescriptor (version)
                                         .mergeMap(({ score, tree, parent }) => {
                                             if (!query.package || !query.package.name) {
                                                 return [{ score, tree, parent }]

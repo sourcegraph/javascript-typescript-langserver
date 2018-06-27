@@ -22,11 +22,11 @@ describe('plugins', () => {
             const memfs = new OverlayFileSystem(new MapFileSystem(), '/')
             const peerPackagesPath = path.resolve(__filename, '../../../../')
             const peerPackagesUri = path2uri(peerPackagesPath)
-            memfs.fileSystem.cacheFile(
+            memfs.fileSystem.makeFileAvailableSynchronously(
                 peerPackagesUri + '/node_modules/some-plugin/package.json',
                 '{ "name": "some-plugin", "version": "0.1.1", "main": "plugin.js"}'
             )
-            memfs.fileSystem.cacheFile(peerPackagesUri + '/node_modules/some-plugin/plugin.js', '')
+            memfs.fileSystem.makeFileAvailableSynchronously(peerPackagesUri + '/node_modules/some-plugin/plugin.js', '')
             const pluginSettings: PluginSettings = {
                 globalPlugins: ['some-plugin'],
                 allowLocalPluginLoads: false,
@@ -51,11 +51,11 @@ describe('plugins', () => {
             const rootUri = path2uri(rootDir) + '/'
             const remoteFileSystem = new MapFileSystem()
             const memfs = new OverlayFileSystem(remoteFileSystem, '/some-project')
-            remoteFileSystem.cacheFile(
+            remoteFileSystem.makeFileAvailableSynchronously(
                 rootUri + 'node_modules/some-plugin/package.json',
                 '{ "name": "some-plugin", "version": "0.1.1", "main": "plugin.js"}'
             )
-            remoteFileSystem.cacheFile(rootUri + 'node_modules/some-plugin/plugin.js', '')
+            remoteFileSystem.makeFileAvailableSynchronously(rootUri + 'node_modules/some-plugin/plugin.js', '')
             const pluginSettings: PluginSettings = {
                 globalPlugins: [],
                 allowLocalPluginLoads: true,

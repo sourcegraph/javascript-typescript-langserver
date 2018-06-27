@@ -2,6 +2,7 @@ import { Span } from 'opentracing'
 import { Observable, Subject } from 'rxjs'
 import { FileSystem } from '../fs'
 import { InMemoryFileSystem } from '../memfs'
+import { observableFromIterable } from '../util'
 
 /**
  * Map-based file system that holds map (URI -> content)
@@ -12,10 +13,10 @@ export class MapFileSystem extends InMemoryFileSystem implements FileSystem {
     }
 
     public getAsyncWorkspaceFiles(base?: string): Observable<string> {
-        return Observable.empty()
+        return Observable.from(observableFromIterable(this.files.keys()))
     }
 
-    public getTextDocumentContent(uri: string): Observable<string> {
+    public readFile(uri: string): Observable<string> {
         const ret = this.files.get(uri)
         if (ret === undefined) {
             return Observable.throw(new Error(`Attempt to read not-existent file ${uri}`))
@@ -42,7 +43,7 @@ export class AddFileSystem extends InMemoryFileSystem {
         this.fileAdditions.complete()
     }
 
-    public getTextDocumentContent(uri: string, childOf?: Span | undefined): Observable<string> {
+    public readFile(uri: string, childOf?: Span | undefined): Observable<string> {
         return Observable.from([this.remoteFiles.get(uri) as string])
     }
 

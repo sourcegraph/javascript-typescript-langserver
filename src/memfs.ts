@@ -43,7 +43,7 @@ export abstract class InMemoryFileSystem implements FileSystem {
      * @param uri The URI of the file
      * @param content The optional content
      */
-    public cacheFile(uri: string, content?: string): void {
+    public makeFileAvailableSynchronously(uri: string, content?: string): void {
         // Make sure not to override existing content with undefined
         if (content !== undefined || !this.files.has(uri)) {
             this.files.set(uri, content)
@@ -95,12 +95,20 @@ export abstract class InMemoryFileSystem implements FileSystem {
         return ret
     }
 
-    /**
-     * Returns an IterableIterator for all URIs known to exist in the workspace (content loaded or not)
-     */
-    public asyncUris(): IterableIterator<string> {
+    public uris(): IterableIterator<string> {
         return this.files.keys()
     }
+
+    /**
+     * Returns an IterableIterator for all URIs known to exist in the workspace whose content is not synchronously available.
+     */
+    public * knownUrisWithoutAvailableContent(): IterableIterator<string> {
+        for(let file in this.files.keys()) {
+            if (!this.files.get(file))
+                yield file
+        }
+    }
+
     /**
      * Returns true if the given file is known to exist in the workspace (content loaded or not)
      *
@@ -109,12 +117,11 @@ export abstract class InMemoryFileSystem implements FileSystem {
     public has(uri: string): boolean {
         return this.files.has(uri)
     }
+
     /**
      * Returns the file content for the given URI.
-     * Will throw an Error if no available in-memory.
-     * Use FileSystemUpdater.ensure() to ensure that the file is available.
      */
-    public get(uri: string): string | undefined {
+    public readFileIfAvailable(uri: string): string | undefined {
         return this.files.get(uri)
     }
 
@@ -132,11 +139,11 @@ export abstract class InMemoryFileSystem implements FileSystem {
      * @param uri The URI of the text document, resolved relative to the rootUri
      * @return An Observable that emits the text document content
      */
-    public abstract getTextDocumentContent(uri: string, childOf?: Span | undefined): Observable<string>
+    public abstract readFile(uri: string, childOf?: Span | undefined): Observable<string>
 }
 
 /**
- * Overlay on top of an existing file system, can be served as a ParseConfigHost (thus allowing listing files that belong to project based on tsconfig.json options)
+ * Overlay a in-memory list of files on top of an existing file system. Useful for storing file state for files that are being editted. Can be served as a ParseConfigHost (thus allowing listing files that belong to project based on tsconfig.json options)
  */
 export class OverlayFileSystem extends EventEmitter implements ts.ParseConfigHost, ts.ModuleResolutionHost {
     /**
@@ -160,39 +167,15 @@ export class OverlayFileSystem extends EventEmitter implements ts.ParseConfigHos
         this.overlay = new Map<string, string>()
     }
 
-    /**
-     * Returns an IterableIterator for all URIs known to exist in the workspace (content loaded or not)
-     */
-    public asyncUris(): IterableIterator<string> {
-        return this.fileSystem.asyncUris()
+    public uris(): IterableIterator<string> {
+        return this.fileSystem.uris()
     }
 
     /**
-     * Returns true if the given file is known to exist in the workspace (content loaded or not)
-     *
-     * @param uri URI to a file
+     * Returns an IterableIterator for all URIs known to exist in the workspace but who's content is not synchronously available.
      */
-    public has(uri: string): boolean {
-        return this.fileSystem.has(uri) || this.fileExists(uri2path(uri))
-    }
-
-    /**
-     * Returns the file content for the given URI.
-     * Will throw an Error if no available in-memory.
-     * Use FileSystemUpdater.ensure() to ensure that the file is available.
-     */
-    public getContent(uri: string): string {
-        let content = this.overlay.get(uri)
-        if (content === undefined) {
-            content = this.fileSystem.get(uri)
-        }
-        if (content === undefined) {
-            content = typeScriptLibraries.get(uri2path(uri))
-        }
-        if (content === undefined) {
-            throw new Error(`Content of ${uri} is not available in memory`)
-        }
-        return content
+    public knownUrisWithoutAvailableContent(): IterableIterator<string> {
+        return this.uris() // TODO replace with this.fileSystem.knownUrisWithoutAvailableContent()
     }
 
     /**
@@ -233,13 +216,26 @@ export class OverlayFileSystem extends EventEmitter implements ts.ParseConfigHos
 
         // TODO This assumes that the URI was a file:// URL.
         //      In reality it could be anything, and the first URI matching the path should be used.
-        //      With the current Map, the search would be O(n), it would require a tree to get O(log(n))
-        content = this.fileSystem.get(uri)
+        //      With the current Map, the search would be O(n), it would require a tree to readFileIfAvailable O(log(n))
+        content = this.fileSystem.readFileIfAvailable(uri)
         if (content !== undefined) {
             return content
         }
 
         return typeScriptLibraries.get(path)
+    }
+
+    /**
+     * Returns the file content for the given URI.
+     * Will throw an Error if no available in-memory.
+     * Use FileSystemUpdater.ensure() to ensure that the file is available.
+     */
+    public getContent(uri: string): string {
+        let content = this.readFileIfExists(uri2path(uri))
+        if (content === undefined) {
+            throw new Error(`Content of ${uri} is not available in memory`)
+        }
+        return content
     }
 
     /**
@@ -257,7 +253,7 @@ export class OverlayFileSystem extends EventEmitter implements ts.ParseConfigHos
     public didSave(uri: string): void {
         const content = this.overlay.get(uri)
         if (content !== undefined) {
-            this.fileSystem.cacheFile(uri, content)
+            this.fileSystem.makeFileAvailableSynchronously(uri, content)
         }
     }
 

@@ -1630,7 +1630,7 @@ export function describeTypeScriptService(
             })
         })
         describe('workspaceXpackages()', function(this: TestContext & ISuiteCallbackContext): void {
-            it('should accournt for all packages', async function(this: TestContext & ITestCallbackContext): Promise<
+            it('should account for all packages', async function(this: TestContext & ITestCallbackContext): Promise<
                 void
             > {
                 const result: PackageInformation[] = await this.service

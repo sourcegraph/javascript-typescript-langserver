@@ -10,6 +10,9 @@ import { traceObservable } from './tracing'
 import { normalizeUri, uri2path } from './util'
 
 export interface FileSystem {
+
+    uris(): IterableIterator<string>
+
     /**
      * Returns files in the workspace under base that cannot be fetched synchronously, such as remote files.
      *
@@ -24,12 +27,12 @@ export interface FileSystem {
      * @param uri The URI of the text document, resolved relative to the rootUri
      * @return An Observable that emits the text document content
      */
-    getTextDocumentContent(uri: string, childOf?: Span): Observable<string>
+    readFile(uri: string, childOf?: Span): Observable<string>
 
     /**
      * Returns an IterableIterator for all URIs known to exist in the workspace (content loaded or not)
      */
-    asyncUris(): IterableIterator<string>
+    knownUrisWithoutAvailableContent(): IterableIterator<string>
 
     /**
      * Returns true if the given file is known to exist in the workspace (content loaded or not)
@@ -39,21 +42,22 @@ export interface FileSystem {
     has(uri: string): boolean
 
     /**
-     * Returns the file content for the given URI.
-     * Will throw an Error if no available in-memory.
-     * Use FileSystemUpdater.ensure() to ensure that the file is available.
+     * Returns the file content for the given URI, if that file is synchronously available.
      */
-    get(uri: string): string | undefined
+    readFileIfAvailable(uri: string): string | undefined
 
     /**
-     * Adds a file to the local cache
+     * Make sure a file is available synchronously. If the file was already available synchronously, such as for a local file system, then nothing has to be done.
      *
      * @param uri The URI of the file
      * @param content The optional content
      */
-    cacheFile(uri: string, content?: string): void
+    makeFileAvailableSynchronously(uri: string, content?: string): void
 
-    getFileSystemEntries(path: string): FileSystemEntries
+    /**
+     * Return the files and directories inside of the given directory
+     */
+    getFileSystemEntries(directory: string): FileSystemEntries
 }
 
 export class RemoteFileSystem extends InMemoryFileSystem implements FileSystem {
@@ -77,7 +81,7 @@ export class RemoteFileSystem extends InMemoryFileSystem implements FileSystem {
      * any text document. This allows language servers to operate without accessing the file system
      * directly.
      */
-    public getTextDocumentContent(uri: string, childOf = new Span()): Observable<string> {
+    public readFile(uri: string, childOf = new Span()): Observable<string> {
         return this.client
             .textDocumentXcontent({ textDocument: { uri } }, childOf)
             .map(textDocument => textDocument.text)
@@ -94,36 +98,39 @@ export class LocalFileSystem implements FileSystem {
         return Observable.empty()
     }
 
-    public getTextDocumentContent(uri: string): Observable<string> {
-        const filePath = uri2path(uri)
-        return Observable.fromPromise(fs.readFile(filePath, 'utf8'))
+    public readFile(uri: string): Observable<string> {
+        return Observable.fromPromise(fs.readFile(uri2path(uri), 'utf8'))
+    }
+
+    public * uris(): IterableIterator<string> {        
     }
 
     /**
      * Returns an IterableIterator for all URIs known to exist in the workspace (content loaded or not)
      */
-    public asyncUris(): IterableIterator<string> {
-        return new Map().keys()
+    public * knownUrisWithoutAvailableContent(): IterableIterator<string> {
     }
 
     /**
      * Returns true if the given file is known to exist in the workspace (content loaded or not)
-     *
      * @param uri URI to a file
      */
     public has(uri: string): boolean {
         return fs.existsSync(uri2path(uri))
     }
+
     /**
      * Returns the file content for the given URI.
-     * Will throw an Error if no available in-memory.
-     * Use FileSystemUpdater.ensure() to ensure that the file is available.
      */
-    public get(uri: string): string | undefined {
-        return fs.readFileSync(uri2path(uri), 'utf8')
+    public readFileIfAvailable(uri: string): string | undefined {
+        try {
+            return fs.readFileSync(uri2path(uri), 'utf8')
+        } catch (e) {
+            return undefined;
+        }
     }
 
-    public cacheFile(uri: string, content?: string): void {
+    public makeFileAvailableSynchronously(uri: string, content?: string): void {
         // no-op
     }
 
@@ -176,11 +183,11 @@ export class FileSystemUpdater {
     public fetch(uri: string, childOf = new Span()): Observable<never> {
         // Limit concurrent fetches
         const observable = Observable.fromPromise(this.concurrencyLimit.wait())
-            .mergeMap(() => this.fileSystem.getTextDocumentContent(uri))
+            .mergeMap(() => this.fileSystem.readFile(uri))
             .do(
                 content => {
                     this.concurrencyLimit.signal()
-                    this.fileSystem.cacheFile(uri, content)
+                    this.fileSystem.makeFileAvailableSynchronously(uri, content)
                 },
                 err => {
                     this.fetches.delete(uri)
@@ -195,7 +202,7 @@ export class FileSystemUpdater {
 
     /**
      * Returns a promise that is resolved when the given URI has been fetched (at least once) to the in-memory file system.
-     * This function cannot be cancelled because multiple callers get the result of the same operation.
+     * This function cannot be cancelled because multiple callers readFileIfAvailable the result of the same operation.
      *
      * @param uri URI of the file to ensure
      * @param childOf An OpenTracing span for tracing
@@ -222,7 +229,7 @@ export class FileSystemUpdater {
                     .getAsyncWorkspaceFiles(undefined, span)
                     .do(
                         uri => {
-                            this.fileSystem.cacheFile(uri)
+                            this.fileSystem.makeFileAvailableSynchronously(uri)
                         },
                         err => {
                             this.structureFetch = undefined

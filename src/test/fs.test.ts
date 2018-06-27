@@ -69,7 +69,7 @@ describe('fs.ts', () => {
         })
         describe('getTextDocumentContent()', () => {
             it('should read files denoted by absolute URI', async () => {
-                const content = await fileSystem.getTextDocumentContent(rootUri + 'tweedledee').toPromise()
+                const content = await fileSystem.readFile(rootUri + 'tweedledee').toPromise()
                 assert.equal(content, 'hi')
             })
         })
