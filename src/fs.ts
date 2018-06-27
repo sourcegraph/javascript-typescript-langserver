@@ -27,7 +27,7 @@ export interface FileSystem {
     readFile(uri: string, childOf?: Span): Observable<string>
 
     /**
-     * Returns an IterableIterator for all URIs known to exist in the workspace (content loaded or not)
+     * Returns all URIs known to exist in the workspace that have not yet been made available synchronously.
      */
     knownUrisWithoutAvailableContent(): IterableIterator<string>
 

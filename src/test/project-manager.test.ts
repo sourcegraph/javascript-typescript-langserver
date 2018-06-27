@@ -4,7 +4,7 @@ import { FileSystemUpdater } from '../fs'
 import { OverlayFileSystem } from '../memfs'
 import { ProjectManager } from '../project-manager'
 import { uri2path } from '../util'
-import { MapFileSystem } from './fs-helpers'
+import { MockRemoteFileSystem } from './fs-helpers'
 chai.use(chaiAsPromised)
 const assert = chai.assert
 
@@ -15,9 +15,7 @@ describe('ProjectManager', () => {
             let memfs: OverlayFileSystem
             it('should add a ProjectConfiguration when a tsconfig.json is added to the InMemoryFileSystem', async () => {
                 const configFileUri = rootUri + 'tsconfig.json'
-                const remoteFileSystem = new MapFileSystem(new Map([
-                    [configFileUri, '{}'],
-                ]))
+                const remoteFileSystem = new MockRemoteFileSystem(new Map([[configFileUri, '{}']]))
 
                 const rootPath = uri2path(rootUri)
                 memfs = new OverlayFileSystem(remoteFileSystem, rootPath)
@@ -35,7 +33,7 @@ describe('ProjectManager', () => {
             describe('ensureBasicFiles', () => {
                 beforeEach(async () => {
                     const rootPath = uri2path(rootUri)
-                    const localfs = new MapFileSystem(
+                    const localfs = new MockRemoteFileSystem(
                         new Map([
                             [rootUri + 'project/package.json', '{"name": "package-name-1"}'],
                             [rootUri + 'project/tsconfig.json', '{ "compilerOptions": { "typeRoots": ["../types"]} }'],
@@ -80,7 +78,7 @@ describe('ProjectManager', () => {
             describe('getPackageName()', () => {
                 beforeEach(async () => {
                     const rootPath = uri2path(rootUri)
-                    const localfs = new MapFileSystem(
+                    const localfs = new MockRemoteFileSystem(
                         new Map([
                             [rootUri + 'package.json', '{"name": "package-name-1"}'],
                             [rootUri + 'subdirectory-with-tsconfig/package.json', '{"name": "package-name-2"}'],
@@ -98,7 +96,7 @@ describe('ProjectManager', () => {
             describe('ensureReferencedFiles()', () => {
                 beforeEach(() => {
                     const rootPath = uri2path(rootUri)
-                    const localfs = new MapFileSystem(
+                    const localfs = new MockRemoteFileSystem(
                         new Map([
                             [rootUri + 'package.json', '{"name": "package-name-1"}'],
                             [
@@ -124,7 +122,7 @@ describe('ProjectManager', () => {
             describe('getConfiguration()', () => {
                 beforeEach(async () => {
                     const rootPath = uri2path(rootUri)
-                    const localfs = new MapFileSystem(
+                    const localfs = new MockRemoteFileSystem(
                         new Map([[rootUri + 'tsconfig.json', '{}'], [rootUri + 'src/jsconfig.json', '{}']])
                     )
                     memfs = new OverlayFileSystem(localfs, rootPath)
@@ -143,7 +141,7 @@ describe('ProjectManager', () => {
             describe('getParentConfiguration()', () => {
                 beforeEach(async () => {
                     const rootPath = uri2path(rootUri)
-                    const localfs = new MapFileSystem(
+                    const localfs = new MockRemoteFileSystem(
                         new Map([[rootUri + 'tsconfig.json', '{}'], [rootUri + 'src/jsconfig.json', '{}']])
                     )
                     memfs = new OverlayFileSystem(localfs, rootPath)
@@ -161,7 +159,7 @@ describe('ProjectManager', () => {
             describe('getChildConfigurations()', () => {
                 beforeEach(async () => {
                     const rootPath = uri2path(rootUri)
-                    const localfs = new MapFileSystem(
+                    const localfs = new MockRemoteFileSystem(
                         new Map([
                             [rootUri + 'tsconfig.json', '{}'],
                             [rootUri + 'foo/bar/tsconfig.json', '{}'],

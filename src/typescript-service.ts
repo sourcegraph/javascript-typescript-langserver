@@ -88,7 +88,10 @@ export interface TypeScriptServiceOptions {
     strict?: boolean
 }
 
-export type TypeScriptServiceFactory = (client: LanguageClient, options?: TypeScriptServiceOptions) => TypeScriptService
+export type TypeScriptServiceFactory = (
+    client: LanguageClient,
+    options?: TypeScriptServiceOptions
+) => Promise<TypeScriptService>
 
 /**
  * Settings synced through `didChangeConfiguration`

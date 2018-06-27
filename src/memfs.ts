@@ -35,7 +35,7 @@ export abstract class InMemoryFileSystem implements FileSystem {
      * Contains a Map of all URIs that exist in the workspace, optionally with a content.
      * File contents for URIs in it do not neccessarily have to be fetched already.
      */
-    constructor(readonly files: Map<string, string | undefined>) {}
+    constructor(private readonly files: Map<string, string | undefined>) {}
 
     /**
      * Adds a file to the local cache
