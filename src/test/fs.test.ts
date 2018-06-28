@@ -43,7 +43,7 @@ describe('fs.ts', () => {
 
             // global package is symlinked into project using npm link
             await fs.symlink(somePackageDir, path.join(projectDir, 'node_modules', 'some_package'), 'junction')
-            fileSystem = new LocalFileSystem(rootUri)
+            fileSystem = new LocalFileSystem()
         })
         after(async () => {
             await new Promise<void>((resolve, reject) => {
@@ -51,25 +51,9 @@ describe('fs.ts', () => {
             })
         })
 
-        describe('getAsyncWorkspaceFiles()', () => {
-            it('should return all files in the workspace', async () => {
-                const files = await fileSystem
-                    .getAsyncWorkspaceFiles()
-                    .toArray()
-                    .toPromise()
-                assert.sameMembers(files, [])
-            })
-            it('should return all files under specific root', async () => {
-                const files = await fileSystem
-                    .getAsyncWorkspaceFiles(rootUri + 'foo')
-                    .toArray()
-                    .toPromise()
-                assert.sameMembers(files, [])
-            })
-        })
         describe('getTextDocumentContent()', () => {
             it('should read files denoted by absolute URI', async () => {
-                const content = await fileSystem.readFile(rootUri + 'tweedledee').toPromise()
+                const content = fileSystem.readFileIfAvailable(rootUri + 'tweedledee')
                 assert.equal(content, 'hi')
             })
         })

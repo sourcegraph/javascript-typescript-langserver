@@ -1,21 +1,18 @@
 import { Observable } from 'rxjs'
-import { FileSystem } from '../fs'
-import { InMemoryFileSystem } from '../memfs'
+import { AsynchronousFileSystem } from '../fs'
 import { observableFromIterable } from '../util'
 
 /**
- * Map-based file system that holds map (URI -> content)
+ * Map-based file system that holds map (URI -> content). Useful for testing.
  */
-export class MockRemoteFileSystem extends InMemoryFileSystem implements FileSystem {
-    constructor(readonly asyncFiles: Map<string, string> = new Map()) {
-        super(new Map())
-    }
+export class MapAsynchronousFileSystem implements AsynchronousFileSystem {
+    constructor(readonly asyncFiles: Map<string, string> = new Map()) {}
 
-    public getAsyncWorkspaceFiles(base?: string): Observable<string> {
+    public getWorkspaceFiles(base?: string): Observable<string> {
         return observableFromIterable(this.asyncFiles.keys())
     }
 
-    public readFile(uri: string): Observable<string> {
+    public getTextDocumentContent(uri: string): Observable<string> {
         const ret = this.asyncFiles.get(uri)
         if (ret === undefined) {
             return Observable.throw(new Error(`Attempt to read not-existent file ${uri}`))

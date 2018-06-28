@@ -1,10 +1,11 @@
 import * as chai from 'chai'
 import chaiAsPromised = require('chai-as-promised')
-import { FileSystemUpdater } from '../fs'
+import { InMemoryFileSystem } from '../fs'
 import { OverlayFileSystem } from '../memfs'
 import { ProjectManager } from '../project-manager'
+import { RemoteFileSystemUpdater } from '../updater'
 import { uri2path } from '../util'
-import { MockRemoteFileSystem } from './fs-helpers'
+import { MapAsynchronousFileSystem } from './fs-helpers'
 chai.use(chaiAsPromised)
 const assert = chai.assert
 
@@ -15,11 +16,11 @@ describe('ProjectManager', () => {
             let memfs: OverlayFileSystem
             it('should add a ProjectConfiguration when a tsconfig.json is added to the InMemoryFileSystem', async () => {
                 const configFileUri = rootUri + 'tsconfig.json'
-                const remoteFileSystem = new MockRemoteFileSystem(new Map([[configFileUri, '{}']]))
-
+                const remoteFileSystem = new MapAsynchronousFileSystem(new Map([[configFileUri, '{}']]))
+                const fs = new InMemoryFileSystem()
                 const rootPath = uri2path(rootUri)
-                memfs = new OverlayFileSystem(remoteFileSystem, rootPath)
-                const updater = new FileSystemUpdater(remoteFileSystem)
+                memfs = new OverlayFileSystem(fs, rootPath)
+                const updater = new RemoteFileSystemUpdater(remoteFileSystem, fs)
                 const structureFetched = updater.fetchStructure().toPromise()
                 projectManager = new ProjectManager(rootPath, memfs, updater, true)
                 await structureFetched
@@ -33,7 +34,8 @@ describe('ProjectManager', () => {
             describe('ensureBasicFiles', () => {
                 beforeEach(async () => {
                     const rootPath = uri2path(rootUri)
-                    const localfs = new MockRemoteFileSystem(
+                    const fs = new InMemoryFileSystem()
+                    const remoteFs = new MapAsynchronousFileSystem(
                         new Map([
                             [rootUri + 'project/package.json', '{"name": "package-name-1"}'],
                             [rootUri + 'project/tsconfig.json', '{ "compilerOptions": { "typeRoots": ["../types"]} }'],
@@ -45,8 +47,8 @@ describe('ProjectManager', () => {
                             [rootUri + 'types/types.d.ts', 'declare var GLOBALCONSTANT=1;'],
                         ])
                     )
-                    memfs = new OverlayFileSystem(localfs, rootPath)
-                    const updater = new FileSystemUpdater(localfs)
+                    memfs = new OverlayFileSystem(fs, rootPath)
+                    const updater = new RemoteFileSystemUpdater(remoteFs, fs)
                     projectManager = new ProjectManager(rootPath, memfs, updater, true)
                 })
 
@@ -78,7 +80,8 @@ describe('ProjectManager', () => {
             describe('getPackageName()', () => {
                 beforeEach(async () => {
                     const rootPath = uri2path(rootUri)
-                    const localfs = new MockRemoteFileSystem(
+                    const fs = new InMemoryFileSystem()
+                    const remoteFs = new MapAsynchronousFileSystem(
                         new Map([
                             [rootUri + 'package.json', '{"name": "package-name-1"}'],
                             [rootUri + 'subdirectory-with-tsconfig/package.json', '{"name": "package-name-2"}'],
@@ -86,8 +89,8 @@ describe('ProjectManager', () => {
                             [rootUri + 'subdirectory-with-tsconfig/src/dummy.ts', ''],
                         ])
                     )
-                    memfs = new OverlayFileSystem(localfs, rootPath)
-                    const updater = new FileSystemUpdater(localfs)
+                    memfs = new OverlayFileSystem(fs, rootPath)
+                    const updater = new RemoteFileSystemUpdater(remoteFs, fs)
                     projectManager = new ProjectManager(rootPath, memfs, updater, true)
                     await projectManager.ensureAllFiles().toPromise()
                 })
@@ -96,7 +99,8 @@ describe('ProjectManager', () => {
             describe('ensureReferencedFiles()', () => {
                 beforeEach(() => {
                     const rootPath = uri2path(rootUri)
-                    const localfs = new MockRemoteFileSystem(
+                    const fs = new InMemoryFileSystem()
+                    const remoteFs = new MapAsynchronousFileSystem(
                         new Map([
                             [rootUri + 'package.json', '{"name": "package-name-1"}'],
                             [
@@ -108,8 +112,8 @@ describe('ProjectManager', () => {
                             [rootUri + 'src/dummy.ts', 'import * as somelib from "somelib";'],
                         ])
                     )
-                    memfs = new OverlayFileSystem(localfs, rootPath)
-                    const updater = new FileSystemUpdater(localfs)
+                    memfs = new OverlayFileSystem(fs, rootPath)
+                    const updater = new RemoteFileSystemUpdater(remoteFs, fs)
                     projectManager = new ProjectManager(rootPath, memfs, updater, true)
                 })
                 it('should ensure content for imports and references is fetched', async () => {
@@ -122,11 +126,12 @@ describe('ProjectManager', () => {
             describe('getConfiguration()', () => {
                 beforeEach(async () => {
                     const rootPath = uri2path(rootUri)
-                    const localfs = new MockRemoteFileSystem(
+                    const fs = new InMemoryFileSystem()
+                    const remoteFs = new MapAsynchronousFileSystem(
                         new Map([[rootUri + 'tsconfig.json', '{}'], [rootUri + 'src/jsconfig.json', '{}']])
                     )
-                    memfs = new OverlayFileSystem(localfs, rootPath)
-                    const updater = new FileSystemUpdater(localfs)
+                    memfs = new OverlayFileSystem(fs, rootPath)
+                    const updater = new RemoteFileSystemUpdater(remoteFs, fs)
                     projectManager = new ProjectManager(rootPath, memfs, updater, true)
                     await projectManager.ensureAllFiles().toPromise()
                 })
@@ -141,11 +146,12 @@ describe('ProjectManager', () => {
             describe('getParentConfiguration()', () => {
                 beforeEach(async () => {
                     const rootPath = uri2path(rootUri)
-                    const localfs = new MockRemoteFileSystem(
+                    const fs = new InMemoryFileSystem()
+                    const remoteFs = new MapAsynchronousFileSystem(
                         new Map([[rootUri + 'tsconfig.json', '{}'], [rootUri + 'src/jsconfig.json', '{}']])
                     )
-                    memfs = new OverlayFileSystem(localfs, rootPath)
-                    const updater = new FileSystemUpdater(localfs)
+                    memfs = new OverlayFileSystem(fs, rootPath)
+                    const updater = new RemoteFileSystemUpdater(remoteFs, fs)
                     projectManager = new ProjectManager(rootPath, memfs, updater, true)
                     await projectManager.ensureAllFiles().toPromise()
                 })
@@ -159,7 +165,8 @@ describe('ProjectManager', () => {
             describe('getChildConfigurations()', () => {
                 beforeEach(async () => {
                     const rootPath = uri2path(rootUri)
-                    const localfs = new MockRemoteFileSystem(
+                    const fs = new InMemoryFileSystem()
+                    const remoteFs = new MapAsynchronousFileSystem(
                         new Map([
                             [rootUri + 'tsconfig.json', '{}'],
                             [rootUri + 'foo/bar/tsconfig.json', '{}'],
@@ -167,8 +174,8 @@ describe('ProjectManager', () => {
                             [rootUri + 'foo/baz/fsconfig.json', '{}'],
                         ])
                     )
-                    memfs = new OverlayFileSystem(localfs, rootPath)
-                    const updater = new FileSystemUpdater(localfs)
+                    memfs = new OverlayFileSystem(fs, rootPath)
+                    const updater = new RemoteFileSystemUpdater(remoteFs, fs)
                     projectManager = new ProjectManager(rootPath, memfs, updater, true)
                     await projectManager.ensureAllFiles().toPromise()
                 })

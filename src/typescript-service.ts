@@ -36,7 +36,7 @@ import {
 } from 'vscode-languageserver'
 import { walkMostAST } from './ast'
 import { convertTsDiagnostic } from './diagnostics'
-import { FileSystem, FileSystemUpdater, LocalFileSystem, RemoteFileSystem } from './fs'
+import { InMemoryFileSystem, LocalFileSystem, RemoteFileSystem, SynchronousFileSystem } from './fs'
 import { LanguageClient } from './lang-handler'
 import { Logger, LSPLogger } from './logging'
 import { isTypeScriptLibrary, OverlayFileSystem } from './memfs'
@@ -72,6 +72,7 @@ import {
     walkNavigationTree,
 } from './symbols'
 import { traceObservable } from './tracing'
+import { FileSystemUpdater, NoopFileSystemUpdater, RemoteFileSystemUpdater } from './updater'
 import {
     getMatchingPropertyCount,
     getPropertyCount,
@@ -155,17 +156,12 @@ export class TypeScriptService {
 
     private traceModuleResolution: boolean
 
-    /**
-     * The remote (or local), asynchronous, file system to fetch files from
-     */
-    protected fileSystem: FileSystem
-
     protected logger: Logger
 
     /**
      * Holds file contents and workspace structure in memory
      */
-    protected overlayFileSystem: OverlayFileSystem
+    protected fileSystem: OverlayFileSystem
 
     /**
      * Syncs the remote file system with the in-memory file system
@@ -228,7 +224,7 @@ export class TypeScriptService {
      * - notifications should be dropped, except for the exit notification. This will allow the exit a
      * server without an initialize request.
      *
-     * Until the server has responded to the `initialize` request with an `InitializeResult` the
+     * Until the server fileExists responded to the `initialize` request with an `InitializeResult` the
      * client must not sent any additional requests or notifications to the server.
      *
      * During the `initialize` request the server is allowed to sent the notifications
@@ -258,16 +254,15 @@ export class TypeScriptService {
             this._initializeFileSystems(
                 !this.options.strict && !(params.capabilities.xcontentProvider && params.capabilities.xfilesProvider)
             )
-            this.updater = new FileSystemUpdater(this.fileSystem)
             this.projectManager = new ProjectManager(
                 this.root,
-                this.overlayFileSystem,
+                this.fileSystem,
                 this.updater,
                 this.traceModuleResolution,
                 this.settings,
                 this.logger
             )
-            this.packageManager = new PackageManager(this.updater, this.overlayFileSystem, this.logger)
+            this.packageManager = new PackageManager(this.updater, this.fileSystem, this.logger)
             // Detect DefinitelyTyped
             // Fetch root package.json (if exists)
             const normRootUri = this.rootUri.endsWith('/') ? this.rootUri : this.rootUri + '/'
@@ -333,8 +328,16 @@ export class TypeScriptService {
      * @param accessDisk Whether the language server is allowed to access the local file system
      */
     protected _initializeFileSystems(accessDisk: boolean): void {
-        this.fileSystem = accessDisk ? new LocalFileSystem(this.rootUri) : new RemoteFileSystem(this.client)
-        this.overlayFileSystem = new OverlayFileSystem(this.fileSystem, this.root, this.logger)
+        let fileSystem: SynchronousFileSystem
+        if (accessDisk) {
+            fileSystem = new LocalFileSystem()
+            this.updater = new NoopFileSystemUpdater()
+        } else {
+            const inMemoryFileSystem = new InMemoryFileSystem()
+            fileSystem = inMemoryFileSystem
+            this.updater = new RemoteFileSystemUpdater(new RemoteFileSystem(this.client), inMemoryFileSystem)
+        }
+        this.fileSystem = new OverlayFileSystem(fileSystem, this.root, this.logger)
     }
 
     /**
@@ -545,9 +548,9 @@ export class TypeScriptService {
                         `/node_modules/${encodedPackageName}/package.json`,
                 })
                 // Fetch the package.json of the dependency
-                return this.updater.ensure(packageJsonUri, span).concat(
+                return this.withUpdater(updater => updater.ensure(packageJsonUri, span)).concat(
                     Observable.defer((): Observable<PackageDescriptor> => {
-                        const packageJson: PackageJson = JSON.parse(this.overlayFileSystem.getContent(packageJsonUri))
+                        const packageJson: PackageJson = JSON.parse(this.fileSystem.getContent(packageJsonUri))
                         const { name, version } = packageJson
                         if (!name) {
                             return Observable.empty()
@@ -588,6 +591,10 @@ export class TypeScriptService {
                 })
             }
         })
+    }
+
+    private withUpdater<T>(ensure: (updater: FileSystemUpdater) => Observable<T>): Observable<T> {
+        return this.updater ? ensure(this.updater) : Observable.empty<T>()
     }
 
     /**
@@ -800,7 +807,7 @@ export class TypeScriptService {
                         .ensureStructure(span)
                         .concat(
                             Observable.defer(() =>
-                                observableFromIterable(this.overlayFileSystem.knownUrisWithoutAvailableContent())
+                                observableFromIterable(this.updater.knownUrisWithoutAvailableContent())
                             )
                         )
                         .filter(uri => uri.startsWith(packageRootUri))
@@ -831,7 +838,7 @@ export class TypeScriptService {
                                             .filter(
                                                 packageJsonUri =>
                                                     (JSON.parse(
-                                                        this.overlayFileSystem.getContent(packageJsonUri)
+                                                        this.fileSystem.getContent(packageJsonUri)
                                                     ) as PackageJson).name === params.symbol!.package!.name
                                             )
                                             // Find their parent and child tsconfigs
@@ -938,7 +945,7 @@ export class TypeScriptService {
                         return observableFromIterable(this.packageManager.packageJsonUris())
                             .filter(
                                 uri =>
-                                    (JSON.parse(this.overlayFileSystem.getContent(uri)) as PackageJson).name ===
+                                    (JSON.parse(this.fileSystem.getContent(uri)) as PackageJson).name ===
                                     params.hints!.dependeePackageName
                             )
                             .take(1)
@@ -1067,7 +1074,7 @@ export class TypeScriptService {
                     const typesUri = url.resolve(this.rootUri, 'types/')
                     return (
                         observableFromIterable(
-                            this.overlayFileSystem.readDirectory(uri2path(typesUri), undefined, undefined, ['*'])
+                            this.fileSystem.readDirectory(uri2path(typesUri), undefined, undefined, ['*'])
                         )
                             // Get the directory names
                             .map((uri): PackageInformation => ({
@@ -1522,7 +1529,7 @@ export class TypeScriptService {
                 })
             )
             .map(([uri, edit]): Operation => {
-                // if file has no edit yet, initialize array
+                // if file fileExists no edit yet, initialize array
                 if (!editUris.has(uri)) {
                     editUris.add(uri)
                     return { op: 'add', path: JSONPTR`/changes/${uri}`, value: [edit] }
@@ -1559,7 +1566,7 @@ export class TypeScriptService {
 
     /**
      * The document change notification is sent from the client to the server to signal changes to a
-     * text document. In 2.0 the shape of the params has changed to include proper version numbers
+     * text document. In 2.0 the shape of the params fileExists changed to include proper version numbers
      * and language ids.
      */
     public async textDocumentDidChange(params: DidChangeTextDocumentParams): Promise<void> {

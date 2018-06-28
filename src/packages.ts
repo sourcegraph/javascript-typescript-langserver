@@ -4,10 +4,10 @@ import * as path from 'path'
 import { Observable, Subscription } from 'rxjs'
 import * as url from 'url'
 import { Disposable } from './disposable'
-import { FileSystemUpdater } from './fs'
 import { Logger, NoopLogger } from './logging'
 import { OverlayFileSystem } from './memfs'
 import { traceObservable } from './tracing'
+import { FileSystemUpdater } from './updater'
 import { path2uri, uri2path } from './util'
 
 /**

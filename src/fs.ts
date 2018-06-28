@@ -2,41 +2,20 @@ import * as fs from 'mz/fs'
 import { Span } from 'opentracing'
 import * as path from 'path'
 import { Observable } from 'rxjs'
-import Semaphore from 'semaphore-async-await'
 import { LanguageClient } from './lang-handler'
 import { FileSystemEntries } from './match-files'
-import { InMemoryFileSystem } from './memfs'
-import { traceObservable } from './tracing'
 import { normalizeUri, uri2path } from './util'
 
-export interface FileSystem {
-    /**
-     * Returns files in the workspace under base that cannot be fetched synchronously, such as remote files.
-     *
-     * @param base A URI under which to search, resolved relative to the rootUri
-     * @return An Observable that emits URIs
-     */
-    getAsyncWorkspaceFiles(base?: string, childOf?: Span): Observable<string>
-
-    /**
-     * Returns the content of a text document
-     *
-     * @param uri The URI of the text document, resolved relative to the rootUri
-     * @return An Observable that emits the text document content
-     */
-    readFile(uri: string, childOf?: Span): Observable<string>
-
-    /**
-     * Returns all URIs known to exist in the workspace that have not yet been made available synchronously.
-     */
-    knownUrisWithoutAvailableContent(): IterableIterator<string>
-
+/**
+ * Provides a synchronous file system API.
+ */
+export interface SynchronousFileSystem {
     /**
      * Returns true if the given file is known to exist in the workspace (content loaded or not)
      *
      * @param uri URI to a file
      */
-    has(uri: string): boolean
+    fileExists(uri: string): boolean
 
     /**
      * Returns the file content for the given URI, if that file is synchronously available.
@@ -44,73 +23,122 @@ export interface FileSystem {
     readFileIfAvailable(uri: string): string | undefined
 
     /**
-     * Make sure a file is available synchronously. If the file was already available synchronously, such as for a local file system, then nothing has to be done.
-     *
-     * @param uri The URI of the file
-     * @param content The optional content
-     */
-    makeFileAvailableSynchronously(uri: string, content?: string): void
-
-    /**
-     * Return the files and directories inside of the given directory
+     * Return the files and directories contained in the given directory
      */
     getFileSystemEntries(directory: string): FileSystemEntries
 }
 
-export class RemoteFileSystem extends InMemoryFileSystem implements FileSystem {
-    constructor(private client: LanguageClient) {
-        super(new Map<string, string | undefined>())
-    }
-
-    /**
-     * The files request is sent from the server to the client to request a list of all files in the workspace or inside the directory of the base parameter, if given.
-     * A language server can use the result to index files by filtering and doing a content request for each text document of interest.
-     */
-    public getAsyncWorkspaceFiles(base?: string, childOf = new Span()): Observable<string> {
-        return this.client
-            .workspaceXfiles({ base }, childOf)
-            .mergeMap(textDocuments => textDocuments)
-            .map(textDocument => normalizeUri(textDocument.uri))
-    }
-
-    /**
-     * The content request is sent from the server to the client to request the current content of
-     * any text document. This allows language servers to operate without accessing the file system
-     * directly.
-     */
-    public readFile(uri: string, childOf = new Span()): Observable<string> {
-        return this.client
-            .textDocumentXcontent({ textDocument: { uri } }, childOf)
-            .map(textDocument => textDocument.text)
-    }
+/**
+ * In-memory file cache node which represents either a folder or a file
+ */
+export interface FileSystemNode {
+    file: boolean
+    children: Map<string, FileSystemNode>
 }
 
-export class LocalFileSystem implements FileSystem {
+/**
+ * In-memory file system
+ */
+export class InMemoryFileSystem implements SynchronousFileSystem {
     /**
-     * @param rootUri The root URI that is used if `base` is not specified
+     * File tree root
      */
-    constructor(private rootUri: string) {}
-
-    public getAsyncWorkspaceFiles(base = this.rootUri): Observable<string> {
-        return Observable.empty()
-    }
-
-    public readFile(uri: string): Observable<string> {
-        return Observable.fromPromise(fs.readFile(uri2path(uri), 'utf8'))
-    }
+    public rootNode: FileSystemNode = { file: false, children: new Map<string, FileSystemNode>() }
 
     /**
-     * Returns an IterableIterator for all URIs known to exist in the workspace (content loaded or not)
+     * Contains a Map of all URIs that exist in the workspace, optionally with a content.
+     * File contents for URIs in it do not neccessarily have to be fetched already.
      */
-    public *knownUrisWithoutAvailableContent(): IterableIterator<string> {
-        // no-op
+    constructor(private readonly files: Map<string, string | undefined> = new Map()) {}
+
+    /**
+     * Return all known uri's in the workspace. (content loaded or not)
+     */
+    public uris(): IterableIterator<string> {
+        return this.files.keys()
+    }
+
+    /**
+     * Adds a file to the local cache
+     *
+     * @param uri The URI of the file
+     * @param content The optional content
+     */
+    public add(uri: string, content?: string): void {
+        // Make sure not to override existing content with undefined
+        if (content !== undefined || !this.files.has(uri)) {
+            this.files.set(uri, content)
+        }
+        // Add to directory tree
+        // TODO: convert this to use URIs.
+        const filePath = uri2path(uri)
+        const components = filePath.split(/[\/\\]/).filter(c => c)
+        let node = this.rootNode
+        for (const [i, component] of components.entries()) {
+            const n = node.children.get(component)
+            if (!n) {
+                if (i < components.length - 1) {
+                    const n = { file: false, children: new Map<string, FileSystemNode>() }
+                    node.children.set(component, n)
+                    node = n
+                } else {
+                    node.children.set(component, { file: true, children: new Map<string, FileSystemNode>() })
+                }
+            } else {
+                node = n
+            }
+        }
+    }
+
+    /**
+     * Called by TS service to scan virtual directory when TS service looks for source files that belong to a project
+     */
+    public getFileSystemEntries(directory: string): FileSystemEntries {
+        const ret: { files: string[]; directories: string[] } = { files: [], directories: [] }
+        let node = this.rootNode
+        const components = directory.split(/[\\\/]/).filter(c => c)
+        if (components.length !== 1 || components[0]) {
+            for (const component of components) {
+                const n = node.children.get(component)
+                if (!n) {
+                    return ret
+                }
+                node = n
+            }
+        }
+        for (const [name, value] of node.children.entries()) {
+            if (value.file) {
+                ret.files.push(name)
+            } else {
+                ret.directories.push(name)
+            }
+        }
+        return ret
     }
 
     /**
      * Returns true if the given file is known to exist in the workspace (content loaded or not)
+     *
      * @param uri URI to a file
      */
-    public has(uri: string): boolean {
+    public fileExists(uri: string): boolean {
+        return this.files.has(uri)
+    }
+
+    /**
+     * Returns the file content for the given URI.
+     */
+    public readFileIfAvailable(uri: string): string | undefined {
+        return this.files.get(uri)
+    }
+}
+
+export class LocalFileSystem implements SynchronousFileSystem {
+    /**
+     * Returns true if the given file is known to exist in the workspace (content loaded or not)
+     * @param uri URI to a file
+     */
+    public fileExists(uri: string): boolean {
         return fs.existsSync(uri2path(uri))
     }
 
@@ -123,10 +151,6 @@ export class LocalFileSystem implements FileSystem {
         } catch (e) {
             return undefined
         }
-    }
-
-    public makeFileAvailableSynchronously(uri: string, content?: string): void {
-        // no-op
     }
 
     public getFileSystemEntries(directory: string): FileSystemEntries {
@@ -146,123 +170,48 @@ export class LocalFileSystem implements FileSystem {
 }
 
 /**
- * Synchronizes a remote file system to an in-memory file system
- *
- * TODO: Implement Disposable with Disposer
+ * Provides a minimal asynchronous file system API.
  */
-export class FileSystemUpdater {
+export interface AsynchronousFileSystem {
     /**
-     * Observable for a pending or completed structure fetch
-     */
-    private structureFetch?: Observable<never>
-
-    /**
-     * Map from URI to Observable of pending or completed content fetch
-     */
-    private fetches = new Map<string, Observable<never>>()
-
-    /**
-     * Limits concurrent fetches to not fetch thousands of files in parallel
-     */
-    private concurrencyLimit = new Semaphore(100)
-
-    constructor(private fileSystem: FileSystem) {}
-
-    /**
-     * Fetches the file content for the given URI and adds the content to the in-memory file system
+     * Returns all files in the workspace under base
      *
-     * @param uri URI of the file to fetch
-     * @param childOf A parent span for tracing
-     * @return Observable that completes when the fetch is finished
+     * @param base A URI under which to search, resolved relative to the rootUri
+     * @return An Observable that emits URIs
      */
-    public fetch(uri: string, childOf = new Span()): Observable<never> {
-        // Limit concurrent fetches
-        const observable = Observable.fromPromise(this.concurrencyLimit.wait())
-            .mergeMap(() => this.fileSystem.readFile(uri))
-            .do(
-                content => {
-                    this.concurrencyLimit.signal()
-                    this.fileSystem.makeFileAvailableSynchronously(uri, content)
-                },
-                err => {
-                    this.fetches.delete(uri)
-                }
-            )
-            .ignoreElements()
-            .publishReplay()
-            .refCount() as Observable<never>
-        this.fetches.set(uri, observable)
-        return observable
+    getWorkspaceFiles(base?: string | undefined, childOf?: Span | undefined): Observable<string>
+
+    /**
+     * Returns the content of a text document
+     *
+     * @param uri The URI of the text document, resolved relative to the rootUri
+     * @return An Observable that emits the text document content
+     */
+    getTextDocumentContent(uri: string, childOf?: Span | undefined): Observable<string>
+}
+
+export class RemoteFileSystem implements AsynchronousFileSystem {
+    constructor(private client: LanguageClient) {}
+
+    /**
+     * The files request is sent from the server to the client to request a list of all files in the workspace or inside the directory of the base parameter, if given.
+     * A language server can use the result to index files by filtering and doing a content request for each text document of interest.
+     */
+    public getWorkspaceFiles(base?: string, childOf = new Span()): Observable<string> {
+        return this.client
+            .workspaceXfiles({ base }, childOf)
+            .mergeMap(textDocuments => textDocuments)
+            .map(textDocument => normalizeUri(textDocument.uri))
     }
 
     /**
-     * Returns a promise that is resolved when the given URI has been fetched (at least once) to the in-memory file system.
-     * This function cannot be cancelled because multiple callers readFileIfAvailable the result of the same operation.
-     *
-     * @param uri URI of the file to ensure
-     * @param childOf An OpenTracing span for tracing
-     * @return Observable that completes when the file was fetched
+     * The content request is sent from the server to the client to request the current content of
+     * any text document. This allows language servers to operate without accessing the file system
+     * directly.
      */
-    public ensure(uri: string, childOf = new Span()): Observable<never> {
-        return traceObservable('Ensure content', childOf, span => {
-            span.addTags({ uri })
-            return this.fetches.get(uri) || this.fetch(uri, span)
-        })
-    }
-
-    /**
-     * Fetches the file/directory structure for the given directory from the remote file system and saves it in the in-memory file system
-     *
-     * @param childOf A parent span for tracing
-     */
-    public fetchStructure(childOf = new Span()): Observable<never> {
-        const observable = traceObservable(
-            'Fetch workspace structure',
-            childOf,
-            span =>
-                this.fileSystem
-                    .getAsyncWorkspaceFiles(undefined, span)
-                    .do(
-                        uri => {
-                            this.fileSystem.makeFileAvailableSynchronously(uri)
-                        },
-                        err => {
-                            this.structureFetch = undefined
-                        }
-                    )
-                    .ignoreElements()
-                    .publishReplay()
-                    .refCount() as Observable<never>
-        )
-        this.structureFetch = observable
-        return observable
-    }
-
-    /**
-     * Returns a promise that is resolved as soon as the file/directory structure for the given directory has been synced
-     * from the remote file system to the in-memory file system (at least once)
-     *
-     * @param span An OpenTracing span for tracing
-     */
-    public ensureStructure(childOf = new Span()): Observable<never> {
-        return traceObservable('Ensure structure', childOf, span => this.structureFetch || this.fetchStructure(span))
-    }
-
-    /**
-     * Invalidates the content fetch cache of a file.
-     * The next call to `ensure` will do a refetch.
-     *
-     * @param uri URI of the file that changed
-     */
-    public invalidate(uri: string): void {
-        this.fetches.delete(uri)
-    }
-
-    /**
-     * Invalidates the structure fetch cache.
-     * The next call to `ensureStructure` will do a refetch.
-     */
-    public invalidateStructure(): void {
-        this.structureFetch = undefined
+    public getTextDocumentContent(uri: string, childOf = new Span()): Observable<string> {
+        return this.client
+            .textDocumentXcontent({ textDocument: { uri } }, childOf)
+            .map(textDocument => textDocument.text)
     }
 }

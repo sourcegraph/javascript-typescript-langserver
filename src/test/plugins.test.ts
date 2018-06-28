@@ -1,16 +1,16 @@
 import * as path from 'path'
 import * as sinon from 'sinon'
 import * as ts from 'typescript'
+import { InMemoryFileSystem } from '../fs'
 import { OverlayFileSystem } from '../memfs'
 import { PluginLoader, PluginModule, PluginModuleFactory } from '../plugins'
 import { PluginSettings } from '../request-type'
 import { path2uri } from '../util'
-import { MockRemoteFileSystem } from './fs-helpers'
 
 describe('plugins', () => {
     describe('loadPlugins()', () => {
         it('should do nothing if no plugins are configured', () => {
-            const memfs = new OverlayFileSystem(new MockRemoteFileSystem(), '/')
+            const memfs = new OverlayFileSystem(new InMemoryFileSystem(), '/')
 
             const loader = new PluginLoader('/', memfs)
             const compilerOptions: ts.CompilerOptions = {}
@@ -19,14 +19,15 @@ describe('plugins', () => {
         })
 
         it('should load a global plugin if specified', () => {
-            const memfs = new OverlayFileSystem(new MockRemoteFileSystem(), '/')
+            const fs = new InMemoryFileSystem()
+            const memfs = new OverlayFileSystem(fs, '/')
             const peerPackagesPath = path.resolve(__filename, '../../../../')
             const peerPackagesUri = path2uri(peerPackagesPath)
-            memfs.fileSystem.makeFileAvailableSynchronously(
+            fs.add(
                 peerPackagesUri + '/node_modules/some-plugin/package.json',
                 '{ "name": "some-plugin", "version": "0.1.1", "main": "plugin.js"}'
             )
-            memfs.fileSystem.makeFileAvailableSynchronously(peerPackagesUri + '/node_modules/some-plugin/plugin.js', '')
+            fs.add(peerPackagesUri + '/node_modules/some-plugin/plugin.js', '')
             const pluginSettings: PluginSettings = {
                 globalPlugins: ['some-plugin'],
                 allowLocalPluginLoads: false,
@@ -49,13 +50,13 @@ describe('plugins', () => {
         it('should load a local plugin if specified', () => {
             const rootDir = (process.platform === 'win32' ? 'c:\\' : '/') + 'some-project'
             const rootUri = path2uri(rootDir) + '/'
-            const remoteFileSystem = new MockRemoteFileSystem()
+            const remoteFileSystem = new InMemoryFileSystem()
             const memfs = new OverlayFileSystem(remoteFileSystem, '/some-project')
-            remoteFileSystem.makeFileAvailableSynchronously(
+            remoteFileSystem.add(
                 rootUri + 'node_modules/some-plugin/package.json',
                 '{ "name": "some-plugin", "version": "0.1.1", "main": "plugin.js"}'
             )
-            remoteFileSystem.makeFileAvailableSynchronously(rootUri + 'node_modules/some-plugin/plugin.js', '')
+            remoteFileSystem.add(rootUri + 'node_modules/some-plugin/plugin.js', '')
             const pluginSettings: PluginSettings = {
                 globalPlugins: [],
                 allowLocalPluginLoads: true,

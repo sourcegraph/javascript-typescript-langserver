@@ -1,9 +1,10 @@
 import * as assert from 'assert'
 import * as sinon from 'sinon'
-import { FileSystemUpdater } from '../fs'
+import { InMemoryFileSystem } from '../fs'
 import { OverlayFileSystem } from '../memfs'
 import { extractDefinitelyTypedPackageName, extractNodeModulesPackageName, PackageManager } from '../packages'
-import { MockRemoteFileSystem } from './fs-helpers'
+import { RemoteFileSystemUpdater } from '../updater'
+import { MapAsynchronousFileSystem } from './fs-helpers'
 
 describe('packages.ts', () => {
     describe('extractDefinitelyTypedPackageName()', () => {
@@ -36,9 +37,10 @@ describe('packages.ts', () => {
     })
     describe('PackageManager', () => {
         it('should register new packages as they are added to InMemoryFileSystem', async () => {
-            const fileSystem = new MockRemoteFileSystem(new Map([['file:///foo/package.json', '{}']]))
-            const memfs = new OverlayFileSystem(fileSystem, '/')
-            const updater = new FileSystemUpdater(fileSystem)
+            const remoteFs = new MapAsynchronousFileSystem(new Map([['file:///foo/package.json', '{}']]))
+            const fs = new InMemoryFileSystem()
+            const memfs = new OverlayFileSystem(fs, '/')
+            const updater = new RemoteFileSystemUpdater(remoteFs, fs)
             const packageManager = new PackageManager(updater, memfs)
 
             const listener = sinon.spy()

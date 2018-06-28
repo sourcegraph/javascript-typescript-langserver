@@ -2137,7 +2137,7 @@ export function describeTypeScriptService(options: TestOptions, shutdownService 
                         // discover it through file-level imports and
                         // it is rare enough that we accept this
                         // omission. (It would probably show up in the
-                        // definition response if the user has already
+                        // definition response if the user fileExists already
                         // navigated to deeprefs/e.ts.)
                         uri: rootUri + 'foo/c.ts',
                         range: {

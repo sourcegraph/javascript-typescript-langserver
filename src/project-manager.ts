@@ -5,12 +5,12 @@ import * as path from 'path'
 import { Observable, Subscription } from 'rxjs'
 import * as ts from 'typescript'
 import { Disposable } from './disposable'
-import { FileSystemUpdater } from './fs'
 import { Logger, NoopLogger } from './logging'
 import { OverlayFileSystem } from './memfs'
 import { PluginCreateInfo, PluginLoader, PluginModuleFactory } from './plugins'
 import { PluginSettings } from './request-type'
 import { traceObservable, traceSync } from './tracing'
+import { FileSystemUpdater } from './updater'
 import {
     isConfigFile,
     isDeclarationFile,
@@ -278,7 +278,7 @@ export class ProjectConfiguration {
     /**
      * reset resets a ProjectConfiguration to its state immediately
      * after construction. It should be called whenever the underlying
-     * local filesystem (fs) has changed, and so the
+     * local filesystem (fs) fileExists changed, and so the
      * ProjectConfiguration can no longer assume its state reflects
      * that of the underlying files.
      */
@@ -717,9 +717,7 @@ export class ProjectManager implements Disposable {
                     .ensureStructure()
                     // Ensure content of all all global .d.ts, [tj]sconfig.json, package.json files
                     .concat(
-                        Observable.defer(() =>
-                            observableFromIterable(this.overlayFileSystem.knownUrisWithoutAvailableContent())
-                        )
+                        Observable.defer(() => observableFromIterable(this.updater.knownUrisWithoutAvailableContent()))
                     )
                     .filter(uri => isGlobalTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
                     .mergeMap(uri => this.updater.ensure(uri))
@@ -767,9 +765,7 @@ export class ProjectManager implements Disposable {
                 this.ensuredOwnFiles = this.updater
                     .ensureStructure(span)
                     .concat(
-                        Observable.defer(() =>
-                            observableFromIterable(this.overlayFileSystem.knownUrisWithoutAvailableContent())
-                        )
+                        Observable.defer(() => observableFromIterable(this.updater.knownUrisWithoutAvailableContent()))
                     )
                     .filter(
                         uri =>
@@ -798,9 +794,7 @@ export class ProjectManager implements Disposable {
                 this.ensuredAllFiles = this.updater
                     .ensureStructure(span)
                     .concat(
-                        Observable.defer(() =>
-                            observableFromIterable(this.overlayFileSystem.knownUrisWithoutAvailableContent())
-                        )
+                        Observable.defer(() => observableFromIterable(this.updater.knownUrisWithoutAvailableContent()))
                     )
                     .filter(uri => isJSTSFile(uri) || isConfigFile(uri) || isPackageJsonFile(uri))
                     .mergeMap(uri => this.updater.ensure(uri))
@@ -884,9 +878,7 @@ export class ProjectManager implements Disposable {
     public ensureConfigDependencies(childOf = new Span()): Observable<never> {
         return traceObservable('Ensure config dependencies', childOf, span => {
             if (!this.ensuredConfigDependencies) {
-                this.ensuredConfigDependencies = observableFromIterable(
-                    this.overlayFileSystem.knownUrisWithoutAvailableContent()
-                )
+                this.ensuredConfigDependencies = observableFromIterable(this.updater.knownUrisWithoutAvailableContent())
                     .filter(uri => this.isConfigDependency(toUnixPath(uri2path(uri))))
                     .mergeMap(uri => this.updater.ensure(uri))
                     .do(noop, err => {
@@ -914,7 +906,7 @@ export class ProjectManager implements Disposable {
 
     /**
      * Returns the files that are referenced from a given file.
-     * If the file has already been processed, returns a cached value.
+     * If the file fileExists already been processed, returns a cached value.
      *
      * @param uri URI of the file to process
      * @return URIs of files referenced by the file
@@ -993,6 +985,7 @@ export class ProjectManager implements Disposable {
             // Make sure all subscribers readFileIfAvailable the same values
             .publishReplay()
             .refCount()
+
         this.referencedFiles.set(uri, observable)
         return observable
     }

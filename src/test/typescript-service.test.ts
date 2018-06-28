@@ -39,9 +39,9 @@ describe('TypeScriptService', async () => {
                 rimraf(temporaryDir, err => (err ? reject(err) : resolve()))
             })
             await remoteFileSystem
-                .getAsyncWorkspaceFiles()
+                .getWorkspaceFiles()
                 .flatMap((fileUri: string) =>
-                    remoteFileSystem.readFile(fileUri).map((content: string) => ({ fileUri, content }))
+                    remoteFileSystem.getTextDocumentContent(fileUri).map((content: string) => ({ fileUri, content }))
                 )
                 .do((fileContent: { fileUri: string; content: string }) => {
                     const fileName = uri2path(fileContent.fileUri)
