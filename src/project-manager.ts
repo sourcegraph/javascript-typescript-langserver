@@ -1039,6 +1039,7 @@ export class ProjectManager implements Disposable {
         return config
     }
 
+    private static readonly windowsDriveRegex = /^[a-zA-Z]:\\$/
     private getConfigurationIfExistsUncached(dir: string, configType: ConfigType): ProjectConfiguration {
         let config: ProjectConfiguration | undefined
         const configs = this.configs[configType]
@@ -1055,7 +1056,7 @@ export class ProjectManager implements Disposable {
             return configs.get(dir) as ProjectConfiguration
         }
 
-        if (dir === '/' || dir === 'c:\\') {
+        if (dir === '/' || ProjectManager.windowsDriveRegex.test(dir)) {
             return this.fallbackConfigs[configType]
         }
 
