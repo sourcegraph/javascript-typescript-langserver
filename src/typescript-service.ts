@@ -858,7 +858,7 @@ export class TypeScriptService {
                                     )
                                 }
                                 // Else search all tsconfigs in the workspace
-                                return observableFromIterable(this.projectManager.configurations())
+                                return observableFromIterable(this.projectManager.allReachableConfigurations())
                             })
                         )
                         // If PackageDescriptor is given, only search project with the matching package name
@@ -952,13 +952,13 @@ export class TypeScriptService {
                             .mergeMap(uri => {
                                 const config = this.projectManager.getParentConfiguration(uri)
                                 if (!config) {
-                                    return observableFromIterable(this.projectManager.configurations())
+                                    return observableFromIterable(this.projectManager.allReachableConfigurations())
                                 }
                                 return [config]
                             })
                     }
                     // else search all tsconfig.jsons
-                    return observableFromIterable(this.projectManager.configurations())
+                    return observableFromIterable(this.projectManager.allReachableConfigurations())
                 })
             )
             .mergeMap((config: ProjectConfiguration) => {

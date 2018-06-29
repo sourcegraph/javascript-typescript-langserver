@@ -140,7 +140,7 @@ describe('ProjectManager', () => {
                     const tsConfig = projectManager.getConfiguration(uri2path(rootUri + 'src/foo.ts'))
                     assert.equal(tsConfig.configFilePath, uri2path(rootUri + 'tsconfig.json'))
                     assert.equal(jsConfig.configFilePath, uri2path(rootUri + 'src/jsconfig.json'))
-                    assert.equal(Array.from(projectManager.configurations()).length, 2)
+                    assert.equal(Array.from(projectManager.allReachableConfigurations()).length, 2)
                 })
             })
             describe('getParentConfiguration()', () => {
@@ -159,7 +159,7 @@ describe('ProjectManager', () => {
                     const config = projectManager.getParentConfiguration(rootUri + 'src/foo.ts')
                     assert.isDefined(config)
                     assert.equal(uri2path(rootUri + 'tsconfig.json'), config!.configFilePath)
-                    assert.equal(Array.from(projectManager.configurations()).length, 2)
+                    assert.equal(Array.from(projectManager.allReachableConfigurations()).length, 2)
                 })
             })
             describe('getChildConfigurations()', () => {
@@ -187,7 +187,7 @@ describe('ProjectManager', () => {
                         uri2path(rootUri + 'foo/bar/tsconfig.json'),
                         uri2path(rootUri + 'foo/baz/jsconfig.json'),
                     ])
-                    assert.equal(Array.from(projectManager.configurations()).length, 3)
+                    assert.equal(Array.from(projectManager.allReachableConfigurations()).length, 3)
                 })
             })
         })

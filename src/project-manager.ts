@@ -609,6 +609,7 @@ export class ProjectManager implements Disposable {
         this.traceModuleResolution = traceModuleResolution || false
 
         this.fallbackConfigs = { js: this.getFallbackConfiguration('js'), ts: this.getFallbackConfiguration('ts') }
+        this.updater.ensureStructure().toPromise().then(() => this.retrievedAllConfigurations = false)
     }
 
     private getFallbackConfiguration(configType: ConfigType): ProjectConfiguration {
@@ -687,16 +688,24 @@ export class ProjectManager implements Disposable {
     }
 
     /**
-     * @return all sub-projects we have identified for a given workspace.
+     * @return all sub-projects that exist in the workspace.
      * Sub-project is mainly a folder which contains tsconfig.json, jsconfig.json, package.json,
      * or a root folder which serves as a fallback
      */
-    public configurations(): ReadonlyArray<ProjectConfiguration> {
-        // TODO: inspect usages.
+    public allReachableConfigurations(): ReadonlyArray<ProjectConfiguration> {
         if (!this.retrievedAllConfigurations) {
             this.getChildConfigurations(path2uri(this.rootPath))
             this.retrievedAllConfigurations = true
         }
+        return this.allRunningConfigurations()
+    }
+
+    /**
+     * @return all sub-projects we have identified for a given workspace.
+     * Sub-project is mainly a folder which contains tsconfig.json, jsconfig.json, package.json,
+     * or a root folder which serves as a fallback
+     */
+    public allRunningConfigurations(): ReadonlyArray<ProjectConfiguration> {
         const result = Array.from(iterate(this.configs.ts.values()).concat(this.configs.js.values()))
         if (result.length === 0) {
             return [this.fallbackConfigs.ts, this.fallbackConfigs.js]
@@ -729,8 +738,7 @@ export class ProjectManager implements Disposable {
                         () => {
                             // Reset all compilation state
                             // TODO ze incremental compilation instead
-                            for (const config of this.configurations()) {
-                                // TODO: Change this so it does not fetch all configurations
+                            for (const config of this.allRunningConfigurations()) {
                                 config.reset()
                             }
                             // Require re-processing of file references
@@ -863,7 +871,7 @@ export class ProjectManager implements Disposable {
      * @param filePath A UNIX-like absolute file path
      */
     public isConfigDependency(filePath: string): boolean {
-        for (const config of this.configurations()) {
+        for (const config of this.allReachableConfigurations()) {
             config.ensureConfigFile()
             if (config.isExpectedDeclarationFile(filePath)) {
                 return true
