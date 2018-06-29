@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events'
+import { noop } from 'lodash'
 import { Span } from 'opentracing'
 import * as path from 'path'
 import { Observable, Subscription } from 'rxjs'
@@ -99,7 +100,11 @@ export class PackageManager extends EventEmitter implements Disposable {
         private logger: Logger = new NoopLogger()
     ) {
         super()
-        this.updater.ensureStructure().toPromise().then(() => this.foundAllPackages = false)
+        this.updater
+            .ensureStructure()
+            .toPromise()
+            .then(() => (this.foundAllPackages = false))
+            .catch(() => noop)
     }
 
     private ensurePackage(uri: string): void {

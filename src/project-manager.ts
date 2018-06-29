@@ -503,6 +503,8 @@ export type ConfigType = 'js' | 'ts'
  * ProjectManager preserves Windows paths until passed to ProjectConfiguration or TS APIs.
  */
 export class ProjectManager implements Disposable {
+    private static readonly windowsDriveRegex = /^[a-zA-Z]:\\$/
+
     /**
      * Root path with slashes
      */
@@ -609,7 +611,11 @@ export class ProjectManager implements Disposable {
         this.traceModuleResolution = traceModuleResolution || false
 
         this.fallbackConfigs = { js: this.getFallbackConfiguration('js'), ts: this.getFallbackConfiguration('ts') }
-        this.updater.ensureStructure().toPromise().then(() => this.retrievedAllConfigurations = false)
+        this.updater
+            .ensureStructure()
+            .toPromise()
+            .then(() => (this.retrievedAllConfigurations = false))
+            .catch(() => noop)
     }
 
     private getFallbackConfiguration(configType: ConfigType): ProjectConfiguration {
@@ -1039,7 +1045,6 @@ export class ProjectManager implements Disposable {
         return config
     }
 
-    private static readonly windowsDriveRegex = /^[a-zA-Z]:\\$/
     private getConfigurationIfExistsUncached(dir: string, configType: ConfigType): ProjectConfiguration {
         let config: ProjectConfiguration | undefined
         const configs = this.configs[configType]
