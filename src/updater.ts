@@ -76,7 +76,7 @@ export class RemoteFileSystemUpdater implements FileSystemUpdater {
 
     /**
      * Returns a promise that is resolved when the given URI has been fetched (at least once) to the in-memory file system.
-     * This function cannot be cancelled because multiple callers readFileIfAvailable the result of the same operation.
+     * This function cannot be cancelled because multiple callers get the result of the same operation.
      *
      * @param uri URI of the file to ensure
      * @param childOf An OpenTracing span for tracing

@@ -91,7 +91,7 @@ export class InMemoryFileSystem implements SynchronousFileSystem {
     }
 
     /**
-     * Called by TS service to scan virtual directory when TS service looks for source files that belong to a project
+     * Return the files and directories contained in the given directory
      */
     public getFileSystemEntries(directory: string): FileSystemEntries {
         const ret: { files: string[]; directories: string[] } = { files: [], directories: [] }
@@ -134,6 +134,7 @@ export class InMemoryFileSystem implements SynchronousFileSystem {
 }
 
 export class LocalFileSystem implements SynchronousFileSystem {
+
     /**
      * Returns true if the given file is known to exist in the workspace (content loaded or not)
      * @param uri URI to a file
@@ -153,6 +154,9 @@ export class LocalFileSystem implements SynchronousFileSystem {
         }
     }
 
+    /**
+     * Return the files and directories contained in the given directory
+     */
     public getFileSystemEntries(directory: string): FileSystemEntries {
         const files: string[] = []
         const directories: string[] = []

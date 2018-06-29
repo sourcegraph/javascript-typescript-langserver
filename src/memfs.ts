@@ -75,7 +75,7 @@ export class OverlayFileSystem extends EventEmitter implements ts.ParseConfigHos
 
         // TODO This assumes that the URI was a file:// URL.
         //      In reality it could be anything, and the first URI matching the path should be used.
-        //      With the current Map, the search would be O(n), it would require a tree to readFileIfAvailable O(log(n))
+        //      With the current Map, the search would be O(n), it would require a tree to get O(log(n))
         content = this.fileSystem.readFileIfAvailable(uri)
         if (content !== undefined) {
             return content
@@ -138,6 +138,9 @@ export class OverlayFileSystem extends EventEmitter implements ts.ParseConfigHos
         )
     }
 
+    /**
+     * Return the files and directories contained in the given directory
+     */
     public getFileSystemEntries(path: string): FileSystemEntries {
         return this.fileSystem.getFileSystemEntries(path)
     }

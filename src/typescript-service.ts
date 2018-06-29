@@ -224,7 +224,7 @@ export class TypeScriptService {
      * - notifications should be dropped, except for the exit notification. This will allow the exit a
      * server without an initialize request.
      *
-     * Until the server fileExists responded to the `initialize` request with an `InitializeResult` the
+     * Until the server has responded to the `initialize` request with an `InitializeResult` the
      * client must not sent any additional requests or notifications to the server.
      *
      * During the `initialize` request the server is allowed to sent the notifications
@@ -548,7 +548,7 @@ export class TypeScriptService {
                         `/node_modules/${encodedPackageName}/package.json`,
                 })
                 // Fetch the package.json of the dependency
-                return this.withUpdater(updater => updater.ensure(packageJsonUri, span)).concat(
+                return this.updater.ensure(packageJsonUri, span).concat(
                     Observable.defer((): Observable<PackageDescriptor> => {
                         const packageJson: PackageJson = JSON.parse(this.fileSystem.getContent(packageJsonUri))
                         const { name, version } = packageJson
@@ -591,10 +591,6 @@ export class TypeScriptService {
                 })
             }
         })
-    }
-
-    private withUpdater<T>(ensure: (updater: FileSystemUpdater) => Observable<T>): Observable<T> {
-        return this.updater ? ensure(this.updater) : Observable.empty<T>()
     }
 
     /**
@@ -1001,7 +997,7 @@ export class TypeScriptService {
                                                 if (!params.query.package || !params.query.package) {
                                                     return [symbol]
                                                 }
-                                                // If SymbolDescriptor matched and the query contains a PackageDescriptor, readFileIfAvailable package.json and match PackageDescriptor name
+                                                // If SymbolDescriptor matched and the query contains a PackageDescriptor, get package.json and match PackageDescriptor name
                                                 // TODO match full PackageDescriptor (version) and fill out the symbol.package field
                                                 const uri = path2uri(definition.fileName)
                                                 return this._getPackageDescriptor(uri, span)
@@ -1566,7 +1562,7 @@ export class TypeScriptService {
 
     /**
      * The document change notification is sent from the client to the server to signal changes to a
-     * text document. In 2.0 the shape of the params fileExists changed to include proper version numbers
+     * text document. In 2.0 the shape of the params has changed to include proper version numbers
      * and language ids.
      */
     public async textDocumentDidChange(params: DidChangeTextDocumentParams): Promise<void> {
@@ -1753,7 +1749,7 @@ export class TypeScriptService {
                                         // Require the minimum score without the PackageDescriptor name
                                         .filter(({ score }) => score >= minScoreWithoutPackage)
                                         // If SymbolDescriptor matched, readFileIfAvailable package.json and match PackageDescriptor name
-                                        // TODO readFileIfAvailable and match full PackageDescriptor (version)
+                                        // TODO get and match full PackageDescriptor (version)
                                         .mergeMap(({ score, tree, parent }) => {
                                             if (!query.package || !query.package.name) {
                                                 return [{ score, tree, parent }]
