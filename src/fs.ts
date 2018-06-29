@@ -134,7 +134,6 @@ export class InMemoryFileSystem implements SynchronousFileSystem {
 }
 
 export class LocalFileSystem implements SynchronousFileSystem {
-
     /**
      * Returns true if the given file is known to exist in the workspace (content loaded or not)
      * @param uri URI to a file
@@ -162,11 +161,15 @@ export class LocalFileSystem implements SynchronousFileSystem {
         const directories: string[] = []
         for (const name of fs.readdirSync(directory)) {
             const filePath = path.join(directory, name)
-            const stat = fs.statSync(filePath)
-            if (stat.isFile()) {
-                files.push(name)
-            } else if (stat.isDirectory()) {
-                directories.push(name)
+            try {
+                const stat = fs.statSync(filePath)
+                if (stat.isFile()) {
+                    files.push(name)
+                } else if (stat.isDirectory()) {
+                    directories.push(name)
+                }
+            } catch (e) {
+                // no-op
             }
         }
         return { files, directories }
