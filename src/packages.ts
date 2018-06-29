@@ -99,6 +99,7 @@ export class PackageManager extends EventEmitter implements Disposable {
         private logger: Logger = new NoopLogger()
     ) {
         super()
+        this.updater.ensureStructure().toPromise().then(() => this.foundAllPackages = false)
     }
 
     private ensurePackage(uri: string): void {
