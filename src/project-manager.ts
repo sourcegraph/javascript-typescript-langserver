@@ -503,8 +503,6 @@ export type ConfigType = 'js' | 'ts'
  * ProjectManager preserves Windows paths until passed to ProjectConfiguration or TS APIs.
  */
 export class ProjectManager implements Disposable {
-    private static readonly windowsDriveRegex = /^[a-zA-Z]:\\$/
-
     /**
      * Root path with slashes
      */
@@ -1061,7 +1059,7 @@ export class ProjectManager implements Disposable {
             return configs.get(dir) as ProjectConfiguration
         }
 
-        if (dir === '/' || ProjectManager.windowsDriveRegex.test(dir)) {
+        if (this.rootPath.startsWith(dir)) {
             return this.fallbackConfigs[configType]
         }
 
