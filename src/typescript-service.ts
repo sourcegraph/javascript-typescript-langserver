@@ -1676,9 +1676,8 @@ export class TypeScriptService {
 
             if (typeof query === 'string') {
                 // Query by text query
-                // Limit the amount of symbols searched for text queries
                 return (
-                    Observable.from(config.getService().getNavigateToItems(query, 100, undefined, false))
+                    Observable.from(config.getService().getNavigateToItems(query))
                         // Exclude dependencies and standard library
                         .filter(
                             item => !isTypeScriptLibrary(item.fileName) && !item.fileName.includes('/node_modules/')
