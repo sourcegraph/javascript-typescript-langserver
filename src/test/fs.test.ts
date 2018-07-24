@@ -5,7 +5,7 @@ import * as path from 'path'
 import * as rimraf from 'rimraf'
 import * as temp from 'temp'
 import { LocalFileSystem } from '../fs'
-import { path2uri } from '../util'
+import { path2uri, uri2path } from '../util'
 chai.use(chaiAsPromised)
 const assert = chai.assert
 
@@ -43,7 +43,7 @@ describe('fs.ts', () => {
 
             // global package is symlinked into project using npm link
             await fs.symlink(somePackageDir, path.join(projectDir, 'node_modules', 'some_package'), 'junction')
-            fileSystem = new LocalFileSystem(rootUri)
+            fileSystem = new LocalFileSystem()
         })
         after(async () => {
             await new Promise<void>((resolve, reject) => {
@@ -51,32 +51,17 @@ describe('fs.ts', () => {
             })
         })
 
-        describe('getWorkspaceFiles()', () => {
-            it('should return all files in the workspace', async () => {
-                const files = await fileSystem
-                    .getWorkspaceFiles()
-                    .toArray()
-                    .toPromise()
-                assert.sameMembers(files, [
-                    rootUri + 'tweedledee',
-                    rootUri + 'tweedledum',
-                    rootUri + 'foo/bar.ts',
-                    rootUri + '%40types/diff/index.d.ts',
-                    rootUri + 'node_modules/some_package/src/function.ts',
-                ])
-            })
-            it('should return all files under specific root', async () => {
-                const files = await fileSystem
-                    .getWorkspaceFiles(rootUri + 'foo')
-                    .toArray()
-                    .toPromise()
-                assert.sameMembers(files, [rootUri + 'foo/bar.ts'])
-            })
-        })
         describe('getTextDocumentContent()', () => {
             it('should read files denoted by absolute URI', async () => {
-                const content = await fileSystem.getTextDocumentContent(rootUri + 'tweedledee').toPromise()
+                const content = fileSystem.readFileIfAvailable(rootUri + 'tweedledee')
                 assert.equal(content, 'hi')
+            })
+        })
+        describe('getFileSystemEntries()', () => {
+            it('should return all non-nested files and directories inside a directory', async () => {
+                const entries = fileSystem.getFileSystemEntries(uri2path(rootUri))
+                assert.sameMembers(['tweedledee', 'tweedledum'], entries.files)
+                assert.sameMembers(['foo', '@types', 'node_modules'], entries.directories)
             })
         })
     })

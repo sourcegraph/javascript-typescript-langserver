@@ -11,9 +11,9 @@ export interface FileSystemEntries {
 
 export function matchFiles(
     path: string,
-    extensions: string[],
-    excludes: string[],
-    includes: string[],
+    extensions: ReadonlyArray<string> | undefined,
+    excludes: ReadonlyArray<string> | undefined,
+    includes: ReadonlyArray<string>,
     useCaseSensitiveFileNames: boolean,
     currentDirectory: string,
     getFileSystemEntries: (path: string) => FileSystemEntries
@@ -21,14 +21,7 @@ export function matchFiles(
     path = normalizePath(path)
     currentDirectory = normalizePath(currentDirectory)
 
-    const patterns = getFileMatcherPatterns(
-        path,
-        extensions,
-        excludes,
-        includes,
-        useCaseSensitiveFileNames,
-        currentDirectory
-    )
+    const patterns = getFileMatcherPatterns(path, excludes, includes, useCaseSensitiveFileNames, currentDirectory)
 
     const regexFlag = useCaseSensitiveFileNames ? '' : 'i'
 
@@ -97,16 +90,14 @@ function normalizePath(path: string): string {
 
 function getFileMatcherPatterns(
     path: string,
-    extensions: string[],
-    excludes: string[],
-    includes: string[],
+    excludes: ReadonlyArray<string> | undefined,
+    includes: ReadonlyArray<string> | undefined,
     useCaseSensitiveFileNames: boolean,
     currentDirectory: string
 ): FileMatcherPatterns {
     path = normalizePath(path)
     currentDirectory = normalizePath(currentDirectory)
     const absolutePath = combinePaths(currentDirectory, path)
-
     return {
         includeFilePattern: getRegularExpressionForWildcard(includes, absolutePath, 'files') || '',
         includeDirectoryPattern: getRegularExpressionForWildcard(includes, absolutePath, 'directories') || '',
@@ -119,7 +110,7 @@ function fileExtensionIs(path: string, extension: string): boolean {
     return path.length > extension.length && endsWith(path, extension)
 }
 
-function fileExtensionIsAny(path: string, extensions: string[]): boolean {
+function fileExtensionIsAny(path: string, extensions: ReadonlyArray<string>): boolean {
     for (const extension of extensions) {
         if (fileExtensionIs(path, extension)) {
             return true
@@ -130,7 +121,7 @@ function fileExtensionIsAny(path: string, extensions: string[]): boolean {
 }
 
 function getRegularExpressionForWildcard(
-    specs: string[],
+    specs: ReadonlyArray<string> | undefined,
     basePath: string,
     usage: 'files' | 'directories' | 'exclude'
 ) {
@@ -289,7 +280,7 @@ function replaceWildcardCharacter(match: string, singleAsteriskRegexFragment: st
     return match === '*' ? singleAsteriskRegexFragment : match === '?' ? '[^/]' : '\\' + match
 }
 
-function getBasePaths(path: string, includes: string[], useCaseSensitiveFileNames: boolean) {
+function getBasePaths(path: string, includes: ReadonlyArray<string> | undefined, useCaseSensitiveFileNames: boolean) {
     // Storage for our results in the form of literal paths (e.g. the paths as written by the user).
     const basePaths: string[] = [path]
     if (includes) {

@@ -36,10 +36,10 @@ import {
 } from 'vscode-languageserver'
 import { walkMostAST } from './ast'
 import { convertTsDiagnostic } from './diagnostics'
-import { FileSystem, FileSystemUpdater, LocalFileSystem, RemoteFileSystem } from './fs'
+import { InMemoryFileSystem, LocalFileSystem, RemoteFileSystem, SynchronousFileSystem } from './fs'
 import { LanguageClient } from './lang-handler'
 import { Logger, LSPLogger } from './logging'
-import { InMemoryFileSystem, isTypeScriptLibrary } from './memfs'
+import { isTypeScriptLibrary, OverlayFileSystem } from './memfs'
 import {
     DEPENDENCY_KEYS,
     extractDefinitelyTypedPackageName,
@@ -72,6 +72,7 @@ import {
     walkNavigationTree,
 } from './symbols'
 import { traceObservable } from './tracing'
+import { FileSystemUpdater, NoopFileSystemUpdater, RemoteFileSystemUpdater } from './updater'
 import {
     getMatchingPropertyCount,
     getPropertyCount,
@@ -88,7 +89,10 @@ export interface TypeScriptServiceOptions {
     strict?: boolean
 }
 
-export type TypeScriptServiceFactory = (client: LanguageClient, options?: TypeScriptServiceOptions) => TypeScriptService
+export type TypeScriptServiceFactory = (
+    client: LanguageClient,
+    options?: TypeScriptServiceOptions
+) => Promise<TypeScriptService>
 
 /**
  * Settings synced through `didChangeConfiguration`
@@ -152,17 +156,12 @@ export class TypeScriptService {
 
     private traceModuleResolution: boolean
 
-    /**
-     * The remote (or local), asynchronous, file system to fetch files from
-     */
-    protected fileSystem: FileSystem
-
     protected logger: Logger
 
     /**
      * Holds file contents and workspace structure in memory
      */
-    protected inMemoryFileSystem: InMemoryFileSystem
+    protected fileSystem: OverlayFileSystem
 
     /**
      * Syncs the remote file system with the in-memory file system
@@ -255,16 +254,15 @@ export class TypeScriptService {
             this._initializeFileSystems(
                 !this.options.strict && !(params.capabilities.xcontentProvider && params.capabilities.xfilesProvider)
             )
-            this.updater = new FileSystemUpdater(this.fileSystem, this.inMemoryFileSystem)
             this.projectManager = new ProjectManager(
                 this.root,
-                this.inMemoryFileSystem,
+                this.fileSystem,
                 this.updater,
                 this.traceModuleResolution,
                 this.settings,
                 this.logger
             )
-            this.packageManager = new PackageManager(this.updater, this.inMemoryFileSystem, this.logger)
+            this.packageManager = new PackageManager(this.updater, this.fileSystem, this.logger)
             // Detect DefinitelyTyped
             // Fetch root package.json (if exists)
             const normRootUri = this.rootUri.endsWith('/') ? this.rootUri : this.rootUri + '/'
@@ -330,8 +328,16 @@ export class TypeScriptService {
      * @param accessDisk Whether the language server is allowed to access the local file system
      */
     protected _initializeFileSystems(accessDisk: boolean): void {
-        this.fileSystem = accessDisk ? new LocalFileSystem(this.rootUri) : new RemoteFileSystem(this.client)
-        this.inMemoryFileSystem = new InMemoryFileSystem(this.root, this.logger)
+        let fileSystem: SynchronousFileSystem
+        if (accessDisk) {
+            fileSystem = new LocalFileSystem()
+            this.updater = new NoopFileSystemUpdater()
+        } else {
+            const inMemoryFileSystem = new InMemoryFileSystem()
+            fileSystem = inMemoryFileSystem
+            this.updater = new RemoteFileSystemUpdater(new RemoteFileSystem(this.client), inMemoryFileSystem)
+        }
+        this.fileSystem = new OverlayFileSystem(fileSystem, this.root, this.logger)
     }
 
     /**
@@ -423,13 +429,14 @@ export class TypeScriptService {
                         sourceFile,
                         definition.textSpan.start + definition.textSpan.length
                     )
-                    return {
+                    const result = {
                         uri: locationUri(definition.fileName),
                         range: {
                             start,
                             end,
                         },
                     }
+                    return result
                 })
             })
     }
@@ -543,7 +550,7 @@ export class TypeScriptService {
                 // Fetch the package.json of the dependency
                 return this.updater.ensure(packageJsonUri, span).concat(
                     Observable.defer((): Observable<PackageDescriptor> => {
-                        const packageJson: PackageJson = JSON.parse(this.inMemoryFileSystem.getContent(packageJsonUri))
+                        const packageJson: PackageJson = JSON.parse(this.fileSystem.getContent(packageJsonUri))
                         const { name, version } = packageJson
                         if (!name) {
                             return Observable.empty()
@@ -794,7 +801,11 @@ export class TypeScriptService {
 
                     return this.updater
                         .ensureStructure(span)
-                        .concat(Observable.defer(() => observableFromIterable(this.inMemoryFileSystem.uris())))
+                        .concat(
+                            Observable.defer(() =>
+                                observableFromIterable(this.updater.knownUrisWithoutAvailableContent())
+                            )
+                        )
                         .filter(uri => uri.startsWith(packageRootUri))
                         .mergeMap(uri => this.updater.ensure(uri, span))
                         .concat(
@@ -823,7 +834,7 @@ export class TypeScriptService {
                                             .filter(
                                                 packageJsonUri =>
                                                     (JSON.parse(
-                                                        this.inMemoryFileSystem.getContent(packageJsonUri)
+                                                        this.fileSystem.getContent(packageJsonUri)
                                                     ) as PackageJson).name === params.symbol!.package!.name
                                             )
                                             // Find their parent and child tsconfigs
@@ -843,7 +854,7 @@ export class TypeScriptService {
                                     )
                                 }
                                 // Else search all tsconfigs in the workspace
-                                return observableFromIterable(this.projectManager.configurations())
+                                return observableFromIterable(this.projectManager.allReachableConfigurations())
                             })
                         )
                         // If PackageDescriptor is given, only search project with the matching package name
@@ -930,20 +941,20 @@ export class TypeScriptService {
                         return observableFromIterable(this.packageManager.packageJsonUris())
                             .filter(
                                 uri =>
-                                    (JSON.parse(this.inMemoryFileSystem.getContent(uri)) as PackageJson).name ===
+                                    (JSON.parse(this.fileSystem.getContent(uri)) as PackageJson).name ===
                                     params.hints!.dependeePackageName
                             )
                             .take(1)
                             .mergeMap(uri => {
                                 const config = this.projectManager.getParentConfiguration(uri)
                                 if (!config) {
-                                    return observableFromIterable(this.projectManager.configurations())
+                                    return observableFromIterable(this.projectManager.allReachableConfigurations())
                                 }
                                 return [config]
                             })
                     }
                     // else search all tsconfig.jsons
-                    return observableFromIterable(this.projectManager.configurations())
+                    return observableFromIterable(this.projectManager.allReachableConfigurations())
                 })
             )
             .mergeMap((config: ProjectConfiguration) => {
@@ -1058,9 +1069,9 @@ export class TypeScriptService {
                 if (isDefinitelyTyped) {
                     const typesUri = url.resolve(this.rootUri, 'types/')
                     return (
-                        observableFromIterable(this.inMemoryFileSystem.uris())
-                            // Find all types/ subdirectories
-                            .filter(uri => uri.startsWith(typesUri))
+                        observableFromIterable(
+                            this.fileSystem.readDirectory(uri2path(typesUri), undefined, undefined, ['*'])
+                        )
                             // Get the directory names
                             .map((uri): PackageInformation => ({
                                 package: {
@@ -1077,9 +1088,9 @@ export class TypeScriptService {
                     this.projectManager
                         .ensureModuleStructure(span)
                         // Iterate all files
-                        .concat(Observable.defer(() => observableFromIterable(this.inMemoryFileSystem.uris())))
+                        .concat(Observable.defer(() => observableFromIterable(this.packageManager.packageJsonUris())))
                         // Filter own package.jsons
-                        .filter(uri => uri.includes('/package.json') && !uri.includes('/node_modules/'))
+                        .filter(uri => !uri.includes('/node_modules/'))
                         // Map to contents of package.jsons
                         .mergeMap(uri => this.packageManager.getPackageJson(uri))
                         // Map each package.json to a PackageInformation
@@ -1135,9 +1146,9 @@ export class TypeScriptService {
             this.projectManager
                 .ensureModuleStructure()
                 // Iterate all files
-                .concat(Observable.defer(() => observableFromIterable(this.inMemoryFileSystem.uris())))
+                .concat(Observable.defer(() => observableFromIterable(this.packageManager.packageJsonUris())))
                 // Filter own package.jsons
-                .filter(uri => uri.includes('/package.json') && !uri.includes('/node_modules/'))
+                .filter(uri => !uri.includes('/node_modules/'))
                 // Ensure contents of own package.jsons
                 .mergeMap(uri => this.packageManager.getPackageJson(uri))
                 // Map package.json to DependencyReferences
@@ -1514,7 +1525,7 @@ export class TypeScriptService {
                 })
             )
             .map(([uri, edit]): Operation => {
-                // if file has no edit yet, initialize array
+                // if file fileExists no edit yet, initialize array
                 if (!editUris.has(uri)) {
                     editUris.add(uri)
                     return { op: 'add', path: JSONPTR`/changes/${uri}`, value: [edit] }
@@ -1736,7 +1747,7 @@ export class TypeScriptService {
                                         })
                                         // Require the minimum score without the PackageDescriptor name
                                         .filter(({ score }) => score >= minScoreWithoutPackage)
-                                        // If SymbolDescriptor matched, get package.json and match PackageDescriptor name
+                                        // If SymbolDescriptor matched, readFileIfAvailable package.json and match PackageDescriptor name
                                         // TODO get and match full PackageDescriptor (version)
                                         .mergeMap(({ score, tree, parent }) => {
                                             if (!query.package || !query.package.name) {

@@ -51,18 +51,19 @@ export interface TestContext {
     client: { [K in keyof LanguageClient]: LanguageClient[K] & sinon.SinonStub }
 }
 
+export interface TestOptions {
+    createService: TypeScriptServiceFactory
+    rootUri: string
+    clientCapabilities: ClientCapabilities
+}
+
 /**
  * Returns a function that initializes the test context with a TypeScriptService instance and initializes it (to be used in `beforeEach`)
  *
  * @param createService A factory that creates the TypeScript service. Allows to test subclasses of TypeScriptService
  * @param files A Map from URI to file content of files that should be available in the workspace
  */
-export const initializeTypeScriptService = (
-    createService: TypeScriptServiceFactory,
-    rootUri: string,
-    files: Map<string, string>,
-    clientCapabilities: ClientCapabilities = DEFAULT_CAPABILITIES
-) =>
+export const initializeTypeScriptService = (options: TestOptions, files: Map<string, string>) =>
     async function(this: TestContext & IBeforeAndAfterContext): Promise<void> {
         // Stub client
         this.client = sinon.createStubInstance(RemoteLanguageClient)
@@ -86,16 +87,16 @@ export const initializeTypeScriptService = (
         )
         this.client.xcacheGet.callsFake(() => Observable.of(null))
         this.client.workspaceApplyEdit.callsFake(() => Observable.of({ applied: true }))
-        this.service = createService(this.client)
+        this.service = await options.createService(this.client)
 
         await this.service
             .initialize({
                 processId: process.pid,
-                rootUri,
-                capabilities: clientCapabilities || DEFAULT_CAPABILITIES,
+                rootUri: options.rootUri,
+                capabilities: options.clientCapabilities || DEFAULT_CAPABILITIES,
                 workspaceFolders: [
                     {
-                        uri: rootUri,
+                        uri: options.rootUri,
                         name: 'test',
                     },
                 ],
@@ -115,16 +116,12 @@ export async function shutdownTypeScriptService(this: TestContext & IBeforeAndAf
  *
  * @param createService Factory function to create the TypeScriptService instance to describe
  */
-export function describeTypeScriptService(
-    createService: TypeScriptServiceFactory,
-    shutdownService = shutdownTypeScriptService,
-    rootUri: string
-): void {
+export function describeTypeScriptService(options: TestOptions, shutdownService = shutdownTypeScriptService): void {
+    const rootUri = options.rootUri
     describe('Workspace without project files', function(this: TestContext & ISuiteCallbackContext): void {
         beforeEach(
             initializeTypeScriptService(
-                createService,
-                rootUri,
+                options,
                 new Map([
                     [rootUri + 'a.ts', 'const abc = 1; console.log(abc);'],
                     [rootUri + 'foo/b.ts', ['/* This is class Foo */', 'export class Foo {}'].join('\n')],
@@ -493,8 +490,7 @@ export function describeTypeScriptService(
     describe('Workspace with typings directory', function(this: TestContext & ISuiteCallbackContext): void {
         beforeEach(
             initializeTypeScriptService(
-                createService,
-                rootUri,
+                options,
                 new Map([
                     [rootUri + 'src/a.ts', "import * as m from 'dep';"],
                     [rootUri + 'typings/dep.d.ts', "declare module 'dep' {}"],
@@ -617,8 +613,7 @@ export function describeTypeScriptService(
     describe('DefinitelyTyped', function(this: TestContext & ISuiteCallbackContext): void {
         beforeEach(
             initializeTypeScriptService(
-                createService,
-                rootUri,
+                options,
                 new Map([
                     [
                         rootUri + 'package.json',
@@ -726,7 +721,7 @@ export function describeTypeScriptService(
                     })
                     .reduce<Operation, SymbolInformation[]>(applyReducer, null as any)
                     .toPromise()
-                assert.deepEqual(result, [
+                assert.includeDeepMembers(result, [
                     {
                         kind: SymbolKind.Variable,
                         location: {
@@ -760,23 +755,25 @@ export function describeTypeScriptService(
                     })
                     .reduce<Operation, SymbolInformation[]>(applyReducer, null as any)
                     .toPromise()
-                assert.deepEqual(result[0], {
-                    kind: SymbolKind.Variable,
-                    location: {
-                        range: {
-                            end: {
-                                character: 63,
-                                line: 2,
+                assert.includeDeepMembers(result, [
+                    {
+                        kind: SymbolKind.Variable,
+                        location: {
+                            range: {
+                                end: {
+                                    character: 63,
+                                    line: 2,
+                                },
+                                start: {
+                                    character: 0,
+                                    line: 2,
+                                },
                             },
-                            start: {
-                                character: 0,
-                                line: 2,
-                            },
+                            uri: rootUri + 'types/resolve/index.d.ts',
                         },
-                        uri: rootUri + 'types/resolve/index.d.ts',
+                        name: 'resolveCallback',
                     },
-                    name: 'resolveCallback',
-                })
+                ])
             })
         })
     })
@@ -784,8 +781,7 @@ export function describeTypeScriptService(
     describe('Workspace with root package.json', function(this: TestContext & ISuiteCallbackContext): void {
         beforeEach(
             initializeTypeScriptService(
-                createService,
-                rootUri,
+                options,
                 new Map([
                     [rootUri + 'a.ts', 'class a { foo() { const i = 1;} }'],
                     [
@@ -1475,8 +1471,7 @@ export function describeTypeScriptService(
     describe('Dependency detection', function(this: TestContext & ISuiteCallbackContext): void {
         beforeEach(
             initializeTypeScriptService(
-                createService,
-                rootUri,
+                options,
                 new Map([
                     [
                         rootUri + 'package.json',
@@ -1630,7 +1625,7 @@ export function describeTypeScriptService(
             })
         })
         describe('workspaceXpackages()', function(this: TestContext & ISuiteCallbackContext): void {
-            it('should accournt for all packages', async function(this: TestContext & ITestCallbackContext): Promise<
+            it('should account for all packages', async function(this: TestContext & ITestCallbackContext): Promise<
                 void
             > {
                 const result: PackageInformation[] = await this.service
@@ -1747,9 +1742,7 @@ export function describeTypeScriptService(
     })
 
     describe('TypeScript library', function(this: TestContext & ISuiteCallbackContext): void {
-        beforeEach(
-            initializeTypeScriptService(createService, rootUri, new Map([[rootUri + 'a.ts', 'let parameters = [];']]))
-        )
+        beforeEach(initializeTypeScriptService(options, new Map([[rootUri + 'a.ts', 'let parameters = [];']])))
 
         afterEach(shutdownService)
 
@@ -1785,9 +1778,7 @@ export function describeTypeScriptService(
     })
 
     describe('Live updates', function(this: TestContext & ISuiteCallbackContext): void {
-        beforeEach(
-            initializeTypeScriptService(createService, rootUri, new Map([[rootUri + 'a.ts', 'let parameters = [];']]))
-        )
+        beforeEach(initializeTypeScriptService(options, new Map([[rootUri + 'a.ts', 'let parameters = [];']])))
 
         afterEach(shutdownService)
 
@@ -1972,11 +1963,7 @@ export function describeTypeScriptService(
 
     describe('Diagnostics', function(this: TestContext & ISuiteCallbackContext): void {
         beforeEach(
-            initializeTypeScriptService(
-                createService,
-                rootUri,
-                new Map([[rootUri + 'src/errors.ts', 'const text: string = 33;']])
-            )
+            initializeTypeScriptService(options, new Map([[rootUri + 'src/errors.ts', 'const text: string = 33;']]))
         )
 
         afterEach(shutdownService)
@@ -2093,8 +2080,7 @@ export function describeTypeScriptService(
     describe('References and imports', function(this: TestContext & ISuiteCallbackContext): void {
         beforeEach(
             initializeTypeScriptService(
-                createService,
-                rootUri,
+                options,
                 new Map([
                     [rootUri + 'a.ts', '/// <reference path="b.ts"/>\nnamespace qux {let f : foo;}'],
                     [rootUri + 'b.ts', '/// <reference path="foo/c.ts"/>'],
@@ -2151,7 +2137,7 @@ export function describeTypeScriptService(
                         // discover it through file-level imports and
                         // it is rare enough that we accept this
                         // omission. (It would probably show up in the
-                        // definition response if the user has already
+                        // definition response if the user fileExists already
                         // navigated to deeprefs/e.ts.)
                         uri: rootUri + 'foo/c.ts',
                         range: {
@@ -2267,8 +2253,7 @@ export function describeTypeScriptService(
     describe('TypeScript libraries', function(this: TestContext & ISuiteCallbackContext): void {
         beforeEach(
             initializeTypeScriptService(
-                createService,
-                rootUri,
+                options,
                 new Map([
                     [
                         rootUri + 'tsconfig.json',
@@ -2428,8 +2413,7 @@ export function describeTypeScriptService(
     describe('textDocumentReferences()', function(this: TestContext & ISuiteCallbackContext): void {
         beforeEach(
             initializeTypeScriptService(
-                createService,
-                rootUri,
+                options,
                 new Map([
                     [
                         rootUri + 'a.ts',
@@ -2591,8 +2575,7 @@ export function describeTypeScriptService(
     describe('textDocumentSignatureHelp()', function(this: TestContext & ISuiteCallbackContext): void {
         beforeEach(
             initializeTypeScriptService(
-                createService,
-                rootUri,
+                options,
                 new Map([
                     [
                         rootUri + 'a.ts',
@@ -2720,8 +2703,19 @@ export function describeTypeScriptService(
     describe('textDocumentCompletion() with snippets', function(this: TestContext & ISuiteCallbackContext): void {
         beforeEach(
             initializeTypeScriptService(
-                createService,
-                rootUri,
+                {
+                    ...options,
+                    clientCapabilities: {
+                        ...DEFAULT_CAPABILITIES,
+                        textDocument: {
+                            completion: {
+                                completionItem: {
+                                    snippetSupport: true,
+                                },
+                            },
+                        },
+                    },
+                },
                 new Map([
                     [
                         rootUri + 'a.ts',
@@ -2740,17 +2734,7 @@ export function describeTypeScriptService(
                             'a.',
                         ].join('\n'),
                     ],
-                ]),
-                {
-                    textDocument: {
-                        completion: {
-                            completionItem: {
-                                snippetSupport: true,
-                            },
-                        },
-                    },
-                    ...DEFAULT_CAPABILITIES,
-                }
+                ])
             )
         )
 
@@ -2893,8 +2877,7 @@ export function describeTypeScriptService(
     describe('textDocumentCompletion()', function(this: TestContext & ISuiteCallbackContext): void {
         beforeEach(
             initializeTypeScriptService(
-                createService,
-                rootUri,
+                options,
                 new Map([
                     [
                         rootUri + 'a.ts',
@@ -3142,8 +3125,7 @@ export function describeTypeScriptService(
     describe('textDocumentRename()', function(this: TestContext & ISuiteCallbackContext): void {
         beforeEach(
             initializeTypeScriptService(
-                createService,
-                rootUri,
+                options,
                 new Map([
                     [rootUri + 'package.json', JSON.stringify({ name: 'mypkg' })],
                     [
@@ -3309,8 +3291,7 @@ export function describeTypeScriptService(
     describe('textDocumentCodeAction()', function(this: TestContext & ISuiteCallbackContext): void {
         beforeEach(
             initializeTypeScriptService(
-                createService,
-                rootUri,
+                options,
                 new Map([
                     [rootUri + 'package.json', JSON.stringify({ name: 'mypkg' })],
                     [
@@ -3393,8 +3374,7 @@ export function describeTypeScriptService(
     describe('workspaceExecuteCommand()', function(this: TestContext & ISuiteCallbackContext): void {
         beforeEach(
             initializeTypeScriptService(
-                createService,
-                rootUri,
+                options,
                 new Map([
                     [rootUri + 'package.json', JSON.stringify({ name: 'mypkg' })],
                     [
@@ -3465,8 +3445,7 @@ export function describeTypeScriptService(
     describe('Special file names', function(this: TestContext & ISuiteCallbackContext): void {
         beforeEach(
             initializeTypeScriptService(
-                createService,
-                rootUri,
+                options,
                 new Map([
                     [rootUri + 'keywords-in-path/class/constructor/a.ts', 'export function a() {}'],
                     [rootUri + 'special-characters-in-path/%40foo/b.ts', 'export function b() {}'],

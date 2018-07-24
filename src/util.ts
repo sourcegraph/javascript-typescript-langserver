@@ -98,6 +98,10 @@ export function uri2path(uri: string): string {
     return decodeURIComponent(filePath)
 }
 
+export function useBackwardSlashForWindows(path: string): string {
+    return uri2path(path2uri(path))
+}
+
 const jstsPattern = /\.[tj]sx?$/
 
 export function isJSTSFile(filename: string): boolean {

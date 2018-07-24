@@ -1,9 +1,10 @@
 import * as assert from 'assert'
 import * as sinon from 'sinon'
-import { FileSystemUpdater } from '../fs'
-import { InMemoryFileSystem } from '../memfs'
+import { InMemoryFileSystem } from '../fs'
+import { OverlayFileSystem } from '../memfs'
 import { extractDefinitelyTypedPackageName, extractNodeModulesPackageName, PackageManager } from '../packages'
-import { MapFileSystem } from './fs-helpers'
+import { RemoteFileSystemUpdater } from '../updater'
+import { MapAsynchronousFileSystem } from './fs-helpers'
 
 describe('packages.ts', () => {
     describe('extractDefinitelyTypedPackageName()', () => {
@@ -35,22 +36,24 @@ describe('packages.ts', () => {
         })
     })
     describe('PackageManager', () => {
-        it('should register new packages as they are added to InMemoryFileSystem', () => {
-            const memfs = new InMemoryFileSystem('/')
-            const localfs = new MapFileSystem(new Map())
-            const updater = new FileSystemUpdater(localfs, memfs)
+        it('should register new packages as they are added to InMemoryFileSystem', async () => {
+            const remoteFs = new MapAsynchronousFileSystem(new Map([['file:///foo/package.json', '{}']]))
+            const fs = new InMemoryFileSystem()
+            const memfs = new OverlayFileSystem(fs, '/')
+            const updater = new RemoteFileSystemUpdater(remoteFs, fs)
             const packageManager = new PackageManager(updater, memfs)
 
             const listener = sinon.spy()
             packageManager.on('parsed', listener)
 
-            memfs.add('file:///foo/package.json', '{}')
-
-            sinon.assert.calledOnce(listener)
-            sinon.assert.alwaysCalledWith(listener, 'file:///foo/package.json', {})
+            const packageJsonEnsured = updater.ensure('file:///foo/package.json').toPromise()
+            await packageJsonEnsured
 
             const packages = Array.from(packageManager.packageJsonUris())
             assert.deepEqual(packages, ['file:///foo/package.json'])
+
+            sinon.assert.calledOnce(listener)
+            sinon.assert.alwaysCalledWith(listener, 'file:///foo/package.json', {})
         })
     })
 })

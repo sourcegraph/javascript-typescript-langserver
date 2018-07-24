@@ -1,21 +1,192 @@
-import { Glob } from 'glob'
 import * as fs from 'mz/fs'
 import { Span } from 'opentracing'
+import * as path from 'path'
 import { Observable } from 'rxjs'
-import Semaphore from 'semaphore-async-await'
 import { LanguageClient } from './lang-handler'
-import { InMemoryFileSystem } from './memfs'
-import { traceObservable } from './tracing'
+import { FileSystemEntries } from './match-files'
 import { normalizeUri, uri2path } from './util'
 
-export interface FileSystem {
+/**
+ * Provides a synchronous file system API.
+ */
+export interface SynchronousFileSystem {
+    /**
+     * Returns true if the given file is known to exist in the workspace (content loaded or not)
+     *
+     * @param uri URI to a file
+     */
+    fileExists(uri: string): boolean
+
+    /**
+     * Returns the file content for the given URI, if that file is synchronously available.
+     */
+    readFileIfAvailable(uri: string): string | undefined
+
+    /**
+     * Return the files and directories contained in the given directory
+     */
+    getFileSystemEntries(directory: string): FileSystemEntries
+}
+
+/**
+ * In-memory file cache node which represents either a folder or a file
+ */
+export interface FileSystemNode {
+    file: boolean
+    children: Map<string, FileSystemNode>
+}
+
+/**
+ * In-memory file system
+ */
+export class InMemoryFileSystem implements SynchronousFileSystem {
+    /**
+     * File tree root
+     */
+    public rootNode: FileSystemNode = { file: false, children: new Map<string, FileSystemNode>() }
+
+    /**
+     * Contains a Map of all URIs that exist in the workspace, optionally with a content.
+     * File contents for URIs in it do not neccessarily have to be fetched already.
+     */
+    constructor(private readonly files: Map<string, string | undefined> = new Map()) {}
+
+    /**
+     * Return all known uri's in the workspace. (content loaded or not)
+     */
+    public uris(): IterableIterator<string> {
+        return this.files.keys()
+    }
+
+    /**
+     * Adds a file to the local cache
+     *
+     * @param uri The URI of the file
+     * @param content The optional content
+     */
+    public add(uri: string, content?: string): void {
+        // Make sure not to override existing content with undefined
+        if (content !== undefined || !this.files.has(uri)) {
+            this.files.set(uri, content)
+        }
+        // Add to directory tree
+        // TODO: convert this to use URIs.
+        const filePath = uri2path(uri)
+        const components = filePath.split(/[\/\\]/).filter(c => c)
+        let node = this.rootNode
+        for (const [i, component] of components.entries()) {
+            const n = node.children.get(component)
+            if (!n) {
+                if (i < components.length - 1) {
+                    const n = { file: false, children: new Map<string, FileSystemNode>() }
+                    node.children.set(component, n)
+                    node = n
+                } else {
+                    node.children.set(component, { file: true, children: new Map<string, FileSystemNode>() })
+                }
+            } else {
+                node = n
+            }
+        }
+    }
+
+    /**
+     * Return the files and directories contained in the given directory
+     */
+    public getFileSystemEntries(directory: string): FileSystemEntries {
+        const ret: { files: string[]; directories: string[] } = { files: [], directories: [] }
+        let node = this.rootNode
+        const components = directory.split(/[\\\/]/).filter(c => c)
+        if (components.length !== 1 || components[0]) {
+            for (const component of components) {
+                const n = node.children.get(component)
+                if (!n) {
+                    return ret
+                }
+                node = n
+            }
+        }
+        for (const [name, value] of node.children.entries()) {
+            if (value.file) {
+                ret.files.push(name)
+            } else {
+                ret.directories.push(name)
+            }
+        }
+        return ret
+    }
+
+    /**
+     * Returns true if the given file is known to exist in the workspace (content loaded or not)
+     *
+     * @param uri URI to a file
+     */
+    public fileExists(uri: string): boolean {
+        return this.files.has(uri)
+    }
+
+    /**
+     * Returns the file content for the given URI.
+     */
+    public readFileIfAvailable(uri: string): string | undefined {
+        return this.files.get(uri)
+    }
+}
+
+export class LocalFileSystem implements SynchronousFileSystem {
+    /**
+     * Returns true if the given file is known to exist in the workspace (content loaded or not)
+     * @param uri URI to a file
+     */
+    public fileExists(uri: string): boolean {
+        return fs.existsSync(uri2path(uri))
+    }
+
+    /**
+     * Returns the file content for the given URI.
+     */
+    public readFileIfAvailable(uri: string): string | undefined {
+        try {
+            return fs.readFileSync(uri2path(uri), 'utf8')
+        } catch (e) {
+            return undefined
+        }
+    }
+
+    /**
+     * Return the files and directories contained in the given directory
+     */
+    public getFileSystemEntries(directory: string): FileSystemEntries {
+        const files: string[] = []
+        const directories: string[] = []
+        for (const name of fs.readdirSync(directory)) {
+            const filePath = path.join(directory, name)
+            try {
+                const stat = fs.statSync(filePath)
+                if (stat.isFile()) {
+                    files.push(name)
+                } else if (stat.isDirectory()) {
+                    directories.push(name)
+                }
+            } catch (e) {
+                // no-op
+            }
+        }
+        return { files, directories }
+    }
+}
+
+/**
+ * Provides a minimal asynchronous file system API.
+ */
+export interface AsynchronousFileSystem {
     /**
      * Returns all files in the workspace under base
      *
      * @param base A URI under which to search, resolved relative to the rootUri
      * @return An Observable that emits URIs
      */
-    getWorkspaceFiles(base?: string, childOf?: Span): Observable<string>
+    getWorkspaceFiles(base?: string | undefined, childOf?: Span | undefined): Observable<string>
 
     /**
      * Returns the content of a text document
@@ -23,10 +194,10 @@ export interface FileSystem {
      * @param uri The URI of the text document, resolved relative to the rootUri
      * @return An Observable that emits the text document content
      */
-    getTextDocumentContent(uri: string, childOf?: Span): Observable<string>
+    getTextDocumentContent(uri: string, childOf?: Span | undefined): Observable<string>
 }
 
-export class RemoteFileSystem implements FileSystem {
+export class RemoteFileSystem implements AsynchronousFileSystem {
     constructor(private client: LanguageClient) {}
 
     /**
@@ -51,8 +222,11 @@ export class RemoteFileSystem implements FileSystem {
             .map(textDocument => textDocument.text)
     }
 }
+<<<<<<< Updated upstream
+=======
 
 export class LocalFileSystem implements FileSystem {
+
     /**
      * @param rootUri The root URI that is used if `base` is not specified
      */
@@ -65,42 +239,60 @@ export class LocalFileSystem implements FileSystem {
         return uri2path(uri)
     }
 
-    public getWorkspaceFiles(base = this.rootUri): Observable<string> {
-        if (!base.endsWith('/')) {
-            base += '/'
-        }
-        const cwd = this.resolveUriToPath(base)
-        return new Observable<string>(subscriber => {
-            const globber = new Glob('*', {
-                cwd,
-                nodir: true,
-                matchBase: true,
-                follow: true,
-            })
-            globber.on('match', (file: string) => {
-                subscriber.next(file)
-            })
-            globber.on('error', (err: any) => {
-                subscriber.error(err)
-            })
-            globber.on('end', () => {
-                subscriber.complete()
-            })
-            return () => {
-                globber.abort()
-            }
-        }).map(file => {
-            const encodedPath = file
-                .split('/')
-                .map(encodeURIComponent)
-                .join('/')
-            return normalizeUri(base + encodedPath)
-        })
+    public getAsyncWorkspaceFiles(base = this.rootUri): Observable<string> {
+        return Observable.empty();
     }
 
     public getTextDocumentContent(uri: string): Observable<string> {
         const filePath = this.resolveUriToPath(uri)
         return Observable.fromPromise(fs.readFile(filePath, 'utf8'))
+    }
+
+    /**
+     * Returns an IterableIterator for all URIs known to exist in the workspace (content loaded or not)
+     */
+    public asyncUris(): IterableIterator<string> {
+        return new Map().keys();
+    }
+
+    /**
+     * Returns true if the given file is known to exist in the workspace (content loaded or not)
+     *
+     * @param uri URI to a file
+     */
+    public has(uri: string): boolean {
+        return fs.existsSync(uri2path(uri));
+    }
+    /**
+     * Returns the file content for the given URI.
+     * Will throw an Error if no available in-memory.
+     * Use FileSystemUpdater.ensure() to ensure that the file is available.
+     */
+    public get(uri: string): string | undefined {
+        return fs.readFileSync(uri2path(uri), 'utf8')
+    }
+
+    public add(uri: string, content?: string): void {
+        // noop
+    }
+
+    public getFileSystemEntries(directory: string): FileSystemEntries {
+        const files: string[] = [];
+        const directories: string[] = [];
+        for(const name of fs.readdirSync(directory)) {
+            const filePath = path.join(directory, name);
+            try {
+                const stat = fs.statSync(filePath);
+                if (stat.isFile()) {
+                    files.push(name);
+                } else if (stat.isDirectory()) {
+                    directories.push(name);
+                }
+            } catch(e) { 
+                // ignore files that don't exist.
+            }
+        }
+        return { files, directories }
     }
 }
 
@@ -125,7 +317,7 @@ export class FileSystemUpdater {
      */
     private concurrencyLimit = new Semaphore(100)
 
-    constructor(private remoteFs: FileSystem, private inMemoryFs: InMemoryFileSystem) {}
+    constructor(private fileSystem: FileSystem, private inMemoryFs: OverlayFileSystem) {} //TODO Remove inMemoryFs as a field
 
     /**
      * Fetches the file content for the given URI and adds the content to the in-memory file system
@@ -137,7 +329,7 @@ export class FileSystemUpdater {
     public fetch(uri: string, childOf = new Span()): Observable<never> {
         // Limit concurrent fetches
         const observable = Observable.fromPromise(this.concurrencyLimit.wait())
-            .mergeMap(() => this.remoteFs.getTextDocumentContent(uri))
+            .mergeMap(() => this.fileSystem.getTextDocumentContent(uri))
             .do(
                 content => {
                     this.concurrencyLimit.signal()
@@ -179,8 +371,8 @@ export class FileSystemUpdater {
             'Fetch workspace structure',
             childOf,
             span =>
-                this.remoteFs
-                    .getWorkspaceFiles(undefined, span)
+                this.fileSystem
+                    .getAsyncWorkspaceFiles(undefined, span)
                     .do(
                         uri => {
                             this.inMemoryFs.add(uri)
@@ -225,3 +417,4 @@ export class FileSystemUpdater {
         this.structureFetch = undefined
     }
 }
+>>>>>>> Stashed changes
