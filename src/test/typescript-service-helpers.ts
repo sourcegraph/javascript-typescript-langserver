@@ -1976,8 +1976,8 @@ export function describeTypeScriptService(
                 createService,
                 rootUri,
                 new Map([
-                    [rootUri + 'src/errors.ts', 'const text: string = 33;'], 
-                    [rootUri + 'src/valid.ts', 'const validText: string = "valid text";']
+                    [rootUri + 'src/errors.ts', 'const text: string = 33;'],
+                    [rootUri + 'src/valid.ts', 'const validText: string = "valid text";'],
                 ])
             )
         )
@@ -2010,10 +2010,9 @@ export function describeTypeScriptService(
                 uri: rootUri + 'src/errors.ts',
             })
         })
-        
-        it('should publish diagnostics for all open files on didOpen', async function(this: TestContext & ITestCallbackContext): Promise<
-            void
-        > {
+
+        it('should publish diagnostics for all open files on didOpen', async function(this: TestContext &
+            ITestCallbackContext): Promise<void> {
             await this.service.textDocumentDidOpen({
                 textDocument: {
                     uri: rootUri + 'src/errors.ts',
@@ -2022,9 +2021,9 @@ export function describeTypeScriptService(
                     version: 1,
                 },
             })
-            
+
             this.client.textDocumentPublishDiagnostics.resetHistory()
-            
+
             await this.service.textDocumentDidOpen({
                 textDocument: {
                     uri: rootUri + 'src/valid.ts',
@@ -2045,7 +2044,7 @@ export function describeTypeScriptService(
                     },
                 ],
                 uri: rootUri + 'src/errors.ts',
-            })            
+            })
             sinon.assert.calledWith(this.client.textDocumentPublishDiagnostics, {
                 diagnostics: [],
                 uri: rootUri + 'src/valid.ts',

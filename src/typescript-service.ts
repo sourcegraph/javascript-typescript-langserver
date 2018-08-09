@@ -178,8 +178,8 @@ export class TypeScriptService {
     /**
      * Keeps track of package.jsons in the workspace
      */
-    protected packageManager: PackageManager   
-    
+    protected packageManager: PackageManager
+
     /**
      * Settings synced though `didChangeConfiguration`
      */
@@ -1569,18 +1569,20 @@ export class TypeScriptService {
         await new Promise<void>(resolve => setTimeout(resolve, 200))
         this._publishDiagnosticsForOpenFiles(uri)
     }
-    
+
     /**
      * Generates and publishes diagnostics for all currently open files in project
-     * 
+     *
      * @param uri URI of the currently open/changed file
-     */    
-     private _publishDiagnosticsForOpenFiles(uri: string) {
+     */
+    private _publishDiagnosticsForOpenFiles(uri: string): void {
         const config = this.projectManager.getParentConfiguration(uri)
         if (!config) {
             return
         }
-        config.openFiles.forEach(fileUri => this._publishDiagnostics(config, fileUri))
+        for (const fileUri of config.openFiles) {
+            this._publishDiagnostics(config, fileUri)
+        }
     }
 
     /**
