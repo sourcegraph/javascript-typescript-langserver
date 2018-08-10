@@ -51,7 +51,7 @@
     "rxjs": "^5.5.0",
     "semaphore-async-await": "^1.5.1",
     "string-similarity": "^1.1.0",
-    "typescript": "2.8.3",
+    "typescript": "3.0.1",
     "vscode-jsonrpc": "^3.3.1",
     "vscode-languageserver": "^4.2.1",
     "vscode-languageserver-types": "^3.0.3"
@@ -82,8 +82,8 @@
     "sinon": "^5.0.0",
     "source-map-support": "^0.5.0",
     "temp": "^0.8.3",
-    "tslint": "^5.8.0",
-    "tslint-language-service": "^0.9.6",
+    "tslint": "^5.11.0",
+    "tslint-language-service": "^0.9.9",
     "validate-commit-msg": "^2.12.2"
   },
   "bin": {

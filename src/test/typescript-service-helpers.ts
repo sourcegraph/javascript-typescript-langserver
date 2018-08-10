@@ -2325,18 +2325,7 @@ export function describeTypeScriptService(
                                 '    readonly COMMENT_NODE: number;',
                                 '    readonly DOCUMENT_FRAGMENT_NODE: number;',
                                 '    readonly DOCUMENT_NODE: number;',
-                                '    readonly DOCUMENT_POSITION_CONTAINED_BY: number;',
-                                '    readonly DOCUMENT_POSITION_CONTAINS: number;',
-                                '    readonly DOCUMENT_POSITION_DISCONNECTED: number;',
-                                '    readonly DOCUMENT_POSITION_FOLLOWING: number;',
-                                '    readonly DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC: number;',
-                                '    readonly DOCUMENT_POSITION_PRECEDING: number;',
-                                '    readonly DOCUMENT_TYPE_NODE: number;',
-                                '    readonly ELEMENT_NODE: number;',
-                                '    readonly ENTITY_NODE: number;',
-                                '    readonly ENTITY_REFERENCE_NODE: number;',
-                                '    readonly NOTATION_NODE: number;',
-                                '    readonly PROCESSING_INSTRUCTION_NODE: number;',
+                                '    ... 12 more ...;',
                                 '    readonly TEXT_NODE: number;',
                                 '}',
                             ].join('\n'),
@@ -2367,11 +2356,11 @@ export function describeTypeScriptService(
                             uri: 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/lib.dom.d.ts',
                             range: {
                                 start: {
-                                    line: 9378,
+                                    line: 10275,
                                     character: 10,
                                 },
                                 end: {
-                                    line: 9378,
+                                    line: 10275,
                                     character: 14,
                                 },
                             },
@@ -2380,11 +2369,11 @@ export function describeTypeScriptService(
                             uri: 'git://github.com/Microsoft/TypeScript?v' + ts.version + '#lib/lib.dom.d.ts',
                             range: {
                                 start: {
-                                    line: 9429,
+                                    line: 10326,
                                     character: 12,
                                 },
                                 end: {
-                                    line: 9429,
+                                    line: 10326,
                                     character: 16,
                                 },
                             },
