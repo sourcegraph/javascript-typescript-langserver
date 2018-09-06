@@ -1252,7 +1252,7 @@ export class TypeScriptService {
 
                 const details = configuration
                     .getService()
-                    .getCompletionEntryDetails(fileName, offset, entryName, undefined, undefined)
+                    .getCompletionEntryDetails(fileName, offset, entryName, undefined, undefined, undefined)
 
                 if (details) {
                     item.documentation = ts.displayPartsToString(details.documentation)
@@ -1307,9 +1307,9 @@ export class TypeScriptService {
                     params.position.character
                 )
 
-                const signatures: ts.SignatureHelpItems = configuration
+                const signatures: ts.SignatureHelpItems | undefined = configuration
                     .getService()
-                    .getSignatureHelpItems(filePath, offset)
+                    .getSignatureHelpItems(filePath, offset, undefined)
                 if (!signatures) {
                     return { signatures: [], activeParameter: 0, activeSignature: 0 }
                 }
@@ -1382,7 +1382,7 @@ export class TypeScriptService {
                 return (
                     configuration
                         .getService()
-                        .getCodeFixesAtPosition(filePath, start, end, errorCodes, this.settings.format || {}) || []
+                        .getCodeFixesAtPosition(filePath, start, end, errorCodes, this.settings.format || {}, {}) || []
                 )
             })
             .map((action: ts.CodeAction): Operation => ({
@@ -1496,7 +1496,7 @@ export class TypeScriptService {
                     }
 
                     return Observable.from(
-                        configuration.getService().findRenameLocations(filePath, position, false, true)
+                        configuration.getService().findRenameLocations(filePath, position, false, true) || []
                     ).map((location: ts.RenameLocation): [string, TextEdit] => {
                         const sourceFile = this._getSourceFile(configuration, location.fileName, span)
                         if (!sourceFile) {
@@ -1585,12 +1585,13 @@ export class TypeScriptService {
         const tsDiagnostics = config
             .getService()
             .getSyntacticDiagnostics(fileName)
-            .concat(config.getService().getSemanticDiagnostics(fileName))
+            .concat(
+                config
+                    .getService()
+                    .getSemanticDiagnostics(fileName)
+                    .filter((e): e is ts.DiagnosticWithLocation => !!e.file)
+            )
         const diagnostics = iterate(tsDiagnostics)
-            // TS can report diagnostics without a file and range in some cases
-            // These cannot be represented as LSP Diagnostics since the range and URI is required
-            // https://github.com/Microsoft/TypeScript/issues/15666
-            .filter(diagnostic => !!diagnostic.file)
             .map(convertTsDiagnostic)
             .toArray()
         this.client.textDocumentPublishDiagnostics({ uri, diagnostics })
