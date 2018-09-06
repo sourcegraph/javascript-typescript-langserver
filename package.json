@@ -33,9 +33,16 @@
     "build": "tsc",
     "watch": "tsc -w",
     "semantic-release": "semantic-release",
-    "commitmsg": "validate-commit-msg"
+    "commitmsg": "commitlint -e $GIT_PARAMS"
+  },
+  "commitlint": {
+    "extends": [
+      "@commitlint/config-conventional"
+    ]
   },
   "dependencies": {
+    "@commitlint/cli": "^7.1.2",
+    "@commitlint/config-conventional": "^7.1.2",
     "chai": "^4.0.1",
     "chai-as-promised": "^7.0.0",
     "chalk": "^2.2.0",
@@ -83,8 +90,7 @@
     "source-map-support": "^0.5.0",
     "temp": "^0.8.3",
     "tslint": "^5.11.0",
-    "tslint-language-service": "^0.9.9",
-    "validate-commit-msg": "^2.12.2"
+    "tslint-language-service": "^0.9.9"
   },
   "bin": {
     "javascript-typescript-langserver": "./lib/language-server.js",
@@ -97,11 +103,6 @@
     "exclude": [
       "lib/test/**/*.js"
     ]
-  },
-  "config": {
-    "commitizen": {
-      "path": "./node_modules/cz-conventional-changelog"
-    }
   },
   "greenkeeper": {
     "ignore": [
