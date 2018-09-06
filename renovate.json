@@ -1,0 +1,10 @@
+{
+  "extends": ["github>sourcegraph/renovate-config"],
+  "semanticCommits": true,
+  "travis": {
+    "enabled": true
+  },
+  "node": {
+    "supportPolicy": ["lts"]
+  }
+}
