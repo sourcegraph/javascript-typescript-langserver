@@ -239,6 +239,11 @@ export class ProjectConfiguration {
     private expectedFilePaths = new Set<string>()
 
     /**
+     * Set of uris for all files currently open in the editor
+     */
+    public readonly openFiles: Set<string> = new Set<string>()
+
+    /**
      * List of resolved extra root directories to allow global type declaration files to be loaded from.
      * Each item is an absolute UNIX-like file path
      */
@@ -1049,6 +1054,11 @@ export class ProjectManager implements Disposable {
      * @param text file's content
      */
     public didOpen(uri: string, text: string): void {
+        const config = this.getParentConfiguration(uri)
+        if (!config) {
+            return
+        }
+        config.openFiles.add(uri)
         this.didChange(uri, text)
     }
 
@@ -1065,6 +1075,7 @@ export class ProjectManager implements Disposable {
         if (!config) {
             return
         }
+        config.openFiles.delete(uri)
         config.ensureConfigFile(span)
         config.getHost().incProjectVersion()
     }

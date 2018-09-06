@@ -1975,7 +1975,10 @@ export function describeTypeScriptService(
             initializeTypeScriptService(
                 createService,
                 rootUri,
-                new Map([[rootUri + 'src/errors.ts', 'const text: string = 33;']])
+                new Map([
+                    [rootUri + 'src/errors.ts', 'const text: string = 33;'],
+                    [rootUri + 'src/valid.ts', 'const validText: string = "valid text";'],
+                ])
             )
         )
 
@@ -2005,6 +2008,46 @@ export function describeTypeScriptService(
                     },
                 ],
                 uri: rootUri + 'src/errors.ts',
+            })
+        })
+
+        it('should publish diagnostics for all open files on didOpen', async function(this: TestContext &
+            ITestCallbackContext): Promise<void> {
+            await this.service.textDocumentDidOpen({
+                textDocument: {
+                    uri: rootUri + 'src/errors.ts',
+                    languageId: 'typescript',
+                    text: 'const text: string = 33;',
+                    version: 1,
+                },
+            })
+
+            this.client.textDocumentPublishDiagnostics.resetHistory()
+
+            await this.service.textDocumentDidOpen({
+                textDocument: {
+                    uri: rootUri + 'src/valid.ts',
+                    languageId: 'typescript',
+                    text: 'const validText: string = "valid text";',
+                    version: 1,
+                },
+            })
+
+            sinon.assert.calledWith(this.client.textDocumentPublishDiagnostics, {
+                diagnostics: [
+                    {
+                        message: "Type '33' is not assignable to type 'string'.",
+                        range: { end: { character: 10, line: 0 }, start: { character: 6, line: 0 } },
+                        severity: 1,
+                        source: 'ts',
+                        code: 2322,
+                    },
+                ],
+                uri: rootUri + 'src/errors.ts',
+            })
+            sinon.assert.calledWith(this.client.textDocumentPublishDiagnostics, {
+                diagnostics: [],
+                uri: rootUri + 'src/valid.ts',
             })
         })
 

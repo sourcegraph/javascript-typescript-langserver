@@ -214,7 +214,6 @@ export class TypeScriptService {
     constructor(protected client: LanguageClient, protected options: TypeScriptServiceOptions = {}) {
         this.logger = new LSPLogger(client)
     }
-
     /**
      * The initialize request is sent as the first request from the client to the server. If the
      * server receives request or notification before the `initialize` request it should act as
@@ -1546,7 +1545,7 @@ export class TypeScriptService {
         await this.projectManager.ensureReferencedFiles(uri).toPromise()
         this.projectManager.didOpen(uri, params.textDocument.text)
         await new Promise<void>(resolve => setTimeout(resolve, 200))
-        this._publishDiagnostics(uri)
+        this._publishDiagnosticsForOpenFiles(uri)
     }
 
     /**
@@ -1568,7 +1567,22 @@ export class TypeScriptService {
         }
         this.projectManager.didChange(uri, text)
         await new Promise<void>(resolve => setTimeout(resolve, 200))
-        this._publishDiagnostics(uri)
+        this._publishDiagnosticsForOpenFiles(uri)
+    }
+
+    /**
+     * Generates and publishes diagnostics for all currently open files in project
+     *
+     * @param uri URI of the currently open/changed file
+     */
+    private _publishDiagnosticsForOpenFiles(uri: string): void {
+        const config = this.projectManager.getParentConfiguration(uri)
+        if (!config) {
+            return
+        }
+        for (const fileUri of config.openFiles) {
+            this._publishDiagnostics(config, fileUri)
+        }
     }
 
     /**
@@ -1576,11 +1590,7 @@ export class TypeScriptService {
      *
      * @param uri URI of the file to check
      */
-    private _publishDiagnostics(uri: string, span = new Span()): void {
-        const config = this.projectManager.getParentConfiguration(uri)
-        if (!config) {
-            return
-        }
+    private _publishDiagnostics(config: ProjectConfiguration, uri: string, span = new Span()): void {
         const fileName = uri2path(uri)
         const tsDiagnostics = config
             .getService()
@@ -1621,7 +1631,6 @@ export class TypeScriptService {
         await this.projectManager.ensureReferencedFiles(uri).toPromise()
 
         this.projectManager.didClose(uri)
-
         // Clear diagnostics
         this.client.textDocumentPublishDiagnostics({ uri, diagnostics: [] })
     }
