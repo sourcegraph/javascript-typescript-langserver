@@ -66,23 +66,24 @@ export const initializeTypeScriptService = (
     async function(this: TestContext & IBeforeAndAfterContext): Promise<void> {
         // Stub client
         this.client = sinon.createStubInstance(RemoteLanguageClient)
-        this.client.textDocumentXcontent.callsFake((params: TextDocumentContentParams): Observable<
-            TextDocumentItem
-        > => {
-            if (!files.has(params.textDocument.uri)) {
-                return Observable.throw(new Error(`Text document ${params.textDocument.uri} does not exist`))
+        this.client.textDocumentXcontent.callsFake(
+            (params: TextDocumentContentParams): Observable<TextDocumentItem> => {
+                if (!files.has(params.textDocument.uri)) {
+                    return Observable.throw(new Error(`Text document ${params.textDocument.uri} does not exist`))
+                }
+                return Observable.of({
+                    uri: params.textDocument.uri,
+                    text: files.get(params.textDocument.uri)!,
+                    version: 1,
+                    languageId: '',
+                })
             }
-            return Observable.of({
-                uri: params.textDocument.uri,
-                text: files.get(params.textDocument.uri)!,
-                version: 1,
-                languageId: '',
-            })
-        })
-        this.client.workspaceXfiles.callsFake((params: WorkspaceFilesParams): Observable<TextDocumentIdentifier[]> =>
-            observableFromIterable(files.keys())
-                .map(uri => ({ uri }))
-                .toArray()
+        )
+        this.client.workspaceXfiles.callsFake(
+            (params: WorkspaceFilesParams): Observable<TextDocumentIdentifier[]> =>
+                observableFromIterable(files.keys())
+                    .map(uri => ({ uri }))
+                    .toArray()
         )
         this.client.xcacheGet.callsFake(() => Observable.of(null))
         this.client.workspaceApplyEdit.callsFake(() => Observable.of({ applied: true }))
