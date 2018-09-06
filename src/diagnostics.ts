@@ -4,14 +4,11 @@ import { Diagnostic, DiagnosticSeverity, Range } from 'vscode-languageserver'
 /**
  * Converts a TypeScript Diagnostic to an LSP Diagnostic
  */
-export function convertTsDiagnostic(diagnostic: ts.Diagnostic): Diagnostic {
+export function convertTsDiagnostic(diagnostic: ts.DiagnosticWithLocation): Diagnostic {
     const text = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')
-    let range: Range = { start: { character: 0, line: 0 }, end: { character: 0, line: 0 } }
-    if (diagnostic.file && diagnostic.start && diagnostic.length) {
-        range = {
-            start: diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start),
-            end: diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start + diagnostic.length),
-        }
+    const range: Range =  {
+        start: diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start),
+        end: diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start + diagnostic.length),
     }
     return {
         range,
