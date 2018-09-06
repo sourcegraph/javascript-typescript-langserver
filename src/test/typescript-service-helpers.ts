@@ -145,6 +145,13 @@ export function describeTypeScriptService(
                     ],
                     [rootUri + 'foo/f.ts', ['import {Foo} from "./b";', '', 'let foo: Foo = Object({});'].join('\n')],
                     [rootUri + 'foo/g.ts', ['class Foo = {}', '', 'let foo: Foo = Object({});'].join('\n')],
+                    [
+                        rootUri + 'interface.ts',
+                        [
+                            'export interface SomeInterface {}',
+                            'class SomeImplementation implements SomeInterface {}',
+                        ].join('\n'),
+                    ],
                 ])
             )
         )
@@ -281,6 +288,39 @@ export function describeTypeScriptService(
                             end: {
                                 line: 0,
                                 character: 9,
+                            },
+                        },
+                    },
+                ])
+            })
+        })
+
+        describe('textDocumentImplementation()', function(this: TestContext & ISuiteCallbackContext): void {
+            it('should return all implementations of an interface', async function(this: TestContext &
+                ITestCallbackContext): Promise<void> {
+                const result: Location[] = await this.service
+                    .textDocumentTypeDefinition({
+                        textDocument: {
+                            uri: rootUri + 'interface.ts',
+                        },
+                        position: {
+                            line: 0,
+                            character: 18,
+                        },
+                    })
+                    .reduce<Operation, Location[]>(applyReducer, null as any)
+                    .toPromise()
+                assert.deepEqual(result, [
+                    {
+                        uri: rootUri + 'foo/b.ts',
+                        range: {
+                            start: {
+                                line: 1,
+                                character: 13,
+                            },
+                            end: {
+                                line: 1,
+                                character: 16,
                             },
                         },
                     },
