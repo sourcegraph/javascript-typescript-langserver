@@ -1008,7 +1008,7 @@ export class TypeScriptService {
                                                 }
                                                 span.log({ event: 'match', score })
                                                 // If no PackageDescriptor query, return match
-                                                if (!params.query.package || !params.query.package) {
+                                                if (!params.query.package) {
                                                     return [symbol]
                                                 }
                                                 // If SymbolDescriptor matched and the query contains a PackageDescriptor, get package.json and match PackageDescriptor name
