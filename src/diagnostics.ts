@@ -6,7 +6,7 @@ import { Diagnostic, DiagnosticSeverity, Range } from 'vscode-languageserver'
  */
 export function convertTsDiagnostic(diagnostic: ts.DiagnosticWithLocation): Diagnostic {
     const text = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')
-    const range: Range =  {
+    const range: Range = {
         start: diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start),
         end: diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start + diagnostic.length),
     }

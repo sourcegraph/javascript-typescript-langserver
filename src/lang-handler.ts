@@ -107,15 +107,13 @@ export class RemoteLanguageClient {
                     .filter(msg => isResponseMessage(msg) && msg.id === id)
                     .take(1)
                     // Emit result or error
-                    .map(
-                        (msg: ResponseMessage): any => {
-                            receivedResponse = true
-                            if (msg.error) {
-                                throw Object.assign(new Error(msg.error.message), msg.error)
-                            }
-                            return msg.result
+                    .map((msg: ResponseMessage): any => {
+                        receivedResponse = true
+                        if (msg.error) {
+                            throw Object.assign(new Error(msg.error.message), msg.error)
                         }
-                    )
+                        return msg.result
+                    })
                     // Forward events to subscriber
                     .subscribe(subscriber)
                 // Handler for unsubscribe()
