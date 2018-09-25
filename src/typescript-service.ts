@@ -1592,12 +1592,6 @@ export class TypeScriptService {
                     .filter((e): e is ts.DiagnosticWithLocation => !!e.file)
             )
         const diagnostics = iterate(tsDiagnostics)
-            // TS can report diagnostics without a file and range in some cases
-            // These cannot be represented as LSP Diagnostics since the range and URI is required
-            // https://github.com/Microsoft/TypeScript/issues/15666
-            .filter(
-                diagnostic => !!diagnostic.file && diagnostic.start !== undefined && diagnostic.length !== undefined
-            )
             .map(convertTsDiagnostic)
             .toArray()
         this.client.textDocumentPublishDiagnostics({ uri, diagnostics })
