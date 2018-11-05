@@ -70,7 +70,7 @@
     "@types/chai": "4.1.7",
     "@types/chai-as-promised": "7.1.0",
     "@types/glob": "7.1.1",
-    "@types/lodash": "4.14.117",
+    "@types/lodash": "4.14.118",
     "@types/mocha": "5.2.5",
     "@types/mz": "0.0.32",
     "@types/node": "7.0.63",
