@@ -71,7 +71,7 @@
     "@types/chai-as-promised": "7.1.0",
     "@types/glob": "7.1.1",
     "@types/lodash": "4.14.121",
-    "@types/mocha": "5.2.5",
+    "@types/mocha": "5.2.6",
     "@types/mz": "0.0.32",
     "@types/node": "7.0.63",
     "@types/object-hash": "1.2.0",
