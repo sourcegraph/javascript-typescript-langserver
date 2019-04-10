@@ -3264,6 +3264,67 @@ export function describeTypeScriptService(
         })
     })
 
+    describe('organizeImports()', () => {
+        beforeEach(
+            initializeTypeScriptService(
+                createService,
+                rootUri,
+                new Map([
+                    [rootUri + 'package.json', JSON.stringify({ name: 'mypkg' })],
+                    [
+                        rootUri + 'a.ts',
+                        [
+                            'import {b, a} from "./import"',
+                            'const x = a() + b();'
+                        ]
+                            .join('\n'),
+                    ],
+                    [
+                        rootUri + 'import.ts',
+                        [
+                            'export function a(): number { return 11; }',
+                            'export function b(): number { return 2; }'
+                        ]
+                            .join('\n'),
+                    ]
+                ])
+            )
+        )
+
+        afterEach(shutdownService)
+
+        it('should return a correct WorkspaceEdit to organize imports', async function(this: TestContext &
+            Context): Promise<void> {
+            const result: WorkspaceEdit = await this.service
+                .organizeImports({
+                    textDocument: {
+                        uri: rootUri + 'a.ts',
+                    },
+                })
+                .reduce<Operation, WorkspaceEdit>(applyReducer, null as any)
+                .toPromise()
+            assert.deepEqual(result, {
+                changes: {
+                    [rootUri + 'a.ts']: [
+                        {
+                            newText: 'import { a, b } from "./import";\n',
+                            range: {
+                                end: {
+                                    character: 0,
+                                    line: 1,
+                                },
+                                start: {
+                                    character: 0,
+                                    line: 0,
+                                },
+                            },
+                        },
+                    ],
+                },
+            })
+        })
+    })
+
     describe('textDocumentCodeAction()', () => {
         beforeEach(
             initializeTypeScriptService(

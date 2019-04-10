@@ -8,6 +8,7 @@ import { Observable } from 'rxjs'
 import * as ts from 'typescript'
 import * as url from 'url'
 import {
+    CodeActionKind,
     CodeActionParams,
     Command,
     CompletionItemKind,
@@ -59,6 +60,7 @@ import {
     ReferenceInformation,
     SymbolDescriptor,
     SymbolLocationInformation,
+    TextDocumentContentParams,
     WorkspaceReferenceParams,
     WorkspaceSymbolParams,
 } from './request-type'
@@ -308,7 +310,9 @@ export class TypeScriptService {
                     resolveProvider: true,
                     triggerCharacters: ['.'],
                 },
-                codeActionProvider: true,
+                codeActionProvider: {
+                    codeActionKinds: [ CodeActionKind.SourceOrganizeImports]
+                },
                 renameProvider: true,
                 executeCommandProvider: {
                     commands: [],
@@ -546,7 +550,7 @@ export class TypeScriptService {
                     .split('/')
                     .map(encodeURIComponent)
                     .join('/')
-                const parts: url.UrlObject = url.parse(uri)
+                const parts: url.UrlObject = url.parse(uri) as url.UrlObject
                 const packageJsonUri = url.format({
                     ...parts,
                     pathname:
@@ -1579,6 +1583,66 @@ export class TypeScriptService {
     }
 
     /**
+     * Organize imports
+     *
+     * @return Observable of JSON Patches that build a `WorkspaceEdit` result
+     */
+    public organizeImports(params: TextDocumentContentParams, span = new Span()): Observable<Operation> {
+        const uri = normalizeUri(params.textDocument.uri)
+        const editUris = new Set<string>()
+        return this.projectManager
+            .ensureOwnFiles(span)
+            .concat(
+                Observable.defer(() => {
+                    const filePath = uri2path(uri)
+                    const configuration = this.projectManager.getParentConfiguration(params.textDocument.uri)
+                    if (!configuration) {
+                        throw new Error(`tsconfig.json not found for ${filePath}`)
+                    }
+                    configuration.ensureAllFiles(span)
+
+                    const sourceFile = this._getSourceFile(configuration, filePath, span)
+                    if (!sourceFile) {
+                        throw new Error(`Expected source file ${filePath} to exist in configuration`)
+                    }
+
+                    const scope: ts.OrganizeImportsScope = {
+                        type: 'file',
+                        fileName: filePath,
+                    }
+                    const formatOptions: ts.FormatCodeSettings = {}
+                    formatOptions.insertSpaceAfterCommaDelimiter = true
+
+                    const fileTextChanges: ts.FileTextChanges[] = configuration
+                        .getService()
+                        .organizeImports(scope, formatOptions, undefined) as ts.FileTextChanges[]
+
+                    return Observable.from(fileTextChanges)
+                        .mergeMap<ts.FileTextChanges, [string, TextEdit]>(fileChange => {
+                            const sourceFile = this._getSourceFile(configuration, fileChange.fileName, span)
+                            if (!sourceFile) {
+                                throw new Error(`Expected source file ${fileChange.fileName} to exist in configuration`)
+                            }
+                            const editUri = path2uri(fileChange.fileName)
+                            return fileChange.textChanges
+                                .map((change): TextEdit => this._textChangeToTextEdit(sourceFile, change))
+                                .map((edit): [string, TextEdit] => [editUri, edit])
+                        })
+                })
+            )
+            .map(
+                ([uri, edit]): Operation => {
+                    if (!editUris.has(uri)) {
+                        editUris.add(uri)
+                        return { op: 'add', path: JSONPTR`/changes/${uri}`, value: [edit] }
+                    }
+                    return { op: 'add', path: JSONPTR`/changes/${uri}/-`, value: edit }
+                }
+            )
+            .startWith({ op: 'add', path: '', value: { changes: {} } as WorkspaceEdit } as Operation)
+    }
+
+    /**
      * The initialized notification is sent from the client to the server after the client received
      * the result of the initialize request but before the client is sending any other request or
      * notification to the server. The server can use the initialized notification for example to
@@ -1622,6 +1686,16 @@ export class TypeScriptService {
         this.projectManager.didChange(uri, text)
         await new Promise<void>(resolve => setTimeout(resolve, 200))
         this._publishDiagnostics(uri)
+    }
+
+    private _textChangeToTextEdit(sourceFile: ts.SourceFileLike, change: ts.TextChange): TextEdit {
+        return {
+            range: {
+                start: ts.getLineAndCharacterOfPosition(sourceFile, change.span.start),
+                end: ts.getLineAndCharacterOfPosition(sourceFile, change.span.start + change.span.length),
+            },
+            newText: change.newText
+        }
     }
 
     /**
