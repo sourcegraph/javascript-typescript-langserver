@@ -49,7 +49,7 @@
     "glob": "^7.1.1",
     "iterare": "^1.1.2",
     "jaeger-client": "^3.5.3",
-    "lodash": "^4.17.4",
+    "lodash": "^4.17.14",
     "mz": "^2.6.0",
     "object-hash": "^1.1.8",
     "opentracing": "^0.14.0",
