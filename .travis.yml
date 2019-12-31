@@ -5,8 +5,8 @@ env:
     - FORCE_COLOR=1
 
 node_js:
-  - '8'
-  - '6'
+  - '10'
+  - '12'
 
 cache:
   directories:
