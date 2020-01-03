@@ -62,8 +62,8 @@
     "vscode-languageserver-types": "^3.0.3"
   },
   "devDependencies": {
-    "@commitlint/cli": "^8.2.0",
-    "@commitlint/config-conventional": "^8.2.0",
+    "@commitlint/cli": "^8.3.3",
+    "@commitlint/config-conventional": "^8.3.3",
     "@sourcegraph/prettierrc": "^3.0.1",
     "@sourcegraph/tsconfig": "^3.0.0",
     "@sourcegraph/tslint-config": "^12.3.1",
