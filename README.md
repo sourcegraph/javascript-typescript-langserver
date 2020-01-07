@@ -23,6 +23,7 @@ This is a language server for JavaScript and TypeScript that adheres to the [Lan
  - In [Eclipse Che](https://eclipse.org/che/)
  - In [NeoVim](https://github.com/autozimu/LanguageClient-neovim)
  - In [Sublime Text](https://lsp.readthedocs.io/en/latest/#javascripttypescript)
+ - In [JupyterLab](https://github.com/krassowski/jupyterlab-lsp)
 
 ## Features
 
