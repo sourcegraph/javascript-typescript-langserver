@@ -51,7 +51,7 @@
     "jaeger-client": "^3.5.3",
     "lodash": "^4.17.4",
     "mz": "^2.6.0",
-    "object-hash": "^1.1.8",
+    "object-hash": "^2.0.3",
     "opentracing": "^0.14.0",
     "rxjs": "^5.5.0",
     "semaphore-async-await": "^1.5.1",
