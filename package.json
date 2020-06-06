@@ -47,7 +47,7 @@
     "commander": "^2.9.0",
     "fast-json-patch": "^2.0.2",
     "glob": "^7.1.1",
-    "iterare": "^1.1.2",
+    "iterare": "^1.2.1",
     "jaeger-client": "^3.5.3",
     "lodash": "^4.17.4",
     "mz": "^2.6.0",
