@@ -1,3 +1,19 @@
+## ⚠️ This project is no longer maintained
+
+This language server is an implementation of LSP using TypeScript's APIs.
+This approach made it difficult to keep up with new features of TypeScript and implied that the server always uses a bundled TypeScript version, instead of the local TypeScript in `node_modules` like using the official (non-LSP) [`tsserver`](https://github.com/Microsoft/TypeScript/wiki/Standalone-Server-%28tsserver%29) allows.
+
+On top of that, over time we simplified our architecture for running language servers in the cloud at Sourcegraph which removed the necessity for this level of tight integration and control. 
+[Theia's TypeScript language server](https://github.com/theia-ide/typescript-language-server) is a thinner wrapper around `tsserver`, which avoids these problems to some extend.
+[Our latest approach](https://github.com/sourcegraph/sourcegraph-typescript) of running a TypeScript language server in the cloud uses Theia's language server (and transitively `tsserver`) under the hood.
+
+However, since then our code intelligence evolved even further and is nowadays powered primarily by [LSIF](https://lsif.dev/), the _Language Server Index Format_.
+LSIF is developed together with LSP and uses the same structures, but in a pre-computed serialization instead of an RPC protocol.
+This allows us to provide [near-instant code intelligence](https://docs.sourcegraph.com/user/code_intelligence/explanations/precise_code_intelligence) for our tricky on-demand cloud code intelligence scenarios and hence we are focusing all of our efforts on LSIF indexers.
+All of this work is also open source of course and if you're curious you can read more about [how we use LSIF on our blog](https://about.sourcegraph.com/blog/evolution-of-the-precise-code-intel-backend/).
+
+---------------------
+
 # JavaScript/TypeScript language server
 
 [![npm](https://img.shields.io/npm/v/javascript-typescript-langserver.svg)](https://www.npmjs.com/package/javascript-typescript-langserver)
