@@ -4,7 +4,7 @@ This language server is an implementation of LSP using TypeScript's APIs.
 This approach made it difficult to keep up with new features of TypeScript and implied that the server always uses a bundled TypeScript version, instead of the local TypeScript in `node_modules` like using the official (non-LSP) [`tsserver`](https://github.com/Microsoft/TypeScript/wiki/Standalone-Server-%28tsserver%29) allows.
 
 On top of that, over time we simplified our architecture for running language servers in the cloud at Sourcegraph which removed the necessity for this level of tight integration and control. 
-[Theia's TypeScript language server](https://github.com/theia-ide/typescript-language-server) is a thinner wrapper around `tsserver`, which avoids these problems to some extend.
+[Theia's TypeScript language server](https://github.com/theia-ide/typescript-language-server) is a thinner wrapper around `tsserver`, which avoids these problems to some extent.
 [Our latest approach](https://github.com/sourcegraph/sourcegraph-typescript) of running a TypeScript language server in the cloud uses Theia's language server (and transitively `tsserver`) under the hood.
 
 However, since then our code intelligence evolved even further and is nowadays powered primarily by [LSIF](https://lsif.dev/), the _Language Server Index Format_.
