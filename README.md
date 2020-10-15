@@ -12,6 +12,9 @@ LSIF is developed together with LSP and uses the same structures, but in a pre-c
 This allows us to provide [near-instant code intelligence](https://docs.sourcegraph.com/user/code_intelligence/explanations/precise_code_intelligence) for our tricky on-demand cloud code intelligence scenarios and hence we are focusing all of our efforts on LSIF indexers.
 All of this work is also open source of course and if you're curious you can read more about [how we use LSIF on our blog](https://about.sourcegraph.com/blog/evolution-of-the-precise-code-intel-backend/).
 
+LSP is still the obvious choice for editor scenarios and everyone is welcome to fork this repository and pick up maintenance, although from what we learned we would recommend to build on Theia's approach (wrapping `tsserver`).
+We would also love to see and are looking forward to [native LSP support for the official `tsserver`](https://github.com/microsoft/TypeScript/issues/39459#issuecomment-696179304), which would eliminate the need for any wrappers.
+
 ---------------------
 
 # JavaScript/TypeScript language server
