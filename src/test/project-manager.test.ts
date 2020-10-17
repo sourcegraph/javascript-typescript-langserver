@@ -1,5 +1,5 @@
 import * as chai from 'chai'
-import chaiAsPromised = require('chai-as-promised')
+import * as chaiAsPromised from 'chai-as-promised'
 import { FileSystemUpdater } from '../fs'
 import { InMemoryFileSystem } from '../memfs'
 import { ProjectManager } from '../project-manager'

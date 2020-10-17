@@ -1,5 +1,5 @@
 import * as chai from 'chai'
-import chaiAsPromised = require('chai-as-promised')
+import * as chaiAsPromised from 'chai-as-promised'
 import * as fs from 'mz/fs'
 import * as path from 'path'
 import * as rimraf from 'rimraf'

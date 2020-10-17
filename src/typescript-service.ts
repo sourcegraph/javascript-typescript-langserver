@@ -2,7 +2,7 @@ import { Operation } from 'fast-json-patch'
 import iterate from 'iterare'
 import { castArray, merge, omit } from 'lodash'
 import { toPairs } from 'lodash'
-import hashObject = require('object-hash')
+import * as hashObject from 'object-hash'
 import { Span } from 'opentracing'
 import { Observable } from 'rxjs'
 import * as ts from 'typescript'
