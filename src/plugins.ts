@@ -154,7 +154,7 @@ export class PluginLoader {
         this.logger.info(`Loading ${moduleName} from ${initialDir} (resolved to ${resolvedPath})`)
         const result = this.requirePlugin(resolvedPath, moduleName)
         if (result.error) {
-            this.logger.error(`Failed to load module: ${JSON.stringify(result.error)}`)
+            this.logger.error('Failed to load module:', result.error)
             return undefined
         }
         return result.module
