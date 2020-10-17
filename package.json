@@ -53,7 +53,7 @@
     "mz": "^2.6.0",
     "object-hash": "^1.1.8",
     "opentracing": "^0.14.0",
-    "rxjs": "^5.5.0",
+    "rxjs": "^6.6.2",
     "semaphore-async-await": "^1.5.1",
     "string-similarity": "^2.0.0",
     "typescript": "~3.0.3",
