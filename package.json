@@ -57,8 +57,8 @@
     "semaphore-async-await": "^1.5.1",
     "string-similarity": "^2.0.0",
     "typescript": "~3.0.3",
-    "vscode-jsonrpc": "^4.0.0",
-    "vscode-languageserver": "^5.0.0",
+    "vscode-jsonrpc": "^5.0.1",
+    "vscode-languageserver": "^6.1.1",
     "vscode-languageserver-types": "^3.0.3"
   },
   "devDependencies": {
